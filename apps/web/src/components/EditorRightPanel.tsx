@@ -8,6 +8,7 @@ import React, { useState } from "react";
 interface EditorRightPanelProps {
   collapsed: boolean;
   onToggle: () => void;
+  syncStatus?: SyncStatus;
 }
 
 // ─── Sync-status type for the indicator ────────────────────────────────────
@@ -15,7 +16,7 @@ interface EditorRightPanelProps {
 // "syncing"  → amber dot with pulse, "Syncing…"
 // "conflict" → red dot, "Conflict"
 // "local"    → mist dot, "Local Only" (guest mode)
-type SyncStatus = "synced" | "syncing" | "conflict" | "local";
+export type SyncStatus = "synced" | "syncing" | "conflict" | "local";
 
 // ─── Status dropdown options ───────────────────────────────────────────────
 const STATUS_OPTIONS = ["Draft", "In Review", "Published"] as const;
@@ -24,6 +25,7 @@ const STATUS_OPTIONS = ["Draft", "In Review", "Published"] as const;
 export default function EditorRightPanel({
   collapsed,
   onToggle,
+  syncStatus = "local",
 }: EditorRightPanelProps) {
   // ── Local state for the frontmatter form fields ──────────────────────────
   const [title, setTitle] = useState("Welcome Note");
@@ -32,9 +34,6 @@ export default function EditorRightPanel({
   const [tagInput, setTagInput] = useState(""); // current text in the tag input
   const [created, setCreated] = useState("2026-08-16");
   const [author, setAuthor] = useState("Guest");
-
-  // Guest mode – hardcoded for now; in production, derive from auth state
-  const syncStatus: SyncStatus = "local";
 
   // ── Derive colour & label from the sync status ───────────────────────────
   const syncConfig: Record<

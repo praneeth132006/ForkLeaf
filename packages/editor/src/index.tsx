@@ -11,6 +11,7 @@ import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Image from '@tiptap/extension-image';
 import type { Editor } from '@tiptap/core';
+import { MermaidBlock } from './extensions/MermaidBlock';
 
 // ─── Design System Tokens ───────────────────────────────────────────────────
 // Waypoint color palette used throughout the editor UI
@@ -111,6 +112,12 @@ const SLASH_COMMANDS: SlashCommand[] = [
         editor.chain().focus().setImage({ src: url }).run();
       }
     },
+  },
+  {
+    title: 'Mermaid Diagram',
+    description: 'Create a smart flowchart or diagram',
+    icon: '📊',
+    command: (editor) => editor.chain().focus().insertContent({ type: 'mermaidBlock' }).run(),
   },
 ];
 
@@ -648,6 +655,8 @@ export const EditorWYSIWYG: React.FC<EditorWYSIWYGProps> = ({ content, onUpdate 
       Image.configure({
         inline: false, // Render images as block-level elements
       }),
+      // Custom mermaid diagram block
+      MermaidBlock,
     ],
     // Set initial content from prop
     content,
@@ -982,6 +991,13 @@ export const MdnotionEditor: React.FC<MdnotionEditorProps> = ({
   const [mode, setMode] = useState<'wysiwyg' | 'raw'>('wysiwyg');
   // The shared content state (HTML string) used by both modes
   const [content, setContent] = useState(initialContent);
+
+  // Sync external content if it changes
+  useEffect(() => {
+    if (initialContent !== undefined && initialContent !== content) {
+      setContent(initialContent);
+    }
+  }, [initialContent]);
 
   // Wrapped content updater that also notifies external consumers
   const handleUpdate = useCallback(

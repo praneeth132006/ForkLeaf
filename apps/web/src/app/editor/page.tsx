@@ -15,6 +15,7 @@ import EditorSidebar from "@/components/EditorSidebar";
 import EditorRightPanel from "@/components/EditorRightPanel";
 import EditorStatusBar from "@/components/EditorStatusBar";
 import { MdnotionEditor } from "@mdnotion/editor";
+import { useSync } from "@/hooks/useSync";
 
 // ─── SVG topographic contour-line pattern (inlined for zero network cost) ──
 // Draws subtle curved lines to evoke a cartographic "waypoint" aesthetic.
@@ -34,6 +35,9 @@ export default function EditorPage() {
 
   // ── Editable page title ──────────────────────────────────────────────────
   const [pageTitle, setPageTitle] = useState("Welcome Note");
+
+  // ── Sync state ───────────────────────────────────────────────────────────
+  const { content, setContent, syncStatus } = useSync("mdnotion-guest-draft", "");
 
   return (
     // Root container: full viewport height, column layout (body + status bar)
@@ -91,7 +95,7 @@ export default function EditorPage() {
             {/* Centered editor container — max 720px wide */}
             <div className="relative z-10 mx-auto w-full max-w-[720px] px-4 md:px-8 py-8 md:py-12">
               {/* Prose wrapper applies typographic defaults to editor content */}
-              <MdnotionEditor />
+              <MdnotionEditor initialContent={content} onChange={setContent} />
             </div>
           </div>
         </main>
@@ -102,6 +106,7 @@ export default function EditorPage() {
           <EditorRightPanel
             collapsed={rightCollapsed}
             onToggle={() => setRightCollapsed((prev) => !prev)}
+            syncStatus={syncStatus}
           />
         </div>
       </div>

@@ -26,3 +26,8 @@ export function stringifyMarkdown(ast: any): string {
   const processor = unified().use(remarkStringify);
   return processor.stringify(ast);
 }
+
+// Stringify raw markdown with frontmatter combined
+export function stringifyWithFrontmatter(content: string, frontmatter: { [key: string]: any }): string {
+  return matter.stringify(content, frontmatter);
+}
