@@ -1,6 +1,8 @@
 import { HeroSplitDemo } from "@/components/HeroSplitDemo";
 import { FeatureSections } from "@/components/FeatureSections";
 import { Footer } from "@/components/Footer";
+import { PricingSection } from "@/components/PricingSection";
+import { DocumentationPreview } from "@/components/DocumentationPreview";
 import Link from "next/link";
 
 export default function Home() {
@@ -82,6 +84,12 @@ export default function Home() {
 
         {/* Features Sections */}
         <FeatureSections />
+
+        {/* Documentation Preview Section */}
+        <DocumentationPreview />
+
+        {/* Pricing Section */}
+        <PricingSection />
 
       </main>
 
