@@ -6,7 +6,7 @@ import type {
 import { linter, type Diagnostic } from "@codemirror/lint";
 import { snippetCompletion } from "@codemirror/autocomplete";
 import type { Extension } from "@codemirror/state";
-import { completionsFor, detectKind, type DiagramKind } from "@mdnotion/diagrams";
+import { completionsFor, detectKind, type DiagramKind } from "@forkleaf/diagrams";
 
 /**
  * Mermaid language support for CodeMirror.

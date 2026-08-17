@@ -60,7 +60,7 @@ export class Transport {
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     this.fetchImpl = config.fetch ?? globalThis.fetch.bind(globalThis);
     this.maxRetries = config.maxRetries ?? 3;
-    this.userAgent = config.userAgent ?? "mdnotion";
+    this.userAgent = config.userAgent ?? "forkleaf";
   }
 
   async request<T>(path: string, options: HttpOptions = {}): Promise<HttpResponse<T>> {

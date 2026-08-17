@@ -1,6 +1,6 @@
-import type { ExportFormat, ExportOptions, Note } from "@mdnotion/types";
-import { serializeDocument, documentStats } from "@mdnotion/markdown-engine";
-import { renderDiagram, toStandaloneSvg, LIGHT_THEME, DARK_THEME } from "@mdnotion/diagrams";
+import type { ExportFormat, ExportOptions, Note } from "@forkleaf/types";
+import { serializeDocument, documentStats } from "@forkleaf/markdown-engine";
+import { renderDiagram, toStandaloneSvg, LIGHT_THEME, DARK_THEME } from "@forkleaf/diagrams";
 import { toHtml } from "./html";
 import { toDocx } from "./docx";
 

@@ -41,7 +41,7 @@ describe("graphToMermaid", () => {
 
   it("stores node positions in a comment mermaid will ignore", () => {
     const code = graphToMermaid(graph);
-    expect(code).toContain("%% mdnotion:layout a:100,50;b:100,200;c:300,200");
+    expect(code).toContain("%% forkleaf:layout a:100,50;b:100,200;c:300,200");
   });
 
   it("quotes labels containing characters that would break the syntax", () => {

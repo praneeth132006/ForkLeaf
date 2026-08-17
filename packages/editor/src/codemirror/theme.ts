@@ -13,7 +13,7 @@ import type { Extension } from "@codemirror/state";
 
 const base = EditorView.theme({
   "&": {
-    color: "var(--color-ink)",
+    color: "var(--fl-text)",
     backgroundColor: "transparent",
     fontSize: "15px",
     height: "100%",
@@ -21,7 +21,7 @@ const base = EditorView.theme({
   ".cm-content": {
     fontFamily: "var(--font-mono, ui-monospace, 'SF Mono', Menlo, monospace)",
     padding: "1rem 0 40vh",
-    caretColor: "var(--color-signal-amber)",
+    caretColor: "var(--fl-accent)",
     lineHeight: "1.7",
   },
   ".cm-scroller": {
@@ -31,22 +31,22 @@ const base = EditorView.theme({
   "&.cm-focused": { outline: "none" },
   ".cm-gutters": {
     backgroundColor: "transparent",
-    color: "var(--color-mist)",
+    color: "var(--fl-muted)",
     border: "none",
     paddingRight: "0.5rem",
   },
-  ".cm-activeLine": { backgroundColor: "var(--color-chalk)" },
-  ".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--color-ink)" },
+  ".cm-activeLine": { backgroundColor: "var(--fl-elevated)" },
+  ".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--fl-text)" },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection": {
-    backgroundColor: "color-mix(in srgb, var(--color-trail-teal) 25%, transparent)",
+    backgroundColor: "color-mix(in srgb, var(--fl-accent) 25%, transparent)",
   },
   ".cm-cursor, .cm-dropCursor": {
-    borderLeftColor: "var(--color-signal-amber)",
+    borderLeftColor: "var(--fl-accent)",
     borderLeftWidth: "2px",
   },
   ".cm-tooltip": {
-    backgroundColor: "var(--color-surface)",
-    border: "1px solid var(--color-border)",
+    backgroundColor: "var(--fl-surface)",
+    border: "1px solid var(--fl-border)",
     borderRadius: "8px",
     boxShadow: "0 8px 24px rgb(0 0 0 / 0.12)",
     overflow: "hidden",
@@ -62,8 +62,8 @@ const base = EditorView.theme({
     gap: "0.5rem",
   },
   ".cm-tooltip-autocomplete ul li[aria-selected]": {
-    backgroundColor: "var(--color-trail-teal)",
-    color: "var(--color-paper)",
+    backgroundColor: "var(--fl-accent)",
+    color: "var(--fl-accent-contrast)",
   },
   ".cm-completionLabel": { fontWeight: "500" },
   ".cm-completionDetail": {
@@ -77,38 +77,38 @@ const base = EditorView.theme({
   // is the normal state while a diagram is being typed.
   ".cm-lintRange-error": {
     backgroundImage: "none",
-    borderBottom: "2px wavy var(--color-ember)",
+    borderBottom: "2px wavy var(--fl-danger)",
   },
-  ".cm-diagnostic-error": { borderLeftColor: "var(--color-ember)" },
+  ".cm-diagnostic-error": { borderLeftColor: "var(--fl-danger)" },
 });
 
 /** Syntax colours for markdown and embedded code. */
 const highlight = HighlightStyle.define([
-  { tag: tags.heading1, fontSize: "1.5em", fontWeight: "700", color: "var(--color-ink)" },
-  { tag: tags.heading2, fontSize: "1.3em", fontWeight: "700", color: "var(--color-ink)" },
-  { tag: tags.heading3, fontSize: "1.15em", fontWeight: "650", color: "var(--color-ink)" },
+  { tag: tags.heading1, fontSize: "1.5em", fontWeight: "700", color: "var(--fl-text)" },
+  { tag: tags.heading2, fontSize: "1.3em", fontWeight: "700", color: "var(--fl-text)" },
+  { tag: tags.heading3, fontSize: "1.15em", fontWeight: "650", color: "var(--fl-text)" },
   {
     tag: [tags.heading4, tags.heading5, tags.heading6],
     fontWeight: "650",
-    color: "var(--color-ink)",
+    color: "var(--fl-text)",
   },
-  { tag: tags.strong, fontWeight: "700", color: "var(--color-ink)" },
+  { tag: tags.strong, fontWeight: "700", color: "var(--fl-text)" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strikethrough, textDecoration: "line-through", opacity: 0.7 },
-  { tag: tags.link, color: "var(--color-trail-teal)", textDecoration: "underline" },
-  { tag: tags.url, color: "var(--color-trail-teal)", opacity: 0.8 },
-  { tag: tags.quote, color: "var(--color-mist)", fontStyle: "italic" },
-  { tag: tags.monospace, color: "var(--color-trail-teal)" },
-  { tag: tags.list, color: "var(--color-signal-amber)" },
+  { tag: tags.link, color: "var(--fl-accent)", textDecoration: "underline" },
+  { tag: tags.url, color: "var(--fl-accent)", opacity: 0.8 },
+  { tag: tags.quote, color: "var(--fl-muted)", fontStyle: "italic" },
+  { tag: tags.monospace, color: "var(--fl-accent)" },
+  { tag: tags.list, color: "var(--fl-accent)" },
   // Markdown punctuation (the ## and ** themselves) is dimmed so the prose reads
   // cleanly while the syntax stays visible and editable.
-  { tag: tags.processingInstruction, color: "var(--color-mist)", opacity: 0.6 },
-  { tag: tags.comment, color: "var(--color-mist)", fontStyle: "italic" },
-  { tag: tags.keyword, color: "var(--color-signal-amber)" },
-  { tag: tags.string, color: "var(--color-trail-teal)" },
-  { tag: tags.number, color: "var(--color-ember)" },
-  { tag: [tags.className, tags.typeName], color: "var(--color-signal-amber)" },
-  { tag: tags.variableName, color: "var(--color-ink)" },
+  { tag: tags.processingInstruction, color: "var(--fl-muted)", opacity: 0.6 },
+  { tag: tags.comment, color: "var(--fl-muted)", fontStyle: "italic" },
+  { tag: tags.keyword, color: "var(--fl-accent)" },
+  { tag: tags.string, color: "var(--fl-accent)" },
+  { tag: tags.number, color: "var(--fl-danger)" },
+  { tag: [tags.className, tags.typeName], color: "var(--fl-text)" },
+  { tag: tags.variableName, color: "var(--fl-text)" },
 ]);
 
 export function editorTheme(): Extension {

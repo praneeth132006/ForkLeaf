@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { cheatsheetFor, expandSnippet, type DiagramKind } from "@mdnotion/diagrams";
+import { cheatsheetFor, expandSnippet, type DiagramKind } from "@forkleaf/diagrams";
 
 export interface CheatsheetProps {
   kind: DiagramKind | null;
@@ -21,7 +21,7 @@ export function Cheatsheet({ kind, onInsert }: CheatsheetProps) {
 
   return (
     <div className="h-full overflow-y-auto p-3 text-sm">
-      <p className="mb-3 text-xs leading-snug text-[var(--color-mist)]">
+      <p className="mb-3 text-xs leading-snug text-[var(--fl-muted)]">
         {kind
           ? `Syntax for ${kind} diagrams. Click any row to insert it.`
           : "Pick a diagram type to start. Click any row to insert it."}
@@ -29,7 +29,7 @@ export function Cheatsheet({ kind, onInsert }: CheatsheetProps) {
 
       {sections.map((section) => (
         <section key={section.section} className="mb-4">
-          <h4 className="mb-1.5 text-[0.7rem] font-semibold uppercase tracking-wider text-[var(--color-mist)]">
+          <h4 className="mb-1.5 text-[0.7rem] font-semibold uppercase tracking-wider text-[var(--fl-muted)]">
             {section.section}
           </h4>
 
@@ -40,10 +40,10 @@ export function Cheatsheet({ kind, onInsert }: CheatsheetProps) {
                   type="button"
                   onClick={() => onInsert(expandSnippet(item.snippet).text)}
                   title={`Insert: ${expandSnippet(item.snippet).text}`}
-                  className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-chalk)] focus:bg-[var(--color-chalk)] focus:outline-none"
+                  className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-[var(--fl-elevated)] focus:bg-[var(--fl-elevated)] focus:outline-none"
                 >
-                  <span className="text-[var(--color-ink)]">{item.label}</span>
-                  <code className="font-mono text-[0.7rem] text-[var(--color-mist)]">
+                  <span className="text-[var(--fl-text)]">{item.label}</span>
+                  <code className="font-mono text-[0.7rem] text-[var(--fl-muted)]">
                     {item.detail}
                   </code>
                 </button>

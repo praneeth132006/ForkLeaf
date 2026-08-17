@@ -4,7 +4,7 @@ import { useCallback, useSyncExternalStore } from "react";
 
 export type Theme = "light" | "dark";
 
-const STORAGE_KEY = "mdnotion-theme";
+const STORAGE_KEY = "forkleaf-theme";
 
 /**
  * Theme state, read from the DOM rather than from React state.

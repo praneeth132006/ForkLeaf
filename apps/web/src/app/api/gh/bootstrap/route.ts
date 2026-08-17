@@ -1,13 +1,13 @@
 import { type NextRequest } from "next/server";
 import { handle, requireClient, normalize } from "@/lib/api-helpers";
-import type { RepoRef } from "@mdnotion/types";
+import type { RepoRef } from "@forkleaf/types";
 
-const DEFAULT_REPO_NAME = "mdnotion-notes";
+const DEFAULT_REPO_NAME = "forkleaf-notes";
 
 /**
  * Sets up the user's default notes repository.
  *
- * Called once after sign-in. Creates a private `mdnotion-notes` repo if it does
+ * Called once after sign-in. Creates a private `forkleaf-notes` repo if it does
  * not exist, seeds it with a welcome note, and returns the workspace to open.
  * Idempotent — running it against an existing repo just returns that repo.
  */
@@ -60,12 +60,12 @@ function welcomePath(directory: string): string {
 }
 
 const WELCOME_NOTE = `---
-title: Welcome to mdnotion
+title: Welcome to ForkLeaf
 tags:
   - getting-started
 ---
 
-# Welcome to mdnotion
+# Welcome to ForkLeaf
 
 This note lives in **your own GitHub repository**. Every edit becomes a commit,
 so you get version history, backups and unlimited storage for free — and you can

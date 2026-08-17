@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Note, TreeNode } from "@mdnotion/types";
+import type { Note, TreeNode } from "@forkleaf/types";
 import { SyncEngine } from "./sync-engine";
 import { MemoryDatabase } from "./memory-db";
 import { coalesce, describeChanges } from "./queue";

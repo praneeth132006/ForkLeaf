@@ -1,4 +1,4 @@
-import type { Note, PendingChange, TreeNode, Workspace } from "@mdnotion/types";
+import type { Note, PendingChange, TreeNode, Workspace } from "@forkleaf/types";
 import type { LocalDatabase } from "./ports";
 
 /**

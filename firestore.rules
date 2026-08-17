@@ -1,0 +1,68 @@
+rules_version = '2';
+
+// ForkLeaf Firestore security rules.
+//
+// ForkLeaf stores no note content in Firestore — notes live in the user's own
+// GitHub repository. What is here is one small profile document per user and
+// their subscription state, so these rules only need to answer one question:
+// "is this person reading or writing their own row?"
+//
+// Deploy with:  firebase deploy --only firestore:rules
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{uid} {
+      // The profile document. `request.auth.uid` comes from the anonymous
+      // Firebase identity the client creates on first load; the GitHub identity
+      // is stored inside the document as data, not used for authorisation.
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && isValidProfile();
+      // Deletion is handled out of band, on request, so a bug in the client
+      // cannot wipe someone's billing history.
+      allow delete: if false;
+
+      match /billing/{document} {
+        // Read-only from the browser. Written exclusively by the payment
+        // webhook through the Admin SDK, which bypasses these rules.
+        //
+        // A client that could write its own plan would make every paid feature
+        // a suggestion rather than an entitlement.
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+
+      // No other subcollection is expected under a user.
+      match /{other=**} {
+        allow read, write: if false;
+      }
+    }
+
+    // Everything else is closed. New collections must opt in explicitly rather
+    // than inheriting access from a permissive catch-all.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+
+  function isOwner(uid) {
+    return request.auth != null && request.auth.uid == uid;
+  }
+
+  // Constrains what a client may put in its own profile: the known fields, of
+  // the right types, and nothing else. Without this, `users/{uid}` is an
+  // arbitrary key-value store anyone can fill with anything.
+  function isValidProfile() {
+    let allowed = [
+      'githubId', 'githubLogin', 'displayName',
+      'avatarUrl', 'createdAt', 'lastSeenAt'
+    ];
+    let incoming = request.resource.data;
+
+    return incoming.keys().hasOnly(allowed)
+      && (!incoming.keys().hasAny(['githubId'])   || incoming.githubId == null   || incoming.githubId is int)
+      && (!incoming.keys().hasAny(['githubLogin'])|| incoming.githubLogin == null|| incoming.githubLogin is string)
+      && (!incoming.keys().hasAny(['displayName'])|| incoming.displayName == null|| incoming.displayName is string)
+      && (!incoming.keys().hasAny(['avatarUrl'])  || incoming.avatarUrl == null  || incoming.avatarUrl is string);
+  }
+}

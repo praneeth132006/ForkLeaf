@@ -4,7 +4,7 @@ import { createOAuthState, githubOAuthConfigured } from "@/lib/session";
 /**
  * Starts the GitHub OAuth flow.
  *
- * Scope is `repo` because mdnotion writes notes to the user's own repositories,
+ * Scope is `repo` because ForkLeaf writes notes to the user's own repositories,
  * including private ones. That is the narrowest scope GitHub offers that still
  * allows private-repo writes — there is no "only my notes repo" classic scope.
  * Users who want finer control can install this as a GitHub App instead; see

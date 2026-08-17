@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from "react";
-import type { EditorViewMode } from "@mdnotion/types";
+import React, { useCallback, useRef, useState } from "react";
+import type { Editor } from "@tiptap/core";
+import type { EditorViewMode } from "@forkleaf/types";
 import { WysiwygEditor } from "./WysiwygEditor";
-import { SourceEditor } from "./SourceEditor";
+import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
 import { Preview } from "./Preview";
+import { EditorToolbar } from "./EditorToolbar";
+import { INSERT_ACTIONS, runRichAction, runSourceAction } from "./insert-actions";
 
 export interface MarkdownEditorProps {
   value: string;
@@ -17,6 +20,8 @@ export interface MarkdownEditorProps {
   className?: string;
   /** Hides the built-in mode switcher when the app renders its own. */
   hideModeSwitcher?: boolean;
+  /** Hides the insert toolbar, for embedded or read-mostly surfaces. */
+  hideToolbar?: boolean;
 }
 
 const MODES: { value: EditorViewMode; label: string; hint: string }[] = [
@@ -31,6 +36,10 @@ const MODES: { value: EditorViewMode; label: string; hint: string }[] = [
  * The three modes are views over the same markdown string, so switching never
  * transforms or reformats the file — which matters when the file is a real
  * commit in the user's own repository.
+ *
+ * The insert toolbar sits above all three and dispatches to whichever surface
+ * is live, so "insert a diagram" is the same button whether you are in rich
+ * text or staring at raw markdown.
  */
 export function MarkdownEditor({
   value,
@@ -41,10 +50,27 @@ export function MarkdownEditor({
   placeholder,
   className,
   hideModeSwitcher = false,
+  hideToolbar = false,
 }: MarkdownEditorProps) {
   // Split view: the divider position, as a percentage of the container width.
   const [splitRatio, setSplitRatio] = useState(50);
   const [dragging, setDragging] = useState(false);
+
+  // The live surfaces, so the toolbar can act on whichever one is mounted.
+  const [tiptap, setTiptap] = useState<Editor | null>(null);
+  const sourceHandle = useRef<SourceEditorHandle | null>(null);
+  // Re-render when the rich editor's marks change, so the B/I/S buttons show
+  // the state of the text under the caret rather than a stale one.
+  const [, forceRender] = useState(0);
+
+  const handleTiptapReady = useCallback((editor: Editor | null) => {
+    setTiptap(editor);
+    if (!editor) return;
+
+    const bump = () => forceRender((n) => n + 1);
+    editor.on("selectionUpdate", bump);
+    editor.on("transaction", bump);
+  }, []);
 
   const handleDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const container = event.currentTarget.parentElement;
@@ -70,47 +96,89 @@ export function MarkdownEditor({
     window.addEventListener("pointerup", onUp);
   }, []);
 
-  const switcher = useMemo(() => {
-    if (hideModeSwitcher || !onModeChange) return null;
+  const runAction = useCallback(
+    (id: string) => {
+      if (mode === "wysiwyg") {
+        if (tiptap) runRichAction(tiptap, id);
+      } else {
+        runSourceAction(sourceHandle.current, id);
+      }
+    },
+    [mode, tiptap],
+  );
 
-    return (
-      <div
-        role="tablist"
-        aria-label="Editor mode"
-        className="flex shrink-0 rounded-md border border-[var(--color-border)] p-0.5"
-      >
-        {MODES.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            role="tab"
-            aria-selected={mode === option.value}
-            title={option.hint}
-            onClick={() => onModeChange(option.value)}
-            className={`rounded px-2.5 py-1 text-xs font-medium transition ${
-              mode === option.value
-                ? "bg-[var(--color-trail-teal)] text-[var(--color-paper)]"
-                : "text-[var(--color-mist)] hover:text-[var(--color-ink)]"
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    );
-  }, [mode, onModeChange, hideModeSwitcher]);
+  const isRich = mode === "wysiwyg";
 
   return (
     <div className={`flex min-h-0 flex-col ${className ?? ""}`}>
-      {switcher && <div className="mb-3 flex justify-end">{switcher}</div>}
+      {!hideModeSwitcher && onModeChange && (
+        <div className="mb-3 flex justify-end">
+          <div
+            role="tablist"
+            aria-label="Editor mode"
+            className="flex shrink-0 rounded-lg border border-[var(--fl-border)] p-0.5"
+          >
+            {MODES.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="tab"
+                aria-selected={mode === option.value}
+                title={option.hint}
+                onClick={() => onModeChange(option.value)}
+                className={`rounded-[6px] px-3 py-1 text-[13px] font-medium transition-colors ${
+                  mode === option.value
+                    ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
+                    : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!hideToolbar && (
+        <EditorToolbar
+          actions={INSERT_ACTIONS}
+          onRun={runAction}
+          disabled={isRich && !tiptap}
+          {...(isRich && tiptap
+            ? {
+                format: {
+                  isActive: (mark: string) => tiptap.isActive(mark),
+                  toggle: (mark: string) => {
+                    const chain = tiptap.chain().focus();
+                    switch (mark) {
+                      case "bold":
+                        chain.toggleBold().run();
+                        break;
+                      case "italic":
+                        chain.toggleItalic().run();
+                        break;
+                      case "strike":
+                        chain.toggleStrike().run();
+                        break;
+                      case "code":
+                        chain.toggleCode().run();
+                        break;
+                    }
+                  },
+                },
+              }
+            : {})}
+        />
+      )}
 
       {mode === "wysiwyg" && (
         <div className="relative min-h-0 flex-1 overflow-y-auto">
           <WysiwygEditor
             value={value}
             onChange={onChange}
+            onReady={handleTiptapReady}
             {...(placeholder ? { placeholder } : {})}
-            className="relative mx-auto w-full max-w-3xl px-1 pb-32"
+            className="relative mx-auto w-full max-w-3xl px-1 py-8 pb-32"
           />
         </div>
       )}
@@ -120,6 +188,7 @@ export function MarkdownEditor({
           <SourceEditor
             value={value}
             onChange={onChange}
+            handleRef={sourceHandle}
             {...(placeholder ? { placeholder } : {})}
             showLineNumbers
           />
@@ -132,6 +201,7 @@ export function MarkdownEditor({
             <SourceEditor
               value={value}
               onChange={onChange}
+              handleRef={sourceHandle}
               {...(placeholder ? { placeholder } : {})}
               showLineNumbers
               className="h-full w-full"
@@ -149,12 +219,12 @@ export function MarkdownEditor({
               if (event.key === "ArrowLeft") setSplitRatio((r) => Math.max(20, r - 5));
               if (event.key === "ArrowRight") setSplitRatio((r) => Math.min(80, r + 5));
             }}
-            className={`w-1 shrink-0 cursor-col-resize bg-[var(--color-border)] transition-colors hover:bg-[var(--color-trail-teal)] focus:bg-[var(--color-trail-teal)] focus:outline-none ${
-              dragging ? "bg-[var(--color-trail-teal)]" : ""
+            className={`w-px shrink-0 cursor-col-resize bg-[var(--fl-border)] transition-colors hover:bg-[var(--fl-accent)] focus:bg-[var(--fl-accent)] focus:outline-none ${
+              dragging ? "bg-[var(--fl-accent)]" : ""
             }`}
           />
 
-          <div className="min-w-0 flex-1 overflow-y-auto bg-[var(--color-paper)] px-6 py-4">
+          <div className="min-w-0 flex-1 overflow-y-auto bg-[var(--fl-surface)] px-8 py-8">
             <Preview markdown={value} {...(theme ? { theme } : {})} className="mx-auto max-w-2xl" />
           </div>
         </div>

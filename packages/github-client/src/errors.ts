@@ -1,4 +1,4 @@
-import type { GitHubErrorCode, SerializedError } from "@mdnotion/types";
+import type { GitHubErrorCode, SerializedError } from "@forkleaf/types";
 
 /**
  * A GitHub API failure with a stable, machine-readable code.

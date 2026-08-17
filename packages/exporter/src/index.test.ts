@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { toHtml, toPlainText, EXPORT_FORMATS } from "./index";
-import type { ExportOptions } from "@mdnotion/types";
+import type { ExportOptions } from "@forkleaf/types";
 
 const options = (overrides: Partial<ExportOptions> = {}): ExportOptions => ({
   format: "html",

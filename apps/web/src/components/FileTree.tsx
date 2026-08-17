@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import type { TreeNode } from "@mdnotion/types";
+import type { TreeNode } from "@forkleaf/types";
 
 export interface FileTreeProps {
   nodes: TreeNode[];
@@ -36,7 +36,7 @@ export function FileTree({
 
   if (visible.length === 0) {
     return (
-      <p className="px-3 py-6 text-center text-xs text-[var(--color-mist)]">
+      <p className="px-3 py-6 text-center text-xs text-[var(--fl-muted)]">
         {filter ? `Nothing matches “${filter}”.` : "No notes yet."}
       </p>
     );
@@ -92,11 +92,11 @@ function TreeItem({
             type="button"
             onClick={() => setExpanded((value) => !value)}
             style={indent}
-            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm text-[var(--color-ink)] hover:bg-[var(--color-chalk)]"
+            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm text-[var(--fl-text)] hover:bg-[var(--fl-elevated)]"
           >
             <span
               aria-hidden="true"
-              className={`shrink-0 text-[0.6rem] text-[var(--color-mist)] transition-transform ${open ? "rotate-90" : ""}`}
+              className={`shrink-0 text-[0.6rem] text-[var(--fl-muted)] transition-transform ${open ? "rotate-90" : ""}`}
             >
               ▶
             </span>
@@ -108,7 +108,7 @@ function TreeItem({
             onClick={() => onCreateIn(node.path)}
             title={`New note in ${node.name}`}
             aria-label={`New note in ${node.name}`}
-            className="mr-1 shrink-0 rounded px-1.5 text-[var(--color-mist)] opacity-0 transition hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)] focus:opacity-100 group-hover:opacity-100"
+            className="mr-1 shrink-0 rounded px-1.5 text-[var(--fl-muted)] opacity-0 transition hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] focus:opacity-100 group-hover:opacity-100"
           >
             +
           </button>
@@ -146,11 +146,11 @@ function TreeItem({
           style={indent}
           className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm transition ${
             active
-              ? "bg-[var(--color-trail-teal)]/12 font-medium text-[var(--color-trail-teal)]"
-              : "text-[var(--color-ink)] hover:bg-[var(--color-chalk)]"
+              ? "bg-[var(--fl-accent)]/12 font-medium text-[var(--fl-accent)]"
+              : "text-[var(--fl-text)] hover:bg-[var(--fl-elevated)]"
           }`}
         >
-          <span aria-hidden="true" className="shrink-0 text-[0.7rem] text-[var(--color-mist)]">
+          <span aria-hidden="true" className="shrink-0 text-[0.7rem] text-[var(--fl-muted)]">
             ◦
           </span>
           <span className="truncate">{node.name.replace(/\.mdx?$/i, "")}</span>
@@ -162,7 +162,7 @@ function TreeItem({
             onClick={() => onRename(node.path)}
             title="Rename"
             aria-label={`Rename ${node.name}`}
-            className="rounded px-1.5 text-xs text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
+            className="rounded px-1.5 text-xs text-[var(--fl-muted)] hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
           >
             ✎
           </button>
@@ -171,7 +171,7 @@ function TreeItem({
             onClick={() => onDelete(node.path)}
             title="Delete"
             aria-label={`Delete ${node.name}`}
-            className="rounded px-1.5 text-xs text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ember)]"
+            className="rounded px-1.5 text-xs text-[var(--fl-muted)] hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-danger)]"
           >
             ✕
           </button>

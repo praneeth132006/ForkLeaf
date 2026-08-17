@@ -67,11 +67,11 @@ pattern-checked. Writes are capped at 5 MB per file and 100 changes per commit.
 ### Commit history
 
 Commit squashing force-updates a git ref. It is deliberately constrained: it
-only ever rewrites a commit that mdnotion itself authored, only within a short
+only ever rewrites a commit that ForkLeaf itself authored, only within a short
 time window, never a root commit, and it re-reads the branch head immediately
 before pushing — falling back to a normal commit if anything moved.
 
-**A way to make mdnotion rewrite or destroy a commit it did not create is a
+**A way to make ForkLeaf rewrite or destroy a commit it did not create is a
 vulnerability.**
 
 ## Out of scope

@@ -1,0 +1,356 @@
+import React from "react";
+import { A, Code, Def, H2, H3, Lead, LI, Note, OL, P, Pre, Table, UL } from "@/components/prose";
+import { PLANS, formatPrice } from "@/lib/plans";
+
+export function Plans() {
+  return (
+    <>
+      <Lead>
+        The editor is free and will stay free. Your notes sit in your own GitHub account, so there
+        is no storage for anyone to charge you for. The paid tiers buy convenience on top of that —
+        never access to your own writing.
+      </Lead>
+
+      <Note>
+        <strong>Pro and Team are not on sale yet.</strong> No payment provider is connected, the
+        buttons say &ldquo;Coming soon&rdquo;, and everyone is on Free. This page describes what is
+        planned so you can judge whether the free tier is going to be quietly hollowed out later. It
+        is not.
+      </Note>
+
+      <H2 id="tiers">The tiers</H2>
+      {PLANS.map((plan) => (
+        <div key={plan.id}>
+          <H3 id={plan.id}>
+            {plan.name} — {formatPrice(plan)}
+            {plan.amount > 0 && <span className="text-[var(--fl-muted)]"> / month</span>}
+          </H3>
+          <P>{plan.tagline}</P>
+          <UL>
+            {plan.features.map((feature) => (
+              <LI key={feature}>{feature}</LI>
+            ))}
+          </UL>
+        </div>
+      ))}
+
+      <H2 id="promise">What Free will always include</H2>
+      <P>
+        A free tier is only meaningful if its boundaries are stated. These will not move behind a
+        paywall:
+      </P>
+      <UL>
+        <LI>Unlimited notes, of unlimited length, in a repository you own.</LI>
+        <LI>All three editing views, and every block type in the insert menu.</LI>
+        <LI>Every Mermaid diagram type, the visual builder, and the source editor.</LI>
+        <LI>Export to Markdown, PDF, HTML, Word, plain text and JSON.</LI>
+        <LI>Offline editing and background sync.</LI>
+        <LI>Conflict detection and resolution.</LI>
+        <LI>Self-hosting the whole thing under Apache-2.0.</LI>
+      </UL>
+      <P>
+        The paid tiers are about scale — more repositories, search across all of them, org-level
+        administration — not about withholding the editor.
+      </P>
+
+      <H2 id="billing">How billing will work</H2>
+      <P>When a payment provider is connected, the flow will be:</P>
+      <OL>
+        <li>You choose a plan and go through the provider&rsquo;s own hosted checkout.</li>
+        <li>
+          ForkLeaf never sees your card. Card details go to the provider, and the provider returns a
+          subscription identifier.
+        </li>
+        <li>
+          A webhook writes your plan and its status into Firestore at{" "}
+          <Code>users/&#123;uid&#125;/billing/subscription</Code>.
+        </li>
+        <li>The app reads that document and unlocks the paid features.</li>
+      </OL>
+      <P>
+        That document is <strong>read-only from the browser</strong>, enforced in the Firestore
+        security rules. A client that could write its own plan would make the whole thing
+        decorative.
+      </P>
+
+      <H2 id="shutdown">If ForkLeaf disappears</H2>
+      <P>
+        Your notes are already in your GitHub repository as plain Markdown, in a normal git history.
+        They keep working with no ForkLeaf involved: clone the repo, open it in any editor, or point
+        another tool at it. There is no export step, because there was never an import step.
+      </P>
+      <P>
+        The source is Apache-2.0 licensed, so a self-hosted instance stays possible regardless — see{" "}
+        <A href="/docs/self-hosting">Self-hosting</A>.
+      </P>
+    </>
+  );
+}
+
+export function PrivacyAndData() {
+  return (
+    <>
+      <Lead>
+        A plain inventory of what ForkLeaf holds about you, where each piece lives, and how to get
+        rid of it. The formal version is the <A href="/privacy">privacy policy</A>; this is the
+        engineering account.
+      </Lead>
+
+      <H2 id="notes">Your notes</H2>
+      <Table
+        head={["Where", "What", "Who can read it"]}
+        rows={[
+          [
+            <strong key="a">Your browser (IndexedDB)</strong>,
+            "Every note in every workspace you have opened, plus the pending-change queue",
+            "You, on that device",
+          ],
+          [
+            <strong key="b">Your GitHub repository</strong>,
+            "Notes as .md files, with full commit history",
+            "Whoever you have granted access to that repository",
+          ],
+          [
+            <strong key="c">ForkLeaf servers</strong>,
+            "Nothing. Note content passes through the API proxy in memory and is not written down.",
+            "—",
+          ],
+        ]}
+      />
+      <P>
+        There is no notes table. This is not a policy commitment that could be revised — it is the
+        architecture. See <A href="/docs/how-it-works">How ForkLeaf works</A>.
+      </P>
+
+      <H2 id="session">Your session</H2>
+      <Def term="The session cookie">
+        Contains your GitHub access token and your public profile — id, login, name, avatar URL —
+        encrypted with JWE (A256GCM). <Code>httpOnly</Code>, <Code>SameSite=Lax</Code>,{" "}
+        <Code>Secure</Code> in production, 30-day expiry. Only the server can decrypt it.
+      </Def>
+      <Def term="The OAuth state cookie">
+        A random value that lives for ten minutes during sign-in and is deleted the moment it is
+        used.
+      </Def>
+
+      <H2 id="firebase">Analytics and account records</H2>
+      <P>
+        The hosted deployment uses Firebase for product analytics and for the billing scaffold. A
+        self-hosted copy with no Firebase configuration collects none of this and works identically.
+      </P>
+      <H3>Analytics</H3>
+      <P>
+        Firebase Analytics records which screens are opened and which features are used — note
+        created, diagram inserted, note exported, repository connected. Events carry no note
+        content, no filenames, no repository names and no note text.
+      </P>
+      <P>
+        It degrades to nothing when unavailable: private browsing, a blocked script or a missing
+        IndexedDB all result in analytics simply not running, and the app does not care.
+      </P>
+      <H3>The user record</H3>
+      <P>
+        One Firestore document, at <Code>users/&#123;uid&#125;</Code>:
+      </P>
+      <Pre label="users/abc123">{`{
+  "githubId": 12345678,
+  "githubLogin": "you",
+  "displayName": "Your Name",
+  "avatarUrl": "https://avatars.githubusercontent.com/u/12345678",
+  "createdAt": "2026-08-14T09:12:00Z",
+  "lastSeenAt": "2026-08-17T16:40:00Z"
+}`}</Pre>
+      <P>
+        That is the entire record. It exists so a subscription has something to attach to. The{" "}
+        <Code>uid</Code> is an anonymous Firebase identity created automatically — you are never
+        asked to sign in to Firebase, and it is not your GitHub login.
+      </P>
+
+      <H2 id="third-parties">Who else is involved</H2>
+      <Table
+        head={["Party", "Role", "What they see"]}
+        rows={[
+          [
+            <strong key="a">GitHub</strong>,
+            "Stores your notes",
+            "Everything in the repository — it is their repository hosting",
+          ],
+          [
+            <strong key="b">Google (Firebase)</strong>,
+            "Analytics, user record, billing state",
+            "Anonymous usage events and the small profile above",
+          ],
+          [
+            <strong key="c">The host</strong>,
+            "Serves the app",
+            "Standard HTTP request logs: IP, user agent, path",
+          ],
+        ]}
+      />
+      <P>
+        No advertising networks, no data brokers, no session-replay tooling, no third-party
+        trackers.
+      </P>
+
+      <H2 id="delete">Deleting everything</H2>
+      <OL>
+        <li>
+          <strong>Notes on GitHub:</strong> delete the repository from your GitHub settings. That is
+          your data in your account — ForkLeaf cannot and does not delete it for you.
+        </li>
+        <li>
+          <strong>Notes in this browser:</strong> clear site data for this domain, which drops the
+          IndexedDB database.
+        </li>
+        <li>
+          <strong>Your session:</strong> sign out, then revoke the app at{" "}
+          <A href="https://github.com/settings/applications">GitHub → Authorized OAuth Apps</A>.
+        </li>
+        <li>
+          <strong>Your Firebase record:</strong> email the address in the{" "}
+          <A href="/privacy">privacy policy</A> and it will be deleted.
+        </li>
+      </OL>
+      <Note>
+        Step 1 first. Deleting the browser copy of an unsynced local-workspace note is irreversible
+        — there is no other copy of it anywhere.
+      </Note>
+    </>
+  );
+}
+
+export function Security() {
+  return (
+    <>
+      <Lead>
+        ForkLeaf holds a token that can read and write every repository you granted it. That is the
+        whole security story, and everything below follows from taking it seriously.
+      </Lead>
+
+      <H2 id="token">Token handling</H2>
+      <UL>
+        <LI>
+          The access token is encrypted (JWE, A256GCM) into an <Code>httpOnly</Code> cookie. The key
+          is derived by SHA-256 from <Code>SESSION_SECRET</Code>.
+        </LI>
+        <LI>
+          It is never serialised into the page, never returned by an API route, and never placed in
+          a URL or redirect.
+        </LI>
+        <LI>
+          Every GitHub call is proxied through <Code>/api/gh/*</Code>, which attaches the token
+          server-side.
+        </LI>
+        <LI>
+          <Code>SESSION_SECRET</Code> has no default. A deployment that forgets to set it fails
+          loudly at startup rather than falling back to a shared constant that would let anyone
+          forge a session.
+        </LI>
+      </UL>
+      <Note>
+        A token in <Code>localStorage</Code> — the usual shortcut — is readable by any script that
+        ever runs on the page, including a compromised npm dependency. That single decision is why
+        the API proxy exists.
+      </Note>
+
+      <H2 id="csrf">OAuth CSRF</H2>
+      <P>
+        The <Code>state</Code> parameter is a 24-byte random value stored in a short-lived cookie
+        and compared on return with a constant-time comparison. It is single-use: consumed and
+        deleted whether or not it matched.
+      </P>
+      <P>
+        Without it, an attacker can complete an OAuth flow in your browser and bind your session to
+        their account, so your notes start being committed to their repository.
+      </P>
+
+      <H2 id="xss">Cross-site scripting</H2>
+      <UL>
+        <LI>
+          Rendered Markdown is sanitised before it reaches the DOM. Raw HTML in a note is not
+          executed.
+        </LI>
+        <LI>
+          Mermaid SVG output is sanitised before insertion — a diagram is user input like any other.
+        </LI>
+        <LI>
+          Link and image URLs are restricted to <Code>http</Code>, <Code>https</Code> and{" "}
+          <Code>mailto</Code>, in the editor, in pasted content, and in the insert menu. A{" "}
+          <Code>javascript:</Code> URL committed into a note would be a stored XSS affecting
+          everyone who later opens the file.
+        </LI>
+      </UL>
+
+      <H2 id="history">The commit-rewrite guard</H2>
+      <P>
+        ForkLeaf squashes consecutive commits so your history is not one commit per keystroke. That
+        means it amends commits, which means it can destroy work if it gets the conditions wrong.
+        The rules are deliberately narrow — it only amends a commit when:
+      </P>
+      <UL>
+        <LI>The head commit&rsquo;s message carries ForkLeaf&rsquo;s own marker.</LI>
+        <LI>It was made within a short time window.</LI>
+        <LI>The author matches.</LI>
+        <LI>Nobody else has pushed since.</LI>
+      </UL>
+      <Note kind="danger">
+        <strong>
+          A way to make ForkLeaf rewrite or destroy a commit it did not create is a security bug,
+          not a bug report.
+        </strong>{" "}
+        Please report it privately rather than opening a public issue — the process is in{" "}
+        <A href="https://github.com/praneeth132006/MarkDown/blob/main/SECURITY.md">SECURITY.md</A>.
+      </Note>
+
+      <H2 id="firestore">Firestore rules</H2>
+      <P>
+        Users can read and write their own profile document and nothing else. The billing document
+        is readable by its owner and writable only by the server, so a browser cannot promote itself
+        to a paid plan:
+      </P>
+      <Pre label="firestore.rules">{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+      // Written only by the payment webhook, using the Admin SDK, which
+      // bypasses these rules. Never writable from a browser.
+      match /billing/{document} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}`}</Pre>
+
+      <H2 id="scope">Known trade-offs</H2>
+      <Def term="The repo scope is broad">
+        It is the narrowest classic OAuth scope that allows writing to a private repository. A
+        GitHub App gives per-repository consent and is supported for self-hosters — see{" "}
+        <A href="/docs/self-hosting">Self-hosting</A>.
+      </Def>
+      <Def term="Notes are only as private as the repository">
+        ForkLeaf creates the notes repository private, but if you make it public, or connect a
+        public one, your notes are public. The app cannot protect you from your own repository
+        settings.
+      </Def>
+      <Def term="Local notes are unencrypted">
+        IndexedDB content is not encrypted at rest. Anyone with access to your unlocked machine and
+        browser profile can read it, as with any web app.
+      </Def>
+
+      <H2 id="reporting">Reporting a vulnerability</H2>
+      <P>
+        Please do not open a public issue. The disclosure process, the response timeline and what is
+        in scope are documented in{" "}
+        <A href="https://github.com/praneeth132006/MarkDown/blob/main/SECURITY.md">SECURITY.md</A>.
+      </P>
+    </>
+  );
+}

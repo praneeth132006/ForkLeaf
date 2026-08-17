@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { SyncState, Workspace } from "@mdnotion/types";
+import type { SyncState, Workspace } from "@forkleaf/types";
 
 export interface EditorStatusBarProps {
   sync: SyncState;
@@ -28,12 +28,12 @@ export function EditorStatusBar({
   const status = describe(sync);
 
   return (
-    <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-[var(--color-border)] bg-[var(--color-paper)] px-3 text-[0.7rem] text-[var(--color-mist)]">
+    <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-[var(--fl-border)] bg-[var(--fl-bg)] px-3 text-[0.7rem] text-[var(--fl-muted)]">
       <button
         type="button"
         onClick={sync.conflicts.length > 0 ? onShowConflicts : onSyncNow}
         title={sync.conflicts.length > 0 ? "Resolve conflicts" : "Sync now"}
-        className="flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-[var(--color-chalk)]"
+        className="flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-[var(--fl-elevated)]"
       >
         <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
         <span className={status.className}>{status.label}</span>
@@ -60,7 +60,7 @@ export function EditorStatusBar({
       )}
 
       {sync.lastError && (
-        <span className="ml-auto truncate text-[var(--color-ember)]" title={sync.lastError}>
+        <span className="ml-auto truncate text-[var(--fl-danger)]" title={sync.lastError}>
           {sync.lastError}
         </span>
       )}
@@ -72,8 +72,8 @@ function describe(sync: SyncState): { label: string; className: string; dot: str
   if (sync.conflicts.length > 0) {
     return {
       label: `${sync.conflicts.length} conflict${sync.conflicts.length === 1 ? "" : "s"} — click to resolve`,
-      className: "text-[var(--color-ember)] font-medium",
-      dot: "bg-[var(--color-ember)]",
+      className: "text-[var(--fl-danger)] font-medium",
+      dot: "bg-[var(--fl-danger)]",
     };
   }
 
@@ -82,7 +82,7 @@ function describe(sync: SyncState): { label: string; className: string; dot: str
       return {
         label: "Saving to GitHub…",
         className: "",
-        dot: "bg-[var(--color-signal-amber)] animate-pulse",
+        dot: "bg-[var(--fl-warn)] animate-pulse",
       };
 
     case "pending":
@@ -90,31 +90,31 @@ function describe(sync: SyncState): { label: string; className: string; dot: str
         // Naming both halves is the point: nothing has been lost.
         label: `Saved locally · ${sync.pendingCount} to push`,
         className: "",
-        dot: "bg-[var(--color-signal-amber)]",
+        dot: "bg-[var(--fl-warn)]",
       };
 
     case "offline":
       return {
         label: `Offline · ${sync.pendingCount} change${sync.pendingCount === 1 ? "" : "s"} queued`,
         className: "",
-        dot: "bg-[var(--color-mist)]",
+        dot: "bg-[var(--fl-muted)]",
       };
 
     case "error":
       return {
         label: "Couldn't sync — click to retry",
-        className: "text-[var(--color-ember)]",
-        dot: "bg-[var(--color-ember)]",
+        className: "text-[var(--fl-danger)]",
+        dot: "bg-[var(--fl-danger)]",
       };
 
     case "local":
-      return { label: "Saved on this device", className: "", dot: "bg-[var(--color-mist)]" };
+      return { label: "Saved on this device", className: "", dot: "bg-[var(--fl-muted)]" };
 
     case "conflict":
       return {
         label: "Conflict",
-        className: "text-[var(--color-ember)]",
-        dot: "bg-[var(--color-ember)]",
+        className: "text-[var(--fl-danger)]",
+        dot: "bg-[var(--fl-danger)]",
       };
 
     case "idle":
@@ -124,7 +124,7 @@ function describe(sync: SyncState): { label: string; className: string; dot: str
           ? `All changes saved ${relative(sync.lastSyncedAt)}`
           : "All changes saved",
         className: "",
-        dot: "bg-[var(--color-trail-teal)]",
+        dot: "bg-[var(--fl-accent)]",
       };
   }
 }

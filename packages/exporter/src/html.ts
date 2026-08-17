@@ -1,6 +1,6 @@
-import { markdownToHtml, extractMermaidBlocks, serializeDocument } from "@mdnotion/markdown-engine";
-import { renderDiagram, LIGHT_THEME, DARK_THEME } from "@mdnotion/diagrams";
-import type { ExportOptions } from "@mdnotion/types";
+import { markdownToHtml, extractMermaidBlocks, serializeDocument } from "@forkleaf/markdown-engine";
+import { renderDiagram, LIGHT_THEME, DARK_THEME } from "@forkleaf/diagrams";
+import type { ExportOptions } from "@forkleaf/types";
 
 /**
  * Standalone HTML export.
@@ -60,13 +60,13 @@ export async function toHtml(
     /<div class="diagram">([\s\S]*?)<\/div>/g,
     (_match, svg: string) => {
       svgs.push(svg);
-      return `\n\nMDNOTIONDIAGRAM${svgs.length - 1}TOKEN\n\n`;
+      return `\n\nFORKLEAFDIAGRAM${svgs.length - 1}TOKEN\n\n`;
     },
   );
 
   let body = markdownToHtml(tokenised);
   body = body.replace(
-    /MDNOTIONDIAGRAM(\d+)TOKEN/g,
+    /FORKLEAFDIAGRAM(\d+)TOKEN/g,
     (_match, index: string) => `<div class="diagram">${svgs[Number(index)] ?? ""}</div>`,
   );
 

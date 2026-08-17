@@ -1,4 +1,4 @@
-import type { Note, PendingChange, TreeNode, Workspace } from "@mdnotion/types";
+import type { Note, PendingChange, TreeNode, Workspace } from "@forkleaf/types";
 
 /**
  * Ports the sync engine depends on.

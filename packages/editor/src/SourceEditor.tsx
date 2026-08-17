@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useMemo } from "react";
+import React, { useEffect, useRef, useMemo, useImperativeHandle } from "react";
 import { EditorState, type Extension, Compartment } from "@codemirror/state";
 import {
   EditorView,
@@ -25,6 +25,7 @@ import { indentOnInput, bracketMatching, foldGutter, foldKeymap } from "@codemir
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { lintKeymap } from "@codemirror/lint";
 import { editorTheme } from "./codemirror/theme";
+import { markdownSlashCommands } from "./codemirror/slash-markdown";
 
 export interface SourceEditorProps {
   value: string;
@@ -38,6 +39,20 @@ export interface SourceEditorProps {
   className?: string;
   autoFocus?: boolean;
   ariaLabel?: string;
+  /** Lets a toolbar insert text at the caret instead of at the end of the file. */
+  handleRef?: React.Ref<SourceEditorHandle>;
+}
+
+export interface SourceEditorHandle {
+  /**
+   * Inserts `text` over the current selection.
+   *
+   * `cursorOffset` places the caret that many characters into the inserted
+   * text — so a toolbar can drop in a fenced code block and leave you inside
+   * it rather than after it.
+   */
+  insertAtCursor: (text: string, cursorOffset?: number) => void;
+  focus: () => void;
 }
 
 /**
@@ -58,6 +73,7 @@ export function SourceEditor({
   className,
   autoFocus = false,
   ariaLabel = "Markdown source",
+  handleRef,
 }: SourceEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -87,7 +103,14 @@ export function SourceEditor({
         indentOnInput(),
         bracketMatching(),
         closeBrackets(),
-        autocompletion({ activateOnTyping: true, icons: false }),
+        autocompletion({
+          activateOnTyping: true,
+          icons: false,
+          // Markdown gets the same `/` block menu as the rich-text editor, so
+          // the keystroke means the same thing in every view. The diagram
+          // studio passes `language="plain"` and supplies its own source.
+          ...(language === "markdown" ? { override: [markdownSlashCommands] } : {}),
+        }),
         EditorState.allowMultipleSelections.of(true),
         EditorView.lineWrapping,
         ...(showLineNumbers ? [lineNumbers(), highlightActiveLineGutter(), foldGutter()] : []),
@@ -143,6 +166,26 @@ export function SourceEditor({
       selection: { anchor: Math.min(view.state.selection.main.anchor, value.length) },
     });
   }, [value]);
+
+  useImperativeHandle(
+    handleRef,
+    (): SourceEditorHandle => ({
+      insertAtCursor: (text, cursorOffset) => {
+        const view = viewRef.current;
+        if (!view) return;
+
+        const { from, to } = view.state.selection.main;
+        view.dispatch({
+          changes: { from, to, insert: text },
+          selection: { anchor: from + (cursorOffset ?? text.length) },
+          scrollIntoView: true,
+        });
+        view.focus();
+      },
+      focus: () => viewRef.current?.focus(),
+    }),
+    [],
+  );
 
   // Swap caller extensions in place.
   useEffect(() => {

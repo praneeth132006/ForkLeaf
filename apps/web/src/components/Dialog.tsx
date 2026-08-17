@@ -7,6 +7,8 @@ export interface DialogProps {
   onClose: () => void;
   children: React.ReactNode;
   wide?: boolean;
+  /** Optional line under the title, for orientation. */
+  subtitle?: string;
 }
 
 /**
@@ -14,7 +16,7 @@ export interface DialogProps {
  * Escape closes it, focus is trapped inside while it is open, and focus returns
  * to whatever opened it on close.
  */
-export function Dialog({ title, onClose, children, wide = false }: DialogProps) {
+export function Dialog({ title, subtitle, onClose, children, wide = false }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
@@ -68,7 +70,7 @@ export function Dialog({ title, onClose, children, wide = false }: DialogProps) 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -79,23 +81,36 @@ export function Dialog({ title, onClose, children, wide = false }: DialogProps) 
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`flex max-h-[85vh] w-full flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl ${
+        className={`flex max-h-[85vh] w-full flex-col overflow-hidden rounded-2xl border border-[var(--fl-border)] bg-[var(--fl-bg)] shadow-[var(--fl-shadow-lg)] ${
           wide ? "max-w-3xl" : "max-w-md"
         }`}
       >
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-          <h2 className="font-serif text-lg font-semibold text-[var(--color-ink)]">{title}</h2>
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--fl-border)] px-5 py-3.5">
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-semibold text-[var(--fl-text)]">{title}</h2>
+            {subtitle && <p className="mt-0.5 text-[12.5px] text-[var(--fl-muted)]">{subtitle}</p>}
+          </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1 text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
+            title="Close (Esc)"
+            className="-mr-1 shrink-0 rounded-lg p-1.5 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
           >
-            ✕
+            <svg
+              viewBox="0 0 16 16"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+            >
+              <path d="m4 4 8 8M12 4l-8 8" />
+            </svg>
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
       </div>
     </div>
   );

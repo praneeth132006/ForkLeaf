@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import type { FileChange } from "@mdnotion/github-client";
+import type { FileChange } from "@forkleaf/github-client";
 import { handle, requireClient, readRepoRefFromBody, normalize, ApiError } from "@/lib/api-helpers";
 
 /** Largest single note we will accept, to keep one bad paste from wedging a repo. */

@@ -1,5 +1,5 @@
 /**
- * Shared domain model for mdnotion.
+ * Shared domain model for ForkLeaf.
  *
  * Everything in here is deliberately serialisable: these objects travel between
  * the browser, IndexedDB and the GitHub API, so no class instances and no `Date`
@@ -50,7 +50,7 @@ export interface Workspace {
   id: string;
   name: string;
   repo: RepoRef;
-  /** True for the repo mdnotion created on the user's behalf. */
+  /** True for the repo ForkLeaf created on the user's behalf. */
   isDefault: boolean;
   /** True for the offline-only workspace used in local mode. */
   isLocal: boolean;

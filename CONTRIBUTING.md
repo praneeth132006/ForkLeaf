@@ -1,4 +1,4 @@
-# Contributing to mdnotion
+# Contributing to ForkLeaf
 
 Thanks for wanting to help. This document should get you from a clean clone to a
 merged pull request without guesswork.

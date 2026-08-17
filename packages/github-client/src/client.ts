@@ -1,4 +1,4 @@
-import type { RepoRef, TreeNode } from "@mdnotion/types";
+import type { RepoRef, TreeNode } from "@forkleaf/types";
 import { Transport, type RateLimit, type TransportConfig } from "./http";
 import { GitHubError } from "./errors";
 import { encodeBase64, decodeBase64 } from "./base64";
@@ -65,7 +65,7 @@ export interface RepoSummary {
   fullName: string;
   private: boolean;
   defaultBranch: string;
-  /** False for repos the user can only read — mdnotion needs write access. */
+  /** False for repos the user can only read — ForkLeaf needs write access. */
   canPush: boolean;
   description: string | null;
   updatedAt: string;
@@ -87,7 +87,7 @@ export type FileChange =
 export interface CommitOptions {
   message: string;
   /**
-   * When set, a commit made by mdnotion within this many milliseconds is
+   * When set, a commit made by ForkLeaf within this many milliseconds is
    * rewritten to absorb these changes instead of stacking a new commit on top.
    * This is what keeps autosave from producing thousands of commits.
    */
@@ -103,7 +103,7 @@ export interface CommitResult {
 }
 
 /** Prefix that marks a commit as ours, so we only ever rewrite our own. */
-const COMMIT_MARKER = "mdnotion:";
+const COMMIT_MARKER = "forkleaf:";
 
 /** Regular non-executable file mode. */
 const FILE_MODE = "100644";
@@ -187,7 +187,7 @@ export class GitHubClient {
       method: "POST",
       body: {
         name: options.name,
-        description: options.description ?? "My notes, synced by mdnotion",
+        description: options.description ?? "My notes, synced by ForkLeaf",
         private: options.private ?? true,
         auto_init: true,
       },
@@ -274,7 +274,7 @@ export class GitHubClient {
 
     if (tree.truncated) {
       // >100k entries. We still show what came back rather than failing outright.
-      console.warn("[mdnotion] Repository tree was truncated by GitHub; showing a partial list.");
+      console.warn("[forkleaf] Repository tree was truncated by GitHub; showing a partial list.");
     }
 
     const inDirectory = (p: string) =>
@@ -403,7 +403,7 @@ export class GitHubClient {
   }
 
   /**
-   * A commit is safe to rewrite only if mdnotion made it, it is recent, and it
+   * A commit is safe to rewrite only if ForkLeaf made it, it is recent, and it
    * has a parent to reattach to. Rewriting anyone else's commit — or the repo's
    * initial commit — is never acceptable.
    */

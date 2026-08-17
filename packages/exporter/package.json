@@ -1,5 +1,5 @@
 {
-  "name": "@mdnotion/exporter",
+  "name": "@forkleaf/exporter",
   "version": "0.2.0",
   "private": true,
   "type": "module",
@@ -12,9 +12,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mdnotion/diagrams": "workspace:*",
-    "@mdnotion/markdown-engine": "workspace:*",
-    "@mdnotion/types": "workspace:*",
+    "@forkleaf/diagrams": "workspace:*",
+    "@forkleaf/markdown-engine": "workspace:*",
+    "@forkleaf/types": "workspace:*",
     "docx": "^9.5.1",
     "jszip": "^3.10.1"
   },

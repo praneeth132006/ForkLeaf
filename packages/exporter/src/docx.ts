@@ -11,7 +11,7 @@ import {
   AlignmentType,
   ExternalHyperlink,
 } from "docx";
-import { parseToAst } from "@mdnotion/markdown-engine";
+import { parseToAst } from "@forkleaf/markdown-engine";
 import type { Root, RootContent, PhrasingContent, Heading, List, Table as MdTable } from "mdast";
 
 /**
@@ -105,7 +105,7 @@ function listParagraphs(list: List, depth = 0): (Paragraph | Table)[] {
         new Paragraph({
           children: [...(prefix ? [new TextRun({ text: prefix })] : []), ...toRuns(first.children)],
           ...(list.ordered
-            ? { numbering: { reference: "mdnotion-ordered", level: depth } }
+            ? { numbering: { reference: "forkleaf-ordered", level: depth } }
             : { bullet: { level: depth } }),
         }),
       );
@@ -229,7 +229,7 @@ export async function toDocx(markdown: string, title: string): Promise<Blob> {
     numbering: {
       config: [
         {
-          reference: "mdnotion-ordered",
+          reference: "forkleaf-ordered",
           levels: [0, 1, 2].map((level) => ({
             level,
             format: "decimal" as const,

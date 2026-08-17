@@ -7,7 +7,7 @@ import {
   createLocalDatabase,
   type LocalDatabase,
   type RemoteGateway,
-} from "@mdnotion/store";
+} from "@forkleaf/store";
 import {
   workspaceId,
   type Note,
@@ -15,8 +15,8 @@ import {
   type TreeNode,
   type Workspace,
   type EditorViewMode,
-} from "@mdnotion/types";
-import { dirname } from "@mdnotion/markdown-engine";
+} from "@forkleaf/types";
+import { dirname } from "@forkleaf/markdown-engine";
 import {
   GitHubGateway,
   LocalGateway,
@@ -151,7 +151,7 @@ export function useNotebook() {
           patch({
             ready: true,
             busy: null,
-            error: error instanceof Error ? error.message : "Could not start mdnotion.",
+            error: error instanceof Error ? error.message : "Could not start ForkLeaf.",
           });
         }
       }

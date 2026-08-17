@@ -1,7 +1,7 @@
 "use client";
 
-import type { RemoteGateway, RemoteCommitInput, RemoteCommitResult } from "@mdnotion/store";
-import type { RepoRef, TreeNode, Workspace } from "@mdnotion/types";
+import type { RemoteGateway, RemoteCommitInput, RemoteCommitResult } from "@forkleaf/store";
+import type { RepoRef, TreeNode, Workspace } from "@forkleaf/types";
 
 /**
  * The browser's view of GitHub.

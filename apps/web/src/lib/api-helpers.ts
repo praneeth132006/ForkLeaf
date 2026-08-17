@@ -1,7 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { GitHubClient, GitHubError } from "@mdnotion/github-client";
-import type { RepoRef } from "@mdnotion/types";
+import { GitHubClient, GitHubError } from "@forkleaf/github-client";
+import type { RepoRef } from "@forkleaf/types";
 import { getSession } from "@/lib/session";
 
 /**
@@ -31,7 +31,7 @@ export async function requireClient(): Promise<{ client: GitHubClient; login: st
   }
 
   return {
-    client: new GitHubClient({ token: session.token, userAgent: "mdnotion" }),
+    client: new GitHubClient({ token: session.token, userAgent: "forkleaf" }),
     login: session.user.login,
   };
 }
@@ -95,14 +95,14 @@ export async function handle<T>(fn: () => Promise<T>): Promise<NextResponse> {
 
     if (error instanceof GitHubError) {
       // Log server-side with full detail; return only the safe projection.
-      console.error("[mdnotion] GitHub API error:", error.code, error.message);
+      console.error("[forkleaf] GitHub API error:", error.code, error.message);
       return NextResponse.json(
         { error: error.toJSON() },
         { status: statusFor(error), headers: { "Cache-Control": "no-store" } },
       );
     }
 
-    console.error("[mdnotion] Unhandled API error:", error);
+    console.error("[forkleaf] Unhandled API error:", error);
     return NextResponse.json(
       { error: { code: "unknown", message: "Something went wrong. Please try again." } },
       { status: 500, headers: { "Cache-Control": "no-store" } },

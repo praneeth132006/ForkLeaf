@@ -4,8 +4,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import type { EditorViewMode } from "@mdnotion/types";
-import { deriveTitle, dirname, joinPath, slugifyFilename } from "@mdnotion/markdown-engine";
+import type { EditorViewMode } from "@forkleaf/types";
+import { deriveTitle, dirname, joinPath, slugifyFilename } from "@forkleaf/markdown-engine";
 import { useNotebook } from "@/hooks/useNotebook";
 import { useTheme } from "@/hooks/useTheme";
 import { EditorSidebar } from "@/components/EditorSidebar";
@@ -14,24 +14,36 @@ import { EditorStatusBar } from "@/components/EditorStatusBar";
 import { ConflictDialog } from "@/components/ConflictDialog";
 import { ExportDialog } from "@/components/ExportDialog";
 import { ConnectRepoDialog } from "@/components/ConnectRepoDialog";
+import { HelpDialog } from "@/components/HelpDialog";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
+import { ForkLeafLogo } from "@/components/Brand";
+import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { signOut } from "@/lib/gateway";
+import { fileUrl } from "@/lib/github-links";
+import { track } from "@/lib/firebase/analytics";
+import { upsertUserProfile } from "@/lib/firebase/users";
 
 /**
  * The editor is browser-only: it reaches for IndexedDB and builds a
  * ProseMirror/CodeMirror DOM on mount, neither of which the server can produce.
  */
 const MarkdownEditor = dynamic(
-  () => import("@mdnotion/editor").then((module) => module.MarkdownEditor),
+  () => import("@forkleaf/editor").then((module) => module.MarkdownEditor),
   {
     ssr: false,
     loading: () => (
-      <div className="p-8 text-sm text-[var(--color-mist)]" aria-busy="true">
+      <div className="p-8 text-sm text-[var(--fl-muted)]" aria-busy="true">
         Loading editor…
       </div>
     ),
   },
 );
+
+const MODES: { value: EditorViewMode; label: string; hint: string }[] = [
+  { value: "wysiwyg", label: "Rich", hint: "Format as you type" },
+  { value: "split", label: "Split", hint: "Markdown beside a live preview" },
+  { value: "source", label: "Source", hint: "Raw markdown" },
+];
 
 export default function EditorPage() {
   const notebook = useNotebook();
@@ -39,7 +51,7 @@ export default function EditorPage() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
-  const [dialog, setDialog] = useState<"export" | "connect" | null>(null);
+  const [dialog, setDialog] = useState<"export" | "connect" | "help" | null>(null);
   const [prompt, setPrompt] = useState<PromptRequest | null>(null);
   // Conflicts open their own dialog as soon as they appear. Dismissing it hides
   // it until they are resolved; the status bar stays as the way back in.
@@ -49,11 +61,28 @@ export default function EditorPage() {
   const note = notebook.note;
   const mode: EditorViewMode = note?.viewMode ?? "wysiwyg";
   const title = note ? deriveTitle(note.content, note.frontmatter.title, note.path) : "";
+  const workspace = notebook.activeWorkspace;
+  const user = notebook.session?.user ?? null;
 
   const conflicts = notebook.sync.conflicts;
   // Derived rather than pushed into state by an effect, which would cause a
   // second render pass on every sync update.
   const showConflicts = conflicts.length > 0 && !conflictsDismissed;
+
+  // Records who is using ForkLeaf, for the analytics and billing side. Fails
+  // silently and never blocks the editor when Firebase is unconfigured.
+  useEffect(() => {
+    if (!notebook.ready) return;
+    void upsertUserProfile(user);
+  }, [notebook.ready, user]);
+
+  const signIn = useCallback(() => {
+    track("github_sign_in_started");
+    // Deliberately a full document navigation: this is an API route that 302s
+    // out to github.com, which the client router cannot follow.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign("/api/auth/github");
+  }, []);
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
@@ -66,6 +95,7 @@ export default function EditorPage() {
         confirmLabel: "Create",
         onConfirm: async (value) => {
           await notebook.createNote(value || "Untitled note", folder);
+          track("note_created");
         },
       });
     },
@@ -129,6 +159,12 @@ export default function EditorPage() {
   // exists and the memoisation stays intact.
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
+      if (event.key === "?" && event.shiftKey && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        setDialog("help");
+        return;
+      }
+
       if (!(event.metaKey || event.ctrlKey)) return;
 
       switch (event.key.toLowerCase()) {
@@ -163,23 +199,26 @@ export default function EditorPage() {
 
   if (!notebook.ready) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[var(--color-paper)]">
-        <p className="text-sm text-[var(--color-mist)]" aria-busy="true">
-          {notebook.busy ?? "Starting mdnotion…"}
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-[var(--fl-bg)]">
+        <ForkLeafLogo markClassName="h-8 w-8" textClassName="text-xl" />
+        <p className="text-sm text-[var(--fl-muted)]" aria-busy="true">
+          {notebook.busy ?? "Starting ForkLeaf…"}
         </p>
       </div>
     );
   }
 
+  const noteGitHubUrl = fileUrl(workspace, note?.path ?? null);
+
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[var(--color-paper)] font-sans text-[var(--color-ink)]">
+    <div className="flex h-screen flex-col overflow-hidden bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
       <div className="flex min-h-0 flex-1">
         <div className="hidden md:flex">
           <EditorSidebar
             collapsed={sidebarCollapsed}
             onToggle={() => setSidebarCollapsed((value) => !value)}
             workspaces={notebook.workspaces}
-            activeWorkspace={notebook.activeWorkspace}
+            activeWorkspace={workspace}
             onSwitchWorkspace={notebook.switchWorkspace}
             onConnectRepo={() => setDialog("connect")}
             tree={notebook.tree}
@@ -188,27 +227,19 @@ export default function EditorPage() {
             onCreateNote={handleCreate}
             onDeleteNote={handleDelete}
             onRenameNote={handleRename}
-            user={notebook.session?.user ?? null}
-            onSignIn={() => {
-              // Deliberately a full document navigation: this is an API route
-              // that 302s out to github.com, which the client router cannot
-              // follow.
-              // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-              window.location.assign("/api/auth/github");
-            }}
+            user={user}
+            onSignIn={signIn}
             onSignOut={handleSignOut}
+            onOpenHelp={() => setDialog("help")}
             githubAvailable={notebook.session?.githubAvailable ?? false}
           />
         </div>
 
         <main className="flex min-w-0 flex-1 flex-col">
           {/* ── Header ────────────────────────────────────────────────── */}
-          <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[var(--color-border)] px-4">
-            <Link
-              href="/"
-              className="shrink-0 font-serif text-lg font-semibold text-[var(--color-ink)] md:hidden"
-            >
-              mdnotion
+          <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-3">
+            <Link href="/" className="shrink-0 text-[var(--fl-text)] md:hidden">
+              <ForkLeafLogo markClassName="h-6 w-6" textClassName="text-[15px]" />
             </Link>
 
             {note ? (
@@ -218,10 +249,11 @@ export default function EditorPage() {
                   notebook.updateFrontmatter({ ...note.frontmatter, title: event.target.value })
                 }
                 aria-label="Note title"
-                className="min-w-0 flex-1 truncate bg-transparent font-serif text-2xl font-bold text-[var(--color-ink)] outline-none"
+                placeholder="Untitled"
+                className="min-w-0 flex-1 truncate rounded-lg bg-transparent px-2 py-1 text-[17px] font-semibold tracking-tight text-[var(--fl-text)] outline-none transition-colors placeholder:text-[var(--fl-muted)] hover:bg-[var(--fl-elevated)] focus:bg-[var(--fl-elevated)]"
               />
             ) : (
-              <span className="flex-1 text-sm text-[var(--color-mist)]">No note open</span>
+              <span className="flex-1 px-2 text-sm text-[var(--fl-muted)]">No note open</span>
             )}
 
             <div className="flex shrink-0 items-center gap-1">
@@ -229,64 +261,89 @@ export default function EditorPage() {
                 <div
                   role="tablist"
                   aria-label="Editor mode"
-                  className="hidden rounded-md border border-[var(--color-border)] p-0.5 sm:flex"
+                  className="hidden rounded-lg border border-[var(--fl-border)] p-0.5 sm:flex"
                 >
-                  {(["wysiwyg", "split", "source"] as const).map((value) => (
+                  {MODES.map((option) => (
                     <button
-                      key={value}
+                      key={option.value}
                       type="button"
                       role="tab"
-                      aria-selected={mode === value}
-                      onClick={() => notebook.setViewMode(value)}
-                      className={`rounded px-2.5 py-1 text-xs font-medium capitalize transition ${
-                        mode === value
-                          ? "bg-[var(--color-trail-teal)] text-[var(--color-paper)]"
-                          : "text-[var(--color-mist)] hover:text-[var(--color-ink)]"
+                      aria-selected={mode === option.value}
+                      title={option.hint}
+                      onClick={() => notebook.setViewMode(option.value)}
+                      className={`rounded-[6px] px-2.5 py-1 text-[12.5px] font-medium transition-colors ${
+                        mode === option.value
+                          ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
+                          : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
                       }`}
                     >
-                      {value === "wysiwyg" ? "Rich" : value}
+                      {option.label}
                     </button>
                   ))}
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={toggleTheme}
-                title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-                aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-                className="rounded-md p-1.5 text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
-              >
-                {theme === "dark" ? "☀" : "☾"}
-              </button>
+              {noteGitHubUrl && (
+                <IconButton as="a" href={noteGitHubUrl} label="View this note on GitHub">
+                  <GitHubGlyph />
+                </IconButton>
+              )}
 
               {note && (
                 <button
                   type="button"
                   onClick={() => setDialog("export")}
-                  className="rounded-md px-2.5 py-1.5 text-xs font-medium text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
+                  className="rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
                 >
                   Export
                 </button>
               )}
 
-              <button
-                type="button"
-                onClick={() => setPanelCollapsed((value) => !value)}
-                title="Toggle properties panel"
-                aria-label="Toggle properties panel"
-                className="hidden rounded-md p-1.5 text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)] lg:block"
+              <IconButton onClick={() => setDialog("help")} label="Help (⌘⇧?)">
+                <svg
+                  viewBox="0 0 16 16"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                >
+                  <circle cx="8" cy="8" r="6.25" />
+                  <path d="M6.2 6.2a1.9 1.9 0 1 1 2.3 2.2v1.1M8.5 12h.01" />
+                </svg>
+              </IconButton>
+
+              <IconButton
+                onClick={toggleTheme}
+                label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
               >
-                ⋮
-              </button>
+                {theme === "dark" ? <SunGlyph /> : <MoonGlyph />}
+              </IconButton>
+
+              <IconButton
+                onClick={() => setPanelCollapsed((value) => !value)}
+                label="Toggle properties panel"
+                className="hidden lg:inline-flex"
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                >
+                  <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" />
+                  <path d="M10 2.75v10.5" />
+                </svg>
+              </IconButton>
             </div>
           </header>
 
-          {/* ── Errors ───────────────────────────────────────────────── */}
+          {/* ── Banners ──────────────────────────────────────────────── */}
           {notebook.error && (
             <div
               role="alert"
-              className="flex items-center gap-2 border-b border-[var(--color-ember)]/30 bg-[var(--color-ember)]/8 px-4 py-2 text-sm text-[var(--color-ember)]"
+              className="flex items-center gap-2 border-b border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/8 px-4 py-2 text-sm text-[var(--fl-danger)]"
             >
               <span className="flex-1">{notebook.error}</span>
               <button
@@ -300,8 +357,16 @@ export default function EditorPage() {
             </div>
           )}
 
+          {!user && (
+            <LocalOnlyBanner
+              githubAvailable={notebook.session?.githubAvailable ?? false}
+              onSignIn={signIn}
+              onLearnMore={() => setDialog("help")}
+            />
+          )}
+
           {/* ── Canvas ───────────────────────────────────────────────── */}
-          <div className="flex min-h-0 flex-1 flex-col px-4 py-3 md:px-8">
+          <div className="flex min-h-0 flex-1 flex-col">
             {note ? (
               <MarkdownEditor
                 key={note.id}
@@ -310,11 +375,15 @@ export default function EditorPage() {
                 mode={mode}
                 theme={theme}
                 hideModeSwitcher
-                placeholder="Type / for commands…"
+                placeholder="Type / for headings, lists, tables and diagrams…"
                 className="min-h-0 flex-1"
               />
             ) : (
-              <EmptyState onCreate={() => handleCreate("")} hasNotes={notebook.tree.length > 0} />
+              <EmptyState
+                onCreate={() => handleCreate("")}
+                onHelp={() => setDialog("help")}
+                hasNotes={notebook.tree.length > 0}
+              />
             )}
           </div>
         </main>
@@ -325,6 +394,7 @@ export default function EditorPage() {
               collapsed={false}
               onToggle={() => setPanelCollapsed(true)}
               note={note}
+              workspace={workspace}
               onFrontmatterChange={notebook.updateFrontmatter}
               onExport={() => setDialog("export")}
             />
@@ -334,7 +404,7 @@ export default function EditorPage() {
 
       <EditorStatusBar
         sync={notebook.sync}
-        workspace={notebook.activeWorkspace}
+        workspace={workspace}
         notePath={note?.path ?? null}
         onSyncNow={notebook.syncNow}
         onShowConflicts={() => setConflictsDismissed(false)}
@@ -346,6 +416,17 @@ export default function EditorPage() {
           note={note}
           loadAllNotes={notebook.allNotes}
           onClose={() => setDialog(null)}
+        />
+      )}
+
+      {dialog === "help" && (
+        <HelpDialog
+          onClose={() => setDialog(null)}
+          user={user}
+          workspace={workspace}
+          githubAvailable={notebook.session?.githubAvailable ?? false}
+          onSignIn={signIn}
+          onConnectRepo={() => setDialog("connect")}
         />
       )}
 
@@ -361,8 +442,9 @@ export default function EditorPage() {
 
       {dialog === "connect" && (
         <ConnectRepoDialog
-          onConnect={async (workspace) => {
-            await notebook.addWorkspace(workspace);
+          onConnect={async (nextWorkspace) => {
+            await notebook.addWorkspace(nextWorkspace);
+            track("repo_connected");
             setDialog(null);
           }}
           onClose={() => setDialog(null)}
@@ -372,24 +454,113 @@ export default function EditorPage() {
   );
 }
 
-function EmptyState({ onCreate, hasNotes }: { onCreate: () => void; hasNotes: boolean }) {
+// ─── Pieces ─────────────────────────────────────────────────────────────────
+
+function IconButton({
+  as = "button",
+  href,
+  onClick,
+  label,
+  children,
+  className = "",
+}: {
+  as?: "button" | "a";
+  href?: string;
+  onClick?: () => void;
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const shared = `inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] ${className}`;
+
+  if (as === "a" && href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        title={label}
+        aria-label={label}
+        className={shared}
+      >
+        {children}
+      </a>
+    );
+  }
+
   return (
-    <div className="flex flex-1 flex-col items-center justify-center text-center">
-      <h2 className="mb-2 font-serif text-2xl font-semibold text-[var(--color-ink)]">
+    <button type="button" onClick={onClick} title={label} aria-label={label} className={shared}>
+      {children}
+    </button>
+  );
+}
+
+function EmptyState({
+  onCreate,
+  onHelp,
+  hasNotes,
+}: {
+  onCreate: () => void;
+  onHelp: () => void;
+  hasNotes: boolean;
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+      <h2 className="mb-2 text-xl font-semibold tracking-tight text-[var(--fl-text)]">
         {hasNotes ? "Pick a note to start" : "Your notebook is empty"}
       </h2>
-      <p className="mb-5 max-w-sm text-sm text-[var(--color-mist)]">
+      <p className="mb-6 max-w-sm text-[14px] leading-relaxed text-[var(--fl-muted)]">
         {hasNotes
           ? "Choose something from the sidebar, or start something new."
-          : "Create your first note. It will be saved to your GitHub repository as plain markdown."}
+          : "Create your first note. It saves to this device instantly, and to your GitHub repository once you connect one."}
       </p>
-      <button
-        type="button"
-        onClick={onCreate}
-        className="rounded-md bg-[var(--color-signal-amber)] px-5 py-2.5 text-sm font-semibold text-[var(--color-basalt)] hover:opacity-90"
-      >
-        New note
-      </button>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <button type="button" onClick={onCreate} className="fl-btn fl-btn-primary !py-2.5">
+          New note
+        </button>
+        <button type="button" onClick={onHelp} className="fl-btn fl-btn-ghost !py-2.5">
+          How does this work?
+        </button>
+      </div>
     </div>
+  );
+}
+
+function GitHubGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" className="h-4 w-4">
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+    </svg>
+  );
+}
+
+function SunGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    >
+      <circle cx="8" cy="8" r="3" />
+      <path d="M8 1v1.5M8 13.5V15M15 8h-1.5M2.5 8H1M12.95 3.05l-1.06 1.06M4.11 11.89l-1.06 1.06M12.95 12.95l-1.06-1.06M4.11 4.11 3.05 3.05" />
+    </svg>
+  );
+}
+
+function MoonGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinejoin="round"
+    >
+      <path d="M13.5 9.7A6 6 0 0 1 6.3 2.5a6 6 0 1 0 7.2 7.2Z" />
+    </svg>
   );
 }

@@ -9,7 +9,7 @@ import React from "react";
  */
 const MESSAGES: Record<string, string> = {
   access_denied:
-    "Sign-in was cancelled. You can keep using mdnotion with notes stored on this device.",
+    "Sign-in was cancelled. You can keep using ForkLeaf with notes stored on this device.",
   invalid_state:
     "That sign-in link expired or did not match. Please try signing in again from this page.",
   missing_code: "GitHub did not send an authorisation code. Please try again.",
@@ -23,10 +23,10 @@ export function SignInError({ code }: { code: string }) {
   const message = MESSAGES[code] ?? "Sign-in did not complete. Please try again.";
 
   return (
-    <div className="relative z-10 mx-auto w-full max-w-3xl px-6">
+    <div className="w-full">
       <p
         role="alert"
-        className="rounded-lg border border-[var(--color-signal-amber)]/40 bg-[var(--color-signal-amber)]/10 px-4 py-3 text-sm text-[var(--color-ink)]"
+        className="rounded-lg border border-[var(--fl-warn)]/40 bg-[var(--fl-warn)]/10 px-4 py-3 text-sm text-[var(--fl-text)]"
       >
         {message}
       </p>

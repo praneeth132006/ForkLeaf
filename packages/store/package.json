@@ -1,5 +1,5 @@
 {
-  "name": "@mdnotion/store",
+  "name": "@forkleaf/store",
   "version": "0.2.0",
   "private": true,
   "main": "./src/index.ts",
@@ -11,8 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mdnotion/markdown-engine": "workspace:*",
-    "@mdnotion/types": "workspace:*",
+    "@forkleaf/markdown-engine": "workspace:*",
+    "@forkleaf/types": "workspace:*",
     "idb": "^8.0.3"
   },
   "devDependencies": {

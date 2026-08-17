@@ -1,7 +1,7 @@
 import "server-only";
 import { EncryptJWT, jwtDecrypt } from "jose";
 import { cookies } from "next/headers";
-import type { SessionUser } from "@mdnotion/types";
+import type { SessionUser } from "@forkleaf/types";
 
 /**
  * Server-side session handling.
@@ -15,8 +15,8 @@ import type { SessionUser } from "@mdnotion/types";
  * script that ever runs on the page.
  */
 
-const COOKIE_NAME = "mdnotion_session";
-const STATE_COOKIE = "mdnotion_oauth_state";
+const COOKIE_NAME = "forkleaf_session";
+const STATE_COOKIE = "forkleaf_oauth_state";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 export interface SessionPayload {

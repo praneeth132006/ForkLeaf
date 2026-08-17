@@ -5,13 +5,13 @@ const nextConfig: NextConfig = {
   // removes the build-order dance between packages and keeps HMR working across
   // the monorepo. Next compiles them as part of the app.
   transpilePackages: [
-    "@mdnotion/types",
-    "@mdnotion/markdown-engine",
-    "@mdnotion/github-client",
-    "@mdnotion/store",
-    "@mdnotion/diagrams",
-    "@mdnotion/exporter",
-    "@mdnotion/editor",
+    "@forkleaf/types",
+    "@forkleaf/markdown-engine",
+    "@forkleaf/github-client",
+    "@forkleaf/store",
+    "@forkleaf/diagrams",
+    "@forkleaf/exporter",
+    "@forkleaf/editor",
   ],
 
   async headers() {
