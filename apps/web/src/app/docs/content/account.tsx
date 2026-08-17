@@ -299,7 +299,7 @@ export function Security() {
           not a bug report.
         </strong>{" "}
         Please report it privately rather than opening a public issue — the process is in{" "}
-        <A href="https://github.com/praneeth132006/MarkDown/blob/main/SECURITY.md">SECURITY.md</A>.
+        <A href="https://github.com/praneeth132006/ForkLeaf/blob/main/SECURITY.md">SECURITY.md</A>.
       </Note>
 
       <H2 id="firestore">Firestore rules</H2>
@@ -349,7 +349,7 @@ service cloud.firestore {
       <P>
         Please do not open a public issue. The disclosure process, the response timeline and what is
         in scope are documented in{" "}
-        <A href="https://github.com/praneeth132006/MarkDown/blob/main/SECURITY.md">SECURITY.md</A>.
+        <A href="https://github.com/praneeth132006/ForkLeaf/blob/main/SECURITY.md">SECURITY.md</A>.
       </P>
     </>
   );

@@ -51,6 +51,9 @@ export function DiagramStudio({
   const [mode, setMode] = useState<StudioMode>(initialMode);
   const [showTemplates, setShowTemplates] = useState(code.trim() === "");
   const [showCheatsheet, setShowCheatsheet] = useState(false);
+  // Collapsing the preview hands the whole width to the canvas, which is what
+  // you want once the diagram is big enough to be worth drawing carefully.
+  const [showPreview, setShowPreview] = useState(true);
 
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<DiagramError | null>(null);
@@ -177,6 +180,19 @@ export function DiagramStudio({
           >
             Change type
           </button>
+          <button
+            type="button"
+            onClick={() => setShowPreview((value) => !value)}
+            aria-pressed={showPreview}
+            title={showPreview ? "Hide the live preview" : "Show the live preview"}
+            className={`rounded-lg px-2.5 py-1.5 text-[13px] transition-colors ${
+              showPreview
+                ? "bg-[var(--fl-elevated)] text-[var(--fl-text)]"
+                : "text-[var(--fl-muted)] hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+            }`}
+          >
+            Preview
+          </button>
           {mode === "source" && (
             <button
               type="button"
@@ -196,7 +212,11 @@ export function DiagramStudio({
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div className="flex min-h-[260px] min-w-0 flex-1 flex-col border-b border-[var(--fl-border)] lg:border-b-0 lg:border-r">
+        <div
+          className={`flex min-h-[280px] min-w-0 flex-1 flex-col ${
+            showPreview ? "border-b border-[var(--fl-border)] lg:border-b-0 lg:border-r" : ""
+          }`}
+        >
           {mode === "visual" && graph ? (
             <VisualBuilder graph={graph} onChange={handleGraphChange} />
           ) : (
@@ -223,40 +243,42 @@ export function DiagramStudio({
         </div>
 
         {/* ── Live preview ──────────────────────────────────────────────── */}
-        <div className="flex min-h-[260px] min-w-0 flex-1 flex-col bg-[var(--fl-surface)]">
-          <div className="flex flex-1 items-center justify-center overflow-auto p-5">
-            {svg ? (
+        {showPreview && (
+          <div className="flex min-h-[220px] min-w-0 flex-col bg-[var(--fl-surface)] lg:w-[38%] lg:min-w-[300px] lg:max-w-[520px]">
+            <div className="flex flex-1 items-center justify-center overflow-auto p-5">
+              {svg ? (
+                <div
+                  className="fl-diagram-preview max-w-full [&_svg]:h-auto [&_svg]:max-w-full"
+                  // Sanitised by the diagram renderer before it reaches here.
+                  dangerouslySetInnerHTML={{ __html: svg }}
+                />
+              ) : (
+                <p className="text-sm text-[var(--fl-muted)]">
+                  {code.trim() ? "Rendering…" : "Your diagram will appear here."}
+                </p>
+              )}
+            </div>
+
+            {error && (
               <div
-                className="fl-diagram-preview max-w-full [&_svg]:h-auto [&_svg]:max-w-full"
-                // Sanitised by the diagram renderer before it reaches here.
-                dangerouslySetInnerHTML={{ __html: svg }}
-              />
-            ) : (
-              <p className="text-sm text-[var(--fl-muted)]">
-                {code.trim() ? "Rendering…" : "Your diagram will appear here."}
-              </p>
+                role="alert"
+                // Pinned to the bottom of the preview column so the message is
+                // always on screen, which is the whole point of showing it.
+                className="shrink-0 border-t border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/5 px-4 py-2.5 text-xs"
+              >
+                <p className="font-medium text-[var(--fl-danger)]">
+                  {error.line !== null && (
+                    <span className="mr-1.5 rounded bg-[var(--fl-danger)]/15 px-1.5 py-0.5 font-mono">
+                      line {error.line}
+                    </span>
+                  )}
+                  {error.message}
+                </p>
+                <p className="mt-1 text-[var(--fl-muted)]">{error.hint}</p>
+              </div>
             )}
           </div>
-
-          {error && (
-            <div
-              role="alert"
-              // Pinned to the bottom of the preview column so the message is
-              // always on screen, which is the whole point of showing it.
-              className="shrink-0 border-t border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/5 px-4 py-2.5 text-xs"
-            >
-              <p className="font-medium text-[var(--fl-danger)]">
-                {error.line !== null && (
-                  <span className="mr-1.5 rounded bg-[var(--fl-danger)]/15 px-1.5 py-0.5 font-mono">
-                    line {error.line}
-                  </span>
-                )}
-                {error.message}
-              </p>
-              <p className="mt-1 text-[var(--fl-muted)]">{error.hint}</p>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

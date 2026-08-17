@@ -2,7 +2,7 @@
 
 **A local-first Markdown editor with first-class Mermaid diagrams, backed by your own GitHub repository.**
 
-[![CI](https://github.com/praneeth132006/MarkDown/actions/workflows/ci.yml/badge.svg)](https://github.com/praneeth132006/MarkDown/actions/workflows/ci.yml)
+[![CI](https://github.com/praneeth132006/ForkLeaf/actions/workflows/ci.yml/badge.svg)](https://github.com/praneeth132006/ForkLeaf/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Your notes are plain `.md` files in a repository you own. That means real version
@@ -76,7 +76,7 @@ github.com and anywhere else Mermaid is supported.
 ### Try it without any setup
 
 ```bash
-git clone https://github.com/praneeth132006/MarkDown.git
+git clone https://github.com/praneeth132006/ForkLeaf.git
 cd MarkDown
 pnpm install
 pnpm dev

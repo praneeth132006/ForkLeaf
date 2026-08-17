@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useMemo, useImperativeHandle } from "react";
-import { EditorState, type Extension, Compartment } from "@codemirror/state";
+import { EditorState, type Extension, Compartment, Prec } from "@codemirror/state";
 import {
   EditorView,
   keymap,
@@ -14,6 +14,7 @@ import {
 } from "@codemirror/view";
 import { history, defaultKeymap, historyKeymap, indentWithTab } from "@codemirror/commands";
 import {
+  acceptCompletion,
   autocompletion,
   closeBrackets,
   closeBracketsKeymap,
@@ -117,6 +118,16 @@ export function SourceEditor({
         ...(language === "markdown"
           ? [markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: true })]
           : []),
+        // Accepting a completion has to outrank everything else: `defaultKeymap`
+        // binds Enter to "insert a newline", which silently won the race and
+        // made the slash menu impossible to accept with the key every other
+        // editor uses. Tab accepts too, since half of people reach for that.
+        Prec.highest(
+          keymap.of([
+            { key: "Enter", run: acceptCompletion },
+            { key: "Tab", run: acceptCompletion },
+          ]),
+        ),
         keymap.of([
           ...closeBracketsKeymap,
           ...defaultKeymap,

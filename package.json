@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/praneeth132006/MarkDown.git"
+    "url": "https://github.com/praneeth132006/ForkLeaf.git"
   },
   "scripts": {
     "dev": "turbo run dev",

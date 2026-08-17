@@ -80,6 +80,7 @@ function MermaidNodeView({ node, updateAttributes, editor, selected }: NodeViewP
           title="Diagram"
           subtitle="Saved into the note as a ```mermaid block, so it also renders on GitHub"
           onClose={close}
+          fullScreen
           actions={
             <button
               type="button"

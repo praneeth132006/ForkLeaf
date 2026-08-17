@@ -239,7 +239,7 @@ export default function PrivacyPage() {
         <P>
           If this policy changes materially, the date at the top of the page changes and a notice
           appears in the app. The history of every revision is public in the{" "}
-          <A href="https://github.com/praneeth132006/MarkDown">git repository</A>, so you can diff
+          <A href="https://github.com/praneeth132006/ForkLeaf">git repository</A>, so you can diff
           it.
         </P>
 
@@ -248,7 +248,7 @@ export default function PrivacyPage() {
           Privacy questions, data requests and complaints:{" "}
           <A href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</A>. For security vulnerabilities,
           please follow the disclosure process in{" "}
-          <A href="https://github.com/praneeth132006/MarkDown/blob/main/SECURITY.md">SECURITY.md</A>{" "}
+          <A href="https://github.com/praneeth132006/ForkLeaf/blob/main/SECURITY.md">SECURITY.md</A>{" "}
           instead of filing a public issue.
         </P>
         <P>

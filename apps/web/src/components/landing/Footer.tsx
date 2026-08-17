@@ -1,14 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { ForkLeafLogo } from "@/components/Brand";
-import {
-  ARCHITECTURE_URL,
-  CONTRIBUTING_URL,
-  ISSUES_URL,
-  LICENSE_URL,
-  REPO_URL,
-  SECURITY_URL,
-} from "@/lib/constants";
+import { CONTRIBUTING_URL, ISSUES_URL, LICENSE_URL, REPO_URL } from "@/lib/constants";
 
 /**
  * Site footer.
@@ -44,7 +37,7 @@ const COLUMNS = [
       { label: "Source", href: REPO_URL },
       { label: "Issues", href: ISSUES_URL },
       { label: "Contributing", href: CONTRIBUTING_URL },
-      { label: "Architecture", href: ARCHITECTURE_URL },
+      { label: "Architecture", href: "/docs/how-it-works" },
       { label: "Licence (Apache-2.0)", href: LICENSE_URL },
     ],
   },
@@ -54,7 +47,6 @@ const COLUMNS = [
       { label: "Privacy Policy", href: "/privacy" },
       { label: "Terms & Conditions", href: "/terms" },
       { label: "Security model", href: "/docs/security" },
-      { label: "Report a vulnerability", href: SECURITY_URL },
       { label: "Your data", href: "/docs/privacy-and-data" },
     ],
   },

@@ -242,7 +242,7 @@ function SlashMenu({ editor }: { editor: Editor }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [position, setPosition] = useState({ top: 0, left: 0 });
 
-  const commands = useMemo(() => filterInsertActions(state.query), [state.query]);
+  const commands = useMemo(() => filterInsertActions(state.query, "rich"), [state.query]);
 
   // Track the slash state on every transaction.
   useEffect(() => {

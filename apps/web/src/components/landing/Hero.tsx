@@ -6,73 +6,80 @@ import { GitHubGlyph } from "./Nav";
 /**
  * The hero.
  *
- * One claim, stated plainly, then the product. Everything the old hero carried
- * that was not that — the licence badge, the "no account needed" caveat, the
- * self-hosting note — has moved to the sections that are actually about those
- * things. A visitor should be able to answer "what is this and do I want it?"
- * without scrolling.
+ * One enormous claim, one sentence explaining it, one button. Everything the
+ * previous version carried alongside that — a "New" pill, two competing
+ * call-to-action buttons of equal weight, a licence badge, a caveat about local
+ * storage — split the visitor's attention three ways before they had decided
+ * whether they cared.
+ *
+ * The display line is set in Instrument Serif at a size that only works because
+ * it is short. Resist lengthening it.
  */
 export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
   return (
     <section className="relative overflow-hidden">
-      {/* Decorative field behind the copy: a dot grid faded out at the edges so
-          it never competes with the text sitting on top of it. */}
+      {/* Ambient field behind the copy. Two layers: a dot grid for texture and a
+          wide soft glow for depth, both masked out well before they reach the
+          text so nothing competes with the headline. */}
       <div
         aria-hidden="true"
-        className="fl-dotgrid pointer-events-none absolute inset-x-0 top-0 h-[560px] opacity-[0.55] [mask-image:radial-gradient(ellipse_70%_60%_at_50%_0%,#000_20%,transparent_75%)]"
+        className="fl-dotgrid pointer-events-none absolute inset-x-0 top-0 h-[720px] opacity-40 [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_10%,transparent_70%)]"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-[-180px] h-[420px] w-[820px] -translate-x-1/2 rounded-full bg-[var(--fl-accent)] opacity-[0.07] blur-[130px]"
+        className="pointer-events-none absolute left-1/2 top-[-260px] h-[560px] w-[1000px] -translate-x-1/2 rounded-full bg-[var(--fl-accent)] opacity-[0.09] blur-[150px]"
       />
 
-      <div className="relative mx-auto w-full max-w-6xl px-6 pb-16 pt-20 md:pt-28">
-        <div className="fl-rise mx-auto max-w-3xl text-center">
-          <a
-            href="#how"
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--fl-border)] bg-[var(--fl-surface)] py-1 pl-1 pr-3.5 text-[13px] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)]"
-          >
-            <span className="rounded-full bg-[var(--fl-accent-soft)] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--fl-accent)]">
-              New
-            </span>
-            Your notes are commits now
-          </a>
-
-          <h1 className="mt-6 text-[2.75rem] font-semibold leading-[1.06] tracking-[-0.03em] text-[var(--fl-text)] sm:text-6xl">
-            The notes app that
-            <br className="hidden sm:block" />{" "}
-            <span className="font-serif font-normal italic text-[var(--fl-accent)]">you</span> own
-            the database of.
+      <div className="relative mx-auto w-full max-w-6xl px-6">
+        {/* ── Statement ─────────────────────────────────────────────────── */}
+        <div className="fl-rise mx-auto max-w-3xl pb-2 pt-24 text-center md:pt-32">
+          <h1 className="font-serif text-[3.5rem] font-normal leading-[0.98] tracking-[-0.02em] text-[var(--fl-text)] sm:text-[5rem] md:text-[6rem]">
+            Notes you own
           </h1>
 
-          <p className="mx-auto mt-6 max-w-xl text-[17px] leading-relaxed text-[var(--fl-muted)]">
-            ForkLeaf is a Markdown editor whose storage is a GitHub repository you already have.
-            Every note is a real <code className="font-mono text-[15px]">.md</code> file. Every save
-            is a real commit. Nothing lives on a server we run.
+          <p className="mx-auto mt-7 max-w-lg text-[17px] leading-[1.65] text-[var(--fl-muted)]">
+            ForkLeaf is a Markdown editor that writes straight into a GitHub repository you already
+            have. Every note is a real file. Every save is a real commit.
           </p>
 
-          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-9 flex justify-center">
             {githubAvailable ? (
-              <a href="/api/auth/github" className="fl-btn fl-btn-primary">
+              <a
+                href="/api/auth/github"
+                className="fl-btn fl-btn-primary !rounded-full !px-6 !py-3.5"
+              >
                 <GitHubGlyph />
                 Continue with GitHub
               </a>
             ) : (
-              <Link href="/editor" className="fl-btn fl-btn-primary">
+              <Link href="/editor" className="fl-btn fl-btn-primary !rounded-full !px-6 !py-3.5">
                 Start writing
               </Link>
             )}
-            <Link href="/editor" className="fl-btn fl-btn-ghost">
-              Try it without an account
-            </Link>
           </div>
 
           <p className="mt-4 text-[13px] text-[var(--fl-muted)]">
-            Free and open source · Works offline · No note ever touches our servers
+            {githubAvailable ? (
+              <>
+                Free · Opens in your browser ·{" "}
+                <Link
+                  href="/editor"
+                  className="underline decoration-[var(--fl-border-strong)] underline-offset-[3px] transition-colors hover:text-[var(--fl-text)]"
+                >
+                  or try it without an account
+                </Link>
+              </>
+            ) : (
+              <>Free · Opens in your browser · No install, no account</>
+            )}
           </p>
         </div>
 
-        <div className="fl-rise mt-16 [animation-delay:120ms]">
+        {/* ── Product ───────────────────────────────────────────────────── */}
+        {/* Deliberately tall and cropped by the fold: the frame continuing past
+            the bottom of the viewport is what makes the page feel worth
+            scrolling. */}
+        <div className="fl-rise pt-24 [animation-delay:140ms] md:pt-32">
           <AppPreview />
         </div>
       </div>

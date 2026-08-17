@@ -5,7 +5,7 @@
 Please **do not** open a public issue for a security vulnerability.
 
 Report it privately through
-[GitHub Security Advisories](https://github.com/praneeth132006/MarkDown/security/advisories/new),
+[GitHub Security Advisories](https://github.com/praneeth132006/ForkLeaf/security/advisories/new),
 which lets us discuss and fix the issue before it becomes public.
 
 Please include:

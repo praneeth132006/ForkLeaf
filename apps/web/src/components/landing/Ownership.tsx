@@ -1,6 +1,6 @@
 import React from "react";
+import Link from "next/link";
 import { SectionHeading } from "./HowItWorks";
-import { ARCHITECTURE_URL, SECURITY_URL, SELF_HOSTING_URL } from "@/lib/constants";
 
 const POINTS = [
   {
@@ -18,9 +18,9 @@ const POINTS = [
 ] as const;
 
 const LINKS = [
-  { label: "Architecture", href: ARCHITECTURE_URL },
-  { label: "Security model", href: SECURITY_URL },
-  { label: "Self-hosting", href: SELF_HOSTING_URL },
+  { label: "How it works", href: "/docs/how-it-works" },
+  { label: "Security model", href: "/docs/security" },
+  { label: "Self-hosting", href: "/docs/self-hosting" },
 ] as const;
 
 /**
@@ -51,15 +51,13 @@ export function Ownership() {
 
         <div className="mt-10 flex flex-wrap gap-2">
           {LINKS.map((link) => (
-            <a
+            <Link
               key={link.label}
               href={link.href}
-              target="_blank"
-              rel="noreferrer"
               className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3.5 py-2 text-[14px] text-[var(--fl-text)] transition-colors hover:border-[var(--fl-accent)] hover:text-[var(--fl-accent)]"
             >
               {link.label} →
-            </a>
+            </Link>
           ))}
         </div>
       </div>

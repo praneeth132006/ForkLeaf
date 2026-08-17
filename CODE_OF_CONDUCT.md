@@ -56,7 +56,7 @@ an individual is officially representing the community in public spaces.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement through a
-[private GitHub Security Advisory](https://github.com/praneeth132006/MarkDown/security/advisories/new)
+[private GitHub Security Advisory](https://github.com/praneeth132006/ForkLeaf/security/advisories/new)
 or by opening a confidential issue.
 
 All complaints will be reviewed and investigated promptly and fairly. All

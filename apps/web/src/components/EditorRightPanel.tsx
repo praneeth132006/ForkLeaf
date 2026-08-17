@@ -3,7 +3,6 @@
 import React, { useMemo, useState } from "react";
 import type { Note, NoteFrontmatter, Workspace } from "@forkleaf/types";
 import { extractOutline, documentStats } from "@forkleaf/markdown-engine";
-import { fileUrl, historyUrl } from "@/lib/github-links";
 
 export interface EditorRightPanelProps {
   collapsed: boolean;
@@ -12,6 +11,7 @@ export interface EditorRightPanelProps {
   workspace: Workspace | null;
   onFrontmatterChange: (frontmatter: NoteFrontmatter) => void;
   onExport: () => void;
+  onShowHistory: () => void;
 }
 
 /** Frontmatter keys that get a dedicated editor rather than the generic list. */
@@ -22,8 +22,9 @@ const RESERVED = new Set(["title", "tags", "created", "updated"]);
  *
  * Properties are the note's YAML frontmatter, edited directly — what is shown
  * here is literally what is written into the file, so notes stay portable to
- * Obsidian, Jekyll, Hugo or plain git. The GitHub links at the bottom make that
- * checkable rather than just claimed.
+ * Obsidian, Jekyll, Hugo or plain git. Version history reads the repository's
+ * commits and renders them in a panel here, rather than sending you to a
+ * different website mid-sentence.
  */
 export function EditorRightPanel({
   collapsed,
@@ -32,6 +33,7 @@ export function EditorRightPanel({
   workspace,
   onFrontmatterChange,
   onExport,
+  onShowHistory,
 }: EditorRightPanelProps) {
   const [tab, setTab] = useState<"properties" | "outline">("properties");
   const [newKey, setNewKey] = useState("");
@@ -65,8 +67,8 @@ export function EditorRightPanel({
     onFrontmatterChange(next);
   };
 
-  const github = fileUrl(workspace, note?.path ?? null);
-  const history = historyUrl(workspace, note?.path ?? null);
+  // History comes from the repository, so it only exists once one is connected.
+  const hasHistory = Boolean(workspace && !workspace.isLocal && note);
 
   return (
     <aside className="flex w-72 shrink-0 flex-col border-l border-[var(--fl-border)] bg-[var(--fl-bg)]">
@@ -213,11 +215,14 @@ export function EditorRightPanel({
                 Export…
               </button>
 
-              {github && (
-                <>
-                  <PanelLink href={github}>Open on GitHub</PanelLink>
-                  <PanelLink href={history!}>Version history</PanelLink>
-                </>
+              {hasHistory && (
+                <button
+                  type="button"
+                  onClick={onShowHistory}
+                  className="w-full rounded-lg border border-[var(--fl-border)] px-3 py-2 text-[13px] font-medium text-[var(--fl-text)] transition-colors hover:border-[var(--fl-accent)] hover:bg-[var(--fl-elevated)]"
+                >
+                  Version history…
+                </button>
               )}
             </div>
 
@@ -254,22 +259,6 @@ export function EditorRightPanel({
         )}
       </div>
     </aside>
-  );
-}
-
-function PanelLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="flex w-full items-center gap-2 rounded-lg border border-[var(--fl-border)] px-3 py-2 text-[13px] font-medium text-[var(--fl-text)] transition-colors hover:border-[var(--fl-accent)] hover:bg-[var(--fl-elevated)]"
-    >
-      <span className="flex-1 text-left">{children}</span>
-      <span aria-hidden="true" className="text-[var(--fl-muted)]">
-        ↗
-      </span>
-    </a>
   );
 }
 
