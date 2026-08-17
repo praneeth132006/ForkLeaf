@@ -181,13 +181,15 @@ export function MarkdownEditor({
             onChange={onChange}
             onReady={handleTiptapReady}
             {...(placeholder ? { placeholder } : {})}
-            className="relative mx-auto w-full max-w-3xl px-1 py-8 pb-32"
+            // A wide bottom pad so the last paragraph can be scrolled to the
+            // middle of the screen instead of being pinned to the bottom edge.
+            className="relative mx-auto w-full max-w-[46rem] px-6 py-10 pb-[40vh]"
           />
         </div>
       )}
 
       {mode === "source" && (
-        <div className="mx-auto min-h-0 w-full max-w-3xl flex-1 overflow-hidden">
+        <div className="mx-auto min-h-0 w-full max-w-[46rem] flex-1 overflow-hidden px-2">
           <SourceEditor
             value={value}
             onChange={onChange}
@@ -200,14 +202,18 @@ export function MarkdownEditor({
 
       {mode === "split" && (
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
-          <div className="min-w-0 overflow-hidden" style={{ width: `${splitRatio}%` }}>
+          <div
+            className="flex min-w-0 flex-col overflow-hidden"
+            style={{ width: `${splitRatio}%` }}
+          >
+            <PaneLabel>Source</PaneLabel>
             <SourceEditor
               value={value}
               onChange={onChange}
               handleRef={sourceHandle}
               {...(placeholder ? { placeholder } : {})}
               showLineNumbers
-              className="h-full w-full"
+              className="min-h-0 w-full flex-1 overflow-hidden"
             />
           </div>
 
@@ -222,16 +228,46 @@ export function MarkdownEditor({
               if (event.key === "ArrowLeft") setSplitRatio((r) => Math.max(20, r - 5));
               if (event.key === "ArrowRight") setSplitRatio((r) => Math.min(80, r + 5));
             }}
-            className={`w-px shrink-0 cursor-col-resize bg-[var(--fl-border)] transition-colors hover:bg-[var(--fl-accent)] focus:bg-[var(--fl-accent)] focus:outline-none ${
-              dragging ? "bg-[var(--fl-accent)]" : ""
-            }`}
-          />
+            // A 1px line is a dexterity test, so the hit area is 9px wide with
+            // the visible rule drawn inside it.
+            className={`group relative w-[9px] shrink-0 cursor-col-resize focus:outline-none`}
+          >
+            <span
+              aria-hidden="true"
+              className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-colors ${
+                dragging
+                  ? "bg-[var(--fl-accent)]"
+                  : "bg-[var(--fl-border)] group-hover:bg-[var(--fl-accent)] group-focus:bg-[var(--fl-accent)]"
+              }`}
+            />
+          </div>
 
-          <div className="min-w-0 flex-1 overflow-y-auto bg-[var(--fl-surface)] px-8 py-8">
-            <Preview markdown={value} {...(theme ? { theme } : {})} className="mx-auto max-w-2xl" />
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--fl-surface)]">
+            <PaneLabel>Preview</PaneLabel>
+            <div className="min-h-0 flex-1 overflow-y-auto px-8 pb-16">
+              <Preview
+                markdown={value}
+                {...(theme ? { theme } : {})}
+                className="mx-auto max-w-2xl"
+              />
+            </div>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The small caption above each split pane.
+ *
+ * Two undifferentiated columns of text is a puzzle for anyone who has not used
+ * a split editor before; naming them costs one line each.
+ */
+function PaneLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="shrink-0 px-4 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
+      {children}
+    </p>
   );
 }
