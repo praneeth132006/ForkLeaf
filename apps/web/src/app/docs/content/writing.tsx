@@ -43,7 +43,11 @@ export function Editor() {
       <Table
         head={["Item", "Rich text", "Markdown inserted"]}
         rows={[
-          [<strong key="a">Diagram</strong>, "A live diagram block", <Code key="a2">```mermaid</Code>],
+          [
+            <strong key="a">Diagram</strong>,
+            "A live diagram block",
+            <Code key="a2">```mermaid</Code>,
+          ],
           ["Heading 1 / 2 / 3", "Heading node", <Code key="b">#</Code>],
           ["Text", "Plain paragraph", "—"],
           ["Bulleted list", "Bullet list", <Code key="c">- </Code>],
@@ -63,16 +67,15 @@ export function Editor() {
         Escape dismisses.
       </P>
       <Note kind="warn">
-        Links and images accept <Code>http://</Code>, <Code>https://</Code> and{" "}
-        <Code>mailto:</Code> only. A <Code>javascript:</Code> or <Code>data:</Code> URL in a note
-        would be a stored cross-site-scripting vector in every renderer that later displays it, so
-        those are rejected.
+        Links and images accept <Code>http://</Code>, <Code>https://</Code> and <Code>mailto:</Code>{" "}
+        only. A <Code>javascript:</Code> or <Code>data:</Code> URL in a note would be a stored
+        cross-site-scripting vector in every renderer that later displays it, so those are rejected.
       </Note>
 
       <H2 id="formatting">Inline formatting</H2>
       <P>
-        In Rich view, select text to get bold, italic, strikethrough, inline code and highlight —
-        or use the toolbar, or <Code>⌘B</Code> and <Code>⌘I</Code>. In Split and Source, type the
+        In Rich view, select text to get bold, italic, strikethrough, inline code and highlight — or
+        use the toolbar, or <Code>⌘B</Code> and <Code>⌘I</Code>. In Split and Source, type the
         Markdown.
       </P>
 
@@ -159,7 +162,11 @@ export function Diagrams() {
             "Class diagram, entity relationship, mind map",
             "How things are shaped and how they relate",
           ],
-          [<strong key="d">Numbers</strong>, "Pie chart, quadrant chart", "Proportions and positioning"],
+          [
+            <strong key="d">Numbers</strong>,
+            "Pie chart, quadrant chart",
+            "Proportions and positioning",
+          ],
         ]}
       />
 
@@ -169,9 +176,7 @@ export function Diagrams() {
         arrow, double-click a node to rename it, and press Delete to remove the selection. The
         Mermaid source is regenerated as you go.
       </P>
-      <P>
-        Node positions are preserved in the file as a comment:
-      </P>
+      <P>Node positions are preserved in the file as a comment:</P>
       <Pre label="a flowchart with saved layout">{`flowchart TD
     %% forkleaf:layout a:100,50;b:100,200;c:300,200
     a[Draft] --> b{Review}
@@ -213,7 +218,11 @@ export function Diagrams() {
         As an ordinary fenced code block. Nothing proprietary, nothing base64-encoded, no external
         image:
       </P>
-      <Pre label="what is committed">{'```mermaid\nflowchart LR\n  A[Keystroke] --> B[(IndexedDB)]\n  B --> C{Online?}\n  C -->|yes| D[Commit]\n  C -->|no| B\n```'}</Pre>
+      <Pre label="what is committed">
+        {
+          "```mermaid\nflowchart LR\n  A[Keystroke] --> B[(IndexedDB)]\n  B --> C{Online?}\n  C -->|yes| D[Commit]\n  C -->|no| B\n```"
+        }
+      </Pre>
       <P>
         GitHub renders <Code>```mermaid</Code> fences natively, so your diagrams show up when you
         browse the file there. So does Obsidian, GitLab, and most static site generators.

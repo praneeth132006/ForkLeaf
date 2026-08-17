@@ -5,8 +5,8 @@ export function GettingStarted() {
   return (
     <>
       <Lead>
-        ForkLeaf works with no account, no install and no configuration. This page takes you from
-        an empty editor to notes committed in your own GitHub repository, and explains what is
+        ForkLeaf works with no account, no install and no configuration. This page takes you from an
+        empty editor to notes committed in your own GitHub repository, and explains what is
         happening at each step so nothing about your writing is a mystery.
       </Lead>
 
@@ -19,8 +19,8 @@ export function GettingStarted() {
       <P>
         Everything you type is saved to this browser&rsquo;s IndexedDB within a few hundred
         milliseconds. The status bar along the bottom of the window tells you so:{" "}
-        <Code>Saved on this device</Code>. Close the tab, kill the browser, lose power — the note
-        is still there when you come back.
+        <Code>Saved on this device</Code>. Close the tab, kill the browser, lose power — the note is
+        still there when you come back.
       </P>
       <Note kind="warn">
         <strong>Browser storage is not a backup.</strong> Clearing site data, using a private
@@ -74,9 +74,7 @@ export function GettingStarted() {
           this note.
         </LI>
       </UL>
-      <P>
-        You can also just clone it. Nothing about a ForkLeaf repository is special:
-      </P>
+      <P>You can also just clone it. Nothing about a ForkLeaf repository is special:</P>
       <Pre label="terminal">{`git clone https://github.com/you/forkleaf-notes.git
 cd forkleaf-notes
 ls
@@ -236,14 +234,15 @@ export function HowItWorks() {
             "The editing surfaces: Tiptap for rich text, CodeMirror for source, and the diagram studio.",
           ],
           [<Code key="g">@forkleaf/exporter</Code>, "Markdown, HTML, Word and PDF generation."],
-          [<Code key="h">apps/web</Code>, "The Next.js application: routes, API proxy, and chrome."],
+          [
+            <Code key="h">apps/web</Code>,
+            "The Next.js application: routes, API proxy, and chrome.",
+          ],
         ]}
       />
 
       <H2 id="not">What ForkLeaf deliberately does not do</H2>
-      <P>
-        Being clear about this is more useful than a longer feature list.
-      </P>
+      <P>Being clear about this is more useful than a longer feature list.</P>
       <UL>
         <LI>
           <strong>Real-time collaborative editing.</strong> Two cursors in one document needs a

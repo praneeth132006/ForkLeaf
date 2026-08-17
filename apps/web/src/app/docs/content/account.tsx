@@ -23,9 +23,7 @@ export function Plans() {
         <div key={plan.id}>
           <H3 id={plan.id}>
             {plan.name} — {formatPrice(plan)}
-            {plan.amount > 0 && (
-              <span className="text-[var(--fl-muted)]"> / month</span>
-            )}
+            {plan.amount > 0 && <span className="text-[var(--fl-muted)]"> / month</span>}
           </H3>
           <P>{plan.tagline}</P>
           <UL>
@@ -56,9 +54,7 @@ export function Plans() {
       </P>
 
       <H2 id="billing">How billing will work</H2>
-      <P>
-        When a payment provider is connected, the flow will be:
-      </P>
+      <P>When a payment provider is connected, the flow will be:</P>
       <OL>
         <li>You choose a plan and go through the provider&rsquo;s own hosted checkout.</li>
         <li>
@@ -84,8 +80,8 @@ export function Plans() {
         another tool at it. There is no export step, because there was never an import step.
       </P>
       <P>
-        The source is Apache-2.0 licensed, so a self-hosted instance stays possible regardless —
-        see <A href="/docs/self-hosting">Self-hosting</A>.
+        The source is Apache-2.0 licensed, so a self-hosted instance stays possible regardless — see{" "}
+        <A href="/docs/self-hosting">Self-hosting</A>.
       </P>
     </>
   );

@@ -71,8 +71,8 @@ export function AccountPanel({ user, githubAvailable }: AccountPanelProps) {
         ) : (
           <div className="mt-4">
             <p className="text-[14.5px] leading-relaxed text-[var(--fl-muted)]">
-              You are not signed in. Notes are being kept in this browser only, and nothing is backed
-              up.
+              You are not signed in. Notes are being kept in this browser only, and nothing is
+              backed up.
             </p>
             {githubAvailable && (
               <a href="/api/auth/github" className="fl-btn fl-btn-primary mt-4">
@@ -124,8 +124,8 @@ export function AccountPanel({ user, githubAvailable }: AccountPanelProps) {
         </h2>
         <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-[var(--fl-muted)]">
           Pro and Team are announced, not on sale — no payment provider is connected yet. The editor
-          itself is free permanently, because your notes live in your own GitHub account and there is
-          no storage for anyone to bill you for.
+          itself is free permanently, because your notes live in your own GitHub account and there
+          is no storage for anyone to bill you for.
         </p>
 
         <div className="mt-6 grid gap-3 lg:grid-cols-3">
@@ -153,9 +153,8 @@ export function AccountPanel({ user, githubAvailable }: AccountPanelProps) {
           Your data
         </h2>
         <p className="mt-3 text-[14.5px] leading-relaxed text-[var(--fl-muted)]">
-          ForkLeaf does not store your notes. They are in this browser and in your GitHub
-          repository — which means deleting them is something you do directly, not something you ask
-          us to do.
+          ForkLeaf does not store your notes. They are in this browser and in your GitHub repository
+          — which means deleting them is something you do directly, not something you ask us to do.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <Link href="/docs/privacy-and-data" className="fl-btn fl-btn-ghost !py-2 !text-[13px]">
@@ -178,9 +177,7 @@ function PlanCard({ plan, current }: { plan: Plan; current: boolean }) {
 
   return (
     <article
-      className={`fl-card relative flex flex-col p-6 ${
-        current ? "border-[var(--fl-accent)]" : ""
-      }`}
+      className={`fl-card relative flex flex-col p-6 ${current ? "border-[var(--fl-accent)]" : ""}`}
     >
       {current && (
         <span className="absolute -top-2.5 left-6 rounded-full bg-[var(--fl-accent)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--fl-accent-contrast)]">
@@ -188,7 +185,9 @@ function PlanCard({ plan, current }: { plan: Plan; current: boolean }) {
         </span>
       )}
 
-      <h3 className="text-[16px] font-semibold tracking-tight text-[var(--fl-text)]">{plan.name}</h3>
+      <h3 className="text-[16px] font-semibold tracking-tight text-[var(--fl-text)]">
+        {plan.name}
+      </h3>
       <p className="mt-1 text-[13.5px] text-[var(--fl-muted)]">{plan.tagline}</p>
 
       <p className="mt-4 flex items-baseline gap-1.5">

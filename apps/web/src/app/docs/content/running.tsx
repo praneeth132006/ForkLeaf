@@ -186,15 +186,15 @@ export function Firebase() {
       <H2 id="project">Setting up the project</H2>
       <OL>
         <li>
-          Create a project at <A href="https://console.firebase.google.com">console.firebase.google.com</A>
-          .
+          Create a project at{" "}
+          <A href="https://console.firebase.google.com">console.firebase.google.com</A>.
         </li>
         <li>
           Add a <strong>Web app</strong> and copy the config object it gives you.
         </li>
         <li>
-          Under <strong>Authentication → Sign-in method</strong>, enable{" "}
-          <strong>Anonymous</strong>. Nothing else is required.
+          Under <strong>Authentication → Sign-in method</strong>, enable <strong>Anonymous</strong>.
+          Nothing else is required.
         </li>
         <li>
           Under <strong>Firestore Database</strong>, create a database in production mode.
@@ -251,7 +251,10 @@ service cloud.firestore {
       <Table
         head={["Event", "Fired when"]}
         rows={[
-          [<Code key="a">page_view</Code>, "Any route is opened, including client-side navigations"],
+          [
+            <Code key="a">page_view</Code>,
+            "Any route is opened, including client-side navigations",
+          ],
           [<Code key="b">note_created</Code>, "A note is created"],
           [<Code key="c">note_exported</Code>, "An export completes"],
           [<Code key="d">repo_connected</Code>, "A repository is connected"],
@@ -266,9 +269,7 @@ service cloud.firestore {
       </P>
 
       <H2 id="payments">Adding payments later</H2>
-      <P>
-        The data model is already in place; what is missing is a provider. To add one:
-      </P>
+      <P>The data model is already in place; what is missing is a provider. To add one:</P>
       <OL>
         <li>
           Add a checkout route that creates a session with your provider and redirects to their
@@ -314,8 +315,8 @@ export function Troubleshooting() {
         finished it in another. Start again from the app.
       </Def>
       <Def term="“Could not complete sign-in with GitHub”">
-        The code-for-token exchange failed. Check that the client secret is correct and has not
-        been regenerated, and that the OAuth app&rsquo;s callback URL exactly matches{" "}
+        The code-for-token exchange failed. Check that the client secret is correct and has not been
+        regenerated, and that the OAuth app&rsquo;s callback URL exactly matches{" "}
         <Code>&lt;your origin&gt;/api/auth/callback</Code> — including scheme and any trailing path.
       </Def>
       <Def term="“redirect_uri_mismatch” on github.com">
@@ -410,8 +411,8 @@ export function Faq() {
 
       <H2 id="general">General</H2>
       <Def term="Do I need an account?">
-        No. The editor works immediately with notes stored in your browser. An account — GitHub —
-        is what gives you a backup and sync across devices.
+        No. The editor works immediately with notes stored in your browser. An account — GitHub — is
+        what gives you a backup and sync across devices.
       </Def>
       <Def term="Where exactly are my notes?">
         Two places: IndexedDB in this browser, and <Code>.md</Code> files in your GitHub repository.

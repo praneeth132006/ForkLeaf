@@ -166,7 +166,8 @@ export function markdownSlashCommands(context: CompletionContext): CompletionRes
   if (match.from === match.to && !context.explicit) return null;
 
   const line = context.state.doc.lineAt(match.from);
-  const charBefore = match.from > line.from ? context.state.sliceDoc(match.from - 1, match.from) : "";
+  const charBefore =
+    match.from > line.from ? context.state.sliceDoc(match.from - 1, match.from) : "";
   if (charBefore && !/\s/.test(charBefore)) return null;
 
   // Filtered here rather than by CodeMirror, which only scores against the

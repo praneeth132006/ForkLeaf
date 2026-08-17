@@ -41,10 +41,8 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
           <h1 className="mt-6 text-[2.75rem] font-semibold leading-[1.06] tracking-[-0.03em] text-[var(--fl-text)] sm:text-6xl">
             The notes app that
             <br className="hidden sm:block" />{" "}
-            <span className="font-serif font-normal italic text-[var(--fl-accent)]">
-              you
-            </span>{" "}
-            own the database of.
+            <span className="font-serif font-normal italic text-[var(--fl-accent)]">you</span> own
+            the database of.
           </h1>
 
           <p className="mx-auto mt-6 max-w-xl text-[17px] leading-relaxed text-[var(--fl-muted)]">

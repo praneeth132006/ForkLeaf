@@ -47,11 +47,9 @@ export async function upsertUserProfile(githubUser: SessionUser | null): Promise
 
   try {
     const existing = await getDoc(ref);
-    await setDoc(
-      ref,
-      existing.exists() ? profile : { ...profile, createdAt: serverTimestamp() },
-      { merge: true },
-    );
+    await setDoc(ref, existing.exists() ? profile : { ...profile, createdAt: serverTimestamp() }, {
+      merge: true,
+    });
   } catch (error) {
     // A missing Firestore database or a rule rejection must not break sign-in.
     console.warn("[ForkLeaf] Could not write user profile:", error);

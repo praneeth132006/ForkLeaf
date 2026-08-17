@@ -31,8 +31,8 @@ export function SigningIn() {
       </OL>
       <Note>
         The <Code>state</Code> check is not ceremony. Without it, someone can complete the OAuth
-        flow inside your browser and quietly bind your session to <em>their</em> GitHub account —
-        a login-CSRF that ends with your notes being committed to a stranger&rsquo;s repository.
+        flow inside your browser and quietly bind your session to <em>their</em> GitHub account — a
+        login-CSRF that ends with your notes being committed to a stranger&rsquo;s repository.
       </Note>
 
       <H2 id="scopes">The permissions it asks for</H2>
@@ -91,8 +91,8 @@ export function SigningIn() {
       <H2 id="google">Google sign-in</H2>
       <P>
         Google is enabled as an identity provider on the Firebase project, but it does not grant
-        repository access — only GitHub can do that. GitHub is the sign-in that matters for ForkLeaf,
-        which is why it is the only button offered.
+        repository access — only GitHub can do that. GitHub is the sign-in that matters for
+        ForkLeaf, which is why it is the only button offered.
       </P>
 
       <H2 id="signing-out">Signing out</H2>
@@ -139,9 +139,8 @@ export function Repositories() {
         access to. Pick one and set:
       </P>
       <Def term="Branch">
-        Defaults to the repository&rsquo;s default branch. Point ForkLeaf at{" "}
-        <Code>docs</Code> or <Code>notes</Code> if you would rather it never touched{" "}
-        <Code>main</Code>.
+        Defaults to the repository&rsquo;s default branch. Point ForkLeaf at <Code>docs</Code> or{" "}
+        <Code>notes</Code> if you would rather it never touched <Code>main</Code>.
       </Def>
       <Def term="Directory">
         Optional. Set it to <Code>docs/</Code> and ForkLeaf treats that folder as the root of the
@@ -245,7 +244,7 @@ export function Sync() {
             "No network. Everything is on this device and will go up automatically when you reconnect.",
           ],
           [
-            <strong key="e">Couldn't sync — click to retry</strong>,
+            <strong key="e">Couldn&apos;t sync — click to retry</strong>,
             "GitHub rejected the push. The reason is at the right of the status bar. Nothing was lost.",
           ],
           [
@@ -293,15 +292,13 @@ export function Sync() {
         The queue accumulates and the status bar says how much is waiting. On reconnect it drains
         automatically.
       </P>
-      <P>
-        If you try to close the tab with unpushed changes, the browser asks you to confirm.
-      </P>
+      <P>If you try to close the tab with unpushed changes, the browser asks you to confirm.</P>
 
       <H2 id="devices">Across devices</H2>
       <P>
         Sign in with the same GitHub account elsewhere and ForkLeaf pulls the repository down. Both
-        devices commit to the same branch, and each pulls the other&rsquo;s commits on the next sync.
-        If they both changed the same note, you get a conflict rather than a silent overwrite.
+        devices commit to the same branch, and each pulls the other&rsquo;s commits on the next
+        sync. If they both changed the same note, you get a conflict rather than a silent overwrite.
       </P>
 
       <H2 id="deleting">Deleting</H2>

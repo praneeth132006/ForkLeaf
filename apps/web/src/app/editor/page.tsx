@@ -117,7 +117,10 @@ export default function EditorPage() {
             notebook.note?.path === path ? notebook.note : await notebook.openNoteAndReturn(path);
           if (!target) return;
 
-          await notebook.renameNote(target, joinPath(dirname(path), `${slugifyFilename(value)}.md`));
+          await notebook.renameNote(
+            target,
+            joinPath(dirname(path), `${slugifyFilename(value)}.md`),
+          );
         },
       });
     },
@@ -281,11 +284,7 @@ export default function EditorPage() {
               )}
 
               {noteGitHubUrl && (
-                <IconButton
-                  as="a"
-                  href={noteGitHubUrl}
-                  label="View this note on GitHub"
-                >
+                <IconButton as="a" href={noteGitHubUrl} label="View this note on GitHub">
                   <GitHubGlyph />
                 </IconButton>
               )}
@@ -413,7 +412,11 @@ export default function EditorPage() {
 
       {/* ── Dialogs ────────────────────────────────────────────────────── */}
       {dialog === "export" && note && (
-        <ExportDialog note={note} loadAllNotes={notebook.allNotes} onClose={() => setDialog(null)} />
+        <ExportDialog
+          note={note}
+          loadAllNotes={notebook.allNotes}
+          onClose={() => setDialog(null)}
+        />
       )}
 
       {dialog === "help" && (
@@ -472,7 +475,14 @@ function IconButton({
 
   if (as === "a" && href) {
     return (
-      <a href={href} target="_blank" rel="noreferrer" title={label} aria-label={label} className={shared}>
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        title={label}
+        aria-label={label}
+        className={shared}
+      >
         {children}
       </a>
     );

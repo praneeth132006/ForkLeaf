@@ -13,10 +13,7 @@ export default async function AccountPage() {
 
   return (
     <SiteShell>
-      <AccountPanel
-        user={session?.user ?? null}
-        githubAvailable={githubOAuthConfigured()}
-      />
+      <AccountPanel user={session?.user ?? null} githubAvailable={githubOAuthConfigured()} />
     </SiteShell>
   );
 }

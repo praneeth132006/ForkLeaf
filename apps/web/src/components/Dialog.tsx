@@ -97,7 +97,14 @@ export function Dialog({ title, subtitle, onClose, children, wide = false }: Dia
             title="Close (Esc)"
             className="-mr-1 shrink-0 rounded-lg p-1.5 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
           >
-            <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
+            <svg
+              viewBox="0 0 16 16"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+            >
               <path d="m4 4 8 8M12 4l-8 8" />
             </svg>
           </button>

@@ -51,7 +51,10 @@ export function UL({ children }: { children: React.ReactNode }) {
 export function LI({ children }: { children: React.ReactNode }) {
   return (
     <li className="flex gap-2.5">
-      <span aria-hidden="true" className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-[var(--fl-accent)]" />
+      <span
+        aria-hidden="true"
+        className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-[var(--fl-accent)]"
+      />
       <span className="min-w-0">{children}</span>
     </li>
   );

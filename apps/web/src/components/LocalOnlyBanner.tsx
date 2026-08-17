@@ -29,6 +29,7 @@ export function LocalOnlyBanner({ githubAvailable, onSignIn, onLearnMore }: Loca
 
   useEffect(() => {
     try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVisible(window.localStorage.getItem(DISMISS_KEY) !== "1");
     } catch {
       // Private browsing with storage disabled — show it.

@@ -59,8 +59,7 @@ export function AppPreview() {
             <span className="text-[#3ecf8e]"># Sync engine</span>
             {"\n\n"}
             Writes land in IndexedDB first, then drain{"\n"}
-            to GitHub in a single{" "}
-            <span className="text-[#e9ece7]">**atomic commit**</span>.{"\n\n"}
+            to GitHub in a single <span className="text-[#e9ece7]">**atomic commit**</span>.{"\n\n"}
             <span className="text-[#5c645b]">```mermaid</span>
             {"\n"}
             flowchart LR{"\n"}
@@ -196,12 +195,7 @@ function Node({
         fill={accent ? "rgba(62,207,142,0.10)" : "#101310"}
         stroke={accent ? "#3ecf8e" : "#2f3a31"}
       />
-      <text
-        x={x + w / 2}
-        y={y + 18}
-        textAnchor="middle"
-        fill={accent ? "#3ecf8e" : "#a8b0a6"}
-      >
+      <text x={x + w / 2} y={y + 18} textAnchor="middle" fill={accent ? "#3ecf8e" : "#a8b0a6"}>
         {label}
       </text>
     </g>

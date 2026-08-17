@@ -44,12 +44,7 @@ export function HelpDialog({
   const [tab, setTab] = useState<Tab>("start");
 
   return (
-    <Dialog
-      title="Help"
-      subtitle="How ForkLeaf works, in about two minutes"
-      onClose={onClose}
-      wide
-    >
+    <Dialog title="Help" subtitle="How ForkLeaf works, in about two minutes" onClose={onClose} wide>
       <div
         role="tablist"
         aria-label="Help topics"
@@ -76,14 +71,12 @@ export function HelpDialog({
       {tab === "start" && (
         <Section>
           <Step n={1} title="Write something">
-            You do not need an account. Notes are saved to this browser
-            immediately — the status bar at the bottom says{" "}
-            <Mono>Saved on this device</Mono> when that has happened.
+            You do not need an account. Notes are saved to this browser immediately — the status bar
+            at the bottom says <Mono>Saved on this device</Mono> when that has happened.
           </Step>
           <Step n={2} title="Sign in with GitHub to keep them">
-            Browser storage is not a backup: clearing site data deletes it.
-            Signing in creates a private repository called{" "}
-            <Mono>forkleaf-notes</Mono> in your GitHub account and starts
+            Browser storage is not a backup: clearing site data deletes it. Signing in creates a
+            private repository called <Mono>forkleaf-notes</Mono> in your GitHub account and starts
             committing your notes there.
             {!user &&
               (githubAvailable ? (
@@ -92,18 +85,16 @@ export function HelpDialog({
                 </button>
               ) : (
                 <Callout>
-                  GitHub sign-in is not configured on this deployment. Whoever
-                  runs it needs to set <Mono>GITHUB_OAUTH_CLIENT_ID</Mono>,{" "}
-                  <Mono>GITHUB_OAUTH_CLIENT_SECRET</Mono> and{" "}
+                  GitHub sign-in is not configured on this deployment. Whoever runs it needs to set{" "}
+                  <Mono>GITHUB_OAUTH_CLIENT_ID</Mono>, <Mono>GITHUB_OAUTH_CLIENT_SECRET</Mono> and{" "}
                   <Mono>SESSION_SECRET</Mono> — see the{" "}
                   <DocLink href="/docs/self-hosting">self-hosting guide</DocLink>.
                 </Callout>
               ))}
           </Step>
           <Step n={3} title="Point it at any repo you like">
-            You are not limited to the notes repo. Connect an existing
-            repository — a docs folder, a wiki, a project README — and edit it
-            here.
+            You are not limited to the notes repo. Connect an existing repository — a docs folder, a
+            wiki, a project README — and edit it here.
             {user && (
               <button type="button" onClick={onConnectRepo} className="fl-btn fl-btn-ghost mt-3">
                 Connect a repository
@@ -116,27 +107,25 @@ export function HelpDialog({
       {tab === "writing" && (
         <Section>
           <Item title="Three views of the same file">
-            <strong>Rich text</strong> formats as you type. <strong>Split</strong>{" "}
-            shows raw Markdown beside a live preview. <strong>Source</strong> is
-            just the Markdown. Switching never rewrites the file, so the commit
-            in your repo is the same either way.
+            <strong>Rich text</strong> formats as you type. <strong>Split</strong> shows raw
+            Markdown beside a live preview. <strong>Source</strong> is just the Markdown. Switching
+            never rewrites the file, so the commit in your repo is the same either way.
           </Item>
           <Item title="Press / for anything">
-            Type <Mono>/</Mono> on an empty line for headings, lists, tables,
-            code blocks, images and diagrams. This works in{" "}
-            <strong>all three views</strong> — in Split and Source it inserts
-            the Markdown directly. The same list is in the{" "}
-            <strong>Insert</strong> button on the toolbar.
+            Type <Mono>/</Mono> on an empty line for headings, lists, tables, code blocks, images
+            and diagrams. This works in <strong>all three views</strong> — in Split and Source it
+            inserts the Markdown directly. The same list is in the <strong>Insert</strong> button on
+            the toolbar.
           </Item>
           <Item title="Properties are real front matter">
-            The Title and Tags fields in the right-hand panel are written into
-            the file as a YAML block at the top. That is why notes written here
-            open correctly in Obsidian, Jekyll and Hugo.
+            The Title and Tags fields in the right-hand panel are written into the file as a YAML
+            block at the top. That is why notes written here open correctly in Obsidian, Jekyll and
+            Hugo.
           </Item>
           <Item title="Export">
-            <Mono>Export</Mono> in the header produces Markdown, PDF, HTML, Word
-            or plain text. Everything is generated in your browser — the note is
-            never uploaded anywhere to become a file.
+            <Mono>Export</Mono> in the header produces Markdown, PDF, HTML, Word or plain text.
+            Everything is generated in your browser — the note is never uploaded anywhere to become
+            a file.
           </Item>
         </Section>
       )}
@@ -145,29 +134,24 @@ export function HelpDialog({
         <Section>
           <Item title="Insert one">
             Press <Mono>/</Mono> and choose <strong>Diagram</strong>, or use{" "}
-            <strong>Diagram</strong> on the toolbar. In rich text a diagram
-            block appears; in Split or Source you get a{" "}
-            <Mono>```mermaid</Mono> fence.
+            <strong>Diagram</strong> on the toolbar. In rich text a diagram block appears; in Split
+            or Source you get a <Mono>```mermaid</Mono> fence.
           </Item>
           <Item title="Choose a type">
-            A new diagram opens the gallery: flowcharts, sequence diagrams,
-            state machines, ER diagrams, Gantt charts, mind maps, pie charts,
-            user journeys, timelines, git graphs and quadrant charts. Each card
-            draws the shape it produces. Pick one and edit it — starting from
-            something that already renders beats starting from an empty box.
+            A new diagram opens the gallery: flowcharts, sequence diagrams, state machines, ER
+            diagrams, Gantt charts, mind maps, pie charts, user journeys, timelines, git graphs and
+            quadrant charts. Each card draws the shape it produces. Pick one and edit it — starting
+            from something that already renders beats starting from an empty box.
           </Item>
           <Item title="Two ways to edit">
-            <strong>Visual</strong> lets you drag boxes and draw arrows on a
-            canvas — available for flowcharts. <strong>Source</strong> is the
-            Mermaid text, with autocomplete, inline error messages that point at
-            the offending line, and a <strong>Syntax help</strong> panel you can
-            click snippets out of. Both write the same code, and the preview
-            updates as you go.
+            <strong>Visual</strong> lets you drag boxes and draw arrows on a canvas — available for
+            flowcharts. <strong>Source</strong> is the Mermaid text, with autocomplete, inline error
+            messages that point at the offending line, and a <strong>Syntax help</strong> panel you
+            can click snippets out of. Both write the same code, and the preview updates as you go.
           </Item>
           <Item title="They are not locked in">
-            A diagram is stored as an ordinary <Mono>```mermaid</Mono> code
-            fence, so GitHub renders it natively when you view the file there,
-            and so does anything else that speaks Mermaid.
+            A diagram is stored as an ordinary <Mono>```mermaid</Mono> code fence, so GitHub renders
+            it natively when you view the file there, and so does anything else that speaks Mermaid.
           </Item>
         </Section>
       )}
@@ -175,12 +159,10 @@ export function HelpDialog({
       {tab === "sync" && (
         <Section>
           <Item title="How saving actually works">
-            Every keystroke goes to this browser first, which is why the editor
-            works with no network. A background queue then pushes the changes to
-            GitHub as commits. The status bar names both halves — “Saved
-            locally · 2 to push” means nothing is lost, it just has not landed
-            in the repo yet. <Mono>⌘S</Mono> pushes immediately instead of
-            waiting.
+            Every keystroke goes to this browser first, which is why the editor works with no
+            network. A background queue then pushes the changes to GitHub as commits. The status bar
+            names both halves — “Saved locally · 2 to push” means nothing is lost, it just has not
+            landed in the repo yet. <Mono>⌘S</Mono> pushes immediately instead of waiting.
           </Item>
           <Item title="Where your notes live on GitHub">
             {workspace && !workspace.isLocal ? (
@@ -195,34 +177,30 @@ export function HelpDialog({
                   <External href={commitsUrl(workspace)}>See every commit</External>
                 </span>
                 <span className="mt-3 block">
-                  Individual notes have their own{" "}
-                  <strong>Open on GitHub</strong> and <strong>History</strong>{" "}
-                  links in the properties panel on the right.
+                  Individual notes have their own <strong>Open on GitHub</strong> and{" "}
+                  <strong>History</strong> links in the properties panel on the right.
                 </span>
               </>
             ) : (
               <>
-                Nothing is on GitHub yet — this workspace is local to this
-                browser. Sign in and ForkLeaf creates a private{" "}
-                <Mono>forkleaf-notes</Mono> repository, then commits each note to
-                it as a plain <Mono>.md</Mono> file you can read, clone or edit
-                anywhere.
+                Nothing is on GitHub yet — this workspace is local to this browser. Sign in and
+                ForkLeaf creates a private <Mono>forkleaf-notes</Mono> repository, then commits each
+                note to it as a plain <Mono>.md</Mono> file you can read, clone or edit anywhere.
               </>
             )}
           </Item>
           <Item title="Working across devices">
-            Sign in with the same GitHub account on another machine and ForkLeaf
-            pulls the repository down. Both devices commit to the same branch.
+            Sign in with the same GitHub account on another machine and ForkLeaf pulls the
+            repository down. Both devices commit to the same branch.
           </Item>
           <Item title="If two devices edit the same note">
-            ForkLeaf detects it and shows you both versions rather than picking
-            one silently. You choose: keep yours, keep the remote one, or keep
-            both as separate files.
+            ForkLeaf detects it and shows you both versions rather than picking one silently. You
+            choose: keep yours, keep the remote one, or keep both as separate files.
           </Item>
           <Item title="What ForkLeaf can see">
-            Your GitHub token is encrypted into an httpOnly cookie that only the
-            server can open — no script on the page can read it, and it is never
-            put in a URL. There is no ForkLeaf database holding your notes.{" "}
+            Your GitHub token is encrypted into an httpOnly cookie that only the server can open —
+            no script on the page can read it, and it is never put in a URL. There is no ForkLeaf
+            database holding your notes.{" "}
             <DocLink href="/docs/security">Read the security model</DocLink>.
           </Item>
         </Section>
@@ -254,8 +232,8 @@ export function HelpDialog({
       )}
 
       <p className="mt-6 border-t border-[var(--fl-border)] pt-4 text-[13px] text-[var(--fl-muted)]">
-        Still stuck? The <DocLink href="/docs">full documentation</DocLink> goes
-        into much more depth.
+        Still stuck? The <DocLink href="/docs">full documentation</DocLink> goes into much more
+        depth.
       </p>
     </Dialog>
   );

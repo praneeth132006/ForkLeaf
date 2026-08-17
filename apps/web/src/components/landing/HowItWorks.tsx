@@ -21,10 +21,7 @@ const STEPS = [
 export function HowItWorks() {
   return (
     <section id="how" className="mx-auto w-full max-w-6xl px-6 py-24">
-      <SectionHeading
-        eyebrow="How it works"
-        title="Three steps, then never think about it again"
-      />
+      <SectionHeading eyebrow="How it works" title="Three steps, then never think about it again" />
 
       <ol className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-[var(--fl-border)] bg-[var(--fl-border)] md:grid-cols-3">
         {STEPS.map((step) => (

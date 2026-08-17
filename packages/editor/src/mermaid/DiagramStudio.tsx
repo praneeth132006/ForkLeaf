@@ -108,7 +108,9 @@ export function DiagramStudio({
     (snippet: string) => {
       // Appended on its own line: reliable, and avoids reaching into
       // CodeMirror's selection state from outside the component.
-      onChange(code.endsWith("\n") || code === "" ? `${code}${snippet}\n` : `${code}\n${snippet}\n`);
+      onChange(
+        code.endsWith("\n") || code === "" ? `${code}${snippet}\n` : `${code}\n${snippet}\n`,
+      );
     },
     [code, onChange],
   );

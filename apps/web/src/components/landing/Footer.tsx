@@ -8,7 +8,6 @@ import {
   LICENSE_URL,
   REPO_URL,
   SECURITY_URL,
-  SELF_HOSTING_URL,
 } from "@/lib/constants";
 
 /**

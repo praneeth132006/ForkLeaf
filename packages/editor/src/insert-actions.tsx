@@ -39,7 +39,17 @@ const MERMAID_STARTER = "flowchart TD\n  A[Start] --> B[Finish]";
 export const INSERT_DEFINITIONS: InsertDefinition[] = [
   {
     id: "diagram",
-    keywords: ["mermaid", "flowchart", "chart", "graph", "sequence", "erd", "gantt", "mindmap", "uml"],
+    keywords: [
+      "mermaid",
+      "flowchart",
+      "chart",
+      "graph",
+      "sequence",
+      "erd",
+      "gantt",
+      "mindmap",
+      "uml",
+    ],
     label: "Diagram",
     hint: "Flowchart, sequence, ERD, Gantt and more",
     primary: true,
@@ -154,7 +164,9 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     keywords: ["url", "href", "anchor"],
     label: "Link",
     hint: "Link out to a URL",
-    icon: <Glyph d="M6.5 9.5 9.5 6.5M6 4.5 7.5 3a2.8 2.8 0 0 1 4 4l-1.5 1.5M10 11.5 8.5 13a2.8 2.8 0 0 1-4-4L6 7.5" />,
+    icon: (
+      <Glyph d="M6.5 9.5 9.5 6.5M6 4.5 7.5 3a2.8 2.8 0 0 1 4 4l-1.5 1.5M10 11.5 8.5 13a2.8 2.8 0 0 1-4-4L6 7.5" />
+    ),
     rich: (editor) => {
       const url = window.prompt("Link URL");
       if (url && /^(https?:\/\/|mailto:)/i.test(url)) {

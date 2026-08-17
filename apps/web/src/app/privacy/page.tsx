@@ -68,21 +68,21 @@ export default function PrivacyPage() {
           <LI>When your account was created and when it was last active</LI>
         </UL>
         <P>
-          That is the whole record. It exists so a subscription has something to attach to and so the
-          app can show which account you are signed in as.
+          That is the whole record. It exists so a subscription has something to attach to and so
+          the app can show which account you are signed in as.
         </P>
 
         <P>
-          <strong>Usage analytics.</strong> Through Google Firebase Analytics we record which screens
-          are opened and which features are used — for example that a note was created, a diagram was
-          inserted, or an export was run. These events contain <em>no</em> note content, note titles,
-          filenames or repository names.
+          <strong>Usage analytics.</strong> Through Google Firebase Analytics we record which
+          screens are opened and which features are used — for example that a note was created, a
+          diagram was inserted, or an export was run. These events contain <em>no</em> note content,
+          note titles, filenames or repository names.
         </P>
 
         <P>
           <strong>Session data.</strong> Your GitHub access token and public profile, encrypted into
-          an <Code>httpOnly</Code> cookie that only our server can decrypt. It expires after 30 days.
-          It is never readable by JavaScript in your browser and never appears in a URL.
+          an <Code>httpOnly</Code> cookie that only our server can decrypt. It expires after 30
+          days. It is never readable by JavaScript in your browser and never appears in a URL.
         </P>
 
         <P>
@@ -154,7 +154,8 @@ export default function PrivacyPage() {
 
         <H2 id="legal">7. Why we are allowed to process it</H2>
         <P>
-          For users in the UK, EEA and other jurisdictions with equivalent law, our lawful bases are:
+          For users in the UK, EEA and other jurisdictions with equivalent law, our lawful bases
+          are:
         </P>
         <UL>
           <LI>
@@ -181,12 +182,12 @@ export default function PrivacyPage() {
             Firebase, currently 14 months.
           </LI>
           <LI>
-            <strong>Server logs:</strong> according to our hosting provider&rsquo;s retention policy,
-            typically 30 days.
+            <strong>Server logs:</strong> according to our hosting provider&rsquo;s retention
+            policy, typically 30 days.
           </LI>
           <LI>
-            <strong>Your notes:</strong> we do not hold them, so there is nothing for us to retain or
-            delete. They persist for as long as you keep the repository.
+            <strong>Your notes:</strong> we do not hold them, so there is nothing for us to retain
+            or delete. They persist for as long as you keep the repository.
           </LI>
         </UL>
 
