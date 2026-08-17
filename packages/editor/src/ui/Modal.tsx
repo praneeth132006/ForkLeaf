@@ -13,6 +13,14 @@ export interface ModalProps {
   actions?: React.ReactNode;
   /** Tailwind max-width class. Diagram work needs the room; prompts do not. */
   widthClassName?: string;
+  /**
+   * Fills the viewport instead of sitting in the middle of it.
+   *
+   * For work where the available area *is* the feature — drawing a diagram on
+   * a canvas is the obvious case, and a centred dialog with a 640px canvas is
+   * the reason it felt cramped.
+   */
+  fullScreen?: boolean;
 }
 
 /**
@@ -33,6 +41,7 @@ export function Modal({
   children,
   actions,
   widthClassName = "max-w-5xl",
+  fullScreen = false,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
@@ -93,7 +102,9 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className={`fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm ${
+        fullScreen ? "p-0 sm:p-3" : "p-4"
+      }`}
       onMouseDown={(event) => {
         // Only a click on the backdrop itself closes — a drag that starts
         // inside the panel and ends outside it must not.
@@ -106,7 +117,11 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`flex max-h-[90vh] w-full ${widthClassName} flex-col overflow-hidden rounded-2xl border border-[var(--fl-border)] bg-[var(--fl-bg)] shadow-[0_32px_80px_-24px_rgba(0,0,0,0.6)] outline-none`}
+        className={`flex w-full flex-col overflow-hidden border border-[var(--fl-border)] bg-[var(--fl-bg)] shadow-[0_32px_80px_-24px_rgba(0,0,0,0.6)] outline-none ${
+          fullScreen
+            ? "h-full max-h-full rounded-none sm:rounded-2xl"
+            : `max-h-[90vh] rounded-2xl ${widthClassName}`
+        }`}
       >
         <header className="flex shrink-0 items-center gap-3 border-b border-[var(--fl-border)] px-5 py-3.5">
           <div className="min-w-0 flex-1">
