@@ -6,7 +6,7 @@ merged pull request without guesswork.
 ## Getting set up
 
 ```bash
-git clone https://github.com/praneeth132006/MarkDown.git
+git clone https://github.com/praneeth132006/ForkLeaf.git
 cd MarkDown
 pnpm install
 pnpm dev

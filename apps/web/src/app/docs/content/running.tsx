@@ -21,7 +21,7 @@ export function SelfHosting() {
       </UL>
 
       <H2 id="local">Running it locally</H2>
-      <Pre label="terminal">{`git clone https://github.com/praneeth132006/MarkDown.git forkleaf
+      <Pre label="terminal">{`git clone https://github.com/praneeth132006/ForkLeaf.git forkleaf
 cd forkleaf
 pnpm install
 cp .env.example apps/web/.env.local
@@ -135,7 +135,7 @@ pnpm --filter @forkleaf/web start   # serves on $PORT, default 3000`}</Pre>
         A GitHub App&rsquo;s user-to-server tokens use the same OAuth endpoints ForkLeaf already
         calls, so only <Code>apps/web/src/app/api/auth/</Code> needs changing — mainly handling the
         refresh token, which classic OAuth tokens do not have. The details are in{" "}
-        <A href="https://github.com/praneeth132006/MarkDown/blob/main/docs/self-hosting.md">
+        <A href="https://github.com/praneeth132006/ForkLeaf/blob/main/docs/self-hosting.md">
           docs/self-hosting.md
         </A>{" "}
         in the repository.
@@ -396,7 +396,7 @@ export function Troubleshooting() {
       <H2 id="still">Still stuck</H2>
       <P>
         Open an issue at{" "}
-        <A href="https://github.com/praneeth132006/MarkDown/issues">the repository</A> with what you
+        <A href="https://github.com/praneeth132006/ForkLeaf/issues">the repository</A> with what you
         did, what you expected, and what happened. For anything security-related, follow{" "}
         <A href="/docs/security">the disclosure process</A> instead of filing publicly.
       </P>
@@ -424,7 +424,7 @@ export function Faq() {
       </Def>
       <Def term="Is it open source?">
         Yes — Apache-2.0.{" "}
-        <A href="https://github.com/praneeth132006/MarkDown">github.com/praneeth132006/MarkDown</A>.
+        <A href="https://github.com/praneeth132006/ForkLeaf">github.com/praneeth132006/ForkLeaf</A>.
       </Def>
 
       <H2 id="github-faq">GitHub</H2>

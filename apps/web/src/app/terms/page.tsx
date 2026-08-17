@@ -94,14 +94,14 @@ export default function TermsPage() {
         </UL>
         <P>
           Security research is welcome. Please follow the disclosure process in{" "}
-          <A href="https://github.com/praneeth132006/MarkDown/blob/main/SECURITY.md">SECURITY.md</A>{" "}
+          <A href="https://github.com/praneeth132006/ForkLeaf/blob/main/SECURITY.md">SECURITY.md</A>{" "}
           rather than testing destructively against the hosted service.
         </P>
 
         <H2 id="software">6. The software licence</H2>
         <P>
           ForkLeaf&rsquo;s source is licensed under the{" "}
-          <A href="https://github.com/praneeth132006/MarkDown/blob/main/LICENSE">
+          <A href="https://github.com/praneeth132006/ForkLeaf/blob/main/LICENSE">
             Apache License 2.0
           </A>
           . That licence governs your rights to the code — to use, modify, distribute and self-host
@@ -196,7 +196,7 @@ export default function TermsPage() {
         <P>
           We may update these terms. The date at the top changes, and material changes are announced
           in the app. Every revision is public in the{" "}
-          <A href="https://github.com/praneeth132006/MarkDown">git repository</A>, so you can diff
+          <A href="https://github.com/praneeth132006/ForkLeaf">git repository</A>, so you can diff
           them. Continuing to use the service after a change means you accept it.
         </P>
 
