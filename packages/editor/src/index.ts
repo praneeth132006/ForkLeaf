@@ -4,10 +4,14 @@ export { SourceEditor, type SourceEditorProps, type SourceEditorHandle } from ".
 export { Preview, type PreviewProps } from "./Preview";
 export { EditorToolbar, type EditorToolbarProps, type InsertAction } from "./EditorToolbar";
 export {
-  INSERT_ACTIONS,
   INSERT_DEFINITIONS,
+  insertActionsFor,
+  insertDefinitionsFor,
+  filterInsertActions,
   runRichAction,
   runSourceAction,
+  type InsertDefinition,
+  type InsertSurface,
 } from "./insert-actions";
 export { Modal, type ModalProps } from "./ui/Modal";
 

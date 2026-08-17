@@ -18,6 +18,15 @@ export interface InsertDefinition extends InsertAction {
   markdown: { text: string; cursor?: number };
   /** Extra words that should match this action when searching. */
   keywords?: string[];
+  /**
+   * Which surfaces can offer this.
+   *
+   * A few Markdown constructs are supported by the renderer (remark-gfm) but
+   * have no Tiptap node — footnotes are the clearest case. Offering those in
+   * rich text would insert something the block editor cannot represent, so the
+   * menus filter by view instead of showing an item that half-works.
+   */
+  availableIn?: "both" | "rich" | "source";
 }
 
 /** Prompts for an image URL, rejecting anything that is not http(s). */
@@ -189,18 +198,126 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     },
     markdown: { text: "![](https://)", cursor: 2 },
   },
+  {
+    id: "h4",
+    keywords: ["heading"],
+    label: "Heading 4",
+    hint: "Fourth-level heading",
+    icon: <TextGlyph>H4</TextGlyph>,
+    rich: (editor) => editor.chain().focus().toggleHeading({ level: 4 }).run(),
+    markdown: { text: "#### " },
+  },
+  {
+    id: "h5",
+    keywords: ["heading"],
+    label: "Heading 5",
+    hint: "Fifth-level heading",
+    icon: <TextGlyph>H5</TextGlyph>,
+    rich: (editor) => editor.chain().focus().toggleHeading({ level: 5 }).run(),
+    markdown: { text: "##### " },
+  },
+  {
+    id: "h6",
+    keywords: ["heading"],
+    label: "Heading 6",
+    hint: "Sixth-level heading",
+    icon: <TextGlyph>H6</TextGlyph>,
+    rich: (editor) => editor.chain().focus().toggleHeading({ level: 6 }).run(),
+    markdown: { text: "###### " },
+  },
+  {
+    id: "bold",
+    keywords: ["strong", "b"],
+    label: "Bold",
+    hint: "Bold the selection, or start bold text",
+    icon: <TextGlyph>B</TextGlyph>,
+    rich: (editor) => editor.chain().focus().toggleBold().run(),
+    markdown: { text: "****", cursor: 2 },
+  },
+  {
+    id: "italic",
+    keywords: ["emphasis", "em", "i"],
+    label: "Italic",
+    hint: "Italicise the selection, or start italic text",
+    icon: <TextGlyph>I</TextGlyph>,
+    rich: (editor) => editor.chain().focus().toggleItalic().run(),
+    markdown: { text: "__", cursor: 1 },
+  },
+  {
+    id: "strike",
+    keywords: ["strikethrough", "cross out", "del"],
+    label: "Strikethrough",
+    hint: "Cross out the selection",
+    icon: <TextGlyph>S</TextGlyph>,
+    rich: (editor) => editor.chain().focus().toggleStrike().run(),
+    markdown: { text: "~~~~", cursor: 2 },
+  },
+  {
+    id: "inline-code",
+    keywords: ["monospace", "tick", "backtick"],
+    label: "Inline code",
+    hint: "Code inside a sentence",
+    icon: <TextGlyph>`</TextGlyph>,
+    rich: (editor) => editor.chain().focus().toggleCode().run(),
+    markdown: { text: "``", cursor: 1 },
+  },
+  {
+    id: "break",
+    keywords: ["newline", "br", "hard break"],
+    label: "Line break",
+    hint: "Break the line without starting a paragraph",
+    icon: <Glyph d="M13 3.5v4a2 2 0 0 1-2 2H3.5M6 7 3.5 9.5 6 12" />,
+    rich: (editor) => editor.chain().focus().setHardBreak().run(),
+    // Two trailing spaces is the portable hard break; a backslash is not
+    // understood by every renderer.
+    markdown: { text: "  \n" },
+  },
+  {
+    id: "footnote",
+    keywords: ["reference", "citation", "note"],
+    label: "Footnote",
+    hint: "A numbered note collected at the end",
+    icon: <TextGlyph>[^]</TextGlyph>,
+    // remark-gfm renders footnotes, but Tiptap has no node for them, so this
+    // is offered only where it round-trips: the raw Markdown views.
+    availableIn: "source",
+    rich: () => undefined,
+    markdown: { text: "[^1]\n\n[^1]: ", cursor: 4 },
+  },
+  {
+    id: "frontmatter",
+    keywords: ["yaml", "metadata", "tags", "title"],
+    label: "Front matter",
+    hint: "YAML metadata block at the top of the note",
+    icon: <TextGlyph>---</TextGlyph>,
+    // The properties panel writes this too; here it is for people editing raw.
+    availableIn: "source",
+    rich: () => undefined,
+    markdown: { text: "---\ntitle: \ntags: []\n---\n", cursor: 11 },
+  },
 ];
 
+/** Which surface is asking. Rich text and raw Markdown differ in what they can hold. */
+export type InsertSurface = "rich" | "source";
+
+/** The definitions a surface can actually apply. */
+export function insertDefinitionsFor(surface: InsertSurface): InsertDefinition[] {
+  return INSERT_DEFINITIONS.filter(
+    (definition) =>
+      (definition.availableIn ?? "both") === "both" || definition.availableIn === surface,
+  );
+}
+
 /** Toolbar-shaped view of the definitions, without the apply functions. */
-export const INSERT_ACTIONS: InsertAction[] = INSERT_DEFINITIONS.map(
-  ({ id, label, hint, icon, primary }) => ({
+export function insertActionsFor(surface: InsertSurface): InsertAction[] {
+  return insertDefinitionsFor(surface).map(({ id, label, hint, icon, primary }) => ({
     id,
     label,
     hint,
     icon,
     ...(primary ? { primary } : {}),
-  }),
-);
+  }));
+}
 
 /** Applies an action to the rich-text editor. */
 export function runRichAction(editor: Editor, id: string): void {
@@ -258,12 +375,16 @@ function TextGlyph({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Filters the action list by a query typed after a slash. */
-export function filterInsertActions(query: string): InsertDefinition[] {
+/** Filters a surface's action list by a query typed after a slash. */
+export function filterInsertActions(
+  query: string,
+  surface: InsertSurface = "rich",
+): InsertDefinition[] {
+  const available = insertDefinitionsFor(surface);
   const needle = query.trim().toLowerCase();
-  if (!needle) return INSERT_DEFINITIONS;
+  if (!needle) return available;
 
-  return INSERT_DEFINITIONS.filter(
+  return available.filter(
     (action) =>
       action.label.toLowerCase().includes(needle) ||
       (action.keywords ?? []).some((keyword) => keyword.includes(needle)),

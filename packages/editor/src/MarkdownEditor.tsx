@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import type { Editor } from "@tiptap/core";
 import type { EditorViewMode } from "@forkleaf/types";
 import { WysiwygEditor } from "./WysiwygEditor";
 import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
 import { Preview } from "./Preview";
 import { EditorToolbar } from "./EditorToolbar";
-import { INSERT_ACTIONS, runRichAction, runSourceAction } from "./insert-actions";
+import { insertActionsFor, runRichAction, runSourceAction } from "./insert-actions";
 
 export interface MarkdownEditorProps {
   value: string;
@@ -108,6 +108,9 @@ export function MarkdownEditor({
   );
 
   const isRich = mode === "wysiwyg";
+  // Rich text and raw Markdown can hold different things, so the toolbar shows
+  // only what the surface underneath it can actually apply.
+  const actions = useMemo(() => insertActionsFor(isRich ? "rich" : "source"), [isRich]);
 
   return (
     <div className={`flex min-h-0 flex-col ${className ?? ""}`}>
@@ -141,7 +144,7 @@ export function MarkdownEditor({
 
       {!hideToolbar && (
         <EditorToolbar
-          actions={INSERT_ACTIONS}
+          actions={actions}
           onRun={runAction}
           disabled={isRich && !tiptap}
           {...(isRich && tiptap
