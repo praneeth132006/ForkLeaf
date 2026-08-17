@@ -33,7 +33,7 @@ function simpleMarkdownToHtml(md: string): string {
       result.push(
         '<h1 style="font-family:Fraunces,serif;font-size:1.8em;font-weight:700;margin:0.5em 0 0.3em;color:#22262E">' +
           text +
-          "</h1>"
+          "</h1>",
       );
     }
     // Blockquote: lines starting with "> "
@@ -42,7 +42,7 @@ function simpleMarkdownToHtml(md: string): string {
       result.push(
         '<blockquote style="border-left:3px solid #E8A33D;padding-left:12px;color:#8A93A3;font-style:italic;margin:0.5em 0">' +
           text +
-          "</blockquote>"
+          "</blockquote>",
       );
     }
     // List item: lines starting with "- "
@@ -50,11 +50,7 @@ function simpleMarkdownToHtml(md: string): string {
       const raw = line.slice(2);
       // Convert **bold** syntax to <strong> tags
       const text = raw.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-      result.push(
-        '<li style="margin:2px 0;list-style:disc;margin-left:20px">' +
-          text +
-          "</li>"
-      );
+      result.push('<li style="margin:2px 0;list-style:disc;margin-left:20px">' + text + "</li>");
     }
     // Empty line becomes a line break
     else if (line.trim() === "") {
@@ -103,10 +99,7 @@ export function HeroSplitDemo() {
   // ── The visible portion of the demo text (characters typed so far) ──
   const visibleText = DEMO_TEXT.substring(0, charIndex);
   // ── Convert visible text to HTML for the preview pane ──
-  const previewHtml = useMemo(
-    () => simpleMarkdownToHtml(visibleText),
-    [visibleText]
-  );
+  const previewHtml = useMemo(() => simpleMarkdownToHtml(visibleText), [visibleText]);
 
   return (
     <div className="w-full max-w-5xl mx-auto flex flex-col md:flex-row rounded-2xl shadow-2xl shadow-[var(--color-fog)]/10 overflow-hidden border border-[var(--color-chalk)] text-left min-h-[400px]">

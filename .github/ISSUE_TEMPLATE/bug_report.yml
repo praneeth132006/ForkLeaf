@@ -1,0 +1,71 @@
+name: Bug report
+description: Something isn't working as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        **If this is a security vulnerability, please don't file it here** —
+        use a [private security advisory](https://github.com/praneeth132006/MarkDown/security/advisories/new)
+        instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a note with…
+        2. Switch to Split mode
+        3. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: note-content
+    attributes:
+      label: Note content that reproduces it
+      description: The smallest markdown that triggers the problem, if relevant.
+      render: markdown
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Which mode were you in?
+      options:
+        - Local only (no GitHub sign-in)
+        - Signed in with GitHub
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: sync-status
+    attributes:
+      label: Status bar text
+      description: If this involves saving or syncing, what did the bottom status bar say?
+      placeholder: e.g. "Saved locally · 2 to push"
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS
+      placeholder: e.g. Firefox 130 on Ubuntu 24.04
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console errors
+      description: Anything red in the browser console.
+      render: text

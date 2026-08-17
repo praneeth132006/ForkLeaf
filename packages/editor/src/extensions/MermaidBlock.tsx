@@ -1,140 +1,171 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Node, mergeAttributes } from '@tiptap/core';
-import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewProps } from '@tiptap/react';
-import mermaid from 'mermaid';
+"use client";
 
-// Initialize mermaid with Waypoint theme settings
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'base',
-  themeVariables: {
-    primaryColor: '#F1EEE6',
-    primaryTextColor: '#22262E',
-    primaryBorderColor: '#2A3240',
-    lineColor: '#3FA796',
-    secondaryColor: '#E8A33D',
-    tertiaryColor: '#14181F',
-  },
-  securityLevel: 'loose', // allow clicks, etc. if needed
-});
+import React, { useState } from "react";
+import { Node, mergeAttributes } from "@tiptap/core";
+import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
+import { DiagramStudio } from "../mermaid/DiagramStudio";
+import { useDiagramSvg } from "../mermaid/useDiagramSvg";
 
-const MermaidComponent: React.FC<NodeViewProps> = (props) => {
-  const [content, setContent] = useState(props.node.attrs.content || 'graph TD\\n  A-->B;');
-  const [svg, setSvg] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [isEditing, setIsEditing] = useState(!props.node.attrs.content);
+/**
+ * A Mermaid diagram as a first-class block in the WYSIWYG editor.
+ *
+ * Stored as a normal ```mermaid fenced code block in the markdown, so a note
+ * written here renders correctly on GitHub, in any other markdown editor, and
+ * in the exported HTML — the diagram is never locked into this app.
+ */
 
-  // Re-render mermaid when content changes
-  useEffect(() => {
-    let isMounted = true;
-    
-    const renderDiagram = async () => {
-      try {
-        if (!content.trim()) {
-          setSvg('');
-          setError(null);
-          return;
-        }
-        
-        // Generate a unique ID for mermaid to mount to
-        const id = `mermaid-${Math.random().toString(36).substring(2, 9)}`;
-        const { svg: renderedSvg } = await mermaid.render(id, content);
-        
-        if (isMounted) {
-          setSvg(renderedSvg);
-          setError(null);
-        }
-      } catch (e: any) {
-        if (isMounted) {
-          // Keep old SVG visible while showing error
-          setError(e.message || 'Syntax Error');
-        }
-      }
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    mermaidBlock: {
+      insertMermaidBlock: (code?: string) => ReturnType;
     };
-    
-    const timeout = setTimeout(renderDiagram, 300); // Debounce rendering
-    return () => {
-      isMounted = false;
-      clearTimeout(timeout);
-    };
-  }, [content]);
+  }
+}
 
-  // Sync back to Tiptap node attributes
-  const updateContent = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setContent(e.target.value);
-    props.updateAttributes({ content: e.target.value });
-  };
+function MermaidNodeView({ node, updateAttributes, editor, selected }: NodeViewProps) {
+  const code = (node.attrs.code as string) ?? "";
+  // Open straight into the editor for a brand-new, empty diagram.
+  const [editing, setEditing] = useState(code.trim() === "");
+  const { svg, error } = useDiagramSvg(code);
+
+  if (editing) {
+    return (
+      <NodeViewWrapper className="my-6" data-drag-handle>
+        <DiagramStudio
+          code={code}
+          onChange={(next) => updateAttributes({ code: next })}
+          onClose={() => {
+            setEditing(false);
+            editor.commands.focus();
+          }}
+        />
+      </NodeViewWrapper>
+    );
+  }
 
   return (
-    <NodeViewWrapper className="mermaid-block relative my-6 rounded-lg overflow-hidden border border-[#EDEAE2]">
-      {isEditing ? (
-        <div className="bg-[#14181F] p-4 font-mono text-sm">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-[#8A93A3] text-xs uppercase tracking-wider font-semibold">Mermaid Source</span>
-            <button 
-              onClick={() => setIsEditing(false)}
-              className="text-xs bg-[#E8A33D] text-[#14181F] px-2 py-1 rounded font-semibold hover:opacity-90"
-            >
-              Done
-            </button>
-          </div>
-          <textarea
-            value={content}
-            onChange={updateContent}
-            className="w-full bg-transparent text-[#EDEAE2] outline-none min-h-[100px] resize-y font-mono"
-            placeholder="graph TD\\n  A-->B;"
-            autoFocus
-          />
-          {error && <div className="text-[#C1483B] text-xs mt-2 border-t border-[#2A3240] pt-2">{error}</div>}
-        </div>
-      ) : (
-        <div 
-          className="bg-white p-6 flex items-center justify-center min-h-[150px] relative group cursor-pointer"
-          onClick={() => setIsEditing(true)}
-        >
-          {/* Edit button appears on hover */}
-          <button className="absolute top-2 right-2 bg-[#F1EEE6] text-[#22262E] px-2 py-1 text-xs rounded border border-[#EDEAE2] opacity-0 group-hover:opacity-100 transition-opacity">
-            Edit Source
-          </button>
-          
+    <NodeViewWrapper className="my-6" data-drag-handle>
+      <figure
+        className={`group relative cursor-pointer overflow-hidden rounded-lg border transition ${
+          selected ? "border-[var(--color-signal-amber)]" : "border-[var(--color-border)]"
+        }`}
+        onClick={() => setEditing(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") setEditing(true);
+        }}
+        tabIndex={0}
+        role="button"
+        aria-label="Edit diagram"
+      >
+        <div className="flex min-h-[140px] items-center justify-center bg-[var(--color-surface)] p-6">
           {svg ? (
-            <div ref={containerRef} dangerouslySetInnerHTML={{ __html: svg }} />
+            <div
+              className="max-w-full [&_svg]:h-auto [&_svg]:max-w-full"
+              // Sanitised by the diagram renderer.
+              dangerouslySetInnerHTML={{ __html: svg }}
+            />
+          ) : error ? (
+            <div className="text-center">
+              <p className="text-sm text-[var(--color-ember)]">{error.message}</p>
+              <p className="mt-1 text-xs text-[var(--color-mist)]">Click to fix it</p>
+            </div>
           ) : (
-            <span className="text-[#8A93A3] italic">Empty Diagram</span>
+            <p className="text-sm italic text-[var(--color-mist)]">Empty diagram — click to edit</p>
           )}
         </div>
-      )}
+
+        <figcaption className="pointer-events-none absolute right-2 top-2 rounded border border-[var(--color-border)] bg-[var(--color-paper)] px-2 py-1 text-xs text-[var(--color-ink)] opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100">
+          Click to edit
+        </figcaption>
+      </figure>
     </NodeViewWrapper>
   );
-};
+}
 
 export const MermaidBlock = Node.create({
-  name: 'mermaidBlock',
-  group: 'block',
+  name: "mermaidBlock",
+  group: "block",
+  // Atomic: the diagram is edited through its own UI, not by ProseMirror.
   atom: true,
+  draggable: true,
 
   addAttributes() {
     return {
-      content: {
-        default: 'graph TD\\n  A-->B;',
+      code: {
+        default: "",
+        parseHTML: (element) => element.getAttribute("data-code") ?? "",
+        renderHTML: (attributes) => ({ "data-code": attributes.code as string }),
       },
     };
   },
 
   parseHTML() {
-    return [
-      {
-        tag: 'div[data-type="mermaid"]',
-      },
-    ];
+    return [{ tag: 'div[data-type="mermaid"]' }];
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'mermaid' })];
+    return ["div", mergeAttributes(HTMLAttributes, { "data-type": "mermaid" })];
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(MermaidComponent);
+    return ReactNodeViewRenderer(MermaidNodeView);
+  },
+
+  addCommands() {
+    return {
+      insertMermaidBlock:
+        (code = "") =>
+        ({ commands }) =>
+          commands.insertContent({ type: this.name, attrs: { code } }),
+    };
+  },
+
+  /**
+   * Markdown bridge — the reason a diagram written here still renders on
+   * github.com, in Obsidian, or in any other markdown tool.
+   *
+   * On the way out the node becomes a ```mermaid fence. On the way in, every
+   * such fence becomes a diagram node again. Without the parse half, reopening
+   * a note would downgrade its diagrams to plain code blocks.
+   */
+  addStorage() {
+    return {
+      markdown: {
+        serialize(state: MarkdownSerializerLike, node: { attrs: { code?: string } }) {
+          state.write("```mermaid\n");
+          // `text(…, false)` writes the body verbatim across newlines; `write`
+          // would re-apply the block prefix and mangle multi-line source.
+          state.text(node.attrs.code ?? "", false);
+          state.ensureNewLine();
+          state.write("```");
+          state.closeBlock(node);
+        },
+        parse: {
+          updateDOM(element: HTMLElement) {
+            const fences = element.querySelectorAll<HTMLElement>("pre > code.language-mermaid");
+
+            for (const code of Array.from(fences)) {
+              const pre = code.parentElement;
+              if (!pre) continue;
+
+              const replacement = element.ownerDocument.createElement("div");
+              replacement.setAttribute("data-type", "mermaid");
+              // textContent is already decoded, and setAttribute escapes it
+              // again on the way in — no manual entity handling needed.
+              replacement.setAttribute("data-code", (code.textContent ?? "").replace(/\n$/, ""));
+              pre.replaceWith(replacement);
+            }
+          },
+        },
+      },
+    };
   },
 });
+
+/** The subset of prosemirror-markdown's serializer state that we use. */
+interface MarkdownSerializerLike {
+  write(text: string): void;
+  text(text: string, escape?: boolean): void;
+  ensureNewLine(): void;
+  closeBlock(node: unknown): void;
+}

@@ -1,240 +1,259 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+import type { Note, NoteFrontmatter } from "@mdnotion/types";
+import { extractOutline, documentStats } from "@mdnotion/markdown-engine";
 
-// ─── Props ──────────────────────────────────────────────────────────────────
-// collapsed: whether the right panel is hidden (0px) or visible (280px)
-// onToggle:  callback to flip the collapsed flag from the parent
-interface EditorRightPanelProps {
+export interface EditorRightPanelProps {
   collapsed: boolean;
   onToggle: () => void;
-  syncStatus?: SyncStatus;
+  note: Note | null;
+  onFrontmatterChange: (frontmatter: NoteFrontmatter) => void;
+  onExport: () => void;
 }
 
-// ─── Sync-status type for the indicator ────────────────────────────────────
-// "synced"   → green dot, "Synced"
-// "syncing"  → amber dot with pulse, "Syncing…"
-// "conflict" → red dot, "Conflict"
-// "local"    → mist dot, "Local Only" (guest mode)
-export type SyncStatus = "synced" | "syncing" | "conflict" | "local";
+/** Frontmatter keys that get a dedicated editor rather than the generic list. */
+const RESERVED = new Set(["title", "tags", "created", "updated"]);
 
-// ─── Status dropdown options ───────────────────────────────────────────────
-const STATUS_OPTIONS = ["Draft", "In Review", "Published"] as const;
-
-// ─── Main Right Panel Component ────────────────────────────────────────────
-export default function EditorRightPanel({
+/**
+ * Right panel: document properties and outline.
+ *
+ * Properties are the note's YAML frontmatter, edited directly — what is shown
+ * here is literally what is written into the file, so notes stay portable to
+ * Obsidian, Jekyll, Hugo or plain git.
+ */
+export function EditorRightPanel({
   collapsed,
   onToggle,
-  syncStatus = "local",
+  note,
+  onFrontmatterChange,
+  onExport,
 }: EditorRightPanelProps) {
-  // ── Local state for the frontmatter form fields ──────────────────────────
-  const [title, setTitle] = useState("Welcome Note");
-  const [status, setStatus] = useState<(typeof STATUS_OPTIONS)[number]>("Draft");
-  const [tags, setTags] = useState<string[]>(["markdown", "editor"]);
-  const [tagInput, setTagInput] = useState(""); // current text in the tag input
-  const [created, setCreated] = useState("2026-08-16");
-  const [author, setAuthor] = useState("Guest");
+  const [tab, setTab] = useState<"properties" | "outline">("properties");
+  const [newKey, setNewKey] = useState("");
 
-  // ── Derive colour & label from the sync status ───────────────────────────
-  const syncConfig: Record<
-    SyncStatus,
-    { color: string; label: string; pulse: boolean }
-  > = {
-    synced: { color: "var(--color-trail-teal)", label: "Synced", pulse: false },
-    syncing: {
-      color: "var(--color-signal-amber)",
-      label: "Syncing…",
-      pulse: true,
-    },
-    conflict: { color: "var(--color-ember)", label: "Conflict", pulse: false },
-    local: { color: "var(--color-mist)", label: "Local Only", pulse: false },
-  };
+  const outline = useMemo(() => (note ? extractOutline(note.content) : []), [note]);
+  const stats = useMemo(() => (note ? documentStats(note.content) : null), [note]);
 
-  const { color, label, pulse } = syncConfig[syncStatus];
-
-  // ── Handler: add a tag when the user presses Enter ───────────────────────
-  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && tagInput.trim()) {
-      e.preventDefault();
-      // Prevent duplicate tags
-      if (!tags.includes(tagInput.trim().toLowerCase())) {
-        setTags([...tags, tagInput.trim().toLowerCase()]);
-      }
-      setTagInput("");
-    }
-  };
-
-  // ── Handler: remove a tag by index ───────────────────────────────────────
-  const removeTag = (index: number) => {
-    setTags(tags.filter((_, i) => i !== index));
-  };
-
-  // ── If panel is collapsed, render only a thin toggle strip ───────────────
   if (collapsed) {
     return (
       <button
+        type="button"
         onClick={onToggle}
-        className="w-8 shrink-0 border-l border-[var(--color-chalk)] bg-[var(--color-paper)] flex items-start justify-center pt-4 cursor-pointer hover:bg-[var(--color-chalk)]/50 transition-colors"
-        aria-label="Expand right panel"
-        title="Expand right panel"
+        title="Show properties"
+        aria-label="Show properties"
+        className="w-8 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-paper)] text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
       >
-        {/* Left-pointing chevron to indicate "expand" */}
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="var(--color-mist)"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <polyline points="15 18 9 12 15 6" />
-        </svg>
+        ‹
       </button>
     );
   }
 
+  const frontmatter = note?.frontmatter ?? {};
+  const tags = Array.isArray(frontmatter.tags) ? (frontmatter.tags as string[]) : [];
+  const custom = Object.entries(frontmatter).filter(([key]) => !RESERVED.has(key));
+
+  const update = (patch: NoteFrontmatter) => {
+    const next = { ...frontmatter, ...patch };
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined) delete next[key];
+    }
+    onFrontmatterChange(next);
+  };
+
   return (
-    <aside className="w-[280px] shrink-0 border-l border-[var(--color-chalk)] bg-[var(--color-paper)] flex flex-col overflow-hidden">
-      {/* ── Sync status indicator (always visible at top) ──────────────── */}
-      <div className="h-14 border-b border-[var(--color-chalk)] flex items-center px-4 gap-2 shrink-0">
-        {/* Coloured status dot — optionally pulsing */}
-        <span
-          className={`inline-block w-2 h-2 rounded-full shrink-0 ${pulse ? "animate-pulse" : ""}`}
-          style={{ backgroundColor: color }}
-        />
-        {/* Status label text */}
-        <span className="text-xs font-medium" style={{ color }}>
-          {label}
-        </span>
-
-        {/* Spacer pushes the collapse button to the right */}
-        <div className="flex-1" />
-
-        {/* Collapse button (right-pointing chevron) */}
+    <aside className="flex w-72 shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-paper)]">
+      <div className="flex items-center gap-1 border-b border-[var(--color-border)] px-2 py-2">
+        <div role="tablist" className="flex flex-1 gap-0.5">
+          {(["properties", "outline"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={tab === value}
+              onClick={() => setTab(value)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition ${
+                tab === value
+                  ? "bg-[var(--color-chalk)] text-[var(--color-ink)]"
+                  : "text-[var(--color-mist)] hover:text-[var(--color-ink)]"
+              }`}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
         <button
+          type="button"
           onClick={onToggle}
-          className="p-1 rounded-md hover:bg-[var(--color-chalk)] transition-colors cursor-pointer"
-          aria-label="Collapse right panel"
-          title="Collapse right panel"
+          title="Hide panel"
+          aria-label="Hide panel"
+          className="rounded-md p-1 text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--color-mist)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
+          ›
         </button>
       </div>
 
-      {/* ── Scrollable frontmatter form ────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        {/* Section header */}
-        <h3 className="text-[10px] uppercase tracking-widest font-bold text-[var(--color-mist)] mb-4 select-none">
-          Properties
-        </h3>
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {!note && (
+          <p className="py-8 text-center text-xs text-[var(--color-mist)]">
+            Open a note to see its properties.
+          </p>
+        )}
 
-        {/* ── Title field ─────────────────────────────────────────────── */}
-        <label className="block mb-3">
-          <span className="text-[11px] font-medium text-[var(--color-mist)] mb-1 block">
-            Title
-          </span>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-2.5 py-1.5 rounded-md border border-[var(--color-chalk)] bg-white/40 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)] transition-colors"
-          />
-        </label>
+        {note && tab === "properties" && (
+          <div className="space-y-3">
+            <Field label="Title">
+              <input
+                value={(frontmatter.title as string) ?? ""}
+                onChange={(event) => update({ title: event.target.value })}
+                placeholder="Untitled"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)]"
+              />
+            </Field>
 
-        {/* ── Status dropdown ─────────────────────────────────────────── */}
-        <label className="block mb-3">
-          <span className="text-[11px] font-medium text-[var(--color-mist)] mb-1 block">
-            Status
-          </span>
-          <select
-            value={status}
-            onChange={(e) =>
-              setStatus(e.target.value as (typeof STATUS_OPTIONS)[number])
-            }
-            className="w-full px-2.5 py-1.5 rounded-md border border-[var(--color-chalk)] bg-white/40 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)] transition-colors cursor-pointer"
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
+            <Field label="Tags">
+              <input
+                value={tags.join(", ")}
+                onChange={(event) =>
+                  update({
+                    tags: event.target.value
+                      .split(",")
+                      .map((tag) => tag.trim())
+                      .filter(Boolean),
+                  })
+                }
+                placeholder="research, draft"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)]"
+              />
+              {tags.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded bg-[var(--color-trail-teal)]/12 px-1.5 py-0.5 text-[0.7rem] text-[var(--color-trail-teal)]"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </Field>
+
+            {custom.map(([key, value]) => (
+              <Field key={key} label={key}>
+                <div className="flex gap-1">
+                  <input
+                    value={String(value ?? "")}
+                    onChange={(event) => update({ [key]: event.target.value })}
+                    className="min-w-0 flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => update({ [key]: undefined })}
+                    title={`Remove ${key}`}
+                    aria-label={`Remove ${key}`}
+                    className="shrink-0 rounded px-2 text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ember)]"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </Field>
             ))}
-          </select>
-        </label>
 
-        {/* ── Tags input with pill display ────────────────────────────── */}
-        <label className="block mb-3">
-          <span className="text-[11px] font-medium text-[var(--color-mist)] mb-1 block">
-            Tags
-          </span>
-          {/* Pill container */}
-          <div className="flex flex-wrap gap-1.5 mb-1.5">
-            {tags.map((tag, i) => (
-              <span
-                key={tag}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--color-trail-teal)]/10 text-[var(--color-trail-teal)] text-[11px] font-medium"
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const key = newKey.trim();
+                if (key && !(key in frontmatter)) update({ [key]: "" });
+                setNewKey("");
+              }}
+              className="flex gap-1 pt-1"
+            >
+              <input
+                value={newKey}
+                onChange={(event) => setNewKey(event.target.value)}
+                placeholder="Add a property…"
+                aria-label="New property name"
+                className="min-w-0 flex-1 rounded-md border border-dashed border-[var(--color-border)] bg-transparent px-2 py-1.5 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)]"
+              />
+              <button
+                type="submit"
+                className="shrink-0 rounded-md px-2 text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
               >
-                {tag}
-                {/* Remove tag button */}
-                <button
-                  onClick={() => removeTag(i)}
-                  className="hover:text-[var(--color-ember)] transition-colors cursor-pointer leading-none"
-                  aria-label={`Remove tag ${tag}`}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
+                ＋
+              </button>
+            </form>
+
+            {stats && (
+              <dl className="grid grid-cols-2 gap-2 border-t border-[var(--color-border)] pt-3 text-xs">
+                <Stat label="Words" value={stats.words.toLocaleString()} />
+                <Stat label="Read time" value={`${stats.readingMinutes} min`} />
+                <Stat label="Headings" value={String(stats.headings)} />
+                <Stat label="Diagrams" value={String(stats.diagrams)} />
+                {stats.tasks.total > 0 && (
+                  <Stat label="Tasks" value={`${stats.tasks.done}/${stats.tasks.total}`} />
+                )}
+              </dl>
+            )}
+
+            <button
+              type="button"
+              onClick={onExport}
+              className="w-full rounded-md border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-[var(--color-ink)] hover:border-[var(--color-trail-teal)] hover:bg-[var(--color-chalk)]"
+            >
+              Export…
+            </button>
+
+            <p className="pt-1 font-mono text-[0.65rem] leading-snug text-[var(--color-mist)]">
+              {note.path}
+            </p>
           </div>
-          {/* Text input to add new tags */}
-          <input
-            type="text"
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={handleTagKeyDown}
-            placeholder="Add tag…"
-            className="w-full px-2.5 py-1.5 rounded-md border border-[var(--color-chalk)] bg-white/40 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)] transition-colors placeholder:text-[var(--color-mist)]"
-          />
-        </label>
+        )}
 
-        {/* ── Created date field ──────────────────────────────────────── */}
-        <label className="block mb-3">
-          <span className="text-[11px] font-medium text-[var(--color-mist)] mb-1 block">
-            Created
-          </span>
-          <input
-            type="date"
-            value={created}
-            onChange={(e) => setCreated(e.target.value)}
-            className="w-full px-2.5 py-1.5 rounded-md border border-[var(--color-chalk)] bg-white/40 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)] transition-colors"
-          />
-        </label>
-
-        {/* ── Author field ────────────────────────────────────────────── */}
-        <label className="block mb-3">
-          <span className="text-[11px] font-medium text-[var(--color-mist)] mb-1 block">
-            Author
-          </span>
-          <input
-            type="text"
-            value={author}
-            onChange={(e) => setAuthor(e.target.value)}
-            className="w-full px-2.5 py-1.5 rounded-md border border-[var(--color-chalk)] bg-white/40 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)] transition-colors"
-          />
-        </label>
+        {note && tab === "outline" && (
+          <nav aria-label="Document outline">
+            {outline.length === 0 ? (
+              <p className="py-8 text-center text-xs text-[var(--color-mist)]">
+                Add headings to build an outline.
+              </p>
+            ) : (
+              <ul className="space-y-0.5">
+                {outline.map((heading, index) => (
+                  <li key={`${heading.slug}-${index}`}>
+                    <a
+                      href={`#${heading.slug}`}
+                      style={{ paddingLeft: `${(heading.depth - 1) * 0.75}rem` }}
+                      className="block truncate rounded px-2 py-1 text-sm text-[var(--color-ink)] hover:bg-[var(--color-chalk)]"
+                    >
+                      {heading.text}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </nav>
+        )}
       </div>
     </aside>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[0.7rem] font-semibold uppercase tracking-wider text-[var(--color-mist)]">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-[var(--color-mist)]">{label}</dt>
+      <dd className="font-medium text-[var(--color-ink)]">{value}</dd>
+    </div>
   );
 }

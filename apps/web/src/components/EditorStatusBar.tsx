@@ -1,63 +1,138 @@
 "use client";
 
 import React from "react";
+import type { SyncState, Workspace } from "@mdnotion/types";
 
-// ─── EditorStatusBar ────────────────────────────────────────────────────────
-// A thin 32px-tall bar pinned to the bottom of the editor viewport.
-// Displays sync status (left), current branch (center), and last commit /
-// PR link (right).  For guest mode everything is static / placeholder.
+export interface EditorStatusBarProps {
+  sync: SyncState;
+  workspace: Workspace | null;
+  notePath: string | null;
+  onSyncNow: () => void;
+  onShowConflicts: () => void;
+}
 
-export default function EditorStatusBar() {
-  // Guest-mode defaults — in production these would come from context / props
-  const syncLabel = "Local Only";
-  const syncColor = "var(--color-mist)"; // mist for guest mode
-  const branchName = "local"; // no real branch for guests
-  const lastCommit = "never"; // guest mode has no commits
-  const prUrl: string | null = null; // no PR for guests
+/**
+ * The bottom bar: what is happening with the user's data, at a glance.
+ *
+ * Deliberately explicit about the difference between "saved on this device" and
+ * "pushed to GitHub" — an autosaving app that is vague about this is how people
+ * end up believing they lost work.
+ */
+export function EditorStatusBar({
+  sync,
+  workspace,
+  notePath,
+  onSyncNow,
+  onShowConflicts,
+}: EditorStatusBarProps) {
+  const status = describe(sync);
 
   return (
-    <footer
-      className="h-8 shrink-0 flex items-center justify-between px-4 border-t border-[var(--color-chalk)] bg-[var(--color-paper)] text-[10px] select-none"
-      role="status"
-      aria-label="Editor status bar"
-    >
-      {/* ── Left: Sync status icon + text ────────────────────────────── */}
-      <div className="flex items-center gap-1.5 min-w-0">
-        {/* Small coloured dot mirroring the right-panel indicator */}
-        <span
-          className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
-          style={{ backgroundColor: syncColor }}
-        />
-        {/* Sync label */}
-        <span className="text-[var(--color-mist)] font-medium whitespace-nowrap">
-          {syncLabel}
+    <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-[var(--color-border)] bg-[var(--color-paper)] px-3 text-[0.7rem] text-[var(--color-mist)]">
+      <button
+        type="button"
+        onClick={sync.conflicts.length > 0 ? onShowConflicts : onSyncNow}
+        title={sync.conflicts.length > 0 ? "Resolve conflicts" : "Sync now"}
+        className="flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-[var(--color-chalk)]"
+      >
+        <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
+        <span className={status.className}>{status.label}</span>
+      </button>
+
+      {workspace && (
+        <span className="hidden truncate sm:inline">
+          {workspace.isLocal ? (
+            "Local storage"
+          ) : (
+            <>
+              {workspace.repo.owner}/{workspace.repo.repo}
+              <span className="mx-1 opacity-50">·</span>
+              {workspace.repo.branch}
+            </>
+          )}
         </span>
-      </div>
+      )}
 
-      {/* ── Center: Current branch name in monospace ─────────────────── */}
-      <div className="font-mono text-[var(--color-mist)] whitespace-nowrap">
-        {branchName}
-      </div>
-
-      {/* ── Right: Last commit info + optional PR link ───────────────── */}
-      <div className="flex items-center gap-3 min-w-0">
-        {/* Last commit timestamp (or "never" for guests) */}
-        <span className="text-[var(--color-mist)] whitespace-nowrap">
-          Last commit: {lastCommit}
+      {notePath && (
+        <span className="ml-auto hidden truncate font-mono md:inline" title={notePath}>
+          {notePath}
         </span>
+      )}
 
-        {/* PR link – only rendered when a PR URL exists */}
-        {prUrl && (
-          <a
-            href={prUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[var(--color-trail-teal)] hover:underline whitespace-nowrap font-medium"
-          >
-            Open PR
-          </a>
-        )}
-      </div>
+      {sync.lastError && (
+        <span className="ml-auto truncate text-[var(--color-ember)]" title={sync.lastError}>
+          {sync.lastError}
+        </span>
+      )}
     </footer>
   );
+}
+
+function describe(sync: SyncState): { label: string; className: string; dot: string } {
+  if (sync.conflicts.length > 0) {
+    return {
+      label: `${sync.conflicts.length} conflict${sync.conflicts.length === 1 ? "" : "s"} — click to resolve`,
+      className: "text-[var(--color-ember)] font-medium",
+      dot: "bg-[var(--color-ember)]",
+    };
+  }
+
+  switch (sync.status) {
+    case "syncing":
+      return {
+        label: "Saving to GitHub…",
+        className: "",
+        dot: "bg-[var(--color-signal-amber)] animate-pulse",
+      };
+
+    case "pending":
+      return {
+        // Naming both halves is the point: nothing has been lost.
+        label: `Saved locally · ${sync.pendingCount} to push`,
+        className: "",
+        dot: "bg-[var(--color-signal-amber)]",
+      };
+
+    case "offline":
+      return {
+        label: `Offline · ${sync.pendingCount} change${sync.pendingCount === 1 ? "" : "s"} queued`,
+        className: "",
+        dot: "bg-[var(--color-mist)]",
+      };
+
+    case "error":
+      return {
+        label: "Couldn't sync — click to retry",
+        className: "text-[var(--color-ember)]",
+        dot: "bg-[var(--color-ember)]",
+      };
+
+    case "local":
+      return { label: "Saved on this device", className: "", dot: "bg-[var(--color-mist)]" };
+
+    case "conflict":
+      return {
+        label: "Conflict",
+        className: "text-[var(--color-ember)]",
+        dot: "bg-[var(--color-ember)]",
+      };
+
+    case "idle":
+    default:
+      return {
+        label: sync.lastSyncedAt
+          ? `All changes saved ${relative(sync.lastSyncedAt)}`
+          : "All changes saved",
+        className: "",
+        dot: "bg-[var(--color-trail-teal)]",
+      };
+  }
+}
+
+function relative(iso: string): string {
+  const seconds = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
 }
