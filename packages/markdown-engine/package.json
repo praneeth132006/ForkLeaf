@@ -1,5 +1,5 @@
 {
-  "name": "@mdnotion/markdown-engine",
+  "name": "@forkleaf/markdown-engine",
   "version": "0.2.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mdnotion/types": "workspace:*",
+    "@forkleaf/types": "workspace:*",
     "github-slugger": "^2.0.0",
     "mdast-util-to-string": "^4.0.0",
     "rehype-sanitize": "^6.0.0",

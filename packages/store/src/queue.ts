@@ -1,4 +1,4 @@
-import type { PendingChange } from "@mdnotion/types";
+import type { PendingChange } from "@forkleaf/types";
 
 /**
  * Coalescing rules for the outbound change queue.

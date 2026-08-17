@@ -1,6 +1,6 @@
-# Self-hosting mdnotion
+# Self-hosting ForkLeaf
 
-mdnotion is a single Next.js application with no database. Anywhere that runs
+ForkLeaf is a single Next.js application with no database. Anywhere that runs
 Node.js 20.9+ will do.
 
 ## Environment variables
@@ -46,7 +46,7 @@ Set the OAuth app's callback URL to
 ```bash
 pnpm install
 pnpm build
-pnpm --filter @mdnotion/web start
+pnpm --filter @forkleaf/web start
 ```
 
 Serves on port 3000 by default; override with `PORT`.
@@ -66,7 +66,7 @@ RUN corepack enable
 COPY --from=build /app .
 ENV NODE_ENV=production
 EXPOSE 3000
-CMD ["pnpm", "--filter", "@mdnotion/web", "start"]
+CMD ["pnpm", "--filter", "@forkleaf/web", "start"]
 ```
 
 Pass the environment variables at run time — never bake secrets into the image.
@@ -74,7 +74,7 @@ Pass the environment variables at run time — never bake secrets into the image
 ## OAuth App vs GitHub App
 
 The default flow uses an **OAuth App** with the `repo` scope. That scope covers
-private repositories, which mdnotion needs in order to write notes to a private
+private repositories, which ForkLeaf needs in order to write notes to a private
 notes repo — but it does grant access to _all_ the user's repositories.
 
 If you want per-repository access instead, register a **GitHub App**:
@@ -85,7 +85,7 @@ If you want per-repository access instead, register a **GitHub App**:
 4. Enable **Request user authorization (OAuth) during installation**
 
 The user-to-server token a GitHub App issues works with the same endpoints
-mdnotion already uses, so `apps/web/src/app/api/auth/` needs only small changes:
+ForkLeaf already uses, so `apps/web/src/app/api/auth/` needs only small changes:
 the authorize URL becomes the app's install URL, and tokens expire after 8 hours
 unless you enable and handle refresh tokens.
 
@@ -105,7 +105,7 @@ browser cache is a cache. Losing the server loses nothing but uptime.
 
 ## Rate limits
 
-Authenticated GitHub requests are limited to 5,000/hour per user. mdnotion stays
+Authenticated GitHub requests are limited to 5,000/hour per user. ForkLeaf stays
 well inside that:
 
 - Tree listings use conditional requests, so unchanged trees cost no quota.

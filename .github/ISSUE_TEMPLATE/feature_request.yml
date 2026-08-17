@@ -27,7 +27,7 @@ body:
     attributes:
       label: Does this fit the project's goals?
       description: |
-        mdnotion deliberately does not do real-time collaborative editing, does
+        ForkLeaf deliberately does not do real-time collaborative editing, does
         not host your notes, and does not convert exports on a server. See
         "Deliberate non-goals" in docs/architecture.md.
       options:

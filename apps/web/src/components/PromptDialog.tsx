@@ -47,12 +47,12 @@ export function PromptDialog({ request, onClose }: PromptDialogProps) {
     <Dialog title={request.title} onClose={onClose}>
       <form onSubmit={submit}>
         {request.body && (
-          <p className="mb-3 text-sm leading-relaxed text-[var(--color-mist)]">{request.body}</p>
+          <p className="mb-3 text-sm leading-relaxed text-[var(--fl-muted)]">{request.body}</p>
         )}
 
         {!request.destructive && (
           <label className="mb-4 block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-[var(--color-mist)]">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-[var(--fl-muted)]">
               {request.label}
             </span>
             <input
@@ -61,7 +61,7 @@ export function PromptDialog({ request, onClose }: PromptDialogProps) {
               autoFocus
               // Select the existing text so renaming replaces rather than appends.
               onFocus={(event) => event.currentTarget.select()}
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)]"
+              className="w-full rounded-md border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-2 text-sm text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
             />
           </label>
         )}
@@ -70,7 +70,7 @@ export function PromptDialog({ request, onClose }: PromptDialogProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-4 py-2 text-sm text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
+            className="rounded-md px-4 py-2 text-sm text-[var(--fl-muted)] hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
           >
             Cancel
           </button>
@@ -79,8 +79,8 @@ export function PromptDialog({ request, onClose }: PromptDialogProps) {
             disabled={busy || (!request.destructive && !value.trim())}
             className={`rounded-md px-4 py-2 text-sm font-semibold disabled:opacity-40 ${
               request.destructive
-                ? "bg-[var(--color-ember)] text-white hover:opacity-90"
-                : "bg-[var(--color-signal-amber)] text-[var(--color-basalt)] hover:opacity-90"
+                ? "bg-[var(--fl-danger)] text-white hover:opacity-90"
+                : "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)] hover:opacity-90"
             }`}
           >
             {busy ? "Working…" : (request.confirmLabel ?? "Save")}

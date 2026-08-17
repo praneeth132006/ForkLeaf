@@ -1,10 +1,10 @@
 # Architecture
 
-How mdnotion is put together, and why.
+How ForkLeaf is put together, and why.
 
 ## The core idea
 
-There is no mdnotion database. Notes are markdown files in the user's own GitHub
+There is no ForkLeaf database. Notes are markdown files in the user's own GitHub
 repository, and the app is a client for that repository plus a local cache.
 
 Everything else follows from that constraint:
@@ -56,13 +56,13 @@ that, always.
 
 ## Packages
 
-### `@mdnotion/types`
+### `@forkleaf/types`
 
 The shared domain model. Everything is plain serialisable data — no classes, no
 `Date` objects — because these values travel through `structuredClone` into
 IndexedDB and across the network.
 
-### `@mdnotion/markdown-engine`
+### `@forkleaf/markdown-engine`
 
 Frontmatter parsing, document analysis and sanitised rendering.
 
@@ -75,7 +75,7 @@ body so a broken property block can't destroy a note.
 repository, so it is untrusted: raw HTML is escaped rather than rendered, and the
 sanitiser uses an explicit allowlist.
 
-### `@mdnotion/github-client`
+### `@forkleaf/github-client`
 
 A hand-written GitHub REST client rather than Octokit. That choice buys explicit
 control over the three behaviours the sync engine depends on:
@@ -97,14 +97,14 @@ history useless. Two mechanisms prevent that:
 
 1. **Coalescing** (in the store): repeated edits to one note collapse into a
    single pending change before anything is sent.
-2. **Squashing** (here): if the branch head is a commit mdnotion made recently,
+2. **Squashing** (here): if the branch head is a commit ForkLeaf made recently,
    the new commit adopts that commit's _parent_ while keeping its _tree_, and the
    ref is force-updated. The two commits collapse into one, and nothing the older
    commit introduced is lost.
 
 Force-updating a ref is dangerous, so it is fenced in:
 
-- only when the head commit's message carries mdnotion's marker
+- only when the head commit's message carries ForkLeaf's marker
 - only within the configured window (default 5 minutes)
 - never when the head commit has zero or multiple parents
 - the branch head is re-read immediately before the push; if it moved, the whole
@@ -112,7 +112,7 @@ Force-updating a ref is dangerous, so it is fenced in:
 
 Every one of those conditions has a test in `client.test.ts`.
 
-### `@mdnotion/store`
+### `@forkleaf/store`
 
 Local-first storage and sync.
 
@@ -135,20 +135,20 @@ Key behaviours:
   deleted repo) is dropped after five attempts rather than blocking the queue
   behind it forever.
 
-### `@mdnotion/diagrams`
+### `@forkleaf/diagrams`
 
 Mermaid support, split into pure logic and rendering.
 
 `graph-model.ts` is the interesting part: a bidirectional mapping between Mermaid
 flowchart source and a `{nodes, edges}` graph. The visual builder edits the graph;
 the source editor edits the text; both stay in sync because the mapping round
-trips. Node positions are stored in a `%% mdnotion:layout` comment, which Mermaid
+trips. Node positions are stored in a `%% forkleaf:layout` comment, which Mermaid
 ignores and GitHub renders fine.
 
 The parser is deliberately forgiving — it runs against half-typed source as the
 user works, so unrecognised lines are skipped rather than throwing.
 
-### `@mdnotion/exporter`
+### `@forkleaf/exporter`
 
 Everything is generated in the browser. No upload, no conversion service, no
 per-export cost, and a private note stays on the machine.
@@ -159,7 +159,7 @@ per-export cost, and a private note stays on the machine.
 - **DOCX**: walks the mdast tree rather than converting HTML, so headings become
   real Word heading styles and lists become real Word lists.
 
-### `@mdnotion/editor`
+### `@forkleaf/editor`
 
 React editing surfaces. Built directly on CodeMirror 6 rather than a React
 wrapper, because wrappers that replace the whole document on every prop change
@@ -170,7 +170,7 @@ serialises to a fence and, crucially, parses fences back into diagram nodes — 
 reopening a note doesn't downgrade its diagrams to code blocks, and a note
 written here renders correctly on github.com.
 
-### `@mdnotion/web`
+### `@forkleaf/web`
 
 The Next.js app: OAuth, the GitHub proxy routes, and the application shell.
 

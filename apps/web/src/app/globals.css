@@ -1,249 +1,399 @@
 @import "tailwindcss";
 
 /* Workspace packages ship untranspiled source, so Tailwind has to be told to
-   scan them or every class used inside @mdnotion/editor is dropped. */
+   scan them or every class used inside @forkleaf/editor is dropped. */
 @source "../../../../packages/editor/src/**/*.{ts,tsx}";
 
+/* ── Type scale ────────────────────────────────────────────────────────────
+   Instrument Sans carries the interface, Instrument Serif the display
+   headings, JetBrains Mono the code. The serif is deliberately only used
+   large: it has a single weight, so it reads as a voice rather than a system. */
 @theme {
-  --color-basalt: #14181f;
-  --color-paper: #f1eee6;
-  --color-fog: #1e2530;
-  --color-chalk: #edeae2;
-  --color-ink: #22262e;
-  --color-signal-amber: #e8a33d;
-  --color-trail-teal: #3fa796;
-  --color-ember: #c1483b;
-  --color-mist: #8a93a3;
-  --color-contour: #2a3240;
-
-  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-instrument-serif), ui-serif, Georgia, serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
-/* ── Semantic tokens ───────────────────────────────────────────────────────
-   Components reference these rather than the raw palette, so a single block
-   below re-themes the whole app for dark mode. */
+/* ── Palette ───────────────────────────────────────────────────────────────
+   Every component references these semantic tokens rather than raw hex, so
+   the two blocks below re-theme the entire app.
+
+   The dark theme is the reference design: a true ink black (#0A0C0A, not a
+   blued-off charcoal) with a single leaf-green accent. Light mode is the same
+   relationships inverted, with the green darkened to stay legible on white. */
 :root {
-  --color-surface: #ffffff;
-  --color-border: #e2dfd6;
+  --fl-bg: #fcfcfa;
+  --fl-surface: #ffffff;
+  --fl-elevated: #f2f3ef;
+  --fl-border: #e4e6e0;
+  --fl-border-strong: #cfd3ca;
+  --fl-text: #12150f;
+  --fl-muted: #6c7268;
+
+  --fl-accent: #16794c;
+  --fl-accent-hover: #12633e;
+  /* Text/icon colour to place on top of a filled accent surface. */
+  --fl-accent-contrast: #ffffff;
+  --fl-accent-soft: rgba(22, 121, 76, 0.1);
+
+  --fl-warn: #a76a0a;
+  --fl-danger: #c2372d;
+
+  /* An always-dark surface — footer, code blocks, the hero terminal. Stays
+     dark in both themes so those elements never invert. */
+  --fl-inverse-bg: #0a0c0a;
+  --fl-inverse-text: #e9ece7;
+
+  --fl-shadow: 0 1px 2px rgba(18, 21, 15, 0.05), 0 8px 24px -12px rgba(18, 21, 15, 0.14);
+  --fl-shadow-lg: 0 2px 4px rgba(18, 21, 15, 0.06), 0 24px 48px -20px rgba(18, 21, 15, 0.22);
+
   color-scheme: light;
 }
 
 [data-theme="dark"] {
-  --color-paper: #14181f;
-  --color-surface: #1e2530;
-  --color-chalk: #252c38;
-  --color-ink: #edeae2;
-  --color-mist: #8a93a3;
-  --color-border: #2a3240;
-  --color-contour: #3a4353;
+  --fl-bg: #0a0c0a;
+  --fl-surface: #101310;
+  --fl-elevated: #181c18;
+  --fl-border: #232823;
+  --fl-border-strong: #343b34;
+  --fl-text: #e9ece7;
+  --fl-muted: #8b938a;
+
+  --fl-accent: #3ecf8e;
+  --fl-accent-hover: #52dd9d;
+  --fl-accent-contrast: #04180d;
+  --fl-accent-soft: rgba(62, 207, 142, 0.13);
+
+  --fl-warn: #e3a93c;
+  --fl-danger: #f2555a;
+
+  --fl-inverse-bg: #050705;
+  --fl-inverse-text: #e9ece7;
+
+  --fl-shadow: 0 1px 2px rgba(0, 0, 0, 0.6), 0 8px 24px -12px rgba(0, 0, 0, 0.8);
+  --fl-shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.6), 0 24px 48px -20px rgba(0, 0, 0, 0.9);
+
   color-scheme: dark;
 }
 
 body {
-  background-color: var(--color-paper);
-  color: var(--color-ink);
+  background-color: var(--fl-bg);
+  color: var(--fl-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Instrument Sans reads loose at display sizes; a touch of negative tracking
+   keeps large headings tight next to the serif. */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.018em;
 }
 
 /* Visible focus for keyboard users, suppressed for mouse clicks. */
 :focus-visible {
-  outline: 2px solid var(--color-trail-teal);
+  outline: 2px solid var(--fl-accent);
   outline-offset: 2px;
-  border-radius: 3px;
+  border-radius: 4px;
+}
+
+/* …but never around a writing surface. ProseMirror and CodeMirror are focused
+   the entire time you are using them, so the generic ring above drew a
+   permanent green box around the document. They show focus with a caret. */
+.ProseMirror,
+.ProseMirror:focus,
+.ProseMirror:focus-visible,
+.cm-editor,
+.cm-editor:focus-visible,
+.cm-content,
+.cm-content:focus,
+.cm-content:focus-visible,
+.cm-scroller:focus-visible {
+  outline: none !important;
+}
+
+::selection {
+  background: var(--fl-accent-soft);
+  color: var(--fl-text);
+}
+
+/* ── Reusable surfaces ─────────────────────────────────────────────────────
+   A small set of classes so the same card/button/input treatment is not
+   re-derived from utilities in a dozen components and then drifting apart. */
+.fl-card {
+  background: var(--fl-surface);
+  border: 1px solid var(--fl-border);
+  border-radius: 14px;
+}
+
+.fl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 10px;
+  font-weight: 550;
+  font-size: 0.9375rem;
+  line-height: 1;
+  padding: 0.75rem 1.25rem;
+  white-space: nowrap;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    transform 140ms ease;
+}
+.fl-btn:active {
+  transform: translateY(1px);
+}
+
+.fl-btn-primary {
+  background: var(--fl-accent);
+  color: var(--fl-accent-contrast);
+}
+.fl-btn-primary:hover {
+  background: var(--fl-accent-hover);
+}
+
+.fl-btn-ghost {
+  border: 1px solid var(--fl-border);
+  color: var(--fl-text);
+  background: transparent;
+}
+.fl-btn-ghost:hover {
+  background: var(--fl-elevated);
+  border-color: var(--fl-border-strong);
+}
+
+.fl-input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--fl-border);
+  background: var(--fl-surface);
+  padding: 0.4375rem 0.625rem;
+  font-size: 0.875rem;
+  color: var(--fl-text);
+  outline: none;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+.fl-input::placeholder {
+  color: var(--fl-muted);
+}
+.fl-input:focus {
+  border-color: var(--fl-accent);
+  box-shadow: 0 0 0 3px var(--fl-accent-soft);
+}
+
+/* Faint dot grid behind the landing hero. Purely decorative. */
+.fl-dotgrid {
+  background-image: radial-gradient(circle at 1px 1px, var(--fl-border-strong) 1px, transparent 0);
+  background-size: 28px 28px;
 }
 
 /* ── Rendered markdown ─────────────────────────────────────────────────────
    Shared by the preview pane, the WYSIWYG surface and the HTML export, so a
    note looks the same however it is being viewed. */
-.mdn-prose {
-  color: var(--color-ink);
+.fl-prose {
+  color: var(--fl-text);
   line-height: 1.75;
-  font-size: 1rem;
+  font-size: 1.0625rem;
 }
 
-.mdn-prose > * + * {
+.fl-prose > * + * {
   margin-top: 1rem;
 }
 
-.mdn-prose h1,
-.mdn-prose h2,
-.mdn-prose h3,
-.mdn-prose h4,
-.mdn-prose h5,
-.mdn-prose h6 {
-  font-family: var(--font-serif);
-  font-weight: 650;
+.fl-prose h1,
+.fl-prose h2,
+.fl-prose h3,
+.fl-prose h4,
+.fl-prose h5,
+.fl-prose h6 {
+  font-family: var(--font-sans);
+  font-weight: 620;
+  letter-spacing: -0.02em;
   line-height: 1.25;
   margin-top: 2rem;
   margin-bottom: 0.5rem;
 }
 
-.mdn-prose h1 {
+.fl-prose h1 {
   font-size: 2rem;
-  letter-spacing: -0.02em;
 }
-.mdn-prose h2 {
+.fl-prose h2 {
   font-size: 1.5rem;
 }
-.mdn-prose h3 {
+.fl-prose h3 {
   font-size: 1.25rem;
 }
-.mdn-prose h4 {
-  font-size: 1.1rem;
+.fl-prose h4 {
+  font-size: 1.0625rem;
 }
 
-.mdn-prose h1:first-child,
-.mdn-prose h2:first-child {
+.fl-prose h1:first-child,
+.fl-prose h2:first-child {
   margin-top: 0;
 }
 
-.mdn-prose a {
-  color: var(--color-trail-teal);
+.fl-prose a {
+  color: var(--fl-accent);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
-.mdn-prose strong {
-  font-weight: 650;
+.fl-prose strong {
+  font-weight: 640;
 }
 
-.mdn-prose ul,
-.mdn-prose ol {
+.fl-prose ul,
+.fl-prose ol {
   padding-left: 1.5rem;
 }
-.mdn-prose ul {
+.fl-prose ul {
   list-style: disc;
 }
-.mdn-prose ol {
+.fl-prose ol {
   list-style: decimal;
 }
-.mdn-prose li {
+.fl-prose li {
   margin: 0.25rem 0;
 }
-.mdn-prose li::marker {
-  color: var(--color-mist);
+.fl-prose li::marker {
+  color: var(--fl-muted);
 }
 
 /* Task lists render as checkboxes rather than bullets. */
-.mdn-prose ul[data-type="taskList"] {
+.fl-prose ul[data-type="taskList"] {
   list-style: none;
   padding-left: 0.25rem;
 }
-.mdn-prose ul[data-type="taskList"] li {
+.fl-prose ul[data-type="taskList"] li {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
 }
-.mdn-prose ul[data-type="taskList"] li > label {
+.fl-prose ul[data-type="taskList"] li > label {
   margin-top: 0.3rem;
 }
-.mdn-prose input[type="checkbox"] {
-  accent-color: var(--color-trail-teal);
+.fl-prose input[type="checkbox"] {
+  accent-color: var(--fl-accent);
   width: 1rem;
   height: 1rem;
 }
 
-.mdn-prose blockquote {
-  border-left: 3px solid var(--color-trail-teal);
+.fl-prose blockquote {
+  border-left: 2px solid var(--fl-accent);
   padding-left: 1rem;
-  color: var(--color-mist);
-  font-style: italic;
+  color: var(--fl-muted);
 }
 
-.mdn-prose code {
+.fl-prose code {
   font-family: var(--font-mono);
-  font-size: 0.875em;
-  background: var(--color-chalk);
-  padding: 0.15em 0.4em;
-  border-radius: 4px;
+  font-size: 0.85em;
+  background: var(--fl-elevated);
+  border: 1px solid var(--fl-border);
+  padding: 0.1em 0.35em;
+  border-radius: 5px;
 }
 
-.mdn-prose pre {
-  background: var(--color-basalt);
-  color: var(--color-chalk);
+.fl-prose pre {
+  background: var(--fl-inverse-bg);
+  color: var(--fl-inverse-text);
+  border: 1px solid var(--fl-border);
   padding: 1rem 1.25rem;
-  border-radius: 8px;
+  border-radius: 12px;
   overflow-x: auto;
   font-size: 0.875rem;
+  line-height: 1.6;
 }
-.mdn-prose pre code {
+.fl-prose pre code {
   background: none;
+  border: none;
   padding: 0;
   color: inherit;
 }
 
-.mdn-prose hr {
+.fl-prose hr {
   border: none;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--fl-border);
   margin: 2rem 0;
 }
 
-.mdn-prose table {
+.fl-prose table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9375rem;
   display: block;
   overflow-x: auto;
 }
-.mdn-prose th,
-.mdn-prose td {
-  border: 1px solid var(--color-border);
+.fl-prose th,
+.fl-prose td {
+  border: 1px solid var(--fl-border);
   padding: 0.5rem 0.75rem;
   text-align: left;
 }
-.mdn-prose th {
-  background: var(--color-chalk);
+.fl-prose th {
+  background: var(--fl-elevated);
   font-weight: 600;
 }
 
-.mdn-prose img {
+.fl-prose img {
   max-width: 100%;
   height: auto;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
-.mdn-diagram,
-.mdn-diagram-preview {
+.fl-diagram,
+.fl-diagram-preview {
   margin: 1.5rem 0;
   display: flex;
   justify-content: center;
   overflow-x: auto;
 }
-.mdn-diagram svg,
-.mdn-diagram-preview svg {
+.fl-diagram svg,
+.fl-diagram-preview svg {
   max-width: 100%;
   height: auto;
 }
-.mdn-diagram {
+.fl-diagram {
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 0.5rem;
-  transition: background-color 120ms ease;
+  outline: 1px solid transparent;
+  transition:
+    background-color 120ms ease,
+    outline-color 120ms ease;
 }
-.mdn-diagram:hover {
-  background: var(--color-chalk);
+.fl-diagram:hover {
+  background: var(--fl-elevated);
+  outline-color: var(--fl-border);
 }
 
 /* Shown while a diagram is still rendering or its source is mid-edit. */
-.mdn-diagram-pending {
+.fl-diagram-pending {
   opacity: 0.6;
   font-size: 0.8125rem;
 }
 
 /* Tiptap's empty-node placeholder. */
-.mdn-prose p.is-editor-empty:first-child::before {
+.fl-prose p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
-  color: var(--color-mist);
+  color: var(--fl-muted);
   float: left;
   height: 0;
   pointer-events: none;
 }
 
-/* ── Scrollbars ───────────────────────────────────────────────────────── */
+/* ── Scrollbars ───────────────────────────────────────────────────────────
+   Thin and low-contrast: in a writing surface a default scrollbar is the
+   loudest thing on screen. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-border) transparent;
+  scrollbar-color: var(--fl-border-strong) transparent;
 }
 *::-webkit-scrollbar {
   width: 10px;
@@ -253,10 +403,28 @@ body {
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 5px;
-  border: 2px solid transparent;
+  background: var(--fl-border-strong);
+  border-radius: 6px;
+  border: 3px solid transparent;
   background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--fl-muted);
+  background-clip: content-box;
+}
+
+@keyframes fl-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fl-rise {
+  animation: fl-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {

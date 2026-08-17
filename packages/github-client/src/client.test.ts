@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { GitHubClient, buildTree } from "./client";
 import { GitHubError } from "./errors";
 import { encodeBase64, decodeBase64 } from "./base64";
-import type { RepoRef } from "@mdnotion/types";
+import type { RepoRef } from "@forkleaf/types";
 
 const repo: RepoRef = { owner: "octo", repo: "notes", branch: "main", directory: "" };
 
@@ -138,7 +138,7 @@ describe("commitChanges", () => {
     expect(tree.tree).toContainEqual({ path: "old.md", mode: "100644", type: "blob", sha: null });
   });
 
-  it("refuses to squash a commit that mdnotion did not write", async () => {
+  it("refuses to squash a commit that forkleaf did not write", async () => {
     const { calls, fetchImpl } = fakeGitHub();
     const client = new GitHubClient({ token: "t", fetch: fetchImpl });
 
@@ -167,7 +167,7 @@ describe("commitChanges", () => {
         sha: "head-sha",
         tree: { sha: "head-tree" },
         parents: [{ sha: "parent-sha" }],
-        message: "mdnotion: update a.md",
+        message: "forkleaf: update a.md",
         committer: { date: new Date().toISOString() },
       },
     });
@@ -203,7 +203,7 @@ describe("commitChanges", () => {
         sha: "head-sha",
         tree: { sha: "head-tree" },
         parents: [{ sha: "parent-sha" }],
-        message: "mdnotion: update a.md",
+        message: "forkleaf: update a.md",
         committer: { date: new Date(Date.now() - 10 * 60_000).toISOString() },
       },
     });
@@ -227,7 +227,7 @@ describe("commitChanges", () => {
         sha: "head-sha",
         tree: { sha: "head-tree" },
         parents: [],
-        message: "mdnotion: initial",
+        message: "forkleaf: initial",
         committer: { date: new Date().toISOString() },
       },
     });
@@ -265,7 +265,7 @@ describe("commitChanges", () => {
           sha: "head-sha",
           tree: { sha: "head-tree" },
           parents: [{ sha: "parent-sha" }],
-          message: "mdnotion: update a.md",
+          message: "forkleaf: update a.md",
           committer: { date: new Date().toISOString() },
         });
       }

@@ -112,7 +112,7 @@ export async function renderDiagram(
   // Mermaid keys internal state by element id; a collision produces a blank or
   // duplicated diagram when two blocks render in the same tick.
   renderCounter += 1;
-  const id = `mdnotion-diagram-${renderCounter}`;
+  const id = `forkleaf-diagram-${renderCounter}`;
 
   try {
     // parse() gives a clean syntax error without leaving a half-built DOM node

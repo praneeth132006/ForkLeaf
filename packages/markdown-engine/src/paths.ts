@@ -1,7 +1,7 @@
 /**
  * Repo-relative path helpers.
  *
- * Every path in mdnotion is POSIX-style, relative to the repo root, and never
+ * Every path in ForkLeaf is POSIX-style, relative to the repo root, and never
  * starts or ends with a slash. GitHub rejects paths containing `..` or leading
  * slashes, so normalisation happens here once rather than at each call site.
  */

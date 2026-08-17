@@ -14,7 +14,7 @@ import {
   type Graph,
   type GraphNode,
   type NodeShape,
-} from "@mdnotion/diagrams";
+} from "@forkleaf/diagrams";
 
 export interface VisualBuilderProps {
   graph: Graph;
@@ -138,8 +138,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
   return (
     <div className="flex h-full flex-col">
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--color-border)] px-3 py-2">
-        <span className="mr-1 text-xs font-medium text-[var(--color-mist)]">Add:</span>
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--fl-border)] px-3 py-2">
+        <span className="mr-1 text-xs font-medium text-[var(--fl-muted)]">Add:</span>
 
         {(Object.keys(SHAPE_LABELS) as NodeShape[]).map((shape) => (
           <button
@@ -147,21 +147,21 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             type="button"
             onClick={() => handleAddNode(shape)}
             title={`Add a ${SHAPE_LABELS[shape].toLowerCase()} node`}
-            className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs hover:border-[var(--color-trail-teal)]"
+            className="rounded-md border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2 py-1 text-xs hover:border-[var(--fl-accent)]"
           >
             {SHAPE_LABELS[shape]}
           </button>
         ))}
 
         <div className="ml-auto flex items-center gap-2">
-          <label className="flex items-center gap-1.5 text-xs text-[var(--color-mist)]">
+          <label className="flex items-center gap-1.5 text-xs text-[var(--fl-muted)]">
             Layout
             <select
               value={graph.direction}
               onChange={(event) =>
                 onChange({ ...graph, direction: event.target.value as Graph["direction"] })
               }
-              className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-1.5 py-1 text-xs text-[var(--color-ink)]"
+              className="rounded-md border border-[var(--fl-border)] bg-[var(--fl-surface)] px-1.5 py-1 text-xs text-[var(--fl-text)]"
             >
               <option value="TD">Top to bottom</option>
               <option value="LR">Left to right</option>
@@ -173,7 +173,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
       </div>
 
       {/* ── Canvas ──────────────────────────────────────────────────────── */}
-      <div className="relative flex-1 overflow-auto bg-[var(--color-paper)]">
+      <div className="relative flex-1 overflow-auto bg-[var(--fl-bg)]">
         <svg
           ref={canvasRef}
           className="h-full min-h-[400px] w-full min-w-[640px] touch-none"
@@ -187,7 +187,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         >
           <defs>
             <marker
-              id="mdn-arrow"
+              id="fl-arrow"
               viewBox="0 0 10 10"
               refX="9"
               refY="5"
@@ -195,14 +195,14 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
               markerHeight="6"
               orient="auto-start-reverse"
             >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--color-trail-teal)" />
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--fl-accent)" />
             </marker>
-            <pattern id="mdn-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-              <circle cx="1" cy="1" r="1" fill="var(--color-border)" opacity="0.5" />
+            <pattern id="fl-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <circle cx="1" cy="1" r="1" fill="var(--fl-border)" opacity="0.5" />
             </pattern>
           </defs>
 
-          <rect width="100%" height="100%" fill="url(#mdn-grid)" />
+          <rect width="100%" height="100%" fill="url(#fl-grid)" />
 
           {/* Edges are drawn first so nodes sit on top of them. */}
           {graph.edges.map((edge) => {
@@ -234,18 +234,18 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                   y1={start.y}
                   x2={end.x}
                   y2={end.y}
-                  stroke={isSelected ? "var(--color-signal-amber)" : "var(--color-trail-teal)"}
+                  stroke={isSelected ? "var(--fl-accent)" : "var(--fl-border-strong)"}
                   strokeWidth={edge.style === "thick" ? 3 : 1.8}
                   strokeDasharray={edge.style === "dotted" ? "5 4" : undefined}
-                  markerEnd={edge.style === "open" ? undefined : "url(#mdn-arrow)"}
+                  markerEnd={edge.style === "open" ? undefined : "url(#fl-arrow)"}
                 />
                 {edge.label && (
                   <text
                     x={(start.x + end.x) / 2}
                     y={(start.y + end.y) / 2 - 6}
                     textAnchor="middle"
-                    className="fill-[var(--color-ink)] text-[11px]"
-                    style={{ paintOrder: "stroke", stroke: "var(--color-paper)", strokeWidth: 4 }}
+                    className="fill-[var(--fl-text)] text-[11px]"
+                    style={{ paintOrder: "stroke", stroke: "var(--fl-bg)", strokeWidth: 4 }}
                   >
                     {edge.label}
                   </text>
@@ -265,7 +265,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                   y1={from.y + NODE_HEIGHT / 2}
                   x2={drag.x}
                   y2={drag.y}
-                  stroke="var(--color-signal-amber)"
+                  stroke="var(--fl-accent)"
                   strokeWidth={2}
                   strokeDasharray="4 4"
                   pointerEvents="none"
@@ -318,7 +318,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                   if (event.key === "Enter" || event.key === "Escape") setEditingLabel(null);
                 }}
                 aria-label="Node label"
-                className="absolute rounded border-2 border-[var(--color-signal-amber)] bg-[var(--color-surface)] px-1 text-center text-sm text-[var(--color-ink)] outline-none"
+                className="absolute rounded border-2 border-[var(--fl-accent)] bg-[var(--fl-surface)] px-1 text-center text-sm text-[var(--fl-text)] outline-none"
                 style={{
                   left: node.x + 8,
                   top: node.y + NODE_HEIGHT / 2 - 14,
@@ -330,7 +330,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
         {graph.nodes.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-            <p className="max-w-xs text-center text-sm text-[var(--color-mist)]">
+            <p className="max-w-xs text-center text-sm text-[var(--fl-muted)]">
               Add a shape from the toolbar, then drag from a node's right edge to connect it to
               another.
             </p>
@@ -340,7 +340,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
       {/* ── Inspector for the current selection ─────────────────────────── */}
       {(selectedNode || selectedEdge) && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border)] px-3 py-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--fl-border)] px-3 py-2 text-xs">
           {selectedNode && (
             <>
               <input
@@ -349,7 +349,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                   onChange(updateNode(graph, selectedNode.id, { label: event.target.value }))
                 }
                 aria-label="Node label"
-                className="w-40 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[var(--color-ink)]"
+                className="w-40 rounded-md border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2 py-1 text-[var(--fl-text)]"
               />
               <select
                 value={selectedNode.shape}
@@ -359,7 +359,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                   )
                 }
                 aria-label="Node shape"
-                className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[var(--color-ink)]"
+                className="rounded-md border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2 py-1 text-[var(--fl-text)]"
               >
                 {(Object.keys(SHAPE_LABELS) as NodeShape[]).map((shape) => (
                   <option key={shape} value={shape}>
@@ -373,7 +373,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                   onChange(removeNode(graph, selectedNode.id));
                   setSelected(null);
                 }}
-                className="ml-auto rounded-md px-2 py-1 text-[var(--color-ember)] hover:bg-[var(--color-chalk)]"
+                className="ml-auto rounded-md px-2 py-1 text-[var(--fl-danger)] hover:bg-[var(--fl-elevated)]"
               >
                 Delete node
               </button>
@@ -394,7 +394,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                   })
                 }
                 aria-label="Arrow label"
-                className="w-40 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[var(--color-ink)]"
+                className="w-40 rounded-md border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2 py-1 text-[var(--fl-text)]"
               />
               <select
                 value={selectedEdge.style}
@@ -409,7 +409,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                   })
                 }
                 aria-label="Arrow style"
-                className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-[var(--color-ink)]"
+                className="rounded-md border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2 py-1 text-[var(--fl-text)]"
               >
                 {(Object.keys(EDGE_LABELS) as EdgeStyle[]).map((style) => (
                   <option key={style} value={style}>
@@ -423,7 +423,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                   onChange(removeEdge(graph, selectedEdge.id));
                   setSelected(null);
                 }}
-                className="ml-auto rounded-md px-2 py-1 text-[var(--color-ember)] hover:bg-[var(--color-chalk)]"
+                className="ml-auto rounded-md px-2 py-1 text-[var(--fl-danger)] hover:bg-[var(--fl-elevated)]"
               >
                 Delete arrow
               </button>
@@ -452,9 +452,9 @@ function NodeShapeView({
   onStartConnect,
   onDoubleClick,
 }: NodeShapeViewProps) {
-  const stroke = selected ? "var(--color-signal-amber)" : "var(--color-contour)";
+  const stroke = selected ? "var(--fl-accent)" : "var(--fl-border-strong)";
   const strokeWidth = selected ? 2.5 : 1.5;
-  const fill = "var(--color-surface)";
+  const fill = "var(--fl-surface)";
 
   return (
     <g
@@ -470,7 +470,7 @@ function NodeShapeView({
         y={NODE_HEIGHT / 2}
         textAnchor="middle"
         dominantBaseline="central"
-        className="pointer-events-none select-none fill-[var(--color-ink)] text-[13px]"
+        className="pointer-events-none select-none fill-[var(--fl-text)] text-[13px]"
       >
         {truncate(node.label, 18)}
       </text>
@@ -480,8 +480,8 @@ function NodeShapeView({
         cx={NODE_WIDTH}
         cy={NODE_HEIGHT / 2}
         r={6}
-        fill="var(--color-trail-teal)"
-        stroke="var(--color-paper)"
+        fill="var(--fl-accent)"
+        stroke="var(--fl-bg)"
         strokeWidth={2}
         className="cursor-crosshair"
         onPointerDown={onStartConnect}

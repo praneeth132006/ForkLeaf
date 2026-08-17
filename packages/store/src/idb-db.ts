@@ -1,15 +1,15 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { Note, PendingChange, TreeNode, Workspace } from "@mdnotion/types";
+import type { Note, PendingChange, TreeNode, Workspace } from "@forkleaf/types";
 import type { LocalDatabase } from "./ports";
 
 /**
- * IndexedDB-backed storage — the reason mdnotion works on a plane.
+ * IndexedDB-backed storage — the reason ForkLeaf works on a plane.
  *
  * Notes are written here first and pushed to GitHub afterwards, so a dropped
  * connection, a closed tab, or a dead battery costs nothing.
  */
 
-interface MdnotionSchema extends DBSchema {
+interface ForkLeafSchema extends DBSchema {
   notes: {
     key: string;
     value: Note;
@@ -34,16 +34,16 @@ interface MdnotionSchema extends DBSchema {
   };
 }
 
-const DB_NAME = "mdnotion";
+const DB_NAME = "forkleaf";
 const DB_VERSION = 1;
 
 export class IndexedDbDatabase implements LocalDatabase {
-  private dbPromise: Promise<IDBPDatabase<MdnotionSchema>> | null = null;
+  private dbPromise: Promise<IDBPDatabase<ForkLeafSchema>> | null = null;
 
-  private get db(): Promise<IDBPDatabase<MdnotionSchema>> {
+  private get db(): Promise<IDBPDatabase<ForkLeafSchema>> {
     // Opened lazily so importing this module during SSR does not touch
     // `indexedDB`, which only exists in the browser.
-    this.dbPromise ??= openDB<MdnotionSchema>(DB_NAME, DB_VERSION, {
+    this.dbPromise ??= openDB<ForkLeafSchema>(DB_NAME, DB_VERSION, {
       upgrade(db) {
         if (!db.objectStoreNames.contains("notes")) {
           const notes = db.createObjectStore("notes", { keyPath: "id" });

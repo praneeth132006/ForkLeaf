@@ -1,4 +1,4 @@
-# mdnotion
+# ForkLeaf
 
 **A local-first Markdown editor with first-class Mermaid diagrams, backed by your own GitHub repository.**
 
@@ -13,7 +13,7 @@ walk away at any time — clone the repo and every note is still there.
 
 ## Why this exists
 
-Most note apps ask you to trust them with your writing. mdnotion doesn't hold
+Most note apps ask you to trust them with your writing. ForkLeaf doesn't hold
 your notes at all:
 
 |             |                                                                   |
@@ -65,7 +65,7 @@ github.com and anywhere else Mermaid is supported.
 
 ### Workspaces
 
-- A private `mdnotion-notes` repo is created for you on first sign-in.
+- A private `forkleaf-notes` repo is created for you on first sign-in.
 - Connect any other repository (optionally scoped to a subfolder like `docs/`)
   and switch between them.
 
@@ -82,7 +82,7 @@ pnpm install
 pnpm dev
 ```
 
-Open <http://localhost:3000/editor>. With no configuration, mdnotion runs in
+Open <http://localhost:3000/editor>. With no configuration, ForkLeaf runs in
 **local mode**: fully functional, with notes stored in your browser. This is also
 how the test suite and CI exercise the app.
 
@@ -118,7 +118,7 @@ openssl rand -base64 32
 
 Restart `pnpm dev` and "Continue with GitHub" will appear.
 
-> **On the `repo` scope:** mdnotion requests `repo` because it writes notes to
+> **On the `repo` scope:** ForkLeaf requests `repo` because it writes notes to
 > your private repositories, and that is the narrowest classic OAuth scope that
 > permits private-repo writes. If you'd rather grant access to one repository
 > only, see [docs/self-hosting.md](docs/self-hosting.md) for the GitHub App route.
@@ -156,14 +156,14 @@ page can read your token.
 
 | Package                     | Responsibility                                                         |
 | --------------------------- | ---------------------------------------------------------------------- |
-| `@mdnotion/types`           | Shared domain model                                                    |
-| `@mdnotion/markdown-engine` | Frontmatter, parsing, sanitised rendering, path helpers                |
-| `@mdnotion/github-client`   | GitHub REST client: trees, files, atomic multi-file commits, squashing |
-| `@mdnotion/store`           | IndexedDB storage, change queue, sync engine, conflict detection       |
-| `@mdnotion/diagrams`        | Mermaid rendering, templates, autocomplete, visual-builder graph model |
-| `@mdnotion/exporter`        | Client-side PDF / HTML / DOCX / Markdown / ZIP export                  |
-| `@mdnotion/editor`          | React editing surfaces (rich text, source, split, diagram studio)      |
-| `@mdnotion/web`             | Next.js app: auth, API routes, application shell                       |
+| `@forkleaf/types`           | Shared domain model                                                    |
+| `@forkleaf/markdown-engine` | Frontmatter, parsing, sanitised rendering, path helpers                |
+| `@forkleaf/github-client`   | GitHub REST client: trees, files, atomic multi-file commits, squashing |
+| `@forkleaf/store`           | IndexedDB storage, change queue, sync engine, conflict detection       |
+| `@forkleaf/diagrams`        | Mermaid rendering, templates, autocomplete, visual-builder graph model |
+| `@forkleaf/exporter`        | Client-side PDF / HTML / DOCX / Markdown / ZIP export                  |
+| `@forkleaf/editor`          | React editing surfaces (rich text, source, split, diagram studio)      |
+| `@forkleaf/web`             | Next.js app: auth, API routes, application shell                       |
 
 More detail in [docs/architecture.md](docs/architecture.md).
 

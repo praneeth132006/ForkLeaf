@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { renderDiagram, LIGHT_THEME, DARK_THEME, type DiagramError } from "@mdnotion/diagrams";
+import { renderDiagram, LIGHT_THEME, DARK_THEME, type DiagramError } from "@forkleaf/diagrams";
 import { useDocumentTheme } from "../useDocumentTheme";
 
 /**

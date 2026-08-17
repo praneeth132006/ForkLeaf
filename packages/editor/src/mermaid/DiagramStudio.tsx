@@ -10,7 +10,7 @@ import {
   DARK_THEME,
   type DiagramError,
   type Graph,
-} from "@mdnotion/diagrams";
+} from "@forkleaf/diagrams";
 import { SourceEditor } from "../SourceEditor";
 import { useDocumentTheme } from "../useDocumentTheme";
 import { mermaidCompletions, mermaidLinter } from "../codemirror/mermaid-language";
@@ -24,7 +24,6 @@ export type StudioMode = "visual" | "source";
 export interface DiagramStudioProps {
   code: string;
   onChange: (code: string) => void;
-  onClose?: () => void;
   /** Omit to follow the app's current theme. */
   theme?: "light" | "dark";
   /** Starts on the template gallery when the diagram is empty. */
@@ -32,19 +31,18 @@ export interface DiagramStudioProps {
 }
 
 /**
- * The full diagram editing surface.
+ * The diagram editing surface. Callers render it inside a modal.
  *
  * Three ways in, because people arrive with different knowledge:
  *  - a template gallery, for a blank diagram
  *  - a visual canvas, for people who know the shape but not the syntax
  *  - a source editor with autocomplete, hints and a cheatsheet, for everyone else
  *
- * All three write to the same mermaid source, and the preview is always live.
+ * All three write to the same Mermaid source, and the preview is always live.
  */
 export function DiagramStudio({
   code,
   onChange,
-  onClose,
   theme,
   initialMode = "visual",
 }: DiagramStudioProps) {
@@ -110,9 +108,7 @@ export function DiagramStudio({
     (snippet: string) => {
       // Appended on its own line: reliable, and avoids reaching into
       // CodeMirror's selection state from outside the component.
-      onChange(
-        code.endsWith("\n") || code === "" ? `${code}${snippet}\n` : `${code}\n${snippet}\n`,
-      );
+      onChange(code.endsWith("\n") || code === "" ? `${code}${snippet}\n` : `${code}\n${snippet}\n`);
     },
     [code, onChange],
   );
@@ -124,60 +120,49 @@ export function DiagramStudio({
 
   if (showTemplates) {
     return (
-      <div className="flex h-full max-h-[min(70vh,640px)] min-h-[420px] flex-col overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
-        <TemplateGallery
-          onPick={(template) => {
-            onChange(template.code);
-            setShowTemplates(false);
-            setMode(template.kind === "flowchart" ? "visual" : "source");
-          }}
-          {...(code.trim() !== "" ? { onCancel: () => setShowTemplates(false) } : {})}
-        />
-      </div>
+      <TemplateGallery
+        onPick={(template) => {
+          onChange(template.code);
+          setShowTemplates(false);
+          setMode(template.kind === "flowchart" ? "visual" : "source");
+        }}
+        {...(code.trim() !== "" ? { onCancel: () => setShowTemplates(false) } : {})}
+      />
     );
   }
 
   return (
-    <div className="flex h-full max-h-[min(70vh,640px)] min-h-[420px] flex-col overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-2">
-        <div className="flex rounded-md border border-[var(--color-border)] p-0.5" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "visual"}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--fl-border)] bg-[var(--fl-surface)] px-4 py-2.5">
+        <div
+          className="flex rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] p-0.5"
+          role="tablist"
+          aria-label="Diagram editing mode"
+        >
+          <StudioTab
+            active={mode === "visual"}
             disabled={!visualAvailable}
             onClick={() => setMode("visual")}
             title={
               visualAvailable
-                ? "Build the diagram by dragging shapes"
+                ? "Drag boxes and arrows on a canvas"
                 : "The visual builder currently supports flowcharts only"
             }
-            className={`rounded px-2.5 py-1 text-xs font-medium transition ${
-              mode === "visual"
-                ? "bg-[var(--color-trail-teal)] text-[var(--color-paper)]"
-                : "text-[var(--color-mist)] hover:text-[var(--color-ink)] disabled:opacity-40 disabled:hover:text-[var(--color-mist)]"
-            }`}
           >
             Visual
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "source"}
+          </StudioTab>
+          <StudioTab
+            active={mode === "source"}
             onClick={() => setMode("source")}
-            className={`rounded px-2.5 py-1 text-xs font-medium transition ${
-              mode === "source"
-                ? "bg-[var(--color-trail-teal)] text-[var(--color-paper)]"
-                : "text-[var(--color-mist)] hover:text-[var(--color-ink)]"
-            }`}
+            title="Edit the Mermaid source directly"
           >
             Source
-          </button>
+          </StudioTab>
         </div>
 
         {kind && (
-          <span className="rounded bg-[var(--color-chalk)] px-2 py-0.5 font-mono text-[0.7rem] text-[var(--color-mist)]">
+          <span className="rounded-md bg-[var(--fl-elevated)] px-2 py-1 font-mono text-[11px] text-[var(--fl-muted)]">
             {kind}
           </span>
         )}
@@ -186,31 +171,22 @@ export function DiagramStudio({
           <button
             type="button"
             onClick={() => setShowTemplates(true)}
-            className="rounded-md px-2 py-1 text-xs text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
+            className="rounded-lg px-2.5 py-1.5 text-[13px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
           >
-            Templates
+            Change type
           </button>
           {mode === "source" && (
             <button
               type="button"
               onClick={() => setShowCheatsheet((value) => !value)}
               aria-pressed={showCheatsheet}
-              className={`rounded-md px-2 py-1 text-xs ${
+              className={`rounded-lg px-2.5 py-1.5 text-[13px] transition-colors ${
                 showCheatsheet
-                  ? "bg-[var(--color-chalk)] text-[var(--color-ink)]"
-                  : "text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
+                  ? "bg-[var(--fl-elevated)] text-[var(--fl-text)]"
+                  : "text-[var(--fl-muted)] hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
               }`}
             >
               Syntax help
-            </button>
-          )}
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md bg-[var(--color-signal-amber)] px-2.5 py-1 text-xs font-semibold text-[var(--color-basalt)] hover:opacity-90"
-            >
-              Done
             </button>
           )}
         </div>
@@ -218,7 +194,7 @@ export function DiagramStudio({
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div className="flex min-h-[240px] min-w-0 flex-1 flex-col border-b border-[var(--color-border)] lg:border-b-0 lg:border-r">
+        <div className="flex min-h-[260px] min-w-0 flex-1 flex-col border-b border-[var(--fl-border)] lg:border-b-0 lg:border-r">
           {mode === "visual" && graph ? (
             <VisualBuilder graph={graph} onChange={handleGraphChange} />
           ) : (
@@ -236,7 +212,7 @@ export function DiagramStudio({
               </div>
 
               {showCheatsheet && (
-                <aside className="w-56 shrink-0 overflow-hidden border-l border-[var(--color-border)] bg-[var(--color-paper)]">
+                <aside className="w-60 shrink-0 overflow-hidden border-l border-[var(--fl-border)] bg-[var(--fl-surface)]">
                   <Cheatsheet kind={kind} onInsert={insertAtCursor} />
                 </aside>
               )}
@@ -245,16 +221,16 @@ export function DiagramStudio({
         </div>
 
         {/* ── Live preview ──────────────────────────────────────────────── */}
-        <div className="flex min-h-[240px] min-w-0 flex-1 flex-col bg-[var(--color-paper)]">
-          <div className="flex flex-1 items-center justify-center overflow-auto p-4">
+        <div className="flex min-h-[260px] min-w-0 flex-1 flex-col bg-[var(--fl-surface)]">
+          <div className="flex flex-1 items-center justify-center overflow-auto p-5">
             {svg ? (
               <div
-                className="mdn-diagram-preview max-w-full [&_svg]:h-auto [&_svg]:max-w-full"
+                className="fl-diagram-preview max-w-full [&_svg]:h-auto [&_svg]:max-w-full"
                 // Sanitised by the diagram renderer before it reaches here.
                 dangerouslySetInnerHTML={{ __html: svg }}
               />
             ) : (
-              <p className="text-sm text-[var(--color-mist)]">
+              <p className="text-sm text-[var(--fl-muted)]">
                 {code.trim() ? "Rendering…" : "Your diagram will appear here."}
               </p>
             )}
@@ -263,24 +239,55 @@ export function DiagramStudio({
           {error && (
             <div
               role="alert"
-              // Pinned to the bottom of the preview column: capped studio height
-              // plus shrink-0 means the message is always on screen, which is
-              // the whole point of showing it.
-              className="shrink-0 border-t border-[var(--color-ember)]/30 bg-[var(--color-ember)]/5 px-3 py-2 text-xs"
+              // Pinned to the bottom of the preview column so the message is
+              // always on screen, which is the whole point of showing it.
+              className="shrink-0 border-t border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/5 px-4 py-2.5 text-xs"
             >
-              <p className="font-medium text-[var(--color-ember)]">
+              <p className="font-medium text-[var(--fl-danger)]">
                 {error.line !== null && (
-                  <span className="mr-1.5 rounded bg-[var(--color-ember)]/15 px-1.5 py-0.5 font-mono">
+                  <span className="mr-1.5 rounded bg-[var(--fl-danger)]/15 px-1.5 py-0.5 font-mono">
                     line {error.line}
                   </span>
                 )}
                 {error.message}
               </p>
-              <p className="mt-1 text-[var(--color-mist)]">{error.hint}</p>
+              <p className="mt-1 text-[var(--fl-muted)]">{error.hint}</p>
             </div>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+function StudioTab({
+  active,
+  disabled = false,
+  onClick,
+  title,
+  children,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      className={`rounded-[6px] px-3 py-1 text-[13px] font-medium transition-colors ${
+        active
+          ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
+          : "text-[var(--fl-muted)] hover:text-[var(--fl-text)] disabled:opacity-40 disabled:hover:text-[var(--fl-muted)]"
+      }`}
+    >
+      {children}
+    </button>
   );
 }

@@ -1,5 +1,5 @@
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import type { NoteFrontmatter } from "@mdnotion/types";
+import type { NoteFrontmatter } from "@forkleaf/types";
 
 /**
  * Frontmatter handling.

@@ -1,4 +1,4 @@
-import type { Note, NoteFrontmatter, TreeNode, Workspace } from "@mdnotion/types";
+import type { Note, NoteFrontmatter, TreeNode, Workspace } from "@forkleaf/types";
 import {
   parseDocument,
   serializeDocument,
@@ -6,7 +6,7 @@ import {
   joinPath,
   slugifyFilename,
   uniquePath,
-} from "@mdnotion/markdown-engine";
+} from "@forkleaf/markdown-engine";
 import type { LocalDatabase, RemoteGateway } from "./ports";
 import type { SyncEngine } from "./sync-engine";
 

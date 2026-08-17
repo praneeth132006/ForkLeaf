@@ -91,7 +91,7 @@ const EDGE_SYNTAX: Record<EdgeStyle, { plain: string; labelled: [string, string]
 /**
  * Renders the graph as mermaid source.
  *
- * Node positions are written into a `%% mdnotion:layout` comment. Mermaid
+ * Node positions are written into a `%% forkleaf:layout` comment. Mermaid
  * ignores it, GitHub renders the diagram fine, and reopening the visual builder
  * restores the exact layout the user arranged.
  */
@@ -126,7 +126,7 @@ export function graphToMermaid(graph: Graph): string {
   }
 
   const layout = graph.nodes.map((n) => `${n.id}:${Math.round(n.x)},${Math.round(n.y)}`).join(";");
-  if (layout) lines.push(`    %% mdnotion:layout ${layout}`);
+  if (layout) lines.push(`    %% forkleaf:layout ${layout}`);
 
   return lines.join("\n");
 }
@@ -333,7 +333,7 @@ function stripQuotes(text: string): string {
 
 function parseLayoutComment(code: string): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
-  const match = /%%\s*mdnotion:layout\s+(.+)/.exec(code);
+  const match = /%%\s*forkleaf:layout\s+(.+)/.exec(code);
   if (!match) return positions;
 
   for (const entry of match[1]!.trim().split(";")) {

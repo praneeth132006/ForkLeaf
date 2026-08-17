@@ -5,7 +5,7 @@ import type {
   PendingChange,
   SyncState,
   SyncStatus,
-} from "@mdnotion/types";
+} from "@forkleaf/types";
 import type { LocalDatabase, RemoteGateway } from "./ports";
 import { coalesce, describeChanges, changeId } from "./queue";
 

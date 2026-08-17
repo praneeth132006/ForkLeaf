@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "mdnotion-web",
+      "name": "forkleaf-web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@mdnotion/web", "dev"],
+      "runtimeArgs": ["--filter", "@forkleaf/web", "dev"],
       "port": 3000,
       "autoPort": true
     }

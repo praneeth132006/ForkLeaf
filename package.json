@@ -1,5 +1,5 @@
 {
-  "name": "mdnotion",
+  "name": "forkleaf",
   "version": "0.2.0",
   "private": true,
   "description": "A local-first Markdown notes editor with first-class Mermaid diagrams that uses your own GitHub repositories as storage.",

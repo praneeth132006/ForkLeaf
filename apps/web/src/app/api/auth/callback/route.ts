@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { GitHubClient } from "@mdnotion/github-client";
+import { GitHubClient } from "@forkleaf/github-client";
 import { consumeOAuthState, setSessionCookie, githubOAuthConfigured } from "@/lib/session";
 
 /**
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.redirect(new URL("/editor", process.env.NEXT_PUBLIC_APP_URL ?? url.origin));
   } catch (error) {
-    console.error("[mdnotion] OAuth callback failed:", error);
+    console.error("[forkleaf] OAuth callback failed:", error);
     return NextResponse.redirect(withError(home, "exchange_failed"));
   }
 }

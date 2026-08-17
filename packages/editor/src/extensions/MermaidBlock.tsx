@@ -5,6 +5,7 @@ import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { DiagramStudio } from "../mermaid/DiagramStudio";
 import { useDiagramSvg } from "../mermaid/useDiagramSvg";
+import { Modal } from "../ui/Modal";
 
 /**
  * A Mermaid diagram as a first-class block in the WYSIWYG editor.
@@ -28,26 +29,18 @@ function MermaidNodeView({ node, updateAttributes, editor, selected }: NodeViewP
   const [editing, setEditing] = useState(code.trim() === "");
   const { svg, error } = useDiagramSvg(code);
 
-  if (editing) {
-    return (
-      <NodeViewWrapper className="my-6" data-drag-handle>
-        <DiagramStudio
-          code={code}
-          onChange={(next) => updateAttributes({ code: next })}
-          onClose={() => {
-            setEditing(false);
-            editor.commands.focus();
-          }}
-        />
-      </NodeViewWrapper>
-    );
-  }
+  const close = () => {
+    setEditing(false);
+    editor.commands.focus();
+  };
 
   return (
     <NodeViewWrapper className="my-6" data-drag-handle>
       <figure
-        className={`group relative cursor-pointer overflow-hidden rounded-lg border transition ${
-          selected ? "border-[var(--color-signal-amber)]" : "border-[var(--color-border)]"
+        className={`group relative cursor-pointer overflow-hidden rounded-xl border transition ${
+          selected
+            ? "border-[var(--fl-accent)]"
+            : "border-[var(--fl-border)] hover:border-[var(--fl-border-strong)]"
         }`}
         onClick={() => setEditing(true)}
         onKeyDown={(event) => {
@@ -57,7 +50,7 @@ function MermaidNodeView({ node, updateAttributes, editor, selected }: NodeViewP
         role="button"
         aria-label="Edit diagram"
       >
-        <div className="flex min-h-[140px] items-center justify-center bg-[var(--color-surface)] p-6">
+        <div className="flex min-h-[140px] items-center justify-center bg-[var(--fl-surface)] p-6">
           {svg ? (
             <div
               className="max-w-full [&_svg]:h-auto [&_svg]:max-w-full"
@@ -66,18 +59,40 @@ function MermaidNodeView({ node, updateAttributes, editor, selected }: NodeViewP
             />
           ) : error ? (
             <div className="text-center">
-              <p className="text-sm text-[var(--color-ember)]">{error.message}</p>
-              <p className="mt-1 text-xs text-[var(--color-mist)]">Click to fix it</p>
+              <p className="text-sm text-[var(--fl-danger)]">{error.message}</p>
+              <p className="mt-1 text-xs text-[var(--fl-muted)]">Click to fix it</p>
             </div>
           ) : (
-            <p className="text-sm italic text-[var(--color-mist)]">Empty diagram — click to edit</p>
+            <p className="text-sm italic text-[var(--fl-muted)]">Empty diagram — click to edit</p>
           )}
         </div>
 
-        <figcaption className="pointer-events-none absolute right-2 top-2 rounded border border-[var(--color-border)] bg-[var(--color-paper)] px-2 py-1 text-xs text-[var(--color-ink)] opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100">
-          Click to edit
+        <figcaption className="pointer-events-none absolute right-2 top-2 rounded-md border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-xs font-medium text-[var(--fl-text)] opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus:opacity-100">
+          Click to edit diagram
         </figcaption>
       </figure>
+
+      {/* The studio is a mode, not part of the document flow — opening it inline
+          used to push the surrounding paragraphs hundreds of pixels down the
+          page and hand the reader a full-height gallery with no obvious exit. */}
+      {editing && (
+        <Modal
+          title="Diagram"
+          subtitle="Saved into the note as a ```mermaid block, so it also renders on GitHub"
+          onClose={close}
+          actions={
+            <button
+              type="button"
+              onClick={close}
+              className="shrink-0 rounded-lg bg-[var(--fl-accent)] px-3.5 py-1.5 text-[13px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
+            >
+              Done
+            </button>
+          }
+        >
+          <DiagramStudio code={code} onChange={(next) => updateAttributes({ code: next })} />
+        </Modal>
+      )}
     </NodeViewWrapper>
   );
 }

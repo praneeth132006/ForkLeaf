@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { markdownToHtml, extractMermaidBlocks } from "@mdnotion/markdown-engine";
-import { renderDiagram, LIGHT_THEME, DARK_THEME } from "@mdnotion/diagrams";
+import { markdownToHtml, extractMermaidBlocks } from "@forkleaf/markdown-engine";
+import { renderDiagram, LIGHT_THEME, DARK_THEME } from "@forkleaf/diagrams";
 import { useDocumentTheme } from "./useDocumentTheme";
 
 export interface PreviewProps {
@@ -15,7 +15,7 @@ export interface PreviewProps {
 }
 
 /** Placeholder token swapped in for a diagram before sanitisation. */
-const TOKEN = (index: number) => `MDNOTIONDIAGRAM${index}TOKEN`;
+const TOKEN = (index: number) => `FORKLEAFDIAGRAM${index}TOKEN`;
 
 /**
  * Rendered markdown preview with live Mermaid diagrams.
@@ -76,7 +76,7 @@ export function Preview({ markdown, theme, className, onDiagramClick }: PreviewP
   const finalHtml = useMemo(() => {
     if (blocks.length === 0) return html;
 
-    return html.replace(/MDNOTIONDIAGRAM(\d+)TOKEN/g, (_match, raw: string) => {
+    return html.replace(/FORKLEAFDIAGRAM(\d+)TOKEN/g, (_match, raw: string) => {
       const index = Number(raw);
       const svg = diagrams.get(index);
 
@@ -84,10 +84,10 @@ export function Preview({ markdown, theme, className, onDiagramClick }: PreviewP
         // Still rendering, or the source is mid-edit and invalid. Show the
         // source rather than a blank gap so nothing appears to vanish.
         const code = blocks[index]?.code ?? "";
-        return `<pre class="mdn-diagram-pending"><code>${escapeHtml(code)}</code></pre>`;
+        return `<pre class="fl-diagram-pending"><code>${escapeHtml(code)}</code></pre>`;
       }
 
-      return `<figure class="mdn-diagram" data-diagram-index="${index}" tabindex="0" role="img">${svg}</figure>`;
+      return `<figure class="fl-diagram" data-diagram-index="${index}" tabindex="0" role="img">${svg}</figure>`;
     });
   }, [html, diagrams, blocks]);
 
@@ -113,7 +113,7 @@ export function Preview({ markdown, theme, className, onDiagramClick }: PreviewP
   return (
     <div
       ref={containerRef}
-      className={`mdn-prose ${className ?? ""}`}
+      className={`fl-prose ${className ?? ""}`}
       // Safe: `markdownToHtml` sanitises the note content, and each SVG was
       // sanitised by the diagram renderer before being spliced in.
       dangerouslySetInnerHTML={{ __html: finalHtml }}

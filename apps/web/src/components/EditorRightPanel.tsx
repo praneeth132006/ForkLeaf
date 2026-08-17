@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import type { Note, NoteFrontmatter } from "@mdnotion/types";
-import { extractOutline, documentStats } from "@mdnotion/markdown-engine";
+import type { Note, NoteFrontmatter, Workspace } from "@forkleaf/types";
+import { extractOutline, documentStats } from "@forkleaf/markdown-engine";
+import { fileUrl, historyUrl } from "@/lib/github-links";
 
 export interface EditorRightPanelProps {
   collapsed: boolean;
   onToggle: () => void;
   note: Note | null;
+  workspace: Workspace | null;
   onFrontmatterChange: (frontmatter: NoteFrontmatter) => void;
   onExport: () => void;
 }
@@ -20,12 +22,14 @@ const RESERVED = new Set(["title", "tags", "created", "updated"]);
  *
  * Properties are the note's YAML frontmatter, edited directly — what is shown
  * here is literally what is written into the file, so notes stay portable to
- * Obsidian, Jekyll, Hugo or plain git.
+ * Obsidian, Jekyll, Hugo or plain git. The GitHub links at the bottom make that
+ * checkable rather than just claimed.
  */
 export function EditorRightPanel({
   collapsed,
   onToggle,
   note,
+  workspace,
   onFrontmatterChange,
   onExport,
 }: EditorRightPanelProps) {
@@ -42,7 +46,7 @@ export function EditorRightPanel({
         onClick={onToggle}
         title="Show properties"
         aria-label="Show properties"
-        className="w-8 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-paper)] text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
+        className="w-8 shrink-0 border-l border-[var(--fl-border)] bg-[var(--fl-bg)] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
       >
         ‹
       </button>
@@ -61,9 +65,12 @@ export function EditorRightPanel({
     onFrontmatterChange(next);
   };
 
+  const github = fileUrl(workspace, note?.path ?? null);
+  const history = historyUrl(workspace, note?.path ?? null);
+
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-paper)]">
-      <div className="flex items-center gap-1 border-b border-[var(--color-border)] px-2 py-2">
+    <aside className="flex w-72 shrink-0 flex-col border-l border-[var(--fl-border)] bg-[var(--fl-bg)]">
+      <div className="flex shrink-0 items-center gap-1 border-b border-[var(--fl-border)] px-2 py-2">
         <div role="tablist" className="flex flex-1 gap-0.5">
           {(["properties", "outline"] as const).map((value) => (
             <button
@@ -72,10 +79,10 @@ export function EditorRightPanel({
               role="tab"
               aria-selected={tab === value}
               onClick={() => setTab(value)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium capitalize transition ${
+              className={`rounded-lg px-2.5 py-1 text-[12.5px] font-medium capitalize transition-colors ${
                 tab === value
-                  ? "bg-[var(--color-chalk)] text-[var(--color-ink)]"
-                  : "text-[var(--color-mist)] hover:text-[var(--color-ink)]"
+                  ? "bg-[var(--fl-elevated)] text-[var(--fl-text)]"
+                  : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
               }`}
             >
               {value}
@@ -87,7 +94,7 @@ export function EditorRightPanel({
           onClick={onToggle}
           title="Hide panel"
           aria-label="Hide panel"
-          className="rounded-md p-1 text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
+          className="rounded-lg p-1.5 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
         >
           ›
         </button>
@@ -95,19 +102,19 @@ export function EditorRightPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {!note && (
-          <p className="py-8 text-center text-xs text-[var(--color-mist)]">
+          <p className="py-8 text-center text-[12.5px] text-[var(--fl-muted)]">
             Open a note to see its properties.
           </p>
         )}
 
         {note && tab === "properties" && (
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             <Field label="Title">
               <input
                 value={(frontmatter.title as string) ?? ""}
                 onChange={(event) => update({ title: event.target.value })}
                 placeholder="Untitled"
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)]"
+                className="fl-input"
               />
             </Field>
 
@@ -123,14 +130,14 @@ export function EditorRightPanel({
                   })
                 }
                 placeholder="research, draft"
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)]"
+                className="fl-input"
               />
               {tags.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {tags.map((tag) => (
                     <span
                       key={tag}
-                      className="rounded bg-[var(--color-trail-teal)]/12 px-1.5 py-0.5 text-[0.7rem] text-[var(--color-trail-teal)]"
+                      className="rounded-md bg-[var(--fl-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--fl-accent)]"
                     >
                       {tag}
                     </span>
@@ -145,14 +152,14 @@ export function EditorRightPanel({
                   <input
                     value={String(value ?? "")}
                     onChange={(event) => update({ [key]: event.target.value })}
-                    className="min-w-0 flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)]"
+                    className="fl-input min-w-0 flex-1"
                   />
                   <button
                     type="button"
                     onClick={() => update({ [key]: undefined })}
                     title={`Remove ${key}`}
                     aria-label={`Remove ${key}`}
-                    className="shrink-0 rounded px-2 text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ember)]"
+                    className="shrink-0 rounded-lg px-2 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-danger)]"
                   >
                     ✕
                   </button>
@@ -167,25 +174,26 @@ export function EditorRightPanel({
                 if (key && !(key in frontmatter)) update({ [key]: "" });
                 setNewKey("");
               }}
-              className="flex gap-1 pt-1"
+              className="flex gap-1"
             >
               <input
                 value={newKey}
                 onChange={(event) => setNewKey(event.target.value)}
                 placeholder="Add a property…"
                 aria-label="New property name"
-                className="min-w-0 flex-1 rounded-md border border-dashed border-[var(--color-border)] bg-transparent px-2 py-1.5 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)]"
+                className="fl-input min-w-0 flex-1 border-dashed !bg-transparent"
               />
               <button
                 type="submit"
-                className="shrink-0 rounded-md px-2 text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
+                aria-label="Add property"
+                className="shrink-0 rounded-lg px-2 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
               >
-                ＋
+                +
               </button>
             </form>
 
             {stats && (
-              <dl className="grid grid-cols-2 gap-2 border-t border-[var(--color-border)] pt-3 text-xs">
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5 border-t border-[var(--fl-border)] pt-3.5 text-[12px]">
                 <Stat label="Words" value={stats.words.toLocaleString()} />
                 <Stat label="Read time" value={`${stats.readingMinutes} min`} />
                 <Stat label="Headings" value={String(stats.headings)} />
@@ -196,15 +204,24 @@ export function EditorRightPanel({
               </dl>
             )}
 
-            <button
-              type="button"
-              onClick={onExport}
-              className="w-full rounded-md border border-[var(--color-border)] px-3 py-2 text-sm font-medium text-[var(--color-ink)] hover:border-[var(--color-trail-teal)] hover:bg-[var(--color-chalk)]"
-            >
-              Export…
-            </button>
+            <div className="space-y-1.5 border-t border-[var(--fl-border)] pt-3.5">
+              <button
+                type="button"
+                onClick={onExport}
+                className="w-full rounded-lg border border-[var(--fl-border)] px-3 py-2 text-[13px] font-medium text-[var(--fl-text)] transition-colors hover:border-[var(--fl-accent)] hover:bg-[var(--fl-elevated)]"
+              >
+                Export…
+              </button>
 
-            <p className="pt-1 font-mono text-[0.65rem] leading-snug text-[var(--color-mist)]">
+              {github && (
+                <>
+                  <PanelLink href={github}>Open on GitHub</PanelLink>
+                  <PanelLink href={history!}>Version history</PanelLink>
+                </>
+              )}
+            </div>
+
+            <p className="pt-1 font-mono text-[10.5px] leading-snug text-[var(--fl-muted)]">
               {note.path}
             </p>
           </div>
@@ -213,8 +230,10 @@ export function EditorRightPanel({
         {note && tab === "outline" && (
           <nav aria-label="Document outline">
             {outline.length === 0 ? (
-              <p className="py-8 text-center text-xs text-[var(--color-mist)]">
+              <p className="py-8 text-center text-[12.5px] leading-relaxed text-[var(--fl-muted)]">
                 Add headings to build an outline.
+                <br />
+                Type <span className="font-mono">/</span> and pick Heading 1.
               </p>
             ) : (
               <ul className="space-y-0.5">
@@ -222,8 +241,8 @@ export function EditorRightPanel({
                   <li key={`${heading.slug}-${index}`}>
                     <a
                       href={`#${heading.slug}`}
-                      style={{ paddingLeft: `${(heading.depth - 1) * 0.75}rem` }}
-                      className="block truncate rounded px-2 py-1 text-sm text-[var(--color-ink)] hover:bg-[var(--color-chalk)]"
+                      style={{ paddingLeft: `${0.5 + (heading.depth - 1) * 0.75}rem` }}
+                      className="block truncate rounded-lg py-1 pr-2 text-[13px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
                     >
                       {heading.text}
                     </a>
@@ -238,10 +257,26 @@ export function EditorRightPanel({
   );
 }
 
+function PanelLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="flex w-full items-center gap-2 rounded-lg border border-[var(--fl-border)] px-3 py-2 text-[13px] font-medium text-[var(--fl-text)] transition-colors hover:border-[var(--fl-accent)] hover:bg-[var(--fl-elevated)]"
+    >
+      <span className="flex-1 text-left">{children}</span>
+      <span aria-hidden="true" className="text-[var(--fl-muted)]">
+        ↗
+      </span>
+    </a>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[0.7rem] font-semibold uppercase tracking-wider text-[var(--color-mist)]">
+      <span className="mb-1.5 block text-[10.5px] font-semibold uppercase tracking-[0.12em] text-[var(--fl-muted)]">
         {label}
       </span>
       {children}
@@ -252,8 +287,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[var(--color-mist)]">{label}</dt>
-      <dd className="font-medium text-[var(--color-ink)]">{value}</dd>
+      <dt className="text-[var(--fl-muted)]">{label}</dt>
+      <dd className="mt-0.5 font-medium text-[var(--fl-text)]">{value}</dd>
     </div>
   );
 }

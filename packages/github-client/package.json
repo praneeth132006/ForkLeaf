@@ -1,5 +1,5 @@
 {
-  "name": "@mdnotion/github-client",
+  "name": "@forkleaf/github-client",
   "version": "0.2.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mdnotion/types": "workspace:*"
+    "@forkleaf/types": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24",

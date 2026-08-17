@@ -24,7 +24,8 @@ function markdownOf(editor: Editor): string {
   return (editor.storage as unknown as { markdown: MarkdownStorage }).markdown.getMarkdown();
 }
 import { MermaidBlock } from "./extensions/MermaidBlock";
-import { filterSlashCommands, readSlashState, type SlashCommand } from "./extensions/SlashCommands";
+import { readSlashState } from "./extensions/SlashCommands";
+import { filterInsertActions, type InsertDefinition } from "./insert-actions";
 
 export interface WysiwygEditorProps {
   /** Markdown body, excluding frontmatter. */
@@ -33,6 +34,8 @@ export interface WysiwygEditorProps {
   placeholder?: string;
   autoFocus?: boolean;
   className?: string;
+  /** Hands the Tiptap instance up so a shared toolbar can drive it. */
+  onReady?: (editor: Editor | null) => void;
 }
 
 /**
@@ -48,6 +51,7 @@ export function WysiwygEditor({
   placeholder = "Type / for commands…",
   autoFocus = false,
   className,
+  onReady,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -60,7 +64,7 @@ export function WysiwygEditor({
     () => [
       StarterKit.configure({
         heading: { levels: [1, 2, 3, 4, 5, 6] },
-        codeBlock: { HTMLAttributes: { class: "mdn-code-block" } },
+        codeBlock: { HTMLAttributes: { class: "fl-code-block" } },
         link: false,
       }),
       Placeholder.configure({ placeholder }),
@@ -101,7 +105,7 @@ export function WysiwygEditor({
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        class: "mdn-prose focus:outline-none min-h-[50vh]",
+        class: "fl-prose focus:outline-none min-h-[50vh]",
         "aria-label": "Note content",
       },
     },
@@ -110,6 +114,16 @@ export function WysiwygEditor({
       onChangeRef.current(markdownOf(instance));
     },
   });
+
+  // Hand the instance to the parent once it exists, and take it back on
+  // unmount so a toolbar never holds a destroyed editor.
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+
+  useEffect(() => {
+    onReadyRef.current?.(editor ?? null);
+    return () => onReadyRef.current?.(null);
+  }, [editor]);
 
   // Pull external changes in (switching notes, resolving a conflict) without
   // disturbing the caret during normal typing.
@@ -141,7 +155,7 @@ export function WysiwygEditor({
         shouldShow={({ editor: instance, from, to }) =>
           from !== to && !instance.state.selection.empty && !instance.isActive("mermaidBlock")
         }
-        className="flex items-center gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-basalt)] p-1 shadow-lg"
+        className="flex items-center gap-0.5 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-inverse-bg)] p-1 shadow-lg"
       >
         <FormatButton editor={editor} mark="bold" label="Bold" glyph="B" className="font-bold" />
         <FormatButton editor={editor} mark="italic" label="Italic" glyph="I" className="italic" />
@@ -212,8 +226,8 @@ function FormatButton({
       }}
       className={`h-7 min-w-7 rounded px-1.5 text-sm transition ${
         active
-          ? "bg-[var(--color-signal-amber)] text-[var(--color-basalt)]"
-          : "text-[var(--color-chalk)] hover:bg-white/10"
+          ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
+          : "text-[var(--fl-elevated)] hover:bg-white/10"
       } ${className ?? ""}`}
     >
       {glyph}
@@ -228,7 +242,7 @@ function SlashMenu({ editor }: { editor: Editor }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [position, setPosition] = useState({ top: 0, left: 0 });
 
-  const commands = useMemo(() => filterSlashCommands(state.query), [state.query]);
+  const commands = useMemo(() => filterInsertActions(state.query), [state.query]);
 
   // Track the slash state on every transaction.
   useEffect(() => {
@@ -259,7 +273,7 @@ function SlashMenu({ editor }: { editor: Editor }) {
   useEffect(() => setSelectedIndex(0), [state.query]);
 
   const run = useCallback(
-    (command: SlashCommand) => {
+    (command: InsertDefinition) => {
       // Remove the "/query" text before running, so the command applies to a
       // clean block.
       editor
@@ -268,7 +282,7 @@ function SlashMenu({ editor }: { editor: Editor }) {
         .deleteRange({ from: state.from, to: state.from + state.query.length + 1 })
         .run();
 
-      command.run(editor);
+      command.rich(editor);
       setState({ active: false, query: "", from: 0 });
     },
     [editor, state],
@@ -312,12 +326,12 @@ function SlashMenu({ editor }: { editor: Editor }) {
     <div
       role="listbox"
       aria-label="Insert block"
-      className="absolute z-50 max-h-72 w-72 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-xl"
+      className="absolute z-50 max-h-80 w-72 overflow-y-auto rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1 shadow-[var(--fl-shadow-lg)]"
       style={{ top: position.top, left: position.left }}
     >
       {commands.map((command, index) => (
         <button
-          key={command.title}
+          key={command.id}
           type="button"
           role="option"
           aria-selected={index === selectedIndex}
@@ -325,22 +339,22 @@ function SlashMenu({ editor }: { editor: Editor }) {
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => run(command)}
           onMouseEnter={() => setSelectedIndex(index)}
-          className={`flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left transition ${
-            index === selectedIndex ? "bg-[var(--color-chalk)]" : ""
+          className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${
+            index === selectedIndex ? "bg-[var(--fl-elevated)]" : ""
           }`}
         >
           <span
             aria-hidden="true"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[var(--color-border)] bg-[var(--color-paper)] font-mono text-xs text-[var(--color-ink)]"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--fl-border)] bg-[var(--fl-bg)] text-[var(--fl-muted)]"
           >
             {command.icon}
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-sm font-medium text-[var(--color-ink)]">
-              {command.title}
+            <span className="block truncate text-[13px] font-medium text-[var(--fl-text)]">
+              {command.label}
             </span>
-            <span className="block truncate text-xs text-[var(--color-mist)]">
-              {command.description}
+            <span className="block truncate text-[11.5px] text-[var(--fl-muted)]">
+              {command.hint}
             </span>
           </span>
         </button>

@@ -16,13 +16,13 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@mdnotion/types": r("./packages/types/src/index.ts"),
-      "@mdnotion/markdown-engine": r("./packages/markdown-engine/src/index.ts"),
-      "@mdnotion/github-client": r("./packages/github-client/src/index.ts"),
-      "@mdnotion/store": r("./packages/store/src/index.ts"),
-      "@mdnotion/diagrams": r("./packages/diagrams/src/index.ts"),
-      "@mdnotion/exporter": r("./packages/exporter/src/index.ts"),
-      "@mdnotion/editor": r("./packages/editor/src/index.ts"),
+      "@forkleaf/types": r("./packages/types/src/index.ts"),
+      "@forkleaf/markdown-engine": r("./packages/markdown-engine/src/index.ts"),
+      "@forkleaf/github-client": r("./packages/github-client/src/index.ts"),
+      "@forkleaf/store": r("./packages/store/src/index.ts"),
+      "@forkleaf/diagrams": r("./packages/diagrams/src/index.ts"),
+      "@forkleaf/exporter": r("./packages/exporter/src/index.ts"),
+      "@forkleaf/editor": r("./packages/editor/src/index.ts"),
     },
   },
 });

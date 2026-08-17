@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { workspaceId, type Workspace } from "@mdnotion/types";
+import { workspaceId, type Workspace } from "@forkleaf/types";
 import { listRepos, type RepoSummaryDto } from "@/lib/gateway";
 import { Dialog } from "./Dialog";
 
@@ -13,7 +13,7 @@ export interface ConnectRepoDialogProps {
 /**
  * Connects an existing repository as an additional workspace.
  *
- * This is what makes mdnotion useful beyond a personal notes repo: point it at
+ * This is what makes ForkLeaf useful beyond a personal notes repo: point it at
  * the `docs/` folder of a real project and edit that project's documentation
  * with the same editor.
  */
@@ -66,13 +66,13 @@ export function ConnectRepoDialog({ onConnect, onClose }: ConnectRepoDialogProps
   return (
     <Dialog title="Connect a repository" onClose={onClose}>
       {error && (
-        <p role="alert" className="mb-3 text-sm text-[var(--color-ember)]">
+        <p role="alert" className="mb-3 text-sm text-[var(--fl-danger)]">
           {error}
         </p>
       )}
 
       {!repos && !error && (
-        <p className="py-8 text-center text-sm text-[var(--color-mist)]">
+        <p className="py-8 text-center text-sm text-[var(--fl-muted)]">
           Loading your repositories…
         </p>
       )}
@@ -86,7 +86,7 @@ export function ConnectRepoDialog({ onConnect, onClose }: ConnectRepoDialogProps
             placeholder="Search repositories…"
             aria-label="Search repositories"
             autoFocus
-            className="mb-2 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--color-trail-teal)]"
+            className="mb-2 w-full rounded-md border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--fl-accent)]"
           />
 
           <ul className="mb-3 max-h-60 space-y-0.5 overflow-y-auto">
@@ -97,22 +97,22 @@ export function ConnectRepoDialog({ onConnect, onClose }: ConnectRepoDialogProps
                   onClick={() => setSelected(repo)}
                   className={`flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition ${
                     selected?.fullName === repo.fullName
-                      ? "bg-[var(--color-trail-teal)]/12"
-                      : "hover:bg-[var(--color-chalk)]"
+                      ? "bg-[var(--fl-accent)]/12"
+                      : "hover:bg-[var(--fl-elevated)]"
                   }`}
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-[var(--color-ink)]">
+                    <span className="block truncate text-sm text-[var(--fl-text)]">
                       {repo.fullName}
                     </span>
                     {repo.description && (
-                      <span className="block truncate text-xs text-[var(--color-mist)]">
+                      <span className="block truncate text-xs text-[var(--fl-muted)]">
                         {repo.description}
                       </span>
                     )}
                   </span>
                   {repo.private && (
-                    <span className="shrink-0 rounded bg-[var(--color-chalk)] px-1.5 py-0.5 text-[0.65rem] text-[var(--color-mist)]">
+                    <span className="shrink-0 rounded bg-[var(--fl-elevated)] px-1.5 py-0.5 text-[0.65rem] text-[var(--fl-muted)]">
                       private
                     </span>
                   )}
@@ -121,23 +121,23 @@ export function ConnectRepoDialog({ onConnect, onClose }: ConnectRepoDialogProps
             ))}
 
             {results.length === 0 && (
-              <li className="py-6 text-center text-sm text-[var(--color-mist)]">
+              <li className="py-6 text-center text-sm text-[var(--fl-muted)]">
                 No repositories match that search.
               </li>
             )}
           </ul>
 
           <label className="mb-4 block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-[var(--color-mist)]">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wider text-[var(--fl-muted)]">
               Folder (optional)
             </span>
             <input
               value={directory}
               onChange={(event) => setDirectory(event.target.value)}
               placeholder="docs"
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--color-trail-teal)]"
+              className="w-full rounded-md border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--fl-accent)]"
             />
-            <span className="mt-1 block text-xs text-[var(--color-mist)]">
+            <span className="mt-1 block text-xs text-[var(--fl-muted)]">
               Leave empty to use the whole repository.
             </span>
           </label>
@@ -146,7 +146,7 @@ export function ConnectRepoDialog({ onConnect, onClose }: ConnectRepoDialogProps
             type="button"
             disabled={!selected}
             onClick={connect}
-            className="w-full rounded-md bg-[var(--color-signal-amber)] px-4 py-2 text-sm font-semibold text-[var(--color-basalt)] hover:opacity-90 disabled:opacity-40"
+            className="w-full rounded-md bg-[var(--fl-accent)] px-4 py-2 text-sm font-semibold text-[var(--fl-accent-contrast)] hover:opacity-90 disabled:opacity-40"
           >
             {selected ? `Connect ${selected.name}` : "Choose a repository"}
           </button>
