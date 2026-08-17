@@ -1,23 +1,269 @@
 @import "tailwindcss";
 
+/* Workspace packages ship untranspiled source, so Tailwind has to be told to
+   scan them or every class used inside @mdnotion/editor is dropped. */
+@source "../../../../packages/editor/src/**/*.{ts,tsx}";
+
 @theme {
-  --color-basalt: #14181F;
-  --color-paper: #F1EEE6;
-  --color-fog: #1E2530;
-  --color-chalk: #EDEAE2;
-  --color-ink: #22262E;
-  --color-signal-amber: #E8A33D;
-  --color-trail-teal: #3FA796;
-  --color-ember: #C1483B;
-  --color-mist: #8A93A3;
-  --color-contour: #2A3240;
+  --color-basalt: #14181f;
+  --color-paper: #f1eee6;
+  --color-fog: #1e2530;
+  --color-chalk: #edeae2;
+  --color-ink: #22262e;
+  --color-signal-amber: #e8a33d;
+  --color-trail-teal: #3fa796;
+  --color-ember: #c1483b;
+  --color-mist: #8a93a3;
+  --color-contour: #2a3240;
 
   --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-fraunces), ui-serif, Georgia, serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
 }
 
+/* ── Semantic tokens ───────────────────────────────────────────────────────
+   Components reference these rather than the raw palette, so a single block
+   below re-themes the whole app for dark mode. */
+:root {
+  --color-surface: #ffffff;
+  --color-border: #e2dfd6;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --color-paper: #14181f;
+  --color-surface: #1e2530;
+  --color-chalk: #252c38;
+  --color-ink: #edeae2;
+  --color-mist: #8a93a3;
+  --color-border: #2a3240;
+  --color-contour: #3a4353;
+  color-scheme: dark;
+}
+
 body {
   background-color: var(--color-paper);
   color: var(--color-ink);
+}
+
+/* Visible focus for keyboard users, suppressed for mouse clicks. */
+:focus-visible {
+  outline: 2px solid var(--color-trail-teal);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ── Rendered markdown ─────────────────────────────────────────────────────
+   Shared by the preview pane, the WYSIWYG surface and the HTML export, so a
+   note looks the same however it is being viewed. */
+.mdn-prose {
+  color: var(--color-ink);
+  line-height: 1.75;
+  font-size: 1rem;
+}
+
+.mdn-prose > * + * {
+  margin-top: 1rem;
+}
+
+.mdn-prose h1,
+.mdn-prose h2,
+.mdn-prose h3,
+.mdn-prose h4,
+.mdn-prose h5,
+.mdn-prose h6 {
+  font-family: var(--font-serif);
+  font-weight: 650;
+  line-height: 1.25;
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.mdn-prose h1 {
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+}
+.mdn-prose h2 {
+  font-size: 1.5rem;
+}
+.mdn-prose h3 {
+  font-size: 1.25rem;
+}
+.mdn-prose h4 {
+  font-size: 1.1rem;
+}
+
+.mdn-prose h1:first-child,
+.mdn-prose h2:first-child {
+  margin-top: 0;
+}
+
+.mdn-prose a {
+  color: var(--color-trail-teal);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.mdn-prose strong {
+  font-weight: 650;
+}
+
+.mdn-prose ul,
+.mdn-prose ol {
+  padding-left: 1.5rem;
+}
+.mdn-prose ul {
+  list-style: disc;
+}
+.mdn-prose ol {
+  list-style: decimal;
+}
+.mdn-prose li {
+  margin: 0.25rem 0;
+}
+.mdn-prose li::marker {
+  color: var(--color-mist);
+}
+
+/* Task lists render as checkboxes rather than bullets. */
+.mdn-prose ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+.mdn-prose ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.mdn-prose ul[data-type="taskList"] li > label {
+  margin-top: 0.3rem;
+}
+.mdn-prose input[type="checkbox"] {
+  accent-color: var(--color-trail-teal);
+  width: 1rem;
+  height: 1rem;
+}
+
+.mdn-prose blockquote {
+  border-left: 3px solid var(--color-trail-teal);
+  padding-left: 1rem;
+  color: var(--color-mist);
+  font-style: italic;
+}
+
+.mdn-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--color-chalk);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+
+.mdn-prose pre {
+  background: var(--color-basalt);
+  color: var(--color-chalk);
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 0.875rem;
+}
+.mdn-prose pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+.mdn-prose hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 2rem 0;
+}
+
+.mdn-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+  display: block;
+  overflow-x: auto;
+}
+.mdn-prose th,
+.mdn-prose td {
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.mdn-prose th {
+  background: var(--color-chalk);
+  font-weight: 600;
+}
+
+.mdn-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.mdn-diagram,
+.mdn-diagram-preview {
+  margin: 1.5rem 0;
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+}
+.mdn-diagram svg,
+.mdn-diagram-preview svg {
+  max-width: 100%;
+  height: auto;
+}
+.mdn-diagram {
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 0.5rem;
+  transition: background-color 120ms ease;
+}
+.mdn-diagram:hover {
+  background: var(--color-chalk);
+}
+
+/* Shown while a diagram is still rendering or its source is mid-edit. */
+.mdn-diagram-pending {
+  opacity: 0.6;
+  font-size: 0.8125rem;
+}
+
+/* Tiptap's empty-node placeholder. */
+.mdn-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-mist);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ── Scrollbars ───────────────────────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -1,113 +1,395 @@
 "use client";
 
-// ─── Editor Page ────────────────────────────────────────────────────────────
-// The main editor route.  Composes:
-//  • EditorSidebar   – collapsible left navigation (260px / 48px rail)
-//  • Center panel    – page title, WYSIWYG toggle, and the MdnotionEditor
-//  • EditorRightPanel – collapsible properties / frontmatter panel (280px)
-//  • EditorStatusBar  – thin bottom bar with sync / branch / commit info
-//
-// Layout uses flexbox with the sidebar + center + right panel in a row,
-// and the status bar pinned to the bottom.
+import React, { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+import type { EditorViewMode } from "@mdnotion/types";
+import { deriveTitle, dirname, joinPath, slugifyFilename } from "@mdnotion/markdown-engine";
+import { useNotebook } from "@/hooks/useNotebook";
+import { useTheme } from "@/hooks/useTheme";
+import { EditorSidebar } from "@/components/EditorSidebar";
+import { EditorRightPanel } from "@/components/EditorRightPanel";
+import { EditorStatusBar } from "@/components/EditorStatusBar";
+import { ConflictDialog } from "@/components/ConflictDialog";
+import { ExportDialog } from "@/components/ExportDialog";
+import { ConnectRepoDialog } from "@/components/ConnectRepoDialog";
+import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
+import { signOut } from "@/lib/gateway";
 
-import React, { useState } from "react";
-import EditorSidebar from "@/components/EditorSidebar";
-import EditorRightPanel from "@/components/EditorRightPanel";
-import EditorStatusBar from "@/components/EditorStatusBar";
-import { MdnotionEditor } from "@mdnotion/editor";
-
-// ─── SVG topographic contour-line pattern (inlined for zero network cost) ──
-// Draws subtle curved lines to evoke a cartographic "waypoint" aesthetic.
-const TOPO_SVG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cg fill='none' stroke='%232A3240' stroke-width='0.6'%3E%3Cellipse cx='100' cy='100' rx='90' ry='60'/%3E%3Cellipse cx='100' cy='100' rx='70' ry='45'/%3E%3Cellipse cx='100' cy='100' rx='50' ry='30'/%3E%3Cellipse cx='100' cy='100' rx='30' ry='18'/%3E%3Cellipse cx='100' cy='100' rx='14' ry='8'/%3E%3C/g%3E%3C/svg%3E")`;
+/**
+ * The editor is browser-only: it reaches for IndexedDB and builds a
+ * ProseMirror/CodeMirror DOM on mount, neither of which the server can produce.
+ */
+const MarkdownEditor = dynamic(
+  () => import("@mdnotion/editor").then((module) => module.MarkdownEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="p-8 text-sm text-[var(--color-mist)]" aria-busy="true">
+        Loading editor…
+      </div>
+    ),
+  },
+);
 
 export default function EditorPage() {
-  // ── Sidebar collapsed state ──────────────────────────────────────────────
-  // When true the sidebar shrinks to a 48px icon-only rail
+  const notebook = useNotebook();
+  const router = useRouter();
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [dialog, setDialog] = useState<"export" | "connect" | null>(null);
+  const [prompt, setPrompt] = useState<PromptRequest | null>(null);
+  // Conflicts open their own dialog as soon as they appear. Dismissing it hides
+  // it until they are resolved; the status bar stays as the way back in.
+  const [conflictsDismissed, setConflictsDismissed] = useState(false);
+  const [theme, , toggleTheme] = useTheme();
 
-  // ── Right panel collapsed state ──────────────────────────────────────────
-  // When true the right panel hides entirely (shows a thin expand strip)
-  const [rightCollapsed, setRightCollapsed] = useState(false);
+  const note = notebook.note;
+  const mode: EditorViewMode = note?.viewMode ?? "wysiwyg";
+  const title = note ? deriveTitle(note.content, note.frontmatter.title, note.path) : "";
 
-  // ── WYSIWYG vs Raw toggle ────────────────────────────────────────────────
-  const [isRawMode, setIsRawMode] = useState(false);
+  const conflicts = notebook.sync.conflicts;
+  // Derived rather than pushed into state by an effect, which would cause a
+  // second render pass on every sync update.
+  const showConflicts = conflicts.length > 0 && !conflictsDismissed;
 
-  // ── Editable page title ──────────────────────────────────────────────────
-  const [pageTitle, setPageTitle] = useState("Welcome Note");
+  // ── Actions ─────────────────────────────────────────────────────────────
+
+  const handleCreate = useCallback(
+    (folder: string) => {
+      setPrompt({
+        title: "New note",
+        label: "Title",
+        initialValue: "Untitled note",
+        confirmLabel: "Create",
+        onConfirm: async (value) => {
+          await notebook.createNote(value || "Untitled note", folder);
+        },
+      });
+    },
+    [notebook],
+  );
+
+  const handleRename = useCallback(
+    (path: string) => {
+      const currentName = (path.split("/").pop() ?? path).replace(/\.mdx?$/i, "");
+
+      setPrompt({
+        title: "Rename note",
+        label: "Name",
+        initialValue: currentName,
+        confirmLabel: "Rename",
+        onConfirm: async (value) => {
+          // Renaming rewrites the file, so its content has to be loaded first.
+          const target =
+            notebook.note?.path === path ? notebook.note : await notebook.openNoteAndReturn(path);
+          if (!target) return;
+
+          await notebook.renameNote(
+            target,
+            joinPath(dirname(path), `${slugifyFilename(value)}.md`),
+          );
+        },
+      });
+    },
+    [notebook],
+  );
+
+  const handleDelete = useCallback(
+    (path: string) => {
+      setPrompt({
+        title: "Delete note",
+        label: "",
+        destructive: true,
+        confirmLabel: "Delete",
+        body: `“${path}” will be deleted. On a connected repository this is committed to GitHub, so it stays recoverable from your git history.`,
+        onConfirm: async () => {
+          // Load it first so the sync engine knows the base SHA to delete against.
+          const target =
+            notebook.note?.path === path ? notebook.note : await notebook.openNoteAndReturn(path);
+          if (target) await notebook.deleteNote(target);
+        },
+      });
+    },
+    [notebook],
+  );
+
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    router.push("/");
+    // The session cookie is gone, so anything the server rendered from it is
+    // now stale.
+    router.refresh();
+  }, [router]);
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
+  // Declared after the callbacks it uses, so nothing is referenced before it
+  // exists and the memoisation stays intact.
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+
+      switch (event.key.toLowerCase()) {
+        case "s":
+          // Everything is already saved locally; this just pushes now instead
+          // of waiting out the debounce.
+          event.preventDefault();
+          void notebook.syncNow();
+          break;
+
+        case "e":
+          if (event.shiftKey && note) {
+            event.preventDefault();
+            setDialog("export");
+          }
+          break;
+
+        case "n":
+          if (event.shiftKey) {
+            event.preventDefault();
+            handleCreate("");
+          }
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [note, notebook, handleCreate]);
+
+  // ── Render ──────────────────────────────────────────────────────────────
+
+  if (!notebook.ready) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[var(--color-paper)]">
+        <p className="text-sm text-[var(--color-mist)]" aria-busy="true">
+          {notebook.busy ?? "Starting mdnotion…"}
+        </p>
+      </div>
+    );
+  }
 
   return (
-    // Root container: full viewport height, column layout (body + status bar)
-    <div className="flex flex-col h-screen bg-[var(--color-paper)] text-[var(--color-ink)] font-sans overflow-hidden">
-      {/* ── Top row: sidebar + center + right panel ───────────────────── */}
-      <div className="flex flex-1 min-h-0">
-        {/* ── Left sidebar ─────────────────────────────────────────── */}
-        {/* Hidden on small screens; visible from md breakpoint upward */}
+    <div className="flex h-screen flex-col overflow-hidden bg-[var(--color-paper)] font-sans text-[var(--color-ink)]">
+      <div className="flex min-h-0 flex-1">
         <div className="hidden md:flex">
           <EditorSidebar
             collapsed={sidebarCollapsed}
-            onToggle={() => setSidebarCollapsed((prev) => !prev)}
+            onToggle={() => setSidebarCollapsed((value) => !value)}
+            workspaces={notebook.workspaces}
+            activeWorkspace={notebook.activeWorkspace}
+            onSwitchWorkspace={notebook.switchWorkspace}
+            onConnectRepo={() => setDialog("connect")}
+            tree={notebook.tree}
+            activePath={note?.path ?? null}
+            onOpenNote={notebook.openNote}
+            onCreateNote={handleCreate}
+            onDeleteNote={handleDelete}
+            onRenameNote={handleRename}
+            user={notebook.session?.user ?? null}
+            onSignIn={() => {
+              // Deliberately a full document navigation: this is an API route
+              // that 302s out to github.com, which the client router cannot
+              // follow.
+              // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+              window.location.assign("/api/auth/github");
+            }}
+            onSignOut={handleSignOut}
+            githubAvailable={notebook.session?.githubAvailable ?? false}
           />
         </div>
 
-        {/* ── Center panel (editor canvas) ─────────────────────────── */}
-        <main className="flex-1 flex flex-col min-w-0 relative">
-          {/* ── Top toolbar ──────────────────────────────────────────── */}
-          <div className="h-14 border-b border-[var(--color-chalk)] flex items-center justify-between px-4 md:px-6 bg-[var(--color-paper)] shrink-0 z-20">
-            {/* Left side: editable page title in Fraunces serif */}
-            <input
-              type="text"
-              value={pageTitle}
-              onChange={(e) => setPageTitle(e.target.value)}
-              className="text-3xl font-serif font-bold bg-transparent outline-none border-none text-[var(--color-ink)] w-full max-w-md truncate"
-              aria-label="Page title"
-            />
+        <main className="flex min-w-0 flex-1 flex-col">
+          {/* ── Header ────────────────────────────────────────────────── */}
+          <header className="flex h-14 shrink-0 items-center gap-3 border-b border-[var(--color-border)] px-4">
+            <Link
+              href="/"
+              className="shrink-0 font-serif text-lg font-semibold text-[var(--color-ink)] md:hidden"
+            >
+              mdnotion
+            </Link>
 
-            {/* Right side: mode toggle button */}
-            <div className="flex items-center gap-2 shrink-0 ml-4">
-              {/* Guest-mode badge */}
-              <span className="hidden sm:inline text-xs font-mono bg-[var(--color-signal-amber)]/10 text-[var(--color-signal-amber)] px-2 py-1 rounded whitespace-nowrap">
-                Guest Mode
-              </span>
+            {note ? (
+              <input
+                value={(note.frontmatter.title as string) ?? title}
+                onChange={(event) =>
+                  notebook.updateFrontmatter({ ...note.frontmatter, title: event.target.value })
+                }
+                aria-label="Note title"
+                className="min-w-0 flex-1 truncate bg-transparent font-serif text-2xl font-bold text-[var(--color-ink)] outline-none"
+              />
+            ) : (
+              <span className="flex-1 text-sm text-[var(--color-mist)]">No note open</span>
+            )}
 
-              {/* WYSIWYG ⇄ Raw toggle */}
+            <div className="flex shrink-0 items-center gap-1">
+              {note && (
+                <div
+                  role="tablist"
+                  aria-label="Editor mode"
+                  className="hidden rounded-md border border-[var(--color-border)] p-0.5 sm:flex"
+                >
+                  {(["wysiwyg", "split", "source"] as const).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="tab"
+                      aria-selected={mode === value}
+                      onClick={() => notebook.setViewMode(value)}
+                      className={`rounded px-2.5 py-1 text-xs font-medium capitalize transition ${
+                        mode === value
+                          ? "bg-[var(--color-trail-teal)] text-[var(--color-paper)]"
+                          : "text-[var(--color-mist)] hover:text-[var(--color-ink)]"
+                      }`}
+                    >
+                      {value === "wysiwyg" ? "Rich" : value}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <button
-                onClick={() => setIsRawMode((prev) => !prev)}
-                className="text-xs bg-[var(--color-chalk)] px-3 py-1.5 rounded-md hover:bg-[var(--color-mist)]/30 transition-colors font-medium whitespace-nowrap cursor-pointer"
+                type="button"
+                onClick={toggleTheme}
+                title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+                aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+                className="rounded-md p-1.5 text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
               >
-                {isRawMode ? "WYSIWYG" : "Raw"} ⇄
+                {theme === "dark" ? "☀" : "☾"}
+              </button>
+
+              {note && (
+                <button
+                  type="button"
+                  onClick={() => setDialog("export")}
+                  className="rounded-md px-2.5 py-1.5 text-xs font-medium text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
+                >
+                  Export
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setPanelCollapsed((value) => !value)}
+                title="Toggle properties panel"
+                aria-label="Toggle properties panel"
+                className="hidden rounded-md p-1.5 text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)] lg:block"
+              >
+                ⋮
               </button>
             </div>
-          </div>
+          </header>
 
-          {/* ── Editor canvas area (scrollable) ─────────────────────── */}
-          <div className="flex-1 overflow-y-auto relative">
-            {/* Ambient topographic contour-line texture at 3% opacity */}
+          {/* ── Errors ───────────────────────────────────────────────── */}
+          {notebook.error && (
             <div
-              className="absolute inset-0 bg-repeat opacity-[0.03] pointer-events-none z-0"
-              style={{ backgroundImage: TOPO_SVG }}
-              aria-hidden="true"
-            />
-
-            {/* Centered editor container — max 720px wide */}
-            <div className="relative z-10 mx-auto w-full max-w-[720px] px-4 md:px-8 py-8 md:py-12">
-              {/* Prose wrapper applies typographic defaults to editor content */}
-              <MdnotionEditor />
+              role="alert"
+              className="flex items-center gap-2 border-b border-[var(--color-ember)]/30 bg-[var(--color-ember)]/8 px-4 py-2 text-sm text-[var(--color-ember)]"
+            >
+              <span className="flex-1">{notebook.error}</span>
+              <button
+                type="button"
+                onClick={notebook.dismissError}
+                aria-label="Dismiss"
+                className="shrink-0 px-2"
+              >
+                ✕
+              </button>
             </div>
+          )}
+
+          {/* ── Canvas ───────────────────────────────────────────────── */}
+          <div className="flex min-h-0 flex-1 flex-col px-4 py-3 md:px-8">
+            {note ? (
+              <MarkdownEditor
+                key={note.id}
+                value={note.content}
+                onChange={notebook.saveNote}
+                mode={mode}
+                theme={theme}
+                hideModeSwitcher
+                placeholder="Type / for commands…"
+                className="min-h-0 flex-1"
+              />
+            ) : (
+              <EmptyState onCreate={() => handleCreate("")} hasNotes={notebook.tree.length > 0} />
+            )}
           </div>
         </main>
 
-        {/* ── Right panel ──────────────────────────────────────────── */}
-        {/* Hidden on small screens; visible from lg breakpoint upward */}
-        <div className="hidden lg:flex">
-          <EditorRightPanel
-            collapsed={rightCollapsed}
-            onToggle={() => setRightCollapsed((prev) => !prev)}
-          />
-        </div>
+        {!panelCollapsed && (
+          <div className="hidden lg:flex">
+            <EditorRightPanel
+              collapsed={false}
+              onToggle={() => setPanelCollapsed(true)}
+              note={note}
+              onFrontmatterChange={notebook.updateFrontmatter}
+              onExport={() => setDialog("export")}
+            />
+          </div>
+        )}
       </div>
 
-      {/* ── Bottom status bar (full width, always visible) ────────────── */}
-      <EditorStatusBar />
+      <EditorStatusBar
+        sync={notebook.sync}
+        workspace={notebook.activeWorkspace}
+        notePath={note?.path ?? null}
+        onSyncNow={notebook.syncNow}
+        onShowConflicts={() => setConflictsDismissed(false)}
+      />
+
+      {/* ── Dialogs ────────────────────────────────────────────────────── */}
+      {dialog === "export" && note && (
+        <ExportDialog
+          note={note}
+          loadAllNotes={notebook.allNotes}
+          onClose={() => setDialog(null)}
+        />
+      )}
+
+      {showConflicts && (
+        <ConflictDialog
+          conflicts={conflicts}
+          onResolve={notebook.resolveConflict}
+          onClose={() => setConflictsDismissed(true)}
+        />
+      )}
+
+      {prompt && <PromptDialog request={prompt} onClose={() => setPrompt(null)} />}
+
+      {dialog === "connect" && (
+        <ConnectRepoDialog
+          onConnect={async (workspace) => {
+            await notebook.addWorkspace(workspace);
+            setDialog(null);
+          }}
+          onClose={() => setDialog(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function EmptyState({ onCreate, hasNotes }: { onCreate: () => void; hasNotes: boolean }) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center text-center">
+      <h2 className="mb-2 font-serif text-2xl font-semibold text-[var(--color-ink)]">
+        {hasNotes ? "Pick a note to start" : "Your notebook is empty"}
+      </h2>
+      <p className="mb-5 max-w-sm text-sm text-[var(--color-mist)]">
+        {hasNotes
+          ? "Choose something from the sidebar, or start something new."
+          : "Create your first note. It will be saved to your GitHub repository as plain markdown."}
+      </p>
+      <button
+        type="button"
+        onClick={onCreate}
+        className="rounded-md bg-[var(--color-signal-amber)] px-5 py-2.5 text-sm font-semibold text-[var(--color-basalt)] hover:opacity-90"
+      >
+        New note
+      </button>
     </div>
   );
 }

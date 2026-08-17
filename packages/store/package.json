@@ -1,0 +1,22 @@
+{
+  "name": "@mdnotion/store",
+  "version": "0.2.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mdnotion/markdown-engine": "workspace:*",
+    "@mdnotion/types": "workspace:*",
+    "idb": "^8.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "typescript": "^5.9.3"
+  }
+}

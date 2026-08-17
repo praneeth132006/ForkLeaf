@@ -4,4 +4,12 @@ node_modules/
 out/
 dist/
 .turbo/
+coverage/
 .DS_Store
+*.tsbuildinfo
+
+# Local environment — never commit real secrets
+.env
+.env.local
+.env*.local
+!.env.example

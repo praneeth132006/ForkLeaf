@@ -1,73 +1,199 @@
 # mdnotion
 
-mdnotion is an open-source, Notion-style markdown notes editor where your own GitHub repository is the entire backend. We never store a single line of your notes.
+**A local-first Markdown editor with first-class Mermaid diagrams, backed by your own GitHub repository.**
 
-Users write notes with live rendered previews, organize them Notion-style with nested pages and frontmatter "database" properties, draw diagrams intuitively, export to PDF/DOCX/HTML/LaTeX/EPUB, and commit changes straight to GitHub. 
+[![CI](https://github.com/praneeth132006/MarkDown/actions/workflows/ci.yml/badge.svg)](https://github.com/praneeth132006/MarkDown/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
+Your notes are plain `.md` files in a repository you own. That means real version
+history, effectively unlimited storage, access from anywhere, and the ability to
+walk away at any time — clone the repo and every note is still there.
+
+---
+
+## Why this exists
+
+Most note apps ask you to trust them with your writing. mdnotion doesn't hold
+your notes at all:
+
+|             |                                                                   |
+| ----------- | ----------------------------------------------------------------- |
+| **Storage** | Your GitHub repo. Nothing is stored on our servers.               |
+| **History** | Ordinary git commits. `git log` your notes.                       |
+| **Offline** | Everything is written to IndexedDB first, then pushed.            |
+| **Export**  | PDF, HTML, Word, Markdown, plain text, JSON — all in the browser. |
+| **Lock-in** | None. They're markdown files in a git repo.                       |
 
 ## Features
 
-- **GitHub as the Backend**: No vendor lock-in. Your data survives and belongs to you.
-- **Tiptap Block Editor**: Notion-like block editing experience with Slash Menu (`/`) and drag handles.
-- **WYSIWYG ⇄ Raw Markdown**: Seamlessly toggle between rich text and raw markdown editing.
-- **Frontmatter Support**: Maintain structured document metadata easily in the "Properties" panel.
-- **Live Markdown Syncing**: Markdown rendering works hand-in-hand with our custom AST sync engine.
-- **Zero-knowledge Collaboration**: WebRTC and Redis-based transient memory for real-time collaboration.
+### Writing
 
-## Architecture
+- **Three editing modes**, switchable per document: Notion-style rich text, a
+  split source/preview view, and raw markdown.
+- **Slash commands** (`/`) for headings, lists, tables, to-dos, code and diagrams.
+- **Properties panel** that edits the note's YAML frontmatter directly, so notes
+  stay compatible with Obsidian, Jekyll, Hugo and friends.
+- Document outline, word count, reading time and task progress.
 
-mdnotion is managed as a Turborepo monorepo:
+### Diagrams
 
-### Apps
-- `apps/web`: The Next.js 14 App Router frontend application.
-- `apps/collab-server`: Hocuspocus WebSockets server for real-time collaboration.
+Mermaid is powerful and hard to remember, so there are three ways in:
 
-### Packages
-- `packages/editor`: The core Tiptap rich text block editor with Waypoint design tokens.
-- `packages/github-client`: Octokit wrapper to interact with the GitHub API for read/write/commit/PR.
-- `packages/markdown-engine`: Unified/Remark/Rehype AST engine to parse markdown and frontmatter.
-- `packages/types`: Shared TypeScript typings for the monorepo.
+- **Template gallery** — 14 ready-made diagrams (flowchart, sequence, ERD, gantt,
+  state machine, mind map, class, pie, journey, timeline, git graph, quadrant).
+- **Visual builder** — drag shapes onto a canvas, pull arrows between them, and
+  the Mermaid source is generated for you. It parses existing diagrams too, so
+  you can switch between visual and source freely.
+- **Smart source editor** — autocomplete that knows which diagram type you're
+  writing, plus inline errors that point at the broken line and explain it in
+  plain language instead of dumping parser output.
 
-## Getting Started
+Diagrams are stored as normal ` ```mermaid ` fenced blocks, so they render on
+github.com and anywhere else Mermaid is supported.
 
-### Prerequisites
+### Sync
 
-- Node.js >= 20.9.0
-- pnpm >= 9.0.0
+- **Local-first.** Edits land in IndexedDB immediately; the network is never in
+  the way of typing.
+- **Clean git history.** Rapid edits to one note coalesce into a single pending
+  change, and a commit made within the last few minutes is amended rather than
+  stacked — so autosave doesn't produce a thousand "update note.md" commits.
+- **Offline-safe.** Changes queue while you're offline and drain when you
+  reconnect. Closing the tab loses nothing.
+- **Conflict handling.** If a note changed both here and on GitHub, you're asked
+  what to keep — nothing is silently overwritten.
 
-### Local Development
+### Workspaces
 
-1. **Clone the repo**
-   ```bash
-   git clone https://github.com/praneeth132006/MarkDown.git mdnotion
-   cd mdnotion
-   ```
+- A private `mdnotion-notes` repo is created for you on first sign-in.
+- Connect any other repository (optionally scoped to a subfolder like `docs/`)
+  and switch between them.
 
-2. **Install dependencies**
-   ```bash
-   pnpm install
-   ```
+---
 
-3. **Start the development server**
-   ```bash
-   pnpm dev
-   ```
+## Quick start
 
-   This will spin up all the applications in parallel. The frontend will be available at `http://localhost:3000`.
-
-## Building for Production
+### Try it without any setup
 
 ```bash
-pnpm build
+git clone https://github.com/praneeth132006/MarkDown.git
+cd MarkDown
+pnpm install
+pnpm dev
 ```
+
+Open <http://localhost:3000/editor>. With no configuration, mdnotion runs in
+**local mode**: fully functional, with notes stored in your browser. This is also
+how the test suite and CI exercise the app.
+
+**Requirements:** Node.js 20.9+ and pnpm 9+.
+
+### Connect GitHub
+
+To sync notes to a repository, register a GitHub OAuth app and add three
+environment variables.
+
+1. Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth App**.
+2. Set:
+   - **Homepage URL**: `http://localhost:3000`
+   - **Authorization callback URL**: `http://localhost:3000/api/auth/callback`
+3. Copy `.env.example` to `apps/web/.env.local` and fill it in:
+
+```bash
+cp .env.example apps/web/.env.local
+```
+
+```ini
+GITHUB_OAUTH_CLIENT_ID=your_client_id
+GITHUB_OAUTH_CLIENT_SECRET=your_client_secret
+SESSION_SECRET=generate_with_openssl_rand_base64_32
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+Generate the session secret with:
+
+```bash
+openssl rand -base64 32
+```
+
+Restart `pnpm dev` and "Continue with GitHub" will appear.
+
+> **On the `repo` scope:** mdnotion requests `repo` because it writes notes to
+> your private repositories, and that is the narrowest classic OAuth scope that
+> permits private-repo writes. If you'd rather grant access to one repository
+> only, see [docs/self-hosting.md](docs/self-hosting.md) for the GitHub App route.
+
+---
+
+## How it works
+
+```mermaid
+flowchart TD
+    User([You type]) --> Editor[Editor]
+    Editor --> Store[(IndexedDB)]
+    Store --> Queue[Change queue]
+    Queue --> Coalesce{Coalesce + debounce}
+    Coalesce --> API[Next.js API route]
+    API --> GH[(Your GitHub repo)]
+
+    subgraph Browser
+        Editor
+        Store
+        Queue
+        Coalesce
+    end
+
+    subgraph Server
+        API
+    end
+```
+
+The access token lives only on the server, encrypted into an httpOnly cookie.
+The browser talks to `/api/gh/*`, never to GitHub directly — so no script on the
+page can read your token.
+
+### Packages
+
+| Package                     | Responsibility                                                         |
+| --------------------------- | ---------------------------------------------------------------------- |
+| `@mdnotion/types`           | Shared domain model                                                    |
+| `@mdnotion/markdown-engine` | Frontmatter, parsing, sanitised rendering, path helpers                |
+| `@mdnotion/github-client`   | GitHub REST client: trees, files, atomic multi-file commits, squashing |
+| `@mdnotion/store`           | IndexedDB storage, change queue, sync engine, conflict detection       |
+| `@mdnotion/diagrams`        | Mermaid rendering, templates, autocomplete, visual-builder graph model |
+| `@mdnotion/exporter`        | Client-side PDF / HTML / DOCX / Markdown / ZIP export                  |
+| `@mdnotion/editor`          | React editing surfaces (rich text, source, split, diagram studio)      |
+| `@mdnotion/web`             | Next.js app: auth, API routes, application shell                       |
+
+More detail in [docs/architecture.md](docs/architecture.md).
+
+---
+
+## Development
+
+```bash
+pnpm dev          # start the web app
+pnpm test         # run the test suite
+pnpm typecheck    # typecheck every package
+pnpm lint         # lint
+pnpm build        # production build
+pnpm check        # everything above, in order
+```
+
+Workspace packages ship TypeScript source and are compiled by Next via
+`transpilePackages`. There is no build step between packages, so edits hot-reload
+across the monorepo.
+
+---
 
 ## Contributing
 
-We welcome contributions from the community! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.
+Contributions are very welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the
+setup, conventions and a list of good first issues.
 
-## Security
-
-If you discover a security vulnerability within mdnotion, please follow our [Security Policy](SECURITY.md).
+Found a security issue? Please read [SECURITY.md](SECURITY.md) rather than
+opening a public issue.
 
 ## License
 
-Distributed under the Apache 2.0 License. See `LICENSE` for more information.
+[Apache License 2.0](LICENSE).

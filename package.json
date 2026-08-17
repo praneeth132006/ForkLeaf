@@ -1,19 +1,35 @@
 {
   "name": "mdnotion",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "description": "A local-first Markdown notes editor with first-class Mermaid diagrams that uses your own GitHub repositories as storage.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/praneeth132006/MarkDown.git"
+  },
   "scripts": {
-    "build": "turbo run build",
     "dev": "turbo run dev",
+    "build": "turbo run build",
     "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+    "typecheck": "turbo run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md,css}\"",
+    "check": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm test && pnpm build"
   },
   "devDependencies": {
-    "turbo": "^1.13.0",
-    "prettier": "^3.2.5"
+    "@vitejs/plugin-react": "^5.1.0",
+    "jsdom": "^28.0.0",
+    "prettier": "^3.6.2",
+    "turbo": "^2.10.10",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   },
   "packageManager": "pnpm@9.0.0",
   "engines": {
-    "node": ">=18"
+    "node": ">=20.9.0",
+    "pnpm": ">=9"
   }
 }

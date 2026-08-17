@@ -1,306 +1,226 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
+import type { TreeNode, Workspace, SessionUser } from "@mdnotion/types";
+import { FileTree } from "./FileTree";
 
-// ─── Props ──────────────────────────────────────────────────────────────────
-// collapsed: whether the sidebar is in its narrow icon-only rail state (48px)
-// onToggle:  callback to flip the collapsed flag from the parent
-interface EditorSidebarProps {
+export interface EditorSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  workspaces: Workspace[];
+  activeWorkspace: Workspace | null;
+  onSwitchWorkspace: (workspace: Workspace) => void;
+  onConnectRepo: () => void;
+  tree: TreeNode[];
+  activePath: string | null;
+  onOpenNote: (path: string) => void;
+  onCreateNote: (folder: string) => void;
+  onDeleteNote: (path: string) => void;
+  onRenameNote: (path: string) => void;
+  user: SessionUser | null;
+  onSignIn: () => void;
+  onSignOut: () => void;
+  githubAvailable: boolean;
 }
 
-// ─── Static page-tree data ──────────────────────────────────────────────────
-// Each node can optionally have `children` for nested items.
-// `icon` is rendered beside the label; we use compass-pin style glyphs.
-interface PageNode {
-  id: string;
-  label: string;
-  icon: string; // emoji / glyph rendered inline
-  children?: PageNode[];
-}
+/**
+ * Left navigation: which repository you are in, and what is inside it.
+ *
+ * Collapses to an icon rail so the editor can take the full width on a laptop
+ * screen without losing the ability to switch notes.
+ */
+export function EditorSidebar(props: EditorSidebarProps) {
+  const [filter, setFilter] = useState("");
+  const [showWorkspaces, setShowWorkspaces] = useState(false);
 
-const PAGE_TREE: PageNode[] = [
-  { id: "getting-started", label: "Getting Started", icon: "🧭" },
-  { id: "architecture", label: "Architecture Notes", icon: "🧭" },
-  { id: "api-ref", label: "API Reference", icon: "🧭" },
-  {
-    id: "meetings",
-    label: "Meeting Notes",
-    icon: "🧭",
-    children: [
-      {
-        id: "standup-jan15",
-        label: "Standup Jan 15",
-        icon: "📌",
-        children: [
-          { id: "sprint-review", label: "Sprint Review", icon: "📌" },
-        ],
-      },
-    ],
-  },
-];
-
-// ─── Favorites list (pinned pages) ─────────────────────────────────────────
-const FAVORITES = [
-  { id: "fav-getting-started", label: "Getting Started" },
-  { id: "fav-api-ref", label: "API Reference" },
-];
-
-// ─── Recursive PageTreeItem component ──────────────────────────────────────
-// Renders a single node in the page tree. If the node has children, it shows
-// an expand/collapse arrow and indents child nodes by one level.
-function PageTreeItem({
-  node,
-  depth,
-  collapsed,
-}: {
-  node: PageNode;
-  depth: number;
-  collapsed: boolean;
-}) {
-  // Track whether this tree node's children are expanded
-  const [expanded, setExpanded] = useState(depth === 0);
-
-  // Has nested pages?
-  const hasChildren = node.children && node.children.length > 0;
-
-  return (
-    <div>
-      {/* Row for this individual page item */}
-      <button
-        onClick={() => hasChildren && setExpanded(!expanded)}
-        className={`
-          flex items-center w-full gap-2 rounded-md text-sm font-medium
-          hover:bg-[var(--color-chalk)] transition-colors cursor-pointer
-          ${collapsed ? "justify-center px-1 py-2" : "px-2 py-1.5"}
-        `}
-        /* Indent nested items: 16px per depth level */
-        style={!collapsed ? { paddingLeft: `${8 + depth * 16}px` } : undefined}
-        title={node.label}
-      >
-        {/* Expand / collapse arrow for nodes with children */}
-        {hasChildren && !collapsed && (
-          <span
-            className="text-[var(--color-mist)] text-xs transition-transform select-none"
-            style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}
-          >
-            ▶
-          </span>
-        )}
-
-        {/* Compass-pin icon */}
-        <span className="text-base leading-none shrink-0">{node.icon}</span>
-
-        {/* Label – hidden in collapsed rail mode */}
-        {!collapsed && (
-          <span className="truncate text-[var(--color-ink)]">{node.label}</span>
-        )}
-      </button>
-
-      {/* Render children recursively when expanded */}
-      {hasChildren && expanded && !collapsed && (
-        <div>
-          {node.children!.map((child) => (
-            <PageTreeItem
-              key={child.id}
-              node={child}
-              depth={depth + 1}
-              collapsed={collapsed}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Main Sidebar Component ────────────────────────────────────────────────
-export default function EditorSidebar({
-  collapsed,
-  onToggle,
-}: EditorSidebarProps) {
-  return (
-    <aside
-      className={`
-        flex flex-col bg-[#f8f6f0] border-r border-[var(--color-chalk)]
-        transition-[width] duration-200 ease-in-out overflow-hidden shrink-0
-        ${collapsed ? "w-12" : "w-[260px]"}
-      `}
-    >
-      {/* ── Header: "Expedition Log" + collapse toggle ─────────────────── */}
-      <div className="h-14 border-b border-[var(--color-chalk)] flex items-center px-3 gap-2 shrink-0">
-        {/* Hamburger / collapse toggle button */}
+  if (props.collapsed) {
+    return (
+      <nav className="flex w-12 shrink-0 flex-col items-center gap-1 border-r border-[var(--color-border)] bg-[var(--color-paper)] py-3">
         <button
-          onClick={onToggle}
-          className="p-1.5 rounded-md hover:bg-[var(--color-chalk)] transition-colors text-[var(--color-mist)] cursor-pointer"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          type="button"
+          onClick={props.onToggle}
+          title="Expand sidebar"
+          aria-label="Expand sidebar"
+          className="rounded-md p-2 text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
         >
-          {/* Three-line hamburger icon (SVG) */}
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          >
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
+          ☰
         </button>
+        <button
+          type="button"
+          onClick={() => props.onCreateNote("")}
+          title="New note"
+          aria-label="New note"
+          className="rounded-md p-2 text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
+        >
+          ＋
+        </button>
+      </nav>
+    );
+  }
 
-        {/* Title text – visible only when sidebar is expanded */}
-        {!collapsed && (
-          <span className="text-sm font-semibold tracking-tight text-[var(--color-ink)] whitespace-nowrap">
-            Expedition Log
-          </span>
-        )}
-      </div>
-
-      {/* ── Repo switcher dropdown ──────────────────────────────────────── */}
-      {!collapsed && (
-        <div className="px-3 pt-3 pb-1 shrink-0">
-          {/* Dropdown button styled as a select – shows current repo */}
-          <button className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-[var(--color-chalk)]/60 hover:bg-[var(--color-chalk)] text-sm transition-colors cursor-pointer">
-            <span className="truncate font-medium text-[var(--color-ink)]">
-              Local Notes
-            </span>
-            {/* Chevron down icon */}
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="text-[var(--color-mist)] shrink-0"
+  return (
+    <nav className="flex w-64 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-paper)]">
+      {/* ── Workspace switcher ────────────────────────────────────────── */}
+      <div className="relative border-b border-[var(--color-border)] p-2">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setShowWorkspaces((value) => !value)}
+            aria-expanded={showWorkspaces}
+            aria-haspopup="listbox"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-[var(--color-chalk)]"
+          >
+            <span
+              aria-hidden="true"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--color-trail-teal)] font-serif text-sm font-bold text-[var(--color-paper)]"
             >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
+              {props.activeWorkspace?.name.charAt(0).toUpperCase() ?? "M"}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-[var(--color-ink)]">
+                {props.activeWorkspace?.name ?? "No workspace"}
+              </span>
+              <span className="block truncate text-[0.7rem] text-[var(--color-mist)]">
+                {props.activeWorkspace?.isLocal
+                  ? "This device only"
+                  : `${props.activeWorkspace?.repo.owner}/${props.activeWorkspace?.repo.repo}`}
+              </span>
+            </span>
+            <span aria-hidden="true" className="shrink-0 text-[0.6rem] text-[var(--color-mist)]">
+              ▼
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={props.onToggle}
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
+            className="shrink-0 rounded-md p-1.5 text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
+          >
+            ‹
           </button>
         </div>
-      )}
 
-      {/* ── Quick-find (⌘K) search bar ─────────────────────────────────── */}
-      {!collapsed && (
-        <div className="px-3 py-2 shrink-0">
-          <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-[var(--color-chalk)] bg-white/40">
-            {/* Magnifying glass icon */}
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="var(--color-mist)"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            {/* Placeholder text with keyboard shortcut hint */}
-            <span className="text-xs text-[var(--color-mist)] select-none">
-              Quick find… ⌘K
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* ── Page tree (scrollable middle area) ─────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-2 py-1">
-        {/* Section header – only when expanded */}
-        {!collapsed && (
-          <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-widest font-bold text-[var(--color-mist)] select-none">
-            Pages
-          </div>
-        )}
-
-        {/* Render each top-level page node */}
-        {PAGE_TREE.map((node) => (
-          <PageTreeItem
-            key={node.id}
-            node={node}
-            depth={0}
-            collapsed={collapsed}
-          />
-        ))}
-
-        {/* ── Favorites section ───────────────────────────────────────── */}
-        {!collapsed && (
-          <>
-            {/* Divider + header */}
-            <div className="mt-4 px-2 pt-2 pb-1 text-[10px] uppercase tracking-widest font-bold text-[var(--color-mist)] select-none">
-              Favorites
-            </div>
-
-            {/* Pinned favorite pages */}
-            {FAVORITES.map((fav) => (
+        {showWorkspaces && (
+          <div
+            role="listbox"
+            className="absolute left-2 right-2 top-full z-30 mt-1 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xl"
+          >
+            {props.workspaces.map((workspace) => (
               <button
-                key={fav.id}
-                className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm font-medium hover:bg-[var(--color-chalk)] transition-colors cursor-pointer"
+                key={workspace.id}
+                type="button"
+                role="option"
+                aria-selected={workspace.id === props.activeWorkspace?.id}
+                onClick={() => {
+                  props.onSwitchWorkspace(workspace);
+                  setShowWorkspaces(false);
+                }}
+                className={`block w-full px-3 py-2 text-left text-sm hover:bg-[var(--color-chalk)] ${
+                  workspace.id === props.activeWorkspace?.id
+                    ? "font-medium text-[var(--color-trail-teal)]"
+                    : "text-[var(--color-ink)]"
+                }`}
               >
-                {/* Star glyph for favorites */}
-                <span className="text-[var(--color-signal-amber)] text-xs">
-                  ★
-                </span>
-                <span className="truncate text-[var(--color-ink)]">
-                  {fav.label}
+                <span className="block truncate">{workspace.name}</span>
+                <span className="block truncate text-[0.7rem] text-[var(--color-mist)]">
+                  {workspace.isLocal
+                    ? "This device only"
+                    : `${workspace.repo.owner}/${workspace.repo.repo}`}
                 </span>
               </button>
             ))}
-          </>
-        )}
 
-        {/* Collapsed-mode: show a star icon for the favorites section */}
-        {collapsed && (
-          <div className="flex justify-center py-2">
-            <span
-              className="text-[var(--color-signal-amber)] text-base"
-              title="Favorites"
-            >
-              ★
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* ── Bottom: User info + sign-out link ──────────────────────────── */}
-      <div className="border-t border-[var(--color-chalk)] p-3 shrink-0">
-        {!collapsed ? (
-          <div className="flex items-center gap-2">
-            {/* User avatar placeholder (circle with initial) */}
-            <div className="w-7 h-7 rounded-full bg-[var(--color-chalk)] flex items-center justify-center text-xs font-bold text-[var(--color-mist)] shrink-0">
-              G
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-medium text-[var(--color-ink)] truncate">
-                Guest User
-              </span>
-              {/* Sign-out link navigates back to the landing page */}
-              <Link
-                href="/"
-                className="text-[10px] text-[var(--color-mist)] hover:text-[var(--color-ink)] underline transition-colors"
+            {props.user && (
+              <button
+                type="button"
+                onClick={() => {
+                  props.onConnectRepo();
+                  setShowWorkspaces(false);
+                }}
+                className="block w-full border-t border-[var(--color-border)] px-3 py-2 text-left text-sm text-[var(--color-trail-teal)] hover:bg-[var(--color-chalk)]"
               >
-                Sign Out
-              </Link>
-            </div>
-          </div>
-        ) : (
-          /* Collapsed mode: show only the avatar circle */
-          <div className="flex justify-center">
-            <div className="w-7 h-7 rounded-full bg-[var(--color-chalk)] flex items-center justify-center text-xs font-bold text-[var(--color-mist)]">
-              G
-            </div>
+                Connect another repository…
+              </button>
+            )}
           </div>
         )}
       </div>
-    </aside>
+
+      {/* ── Search and new note ───────────────────────────────────────── */}
+      <div className="flex items-center gap-1 p-2">
+        <input
+          type="search"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          placeholder="Search notes…"
+          aria-label="Search notes"
+          className="min-w-0 flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-trail-teal)]"
+        />
+        <button
+          type="button"
+          onClick={() => props.onCreateNote("")}
+          title="New note"
+          aria-label="New note"
+          className="shrink-0 rounded-md bg-[var(--color-signal-amber)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-basalt)] hover:opacity-90"
+        >
+          ＋
+        </button>
+      </div>
+
+      {/* ── Tree ──────────────────────────────────────────────────────── */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <FileTree
+          nodes={props.tree}
+          activePath={props.activePath}
+          onOpen={props.onOpenNote}
+          onDelete={props.onDeleteNote}
+          onRename={props.onRenameNote}
+          onCreateIn={props.onCreateNote}
+          filter={filter}
+        />
+      </div>
+
+      {/* ── Account ───────────────────────────────────────────────────── */}
+      <div className="border-t border-[var(--color-border)] p-2">
+        {props.user ? (
+          <div className="flex items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element -- avatars are
+                remote GitHub URLs; next/image would need a domain allowlist for
+                every possible avatar host. */}
+            <img
+              src={props.user.avatarUrl}
+              alt=""
+              width={24}
+              height={24}
+              className="h-6 w-6 shrink-0 rounded-full"
+            />
+            <span className="min-w-0 flex-1 truncate text-sm text-[var(--color-ink)]">
+              {props.user.name ?? props.user.login}
+            </span>
+            <button
+              type="button"
+              onClick={props.onSignOut}
+              className="shrink-0 rounded px-2 py-1 text-xs text-[var(--color-mist)] hover:bg-[var(--color-chalk)] hover:text-[var(--color-ink)]"
+            >
+              Sign out
+            </button>
+          </div>
+        ) : props.githubAvailable ? (
+          <button
+            type="button"
+            onClick={props.onSignIn}
+            className="w-full rounded-md bg-[var(--color-basalt)] px-3 py-2 text-sm font-medium text-[var(--color-paper)] hover:opacity-90"
+          >
+            Continue with GitHub
+          </button>
+        ) : (
+          <p className="px-1 text-[0.7rem] leading-snug text-[var(--color-mist)]">
+            Notes are saved on this device. Set up GitHub sign-in to sync them — see the README.
+          </p>
+        )}
+      </div>
+    </nav>
   );
 }
