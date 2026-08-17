@@ -49,6 +49,16 @@ interface ApiTree {
   truncated: boolean;
 }
 
+interface ApiCommitListEntry {
+  sha: string;
+  commit: {
+    message: string;
+    author: { name?: string; date?: string } | null;
+    committer: { date?: string } | null;
+  };
+  author: { login: string; avatar_url: string } | null;
+}
+
 interface ApiContent {
   content?: string;
   encoding?: string;
@@ -69,6 +79,20 @@ export interface RepoSummary {
   canPush: boolean;
   description: string | null;
   updatedAt: string;
+}
+
+/** One entry in a note's history, flattened for display. */
+export interface NoteCommit {
+  sha: string;
+  /** The commit subject line only. */
+  message: string;
+  authorName: string;
+  authorLogin: string | null;
+  avatarUrl: string | null;
+  /** ISO 8601. */
+  date: string;
+  /** True when ForkLeaf wrote this commit, rather than a person or a CI job. */
+  byForkLeaf: boolean;
 }
 
 export interface FileContent {
@@ -309,6 +333,55 @@ export class GitHubClient {
         data.content === "" ? await this.readBlob(repo, data.sha) : decodeBase64(data.content);
 
       return { path, content, sha: data.sha, size: data.size };
+    } catch (err) {
+      if (err instanceof GitHubError && err.code === "not-found") return null;
+      throw err;
+    }
+  }
+
+  /**
+   * The commit history of one file, newest first.
+   *
+   * Exists so ForkLeaf can show a note's history inside the app rather than
+   * bouncing the reader out to github.com. The `path` filter is applied by
+   * GitHub, so this stays one request regardless of how large the repo is.
+   */
+  async listFileCommits(repo: RepoRef, path: string, limit = 30): Promise<NoteCommit[]> {
+    const url =
+      `/repos/${repo.owner}/${repo.repo}/commits` +
+      `?path=${encodePath(path)}` +
+      `&sha=${encodeURIComponent(repo.branch)}` +
+      `&per_page=${Math.min(Math.max(limit, 1), 100)}`;
+
+    const { data } = await this.transport.request<ApiCommitListEntry[]>(url);
+    if (!data) return [];
+
+    return data.map((entry) => ({
+      sha: entry.sha,
+      // GitHub commit messages are "subject\n\nbody"; only the subject is
+      // useful in a list.
+      message: (entry.commit.message ?? "").split("\n")[0] ?? "",
+      authorName: entry.commit.author?.name ?? entry.author?.login ?? "Unknown",
+      authorLogin: entry.author?.login ?? null,
+      avatarUrl: entry.author?.avatar_url ?? null,
+      date: entry.commit.author?.date ?? entry.commit.committer?.date ?? "",
+      // True when ForkLeaf itself wrote it, so the UI can distinguish an
+      // autosave from an edit someone made elsewhere.
+      byForkLeaf: (entry.commit.message ?? "").startsWith(COMMIT_MARKER),
+    }));
+  }
+
+  /** The content of one file at one commit, for previewing an old version. */
+  async readFileAtCommit(repo: RepoRef, path: string, sha: string): Promise<string | null> {
+    const url =
+      `/repos/${repo.owner}/${repo.repo}/contents/${encodePath(path)}` +
+      `?ref=${encodeURIComponent(sha)}`;
+
+    try {
+      const { data } = await this.transport.request<ApiContent>(url);
+      if (!data || data.type !== "file" || data.content === undefined) return null;
+
+      return data.content === "" ? await this.readBlob(repo, data.sha) : decodeBase64(data.content);
     } catch (err) {
       if (err instanceof GitHubError && err.code === "not-found") return null;
       throw err;

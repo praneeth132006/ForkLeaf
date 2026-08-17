@@ -180,6 +180,42 @@ export interface RepoSummaryDto {
   updatedAt: string;
 }
 
+/** One entry in a note's history. Mirrors `NoteCommit` from the GitHub client. */
+export interface NoteCommitDto {
+  sha: string;
+  message: string;
+  authorName: string;
+  authorLogin: string | null;
+  avatarUrl: string | null;
+  date: string;
+  byForkLeaf: boolean;
+}
+
+/**
+ * A note's commit history, newest first.
+ *
+ * Read through our own proxy like everything else, so the access token stays
+ * server-side and the reader never has to leave the app to see it.
+ */
+export async function listNoteHistory(repo: RepoRef, path: string): Promise<NoteCommitDto[]> {
+  const { commits } = await call<{ commits: NoteCommitDto[] }>(
+    `/api/gh/history?${repoParams(repo)}&path=${encodeURIComponent(path)}`,
+  );
+  return commits;
+}
+
+/** The content of a note as of one commit, for previewing an old revision. */
+export async function readNoteAtCommit(
+  repo: RepoRef,
+  path: string,
+  sha: string,
+): Promise<string | null> {
+  const { content } = await call<{ content: string | null }>(
+    `/api/gh/history?${repoParams(repo)}&path=${encodeURIComponent(path)}&sha=${encodeURIComponent(sha)}`,
+  );
+  return content;
+}
+
 export async function listRepos(): Promise<RepoSummaryDto[]> {
   const { repos } = await call<{ repos: RepoSummaryDto[] }>("/api/gh/repos");
   return repos;

@@ -6,7 +6,6 @@ import type { TreeNode, Workspace, SessionUser } from "@forkleaf/types";
 import { FileTree } from "./FileTree";
 import { ForkLeafMark } from "./Brand";
 import { PlanBadge } from "./PlanBadge";
-import { repoUrl } from "@/lib/github-links";
 
 export interface EditorSidebarProps {
   collapsed: boolean;
@@ -89,8 +88,6 @@ export function EditorSidebar(props: EditorSidebarProps) {
       </nav>
     );
   }
-
-  const activeRepo = repoUrl(props.activeWorkspace);
 
   return (
     <nav className="flex w-64 shrink-0 flex-col border-r border-[var(--fl-border)] bg-[var(--fl-bg)]">
@@ -233,19 +230,6 @@ export function EditorSidebar(props: EditorSidebarProps) {
 
       {/* ── Footer: repo shortcut, help, account ──────────────────────── */}
       <div className="border-t border-[var(--fl-border)] p-2">
-        {activeRepo && (
-          <a
-            href={activeRepo}
-            target="_blank"
-            rel="noreferrer"
-            className="mb-1 flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
-          >
-            <GitHubGlyph />
-            <span className="min-w-0 flex-1 truncate">View notes on GitHub</span>
-            <span aria-hidden="true">↗</span>
-          </a>
-        )}
-
         <button
           type="button"
           onClick={props.onOpenHelp}

@@ -3,6 +3,7 @@ export {
   buildTree,
   type RepoSummary,
   type FileContent,
+  type NoteCommit,
   type FileChange,
   type CommitOptions,
   type CommitResult,

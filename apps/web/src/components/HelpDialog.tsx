@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import Link from "next/link";
 import type { SessionUser, Workspace } from "@forkleaf/types";
 import { Dialog } from "./Dialog";
-import { commitsUrl, repoUrl } from "@/lib/github-links";
 
 export interface HelpDialogProps {
   onClose: () => void;
@@ -167,18 +166,20 @@ export function HelpDialog({
           <Item title="Where your notes live on GitHub">
             {workspace && !workspace.isLocal ? (
               <>
-                This workspace is{" "}
+                This workspace is the repository{" "}
                 <Mono>
                   {workspace.repo.owner}/{workspace.repo.repo}
                 </Mono>{" "}
-                on branch <Mono>{workspace.repo.branch}</Mono>.
-                <span className="mt-3 flex flex-wrap gap-2">
-                  <External href={repoUrl(workspace)}>Open the repository</External>
-                  <External href={commitsUrl(workspace)}>See every commit</External>
+                on branch <Mono>{workspace.repo.branch}</Mono>. Each note is one <Mono>.md</Mono>{" "}
+                file in it, at the path shown in the status bar.
+                <span className="mt-3 block">
+                  To see how a note has changed, open <strong>Version history</strong> in the
+                  properties panel on the right — the whole commit log, and any earlier version,
+                  without leaving ForkLeaf.
                 </span>
                 <span className="mt-3 block">
-                  Individual notes have their own <strong>Open on GitHub</strong> and{" "}
-                  <strong>History</strong> links in the properties panel on the right.
+                  You can also clone it. <Mono>git clone</Mono> the repository and every note is
+                  there as plain Markdown.
                 </span>
               </>
             ) : (
@@ -289,20 +290,5 @@ function DocLink({ href, children }: { href: string; children: React.ReactNode }
     <Link href={href} className="text-[var(--fl-accent)] underline underline-offset-2">
       {children}
     </Link>
-  );
-}
-
-function External({ href, children }: { href: string | null; children: React.ReactNode }) {
-  if (!href) return null;
-
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--fl-border)] px-3 py-1.5 text-[13px] font-medium text-[var(--fl-text)] transition-colors hover:border-[var(--fl-accent)] hover:text-[var(--fl-accent)]"
-    >
-      {children} ↗
-    </a>
   );
 }
