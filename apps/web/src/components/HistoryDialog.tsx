@@ -227,11 +227,24 @@ export function HistoryDialog({ note, workspace, onClose, onRestore }: HistoryDi
                 ))}
               </div>
 
+              {/* The one thing the in-app view cannot show is everything else
+                  that commit touched, so it links out rather than pretending. */}
+              {selected && (
+                <a
+                  href={`https://github.com/${workspace.repo.owner}/${workspace.repo.repo}/commit/${selected.sha}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-auto shrink-0 rounded-lg px-2 py-1.5 text-[12.5px] text-[var(--fl-muted)] underline decoration-[var(--fl-border-strong)] underline-offset-[3px] transition-colors hover:text-[var(--fl-text)]"
+                >
+                  Whole commit on GitHub
+                </a>
+              )}
+
               <button
                 type="button"
                 onClick={() => void restore()}
                 disabled={typeof selectedText !== "string" || restoring}
-                className="ml-auto shrink-0 rounded-lg bg-[var(--fl-accent)] px-3 py-1.5 text-[12.5px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)] disabled:opacity-40"
+                className="shrink-0 rounded-lg bg-[var(--fl-accent)] px-3 py-1.5 text-[12.5px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)] disabled:opacity-40"
               >
                 {restoring ? "Restoring…" : "Restore this version"}
               </button>

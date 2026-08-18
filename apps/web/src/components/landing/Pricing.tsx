@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { EVERYTHING } from "@/lib/plans";
-import { SectionHeading } from "./HowItWorks";
+import { SectionHeading } from "./SectionHeading";
 
 /**
  * Pricing — or rather, the absence of it.

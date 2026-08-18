@@ -10,7 +10,10 @@ import {
 } from "@forkleaf/store";
 import {
   workspaceId,
+  DEFAULT_SYNC_PREFERENCE,
   type Note,
+  type SyncMode,
+  type SyncPreference,
   type SyncState,
   type TreeNode,
   type Workspace,
@@ -58,6 +61,12 @@ export interface NotebookState {
   /** Path of the note the editor is showing. */
   activePath: string | null;
   sync: SyncState;
+  /**
+   * How the active workspace is configured to push. Kept alongside the sync
+   * state because the state reports the mode but not the interval, and the
+   * settings UI has to show the number the user picked.
+   */
+  syncPreference: SyncPreference;
   error: string | null;
   /** Set while a slow operation (bootstrap, opening a note) is running. */
   busy: string | null;
@@ -66,6 +75,17 @@ export interface NotebookState {
 /** Keys the open set is remembered under, so a reload reopens the same tabs. */
 const openTabsKey = (workspace: string) => `openNotes:${workspace}`;
 const activeTabKey = (workspace: string) => `activeNote:${workspace}`;
+/**
+ * Sync preferences are stored per repository, not globally: "commit whenever
+ * you like" is the right answer for your own notes repository and the wrong one
+ * for a colleague's documentation repo, and most people have both connected.
+ *
+ * Keyed on the repository rather than the workspace id, which carries the
+ * branch — how you want to commit is a fact about the repository, and having
+ * the setting silently reset every time you moved to a branch would be a bug.
+ */
+const syncPrefKey = (workspace: Workspace) =>
+  `syncPreference:${workspace.repo.owner}/${workspace.repo.repo}`;
 
 /** How many notes may be open at once, to bound memory and tab-strip width. */
 const MAX_OPEN_NOTES = 12;
@@ -79,7 +99,15 @@ export function useNotebook() {
     tree: [],
     openNotes: [],
     activePath: null,
-    sync: { status: "idle", pendingCount: 0, lastSyncedAt: null, lastError: null, conflicts: [] },
+    sync: {
+      status: "idle",
+      mode: DEFAULT_SYNC_PREFERENCE.mode,
+      pendingCount: 0,
+      lastSyncedAt: null,
+      lastError: null,
+      conflicts: [],
+    },
+    syncPreference: DEFAULT_SYNC_PREFERENCE,
     error: null,
     busy: null,
   });
@@ -189,6 +217,18 @@ export function useNotebook() {
     const load = async () => {
       await dbRef.current?.putMeta("activeWorkspace", workspace.id);
       await notes.touchWorkspace(workspace.id);
+
+      // The engine outlives the workspace switch, so its mode has to be reset
+      // to this workspace's choice — otherwise the manual mode you set on a
+      // colleague's repo silently follows you into your own notes.
+      const preference =
+        (await dbRef.current?.getMeta<SyncPreference>(syncPrefKey(workspace))) ??
+        DEFAULT_SYNC_PREFERENCE;
+
+      if (!cancelled) {
+        syncRef.current?.setMode(preference.mode, preference.intervalMinutes);
+        patch({ syncPreference: preference });
+      }
 
       // Reopen the tabs this workspace had last time. A note that has since
       // been deleted simply fails to load and is left out.
@@ -569,6 +609,30 @@ export function useNotebook() {
 
   const syncNow = useCallback(() => syncRef.current?.flushNow(), []);
 
+  /**
+   * Changes how eagerly this workspace pushes.
+   *
+   * Auto is the default and stays the default; this only exists for the people
+   * who want their commit log to read as deliberate work rather than as a
+   * transcript of their typing. Nothing here affects local saving, which is
+   * always immediate whatever the mode.
+   */
+  const setSyncMode = useCallback(
+    async (mode: SyncMode, intervalMinutes?: number) => {
+      const workspace = state.activeWorkspace;
+      const preference: SyncPreference = {
+        mode,
+        intervalMinutes: intervalMinutes ?? state.syncPreference.intervalMinutes,
+      };
+
+      syncRef.current?.setMode(preference.mode, preference.intervalMinutes);
+      patch({ syncPreference: preference });
+
+      if (workspace) await dbRef.current?.putMeta(syncPrefKey(workspace), preference);
+    },
+    [state.activeWorkspace, state.syncPreference.intervalMinutes, patch],
+  );
+
   const resolveConflict = useCallback(
     async (path: string, resolution: "keep-local" | "keep-remote" | "keep-both") => {
       const workspace = state.activeWorkspace;
@@ -613,6 +677,7 @@ export function useNotebook() {
       addWorkspace,
       removeWorkspace,
       syncNow,
+      setSyncMode,
       resolveConflict,
       allNotes,
       dismissError: () => patch({ error: null }),
@@ -634,6 +699,7 @@ export function useNotebook() {
       addWorkspace,
       removeWorkspace,
       syncNow,
+      setSyncMode,
       resolveConflict,
       allNotes,
       patch,

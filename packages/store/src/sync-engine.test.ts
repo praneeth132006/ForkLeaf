@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Note, TreeNode } from "@forkleaf/types";
+import type { Note, SyncMode, TreeNode } from "@forkleaf/types";
 import { SyncEngine } from "./sync-engine";
 import { MemoryDatabase } from "./memory-db";
 import { coalesce, describeChanges } from "./queue";
@@ -55,9 +55,11 @@ class FakeGateway implements RemoteGateway {
 /** Timer control so debounce behaviour is tested deterministically. */
 function fakeTimers() {
   let pending: (() => void) | null = null;
+  let lastDelay: number | null = null;
   return {
-    setTimeout: (fn: () => void) => {
+    setTimeout: (fn: () => void, ms: number) => {
       pending = fn;
+      lastDelay = ms;
       return 1;
     },
     clearTimeout: () => {
@@ -73,6 +75,10 @@ function fakeTimers() {
     },
     get scheduled() {
       return pending !== null;
+    },
+    /** How long the pending callback was scheduled for. */
+    get delay() {
+      return lastDelay;
     },
   };
 }
@@ -91,7 +97,7 @@ function makeNote(overrides: Partial<Note> = {}): Note {
   };
 }
 
-function setup(options: { online?: boolean } = {}) {
+function setup(options: { online?: boolean; mode?: SyncMode; intervalMinutes?: number } = {}) {
   const db = new MemoryDatabase();
   const gateway = new FakeGateway();
   const timers = fakeTimers();
@@ -104,6 +110,8 @@ function setup(options: { online?: boolean } = {}) {
     setTimeout: timers.setTimeout,
     clearTimeout: timers.clearTimeout,
     isOnline: () => online,
+    ...(options.mode ? { mode: options.mode } : {}),
+    ...(options.intervalMinutes !== undefined ? { intervalMinutes: options.intervalMinutes } : {}),
   });
 
   return {
@@ -462,5 +470,87 @@ describe("SyncEngine", () => {
     expect(seen).toContain("pending");
     expect(seen).toContain("syncing");
     expect(seen.at(-1)).toBe("idle");
+  });
+});
+
+describe("sync modes", () => {
+  it("defaults to auto, preserving the behaviour the app shipped with", async () => {
+    const { engine, gateway, timers } = setup();
+
+    await engine.recordUpsert(makeNote(), "hello");
+    expect(engine.state.mode).toBe("auto");
+    expect(timers.delay).toBe(1000);
+
+    await timers.tick();
+    expect(gateway.commits).toHaveLength(1);
+  });
+
+  it("schedules nothing at all in manual mode", async () => {
+    const { engine, gateway, timers } = setup({ mode: "manual" });
+
+    await engine.recordUpsert(makeNote(), "hello");
+
+    expect(timers.scheduled).toBe(false);
+    expect(gateway.commits).toHaveLength(0);
+    // The local write already happened, so nothing is at risk while it waits.
+    expect(engine.state.status).toBe("pending");
+    expect(engine.state.pendingCount).toBe(1);
+  });
+
+  it("still pushes on demand in manual mode", async () => {
+    const { engine, gateway } = setup({ mode: "manual" });
+
+    await engine.recordUpsert(makeNote(), "hello");
+    await engine.flushNow();
+
+    expect(gateway.commits).toHaveLength(1);
+  });
+
+  it("waits the configured interval rather than the debounce", async () => {
+    const { engine, timers } = setup({ mode: "interval", intervalMinutes: 10 });
+
+    await engine.recordUpsert(makeNote(), "hello");
+
+    expect(timers.delay).toBe(10 * 60_000);
+  });
+
+  it("flushes what is already queued when auto is turned back on", async () => {
+    const { engine, gateway, timers } = setup({ mode: "manual" });
+
+    await engine.recordUpsert(makeNote(), "hello");
+    expect(timers.scheduled).toBe(false);
+
+    engine.setMode("auto");
+    expect(timers.scheduled).toBe(true);
+
+    await timers.tick();
+    expect(gateway.commits).toHaveLength(1);
+  });
+
+  it("cancels a pending push when switching to manual", async () => {
+    const { engine, timers } = setup();
+
+    await engine.recordUpsert(makeNote(), "hello");
+    expect(timers.scheduled).toBe(true);
+
+    engine.setMode("manual");
+    expect(timers.scheduled).toBe(false);
+  });
+
+  it("reports the current mode in its state", () => {
+    const { engine } = setup({ mode: "interval", intervalMinutes: 5 });
+    expect(engine.state.mode).toBe("interval");
+
+    engine.setMode("manual");
+    expect(engine.state.mode).toBe("manual");
+  });
+
+  it("takes a new interval along with the mode", async () => {
+    const { engine, timers } = setup();
+
+    engine.setMode("interval", 30);
+    await engine.recordUpsert(makeNote(), "hello");
+
+    expect(timers.delay).toBe(30 * 60_000);
   });
 });

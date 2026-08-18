@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { SectionHeading } from "./HowItWorks";
+import { SectionHeading } from "./SectionHeading";
 
 const POINTS = [
   {

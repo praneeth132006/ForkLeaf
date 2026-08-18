@@ -3,6 +3,7 @@ import type {
   ConflictResolution,
   Note,
   PendingChange,
+  SyncMode,
   SyncState,
   SyncStatus,
 } from "@forkleaf/types";
@@ -22,6 +23,10 @@ export interface SyncEngineOptions {
   clearTimeout?: (handle: unknown) => void;
   /** Reports whether the device currently has a network connection. */
   isOnline?: () => boolean;
+  /** How eagerly to push. Defaults to `auto`, the original behaviour. */
+  mode?: SyncMode;
+  /** Minutes between pushes in `interval` mode. */
+  intervalMinutes?: number;
 }
 
 type Listener = (state: SyncState) => void;
@@ -61,6 +66,8 @@ export class SyncEngine {
   /** Set when an edit lands mid-flush, so we push again straight after. */
   private dirtyDuringFlush = false;
   private status: SyncStatus = "idle";
+  private mode: SyncMode;
+  private intervalMinutes: number;
   /** Current backoff delay; zero when the last push succeeded. */
   private retryDelay = 0;
   private lastSyncedAt: string | null = null;
@@ -76,6 +83,39 @@ export class SyncEngine {
     this.schedule = options.setTimeout ?? ((fn, ms) => setTimeout(fn, ms));
     this.cancel = options.clearTimeout ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
     this.isOnline = options.isOnline ?? defaultIsOnline;
+    this.mode = options.mode ?? "auto";
+    this.intervalMinutes = options.intervalMinutes ?? 15;
+  }
+
+  /**
+   * Changes how eagerly the engine pushes.
+   *
+   * Switching *to* auto or interval flushes what is already queued, so turning
+   * automatic syncing back on does not leave yesterday's edits sitting there
+   * waiting for the next keystroke to notice them.
+   */
+  setMode(mode: SyncMode, intervalMinutes?: number): void {
+    this.mode = mode;
+    if (intervalMinutes !== undefined) this.intervalMinutes = intervalMinutes;
+
+    if (mode === "manual") {
+      // Stop the pending timer: in manual mode nothing pushes unbidden.
+      if (this.timer !== null) {
+        this.cancel(this.timer);
+        this.timer = null;
+      }
+      this.setStatus(this.queue.length > 0 ? "pending" : "idle");
+      this.emit();
+      return;
+    }
+
+    this.retryDelay = 0;
+    if (this.queue.length > 0) this.scheduleFlush();
+    this.emit();
+  }
+
+  get syncMode(): SyncMode {
+    return this.mode;
   }
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
@@ -96,6 +136,7 @@ export class SyncEngine {
   get state(): SyncState {
     return {
       status: this.status,
+      mode: this.mode,
       pendingCount: this.queue.length,
       lastSyncedAt: this.lastSyncedAt,
       lastError: this.lastError,
@@ -172,10 +213,18 @@ export class SyncEngine {
     this.retryDelay = 0;
 
     this.setStatus(this.queue.length > 0 ? "pending" : "idle");
+
+    // Manual mode queues and waits. The local write has already happened, so
+    // nothing is at risk — the change simply does not leave the device until
+    // the user says so.
+    if (this.mode === "manual") return;
+
+    const delay = this.mode === "interval" ? this.intervalMinutes * 60_000 : this.debounceMs;
+
     this.timer = this.schedule(() => {
       this.timer = null;
       void this.flush();
-    }, this.debounceMs);
+    }, delay);
   }
 
   /** Pushes everything pending right now, bypassing the debounce. */

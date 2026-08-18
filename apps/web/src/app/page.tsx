@@ -2,7 +2,7 @@ import { githubOAuthConfigured } from "@/lib/session";
 import { SignInError } from "@/components/SignInError";
 import { Nav } from "@/components/landing/Nav";
 import { Hero } from "@/components/landing/Hero";
-import { HowItWorks } from "@/components/landing/HowItWorks";
+import { ScrollStory } from "@/components/landing/ScrollStory";
 import { Features } from "@/components/landing/Features";
 import { Ownership } from "@/components/landing/Ownership";
 import { Pricing } from "@/components/landing/Pricing";
@@ -23,8 +23,11 @@ export default async function Home({
   const { error } = await searchParams;
   const githubAvailable = githubOAuthConfigured();
 
+  // `clip` rather than `hidden` on the root below: hidden makes it a scroll
+  // container, and a scroll container that never scrolls silently breaks
+  // `position: sticky` inside it — which is the entire scroll story.
   return (
-    <div className="flex min-h-screen flex-col overflow-x-hidden bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
+    <div className="flex min-h-screen flex-col overflow-x-clip bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
       <Nav githubAvailable={githubAvailable} />
 
       {error && (
@@ -35,7 +38,7 @@ export default async function Home({
 
       <main className="flex-1">
         <Hero githubAvailable={githubAvailable} />
-        <HowItWorks />
+        <ScrollStory />
         <Features />
         <Ownership />
         <Pricing />

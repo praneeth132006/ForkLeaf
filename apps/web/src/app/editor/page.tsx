@@ -11,6 +11,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { EditorSidebar } from "@/components/EditorSidebar";
 import { EditorRightPanel } from "@/components/EditorRightPanel";
 import { EditorStatusBar } from "@/components/EditorStatusBar";
+import { EditorTabs } from "@/components/EditorTabs";
 import { ConflictDialog } from "@/components/ConflictDialog";
 import { ExportDialog } from "@/components/ExportDialog";
 import { ConnectRepoDialog } from "@/components/ConnectRepoDialog";
@@ -334,6 +335,14 @@ export default function EditorPage() {
             </div>
           </header>
 
+          {/* ── Open notes ───────────────────────────────────────────── */}
+          <EditorTabs
+            notes={notebook.openNotes}
+            activePath={notebook.activePath}
+            onSelect={notebook.openNote}
+            onClose={notebook.closeNote}
+          />
+
           {/* ── Banners ──────────────────────────────────────────────── */}
           {notebook.error && (
             <div
@@ -404,6 +413,8 @@ export default function EditorPage() {
         sync={notebook.sync}
         workspace={workspace}
         notePath={note?.path ?? null}
+        syncPreference={notebook.syncPreference}
+        onSyncModeChange={notebook.setSyncMode}
         onSyncNow={notebook.syncNow}
         onShowConflicts={() => setConflictsDismissed(false)}
       />
