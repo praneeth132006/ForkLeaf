@@ -483,6 +483,50 @@ export function useNotebook() {
     [patch],
   );
 
+  /**
+   * Moves the current workspace onto another branch, or onto a fork.
+   *
+   * A branch is not a different workspace as far as the user is concerned — it
+   * is the same notes, one revision sideways — so this edits the workspace in
+   * place rather than creating a second entry for every branch. Open notes are
+   * cleared because their content and base SHAs belong to the old branch.
+   */
+  const switchBranch = useCallback(
+    async (branch: string, repo?: { owner: string; repo: string }) => {
+      const notes = repoRef.current;
+      const current = state.activeWorkspace;
+      if (!notes || !current || current.isLocal) return;
+
+      const nextRepo = {
+        ...current.repo,
+        ...(repo ? { owner: repo.owner, repo: repo.repo } : {}),
+        branch,
+      };
+
+      const next: Workspace = {
+        ...current,
+        id: workspaceId(nextRepo),
+        name: repo ? repo.repo : current.name,
+        repo: nextRepo,
+        lastOpenedAt: new Date().toISOString(),
+      };
+
+      await notes.addWorkspace(next);
+      if (gatewayRef.current instanceof GitHubGateway) {
+        gatewayRef.current.register(next);
+      }
+
+      patch({
+        workspaces: [...state.workspaces.filter((w) => w.id !== next.id), next],
+        activeWorkspace: next,
+        openNotes: [],
+        activePath: null,
+        tree: [],
+      });
+    },
+    [state.activeWorkspace, state.workspaces, patch],
+  );
+
   const addWorkspace = useCallback(
     async (workspace: Workspace) => {
       const notes = repoRef.current;
@@ -565,6 +609,7 @@ export function useNotebook() {
       renameNote,
       setViewMode,
       switchWorkspace,
+      switchBranch,
       addWorkspace,
       removeWorkspace,
       syncNow,
@@ -585,6 +630,7 @@ export function useNotebook() {
       renameNote,
       setViewMode,
       switchWorkspace,
+      switchBranch,
       addWorkspace,
       removeWorkspace,
       syncNow,

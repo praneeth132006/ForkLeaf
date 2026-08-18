@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { SyncState, Workspace } from "@forkleaf/types";
+import { BranchMenu } from "./BranchMenu";
 
 export interface EditorStatusBarProps {
   sync: SyncState;
@@ -9,6 +10,10 @@ export interface EditorStatusBarProps {
   notePath: string | null;
   onSyncNow: () => void;
   onShowConflicts: () => void;
+  /** Moves the workspace to another branch of the same repository. */
+  onSwitchBranch: (branch: string) => void | Promise<void>;
+  /** Opens the pull-request flow for the current work. */
+  onPropose: () => void;
 }
 
 /**
@@ -24,6 +29,8 @@ export function EditorStatusBar({
   notePath,
   onSyncNow,
   onShowConflicts,
+  onSwitchBranch,
+  onPropose,
 }: EditorStatusBarProps) {
   const status = describe(sync);
 
@@ -39,18 +46,28 @@ export function EditorStatusBar({
         <span className={status.className}>{status.label}</span>
       </button>
 
-      {workspace && (
-        <span className="hidden truncate sm:inline">
-          {workspace.isLocal ? (
-            "Local storage"
-          ) : (
-            <>
-              {workspace.repo.owner}/{workspace.repo.repo}
-              <span className="mx-1 opacity-50">·</span>
-              {workspace.repo.branch}
-            </>
-          )}
-        </span>
+      {workspace?.isLocal && <span className="hidden truncate sm:inline">Local storage</span>}
+
+      {workspace && !workspace.isLocal && (
+        <>
+          <span className="hidden truncate sm:inline">
+            {workspace.repo.owner}/{workspace.repo.repo}
+          </span>
+
+          {/* The branch is a control now, not a label: writing documentation
+              straight onto a repository's default branch is rarely what anyone
+              wants, and there was previously no way to see or change it. */}
+          <BranchMenu workspace={workspace} onSwitch={onSwitchBranch} />
+
+          <button
+            type="button"
+            onClick={onPropose}
+            title="Open a pull request for these changes"
+            className="hidden rounded px-1.5 py-0.5 transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] sm:inline"
+          >
+            Propose changes…
+          </button>
+        </>
       )}
 
       {notePath && (

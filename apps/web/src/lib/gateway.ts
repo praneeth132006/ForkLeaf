@@ -233,3 +233,68 @@ export function bootstrapWorkspace(options?: {
     body: JSON.stringify(options ?? {}),
   });
 }
+
+// ─── Branches and pull requests ─────────────────────────────────────────────
+
+export interface BranchSummaryDto {
+  name: string;
+  sha: string;
+  isDefault: boolean;
+  protected: boolean;
+}
+
+export interface PullRequestDto {
+  number: number;
+  url: string;
+  state: string;
+  title: string;
+  draft: boolean;
+  head: string;
+  base: string;
+}
+
+export async function listBranches(owner: string, repo: string): Promise<BranchSummaryDto[]> {
+  const { branches } = await call<{ branches: BranchSummaryDto[] }>(
+    `/api/gh/branches?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`,
+  );
+  return branches;
+}
+
+export async function createBranch(options: {
+  owner: string;
+  repo: string;
+  name: string;
+  from: string;
+}): Promise<BranchSummaryDto> {
+  const { branch } = await call<{ branch: BranchSummaryDto }>("/api/gh/branches", {
+    method: "POST",
+    body: JSON.stringify(options),
+  });
+  return branch;
+}
+
+/** Forks a repository so the user can write to a project they cannot push to. */
+export async function forkRepo(
+  owner: string,
+  repo: string,
+): Promise<{ repo: RepoSummaryDto; created: boolean }> {
+  return call("/api/gh/fork", {
+    method: "POST",
+    body: JSON.stringify({ owner, repo }),
+  });
+}
+
+export async function openPullRequest(options: {
+  owner: string;
+  repo: string;
+  base: string;
+  head: string;
+  title: string;
+  description?: string;
+  draft?: boolean;
+}): Promise<{ pull: PullRequestDto; crossFork: boolean }> {
+  return call("/api/gh/pull", {
+    method: "POST",
+    body: JSON.stringify(options),
+  });
+}

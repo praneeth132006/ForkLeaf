@@ -27,6 +27,16 @@ interface ApiRef {
   object: { sha: string };
 }
 
+interface ApiPullRequest {
+  number: number;
+  html_url: string;
+  state: string;
+  title: string;
+  draft?: boolean;
+  head: { ref: string };
+  base: { ref: string };
+}
+
 interface ApiCommit {
   sha: string;
   tree: { sha: string };
@@ -79,6 +89,25 @@ export interface RepoSummary {
   canPush: boolean;
   description: string | null;
   updatedAt: string;
+}
+
+/** A branch, with enough context to show it in a picker. */
+export interface BranchSummary {
+  name: string;
+  sha: string;
+  isDefault: boolean;
+  protected: boolean;
+}
+
+/** An opened pull request, as much of it as the UI needs. */
+export interface PullRequestSummary {
+  number: number;
+  url: string;
+  state: string;
+  title: string;
+  draft: boolean;
+  head: string;
+  base: string;
 }
 
 /** One entry in a note's history, flattened for display. */
@@ -255,6 +284,182 @@ export class GitHubClient {
       `/repos/${owner}/${repo}/branches?per_page=100`,
     );
     return branches.map((b) => b.name);
+  }
+
+  /**
+   * Branches with their head SHAs and which one is the default.
+   *
+   * A bare list of names is not enough to build a branch picker: the default
+   * needs marking, and protected branches need flagging so the UI can steer
+   * someone towards a pull request before they discover the push is rejected.
+   */
+  async listBranchSummaries(owner: string, repo: string): Promise<BranchSummary[]> {
+    const [branches, repository] = await Promise.all([
+      this.transport.paginate<{ name: string; commit: { sha: string }; protected?: boolean }>(
+        `/repos/${owner}/${repo}/branches?per_page=100`,
+      ),
+      this.getRepo(owner, repo),
+    ]);
+
+    const defaultBranch = repository?.defaultBranch;
+
+    return (
+      branches
+        .map((branch) => ({
+          name: branch.name,
+          sha: branch.commit.sha,
+          isDefault: branch.name === defaultBranch,
+          protected: branch.protected === true,
+        }))
+        // The default first, then alphabetically — the order a picker wants.
+        .sort((a, b) => {
+          if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        })
+    );
+  }
+
+  /**
+   * Creates a branch pointing at another branch's head.
+   *
+   * Idempotent by design: an existing branch of the same name is returned
+   * rather than treated as an error, because the common case is coming back to
+   * a branch you started earlier in the session.
+   */
+  async createBranch(
+    owner: string,
+    repo: string,
+    name: string,
+    fromBranch: string,
+  ): Promise<BranchSummary> {
+    const existing = await this.getBranch(owner, repo, name);
+    if (existing) return existing;
+
+    const from = await this.getBranch(owner, repo, fromBranch);
+    if (!from) {
+      throw new GitHubError("not-found", `Cannot branch from ${fromBranch}: it does not exist.`);
+    }
+
+    await this.transport.request(`/repos/${owner}/${repo}/git/refs`, {
+      method: "POST",
+      body: { ref: `refs/heads/${name}`, sha: from.sha },
+    });
+
+    return { name, sha: from.sha, isDefault: false, protected: false };
+  }
+
+  async getBranch(owner: string, repo: string, name: string): Promise<BranchSummary | null> {
+    try {
+      const { data } = await this.transport.request<{
+        name: string;
+        commit: { sha: string };
+        protected?: boolean;
+      }>(`/repos/${owner}/${repo}/branches/${encodeURIComponent(name)}`);
+
+      if (!data) return null;
+      return {
+        name: data.name,
+        sha: data.commit.sha,
+        isDefault: false,
+        protected: data.protected === true,
+      };
+    } catch (err) {
+      if (err instanceof GitHubError && err.code === "not-found") return null;
+      throw err;
+    }
+  }
+
+  /**
+   * Forks a repository into the user's account, waiting until it is usable.
+   *
+   * This is what lets someone edit documentation in a repository they cannot
+   * push to. GitHub's fork call returns 202 immediately and creates the
+   * repository asynchronously, so a commit issued straight afterwards fails
+   * with a confusing 404 — hence the poll.
+   */
+  async forkRepo(owner: string, repo: string): Promise<RepoSummary> {
+    const { data } = await this.transport.request<ApiRepo>(`/repos/${owner}/${repo}/forks`, {
+      method: "POST",
+      body: {},
+    });
+
+    if (!data) throw new GitHubError("unknown", "Empty fork response");
+
+    const forkOwner = data.owner.login;
+    const forkName = data.name;
+
+    // Up to ~20s. Forking a small docs repo is usually ready within two or
+    // three, and giving up is better than hanging forever on a large one.
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const fork = await this.getRepo(forkOwner, forkName);
+      // A fork with a default branch has finished copying refs.
+      if (fork?.defaultBranch) return fork;
+      await delay(2000);
+    }
+
+    throw new GitHubError(
+      "unknown",
+      "The fork is taking longer than expected to become available. It was created — try again in a moment.",
+    );
+  }
+
+  /**
+   * Opens a pull request, or returns the one already open for this branch.
+   *
+   * Re-running the same "propose these changes" action should not litter the
+   * repository with duplicate pull requests, and GitHub rejects the second one
+   * with a validation error rather than something actionable.
+   */
+  async createPullRequest(options: {
+    owner: string;
+    repo: string;
+    title: string;
+    body?: string;
+    /** Branch containing the changes. Cross-fork takes the form `owner:branch`. */
+    head: string;
+    base: string;
+    draft?: boolean;
+  }): Promise<PullRequestSummary> {
+    const existing = await this.findOpenPullRequest(
+      options.owner,
+      options.repo,
+      options.head,
+      options.base,
+    );
+    if (existing) return existing;
+
+    const { data } = await this.transport.request<ApiPullRequest>(
+      `/repos/${options.owner}/${options.repo}/pulls`,
+      {
+        method: "POST",
+        body: {
+          title: options.title,
+          head: options.head,
+          base: options.base,
+          ...(options.body ? { body: options.body } : {}),
+          ...(options.draft ? { draft: true } : {}),
+        },
+      },
+    );
+
+    if (!data) throw new GitHubError("unknown", "Empty pull request response");
+    return toPullRequest(data);
+  }
+
+  async findOpenPullRequest(
+    owner: string,
+    repo: string,
+    head: string,
+    base: string,
+  ): Promise<PullRequestSummary | null> {
+    // `head` is qualified with an owner for cross-fork requests; the list
+    // endpoint expects the same qualified form.
+    const qualified = head.includes(":") ? head : `${owner}:${head}`;
+    const pulls = await this.transport.paginate<ApiPullRequest>(
+      `/repos/${owner}/${repo}/pulls?state=open&head=${encodeURIComponent(qualified)}&base=${encodeURIComponent(base)}&per_page=10`,
+    );
+
+    return pulls[0] ? toPullRequest(pulls[0]) : null;
   }
 
   // ─── Reading ──────────────────────────────────────────────────────────────
@@ -571,6 +776,22 @@ export class GitHubClient {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+function toPullRequest(data: ApiPullRequest): PullRequestSummary {
+  return {
+    number: data.number,
+    url: data.html_url,
+    state: data.state,
+    title: data.title,
+    draft: data.draft === true,
+    head: data.head.ref,
+    base: data.base.ref,
+  };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /** Encodes each path segment but keeps the slashes that GitHub expects. */
 function encodePath(path: string): string {
