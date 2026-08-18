@@ -110,7 +110,7 @@ function displayName(language: string): string {
   return DISPLAY_NAMES[language] ?? language.charAt(0).toUpperCase() + language.slice(1);
 }
 
-function CodeBlockView({ node, updateAttributes, extension }: NodeViewProps) {
+function CodeBlockView({ node, updateAttributes, extension, editor, getPos }: NodeViewProps) {
   const language = (node.attrs.language as string) ?? "";
   const [copied, setCopied] = useState(false);
 
@@ -125,6 +125,32 @@ function CodeBlockView({ node, updateAttributes, extension }: NodeViewProps) {
       language && !popular.includes(language) && !rest.includes(language) ? [language] : [];
     return { popular, rest, unlisted };
   }, [extension.options.lowlight, language]);
+
+  /**
+   * Puts the caret in the code when the click lands on the block's padding
+   * rather than on a character.
+   *
+   * An empty code block is *all* padding — there is no text to aim at — so
+   * clicking one did nothing whatsoever: ProseMirror could not resolve a
+   * position, the editor never took focus, and the next keystroke went to the
+   * page instead of into the block. It read as a block that swallowed clicks
+   * and then quietly disappeared.
+   */
+  const focusCode = (event: React.MouseEvent<HTMLPreElement>) => {
+    if ((event.target as HTMLElement).closest("code")) return;
+
+    const pos = typeof getPos === "function" ? getPos() : null;
+    if (typeof pos !== "number") return;
+
+    event.preventDefault();
+    // The last position inside this node, so clicking below the final line
+    // lands at the end of the code rather than at the start of it.
+    editor
+      .chain()
+      .focus()
+      .setTextSelection(pos + node.nodeSize - 1)
+      .run();
+  };
 
   const copy = async () => {
     try {
@@ -173,7 +199,7 @@ function CodeBlockView({ node, updateAttributes, extension }: NodeViewProps) {
         </button>
       </div>
 
-      <pre spellCheck={false}>
+      <pre spellCheck={false} onMouseDown={focusCode}>
         <NodeViewContent<"code">
           as="code"
           className={language ? `language-${language}` : undefined}

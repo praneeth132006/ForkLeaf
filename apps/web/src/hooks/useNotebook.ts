@@ -70,6 +70,17 @@ export interface NotebookState {
   error: string | null;
   /** Set while a slow operation (bootstrap, opening a note) is running. */
   busy: string | null;
+  /**
+   * Folders the user has made that do not hold a note yet.
+   *
+   * Git has no concept of an empty directory — a folder exists only because a
+   * file in it does — so a freshly made folder has nowhere real to live until
+   * the first note lands in it. Rather than refuse to make one, or commit a
+   * placeholder file into someone's repository, they are kept here and merged
+   * into the displayed tree. The moment a note is created inside, the folder
+   * becomes part of the repository and drops out of this list.
+   */
+  emptyFolders: string[];
 }
 
 /** Keys the open set is remembered under, so a reload reopens the same tabs. */
@@ -86,6 +97,8 @@ const activeTabKey = (workspace: string) => `activeNote:${workspace}`;
  */
 const syncPrefKey = (workspace: Workspace) =>
   `syncPreference:${workspace.repo.owner}/${workspace.repo.repo}`;
+/** Folders made locally that have no note in them yet. See `emptyFolders`. */
+const emptyFoldersKey = (workspace: string) => `emptyFolders:${workspace}`;
 
 /** How many notes may be open at once, to bound memory and tab-strip width. */
 const MAX_OPEN_NOTES = 12;
@@ -110,6 +123,7 @@ export function useNotebook() {
     syncPreference: DEFAULT_SYNC_PREFERENCE,
     error: null,
     busy: null,
+    emptyFolders: [],
   });
 
   // Long-lived singletons. Refs rather than state: replacing the sync engine
@@ -230,6 +244,9 @@ export function useNotebook() {
         patch({ syncPreference: preference });
       }
 
+      const folders = (await dbRef.current?.getMeta<string[]>(emptyFoldersKey(workspace.id))) ?? [];
+      if (!cancelled) patch({ emptyFolders: folders });
+
       // Reopen the tabs this workspace had last time. A note that has since
       // been deleted simply fails to load and is left out.
       const remembered = (await dbRef.current?.getMeta<string[]>(openTabsKey(workspace.id))) ?? [];
@@ -258,17 +275,7 @@ export function useNotebook() {
       if (workspace.isLocal) {
         // Local mode has no remote tree; build one from what is stored.
         const localNotes = await notes.listNotes(workspace.id);
-        if (!cancelled) {
-          patch({
-            tree: localNotes
-              .map((note) => ({
-                path: note.path,
-                name: note.path.split("/").pop()!,
-                kind: "file" as const,
-              }))
-              .sort((a, b) => a.name.localeCompare(b.name)),
-          });
-        }
+        if (!cancelled) patch({ tree: treeFromPaths(localNotes.map((note) => note.path)) });
         return;
       }
 
@@ -453,15 +460,25 @@ export function useNotebook() {
       });
 
       const open = [...state.openNotes, note].slice(-MAX_OPEN_NOTES);
+      // The folders this note sits in now hold something, so they are the
+      // repository's business rather than this device's.
+      const stillEmpty = state.emptyFolders.filter(
+        (candidate) => !`${note.path}/`.startsWith(`${candidate}/`),
+      );
+
       patch({
         openNotes: open,
         activePath: note.path,
         tree: insertIntoTree(state.tree, note.path),
+        ...(stillEmpty.length !== state.emptyFolders.length ? { emptyFolders: stillEmpty } : {}),
       });
+      if (stillEmpty.length !== state.emptyFolders.length) {
+        void dbRef.current?.putMeta(emptyFoldersKey(workspace.id), stillEmpty);
+      }
       rememberTabs(workspace.id, open, note.path);
       return note;
     },
-    [state.activeWorkspace, state.tree, state.openNotes, patch, rememberTabs],
+    [state.activeWorkspace, state.tree, state.openNotes, state.emptyFolders, patch, rememberTabs],
   );
 
   const deleteNote = useCallback(
@@ -502,6 +519,165 @@ export function useNotebook() {
       return renamed;
     },
     [state.tree, state.openNotes, state.activePath, state.activeWorkspace, patch, rememberTabs],
+  );
+
+  /**
+   * Rebuilds the note tree from storage.
+   *
+   * Folder-wide operations touch many notes at once, and patching the tree
+   * once per note would render a half-moved folder on the way through.
+   */
+  const refreshTree = useCallback(async () => {
+    const workspace = state.activeWorkspace;
+    const notes = repoRef.current;
+    if (!workspace || !notes) return;
+
+    if (workspace.isLocal) {
+      const localNotes = await notes.listNotes(workspace.id);
+      patch({ tree: treeFromPaths(localNotes.map((note) => note.path)) });
+      return;
+    }
+
+    patch({ tree: await notes.getTree(workspace.id) });
+  }, [state.activeWorkspace, patch]);
+
+  /** Persists the empty-folder list and reflects it in state in one step. */
+  const putEmptyFolders = useCallback(
+    (next: string[]) => {
+      const workspace = state.activeWorkspace;
+      patch({ emptyFolders: next });
+      if (workspace) void dbRef.current?.putMeta(emptyFoldersKey(workspace.id), next);
+    },
+    [state.activeWorkspace, patch],
+  );
+
+  /**
+   * Makes a folder at `path`, which may be nested any number of levels deep.
+   *
+   * Nothing is committed: the folder is real to the repository only once it
+   * contains a note. Until then it is remembered on this device so notes can
+   * be created inside it — which is the only reason anyone makes a folder.
+   */
+  const createFolder = useCallback(
+    async (path: string) => {
+      const clean = normaliseFolder(path);
+      if (!clean) return;
+
+      // Already there — as a real folder in the tree, or as one made earlier.
+      if (folderExists(state.tree, clean) || state.emptyFolders.includes(clean)) return clean;
+
+      // Every level above it counts as made too, so `a/b/c` leaves `a` and
+      // `a/b` on screen rather than one orphaned leaf.
+      const ancestors = ancestorFolders(clean).filter(
+        (folder) => !folderExists(state.tree, folder) && !state.emptyFolders.includes(folder),
+      );
+
+      putEmptyFolders([...state.emptyFolders, ...ancestors, clean].sort());
+      return clean;
+    },
+    [state.tree, state.emptyFolders, putEmptyFolders],
+  );
+
+  /**
+   * Renames a folder by renaming every note under it.
+   *
+   * Git tracks files, not directories, so this is what "rename a folder" means
+   * in a repository: each note moves, and the old directory stops existing
+   * because nothing is left in it.
+   */
+  const renameFolder = useCallback(
+    async (from: string, to: string) => {
+      const source = normaliseFolder(from);
+      const target = normaliseFolder(to);
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace || !source || !target || source === target) return;
+
+      patch({ busy: "Renaming folder…" });
+      try {
+        for (const path of collectPaths(state.tree).filter((candidate) =>
+          candidate.startsWith(`${source}/`),
+        )) {
+          const note =
+            state.openNotes.find((candidate) => candidate.path === path) ??
+            (await notes.openNote(workspace.id, path));
+          await notes.renameNote(note, `${target}${path.slice(source.length)}`);
+        }
+
+        putEmptyFolders(
+          state.emptyFolders.map((folder) =>
+            folder === source || folder.startsWith(`${source}/`)
+              ? `${target}${folder.slice(source.length)}`
+              : folder,
+          ),
+        );
+
+        await refreshTree();
+      } finally {
+        patch({ busy: null });
+      }
+    },
+    [
+      state.tree,
+      state.openNotes,
+      state.activeWorkspace,
+      state.emptyFolders,
+      putEmptyFolders,
+      refreshTree,
+      patch,
+    ],
+  );
+
+  /** Deletes a folder and every note inside it. */
+  const deleteFolder = useCallback(
+    async (path: string) => {
+      const folder = normaliseFolder(path);
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace || !folder) return;
+
+      patch({ busy: "Deleting folder…" });
+      try {
+        for (const notePath of collectPaths(state.tree).filter((candidate) =>
+          candidate.startsWith(`${folder}/`),
+        )) {
+          const note =
+            state.openNotes.find((candidate) => candidate.path === notePath) ??
+            (await notes.openNote(workspace.id, notePath));
+          await notes.deleteNote(note);
+        }
+
+        putEmptyFolders(
+          state.emptyFolders.filter(
+            (candidate) => candidate !== folder && !candidate.startsWith(`${folder}/`),
+          ),
+        );
+
+        const open = state.openNotes.filter(
+          (candidate) => !candidate.path.startsWith(`${folder}/`),
+        );
+        const activePath = open.some((candidate) => candidate.path === state.activePath)
+          ? state.activePath
+          : (open[0]?.path ?? null);
+
+        patch({ openNotes: open, activePath });
+        rememberTabs(workspace.id, open, activePath);
+        await refreshTree();
+      } finally {
+        patch({ busy: null });
+      }
+    },
+    [
+      state.tree,
+      state.openNotes,
+      state.activePath,
+      state.activeWorkspace,
+      state.emptyFolders,
+      putEmptyFolders,
+      refreshTree,
+      rememberTabs,
+      patch,
+    ],
   );
 
   const setViewMode = useCallback(
@@ -658,6 +834,11 @@ export function useNotebook() {
     return notes.listNotes(workspace.id);
   }, [state.activeWorkspace]);
 
+  const displayTree = useMemo(
+    () => withEmptyFolders(state.tree, state.emptyFolders),
+    [state.tree, state.emptyFolders],
+  );
+
   return useMemo(
     () => ({
       ...state,
@@ -671,6 +852,9 @@ export function useNotebook() {
       createNote,
       deleteNote,
       renameNote,
+      createFolder,
+      renameFolder,
+      deleteFolder,
       setViewMode,
       switchWorkspace,
       switchBranch,
@@ -681,6 +865,11 @@ export function useNotebook() {
       resolveConflict,
       allNotes,
       dismissError: () => patch({ error: null }),
+      /**
+       * The tree as the sidebar should draw it: what is in the repository,
+       * plus the folders made here that are still waiting for their first note.
+       */
+      tree: displayTree,
     }),
     [
       state,
@@ -693,6 +882,10 @@ export function useNotebook() {
       createNote,
       deleteNote,
       renameNote,
+      createFolder,
+      renameFolder,
+      deleteFolder,
+      displayTree,
       setViewMode,
       switchWorkspace,
       switchBranch,
@@ -730,6 +923,12 @@ function insertIntoTree(tree: TreeNode[], path: string): TreeNode[] {
 
   if (folder === "") return sortNodes([...tree, node]);
 
+  // The folder has to be on the tree before the note can go in it. Without
+  // this, a note created in a folder that only existed locally was written to
+  // storage and then dropped from the sidebar — it reappeared on the next
+  // refresh, so it read as the note simply not being created.
+  const withFolder = ensureFolder(tree, folder);
+
   const insert = (nodes: TreeNode[], prefix: string): TreeNode[] =>
     nodes.map((current) => {
       if (current.kind !== "folder") return current;
@@ -742,7 +941,82 @@ function insertIntoTree(tree: TreeNode[], path: string): TreeNode[] {
       return current;
     });
 
-  return insert(tree, folder);
+  return insert(withFolder, folder);
+}
+
+/**
+ * A nested tree from a flat list of note paths.
+ *
+ * Local mode has no GitHub tree to read, and the list of stored notes was being
+ * turned into a flat list of filenames — so a note at `Projects/2026/roadmap.md`
+ * appeared beside the top-level ones as plain `roadmap`, and folders made on
+ * this device vanished from the sidebar the moment they held something. The
+ * folder structure is right there in the paths; this reads it back out.
+ */
+function treeFromPaths(paths: string[]): TreeNode[] {
+  return paths.reduce<TreeNode[]>((tree, path) => insertIntoTree(tree, path), []);
+}
+
+/** A folder path with the noise taken out: no slashes at either end, no `..`. */
+function normaliseFolder(path: string): string {
+  return path
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter((segment) => segment !== "" && segment !== "." && segment !== "..")
+    .join("/");
+}
+
+/** `a/b/c` → `["a", "a/b"]`. Every level a folder needs above it. */
+function ancestorFolders(path: string): string[] {
+  const segments = normaliseFolder(path).split("/");
+  return segments.slice(0, -1).map((_, index) => segments.slice(0, index + 1).join("/"));
+}
+
+function folderExists(tree: TreeNode[], path: string): boolean {
+  for (const node of tree) {
+    if (node.kind !== "folder") continue;
+    if (node.path === path) return true;
+    if (path.startsWith(`${node.path}/`) && folderExists(node.children ?? [], path)) return true;
+  }
+  return false;
+}
+
+/** Adds `path` to the tree as a folder, creating any missing level above it. */
+function ensureFolder(tree: TreeNode[], path: string): TreeNode[] {
+  const segments = normaliseFolder(path).split("/").filter(Boolean);
+  if (segments.length === 0) return tree;
+
+  const add = (nodes: TreeNode[], depth: number, prefix: string): TreeNode[] => {
+    const current = prefix ? `${prefix}/${segments[depth]}` : segments[depth]!;
+    const existing = nodes.find((node) => node.kind === "folder" && node.path === current);
+
+    const children =
+      depth + 1 < segments.length
+        ? add(existing?.children ?? [], depth + 1, current)
+        : (existing?.children ?? []);
+
+    const folder: TreeNode = {
+      path: current,
+      name: segments[depth]!,
+      kind: "folder",
+      children,
+    };
+
+    return sortNodes([...nodes.filter((node) => node.path !== current), folder]);
+  };
+
+  return add(tree, 0, "");
+}
+
+/**
+ * The repository's tree with the locally made, still-empty folders grafted on.
+ *
+ * Kept as a display-time merge rather than written into `state.tree`: the real
+ * tree is refreshed from GitHub, and anything merged into it would be wiped by
+ * the next refresh.
+ */
+function withEmptyFolders(tree: TreeNode[], folders: string[]): TreeNode[] {
+  return folders.reduce((accumulated, folder) => ensureFolder(accumulated, folder), tree);
 }
 
 function removeFromTree(tree: TreeNode[], path: string): TreeNode[] {

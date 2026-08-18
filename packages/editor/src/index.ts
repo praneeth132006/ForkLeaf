@@ -20,7 +20,7 @@ export {
 } from "./insert-actions";
 export { Modal, type ModalProps } from "./ui/Modal";
 
-export { DiagramStudio, type DiagramStudioProps, type StudioMode } from "./mermaid/DiagramStudio";
+export { DiagramStudio, type DiagramStudioProps, type StudioView } from "./mermaid/DiagramStudio";
 export { VisualBuilder, type VisualBuilderProps } from "./mermaid/VisualBuilder";
 export { TemplateGallery, type TemplateGalleryProps } from "./mermaid/TemplateGallery";
 export { TemplateThumbnail } from "./mermaid/TemplateThumbnail";

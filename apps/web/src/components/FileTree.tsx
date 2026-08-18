@@ -10,6 +10,10 @@ export interface FileTreeProps {
   onDelete: (path: string) => void;
   onRename: (path: string) => void;
   onCreateIn: (folder: string) => void;
+  /** Make a folder inside `parent`. An empty string means the repository root. */
+  onCreateFolder: (parent: string) => void;
+  onRenameFolder: (path: string) => void;
+  onDeleteFolder: (path: string) => void;
   filter: string;
 }
 
@@ -27,6 +31,9 @@ export function FileTree({
   onDelete,
   onRename,
   onCreateIn,
+  onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
   filter,
 }: FileTreeProps) {
   const visible = useMemo(
@@ -54,6 +61,9 @@ export function FileTree({
           onDelete={onDelete}
           onRename={onRename}
           onCreateIn={onCreateIn}
+          onCreateFolder={onCreateFolder}
+          onRenameFolder={onRenameFolder}
+          onDeleteFolder={onDeleteFolder}
           // A search should reveal matches inside collapsed folders.
           forceOpen={filter.length > 0}
         />
@@ -76,6 +86,9 @@ function TreeItem({
   onDelete,
   onRename,
   onCreateIn,
+  onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
   forceOpen,
 }: TreeItemProps) {
   const [expanded, setExpanded] = useState(depth === 0);
@@ -103,16 +116,49 @@ function TreeItem({
             <span className="truncate font-medium">{node.name}</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => onCreateIn(node.path)}
-            title={`New note in ${node.name}`}
-            aria-label={`New note in ${node.name}`}
-            className="mr-1 shrink-0 rounded px-1.5 text-[var(--fl-muted)] opacity-0 transition hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] focus:opacity-100 group-hover:opacity-100"
-          >
-            +
-          </button>
+          {/* Every folder operation, on the folder itself. Reaching them only
+              through a menu at the top of the sidebar is what made nested
+              folders feel impossible rather than merely undiscovered. */}
+          <div className="mr-1 flex shrink-0 opacity-0 transition focus-within:opacity-100 group-hover:opacity-100">
+            <RowButton
+              onClick={() => {
+                setExpanded(true);
+                onCreateIn(node.path);
+              }}
+              title={`New note in ${node.name}`}
+            >
+              <NoteGlyph />
+            </RowButton>
+            <RowButton
+              onClick={() => {
+                setExpanded(true);
+                onCreateFolder(node.path);
+              }}
+              title={`New folder in ${node.name}`}
+            >
+              <FolderPlusGlyph />
+            </RowButton>
+            <RowButton onClick={() => onRenameFolder(node.path)} title={`Rename ${node.name}`}>
+              ✎
+            </RowButton>
+            <RowButton
+              onClick={() => onDeleteFolder(node.path)}
+              title={`Delete ${node.name} and everything in it`}
+              danger
+            >
+              ✕
+            </RowButton>
+          </div>
         </div>
+
+        {open && (node.children?.length ?? 0) === 0 && (
+          <p
+            style={{ paddingLeft: `${1.6 + depth * 0.75}rem` }}
+            className="py-1 pr-2 text-[11.5px] italic text-[var(--fl-muted)]"
+          >
+            Empty
+          </p>
+        )}
 
         {open && node.children && (
           <ul role="group">
@@ -126,6 +172,9 @@ function TreeItem({
                 onDelete={onDelete}
                 onRename={onRename}
                 onCreateIn={onCreateIn}
+                onCreateFolder={onCreateFolder}
+                onRenameFolder={onRenameFolder}
+                onDeleteFolder={onDeleteFolder}
                 forceOpen={forceOpen}
               />
             ))}
@@ -157,27 +206,84 @@ function TreeItem({
         </button>
 
         <div className="mr-1 flex shrink-0 opacity-0 transition focus-within:opacity-100 group-hover:opacity-100">
-          <button
-            type="button"
-            onClick={() => onRename(node.path)}
-            title="Rename"
-            aria-label={`Rename ${node.name}`}
-            className="rounded px-1.5 text-xs text-[var(--fl-muted)] hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
-          >
+          <RowButton onClick={() => onRename(node.path)} title={`Rename ${node.name}`}>
             ✎
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete(node.path)}
-            title="Delete"
-            aria-label={`Delete ${node.name}`}
-            className="rounded px-1.5 text-xs text-[var(--fl-muted)] hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-danger)]"
-          >
+          </RowButton>
+          <RowButton onClick={() => onDelete(node.path)} title={`Delete ${node.name}`} danger>
             ✕
-          </button>
+          </RowButton>
         </div>
       </div>
     </li>
+  );
+}
+
+/**
+ * One of the small actions on a tree row.
+ *
+ * Hidden until the row is hovered or focused, so a full sidebar is a list of
+ * names rather than a grid of icons — but always in the tab order, because a
+ * control that only exists under a pointer does not exist for everyone.
+ */
+function RowButton({
+  onClick,
+  title,
+  danger = false,
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className={`flex h-6 w-6 items-center justify-center rounded text-xs text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] ${
+        danger ? "hover:text-[var(--fl-danger)]" : "hover:text-[var(--fl-text)]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function NoteGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+      strokeLinecap="round"
+    >
+      <path d="M9 1.75H4.5A1.75 1.75 0 0 0 2.75 3.5v9c0 .97.78 1.75 1.75 1.75h7a1.75 1.75 0 0 0 1.75-1.75V6z" />
+      <path d="M9 1.75V6h4.25M6 9.5h4M6 11.5h2.5" />
+    </svg>
+  );
+}
+
+function FolderPlusGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+      strokeLinecap="round"
+    >
+      <path d="M1.75 4.25c0-.83.67-1.5 1.5-1.5h2.4c.5 0 .96.24 1.25.65l.6.85h5.25c.83 0 1.5.67 1.5 1.5v6.5c0 .83-.67 1.5-1.5 1.5H3.25c-.83 0-1.5-.67-1.5-1.5z" />
+      <path d="M8 7.75v4M6 9.75h4" />
+    </svg>
   );
 }
 

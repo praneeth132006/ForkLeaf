@@ -19,52 +19,82 @@ import { TemplateGallery } from "./TemplateGallery";
 import { Cheatsheet } from "./Cheatsheet";
 import { VisualBuilder } from "./VisualBuilder";
 
-export type StudioMode = "visual" | "source";
+/** What the right-hand pane is showing. */
+export type StudioView = "canvas" | "preview";
 
 export interface DiagramStudioProps {
   code: string;
   onChange: (code: string) => void;
   /** Omit to follow the app's current theme. */
   theme?: "light" | "dark";
-  /** Starts on the template gallery when the diagram is empty. */
-  initialMode?: StudioMode;
+  /** Which pane the right-hand side opens on. */
+  initialView?: StudioView;
 }
+
+/** Where the divider sits, as a percentage of the studio's width. */
+const DEFAULT_SPLIT = 46;
+const MIN_SPLIT = 22;
+const MAX_SPLIT = 78;
 
 /**
  * The diagram editing surface. Callers render it inside a modal.
  *
- * Three ways in, because people arrive with different knowledge:
- *  - a template gallery, for a blank diagram
- *  - a visual canvas, for people who know the shape but not the syntax
- *  - a source editor with autocomplete, hints and a cheatsheet, for everyone else
+ * Source on the left, the diagram on the right, both live at once. They are
+ * two views of one Mermaid string, not two modes you switch between: type a
+ * node and it appears on the canvas, drag a box and the source updates under
+ * your cursor. Making them exclusive — which is how this started — meant
+ * anyone who wanted to see their syntax take shape had to keep flipping tabs,
+ * and anyone on the canvas could not see what it was writing for them.
  *
- * All three write to the same Mermaid source, and the preview is always live.
+ * The right pane is the editable canvas for the diagram types the graph model
+ * covers, and the rendered preview otherwise; for flowcharts and state
+ * diagrams you can flip between the two, since a canvas mid-edit is not the
+ * same thing as seeing what Mermaid will actually draw.
+ *
+ * A blank diagram opens on the template gallery instead, because the hardest
+ * part of Mermaid is the first line.
  */
 export function DiagramStudio({
   code,
   onChange,
   theme,
-  initialMode = "visual",
+  initialView = "canvas",
 }: DiagramStudioProps) {
   const documentTheme = useDocumentTheme();
   const resolvedTheme = theme ?? documentTheme;
-  const [mode, setMode] = useState<StudioMode>(initialMode);
-  const [showTemplates, setShowTemplates] = useState(code.trim() === "");
+
+  const [view, setView] = useState<StudioView>(initialView);
+  // A new diagram opens on a blank canvas, not on a catalogue. Being handed a
+  // gallery of twelve diagram types before you have drawn anything is a
+  // decision you have not got the information to make yet; an empty canvas
+  // with a shape palette is somewhere to start. The gallery is still one click
+  // away under "Templates", for anyone who wants the shape handed to them.
+  const [showTemplates, setShowTemplates] = useState(false);
   const [showCheatsheet, setShowCheatsheet] = useState(false);
-  // Collapsing the preview hands the whole width to the canvas, which is what
-  // you want once the diagram is big enough to be worth drawing carefully.
-  const [showPreview, setShowPreview] = useState(true);
+  // Either pane can be given the whole width — a diagram big enough to be worth
+  // drawing carefully wants the room, and so does a long source file.
+  const [showSource, setShowSource] = useState(true);
+  const [showDiagram, setShowDiagram] = useState(true);
+
+  const [split, setSplit] = useState(DEFAULT_SPLIT);
+  const [dragging, setDragging] = useState(false);
 
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<DiagramError | null>(null);
 
   const kind = useMemo(() => detectKind(code), [code]);
 
-  // The canvas edits flowcharts and state diagrams. For anything else the tab
-  // stays clickable and explains itself — a greyed-out button with a tooltip
-  // reads as broken, which is exactly how it was reported.
-  const graph = useMemo(() => mermaidToGraph(code), [code]);
-  const visualAvailable = graph !== null;
+  // The canvas edits flowcharts and state diagrams. For anything else the pane
+  // falls back to the live preview and says so, rather than offering a tab that
+  // does nothing.
+  //
+  // An empty diagram is read as an empty flowchart so the canvas is usable
+  // from the very first click: the alternative was a blank pane that stayed
+  // blank until you had typed the word `flowchart` into the source yourself,
+  // which is exactly the knowledge the canvas exists to not require.
+  const graph = useMemo(() => mermaidToGraph(code.trim() === "" ? "flowchart TD" : code), [code]);
+  const canvasAvailable = graph !== null;
+  const effectiveView: StudioView = canvasAvailable ? view : "preview";
 
   // ── Live preview ────────────────────────────────────────────────────────
   // Debounced so mermaid is not re-invoked on every keystroke, and the last
@@ -120,18 +150,48 @@ export function DiagramStudio({
     [onChange],
   );
 
+  // ── Divider ─────────────────────────────────────────────────────────────
+  const startDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const container = event.currentTarget.parentElement;
+    if (!container) return;
+
+    setDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    const onMove = (moveEvent: PointerEvent) => {
+      const rect = container.getBoundingClientRect();
+      const ratio = ((moveEvent.clientX - rect.left) / rect.width) * 100;
+      setSplit(Math.min(MAX_SPLIT, Math.max(MIN_SPLIT, ratio)));
+    };
+
+    const onUp = () => {
+      setDragging(false);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, []);
+
   if (showTemplates) {
     return (
       <TemplateGallery
         onPick={(template) => {
           onChange(template.code);
           setShowTemplates(false);
-          setMode(template.kind === "flowchart" || template.kind === "state" ? "visual" : "source");
+          setView(
+            template.kind === "flowchart" || template.kind === "state" ? "canvas" : "preview",
+          );
         }}
         {...(code.trim() !== "" ? { onCancel: () => setShowTemplates(false) } : {})}
       />
     );
   }
+
+  // Collapsing one pane hands the other the full width; the divider only makes
+  // sense while both are on screen.
+  const bothPanes = showSource && showDiagram;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -139,27 +199,25 @@ export function DiagramStudio({
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--fl-border)] bg-[var(--fl-surface)] px-4 py-2.5">
         <div
           className="flex rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] p-0.5"
-          role="tablist"
-          aria-label="Diagram editing mode"
+          role="group"
+          aria-label="Studio panes"
         >
-          <StudioTab
-            active={mode === "visual"}
-            onClick={() => setMode("visual")}
-            title={
-              visualAvailable
-                ? "Drag boxes and arrows on a canvas"
-                : "This diagram type has no canvas yet — the source editor covers it"
-            }
-          >
-            Visual
-          </StudioTab>
-          <StudioTab
-            active={mode === "source"}
-            onClick={() => setMode("source")}
-            title="Edit the Mermaid source directly"
+          <PaneToggle
+            active={showSource}
+            // Never let both panes be hidden — an empty studio is not a state
+            // anyone asked for.
+            onClick={() => (showDiagram ? setShowSource((value) => !value) : undefined)}
+            title="Show or hide the Mermaid source"
           >
             Source
-          </StudioTab>
+          </PaneToggle>
+          <PaneToggle
+            active={showDiagram}
+            onClick={() => (showSource ? setShowDiagram((value) => !value) : undefined)}
+            title="Show or hide the diagram"
+          >
+            Diagram
+          </PaneToggle>
         </div>
 
         {kind && (
@@ -172,24 +230,12 @@ export function DiagramStudio({
           <button
             type="button"
             onClick={() => setShowTemplates(true)}
+            title="Start from a sequence chart, ERD, gantt, class diagram and more"
             className="rounded-lg px-2.5 py-1.5 text-[13px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
           >
-            Change type
+            {code.trim() === "" ? "Templates" : "Change type"}
           </button>
-          <button
-            type="button"
-            onClick={() => setShowPreview((value) => !value)}
-            aria-pressed={showPreview}
-            title={showPreview ? "Hide the live preview" : "Show the live preview"}
-            className={`rounded-lg px-2.5 py-1.5 text-[13px] transition-colors ${
-              showPreview
-                ? "bg-[var(--fl-elevated)] text-[var(--fl-text)]"
-                : "text-[var(--fl-muted)] hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
-            }`}
-          >
-            Preview
-          </button>
-          {mode === "source" && (
+          {showSource && (
             <button
               type="button"
               onClick={() => setShowCheatsheet((value) => !value)}
@@ -208,20 +254,17 @@ export function DiagramStudio({
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div
-          className={`flex min-h-[280px] min-w-0 flex-1 flex-col ${
-            showPreview ? "border-b border-[var(--fl-border)] lg:border-b-0 lg:border-r" : ""
-          }`}
-        >
-          {mode === "visual" && graph ? (
-            <VisualBuilder graph={graph} onChange={handleGraphChange} />
-          ) : mode === "visual" ? (
-            <NoCanvasYet
-              kind={kind}
-              onEditSource={() => setMode("source")}
-              onChangeType={() => setShowTemplates(true)}
-            />
-          ) : (
+        {showSource && (
+          <div
+            className={`flex min-h-[220px] min-w-0 flex-col border-b border-[var(--fl-border)] lg:border-b-0 ${
+              bothPanes ? "lg:w-[var(--fl-split)] lg:flex-none" : "flex-1"
+            }`}
+            // Carried as a custom property rather than an inline width: the
+            // panes stack on a narrow screen, where a percentage width would
+            // squeeze the source into a column instead of stacking it.
+            style={{ "--fl-split": `${split}%` } as React.CSSProperties}
+          >
+            <PaneHeading>Mermaid source</PaneHeading>
             <div className="flex min-h-0 flex-1">
               <div className="min-w-0 flex-1 overflow-hidden">
                 <SourceEditor
@@ -241,31 +284,97 @@ export function DiagramStudio({
                 </aside>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* ── Live preview ──────────────────────────────────────────────── */}
-        {showPreview && (
-          <div className="flex min-h-[220px] min-w-0 flex-col bg-[var(--fl-surface)] lg:w-[38%] lg:min-w-[300px] lg:max-w-[520px]">
-            <div className="flex flex-1 items-center justify-center overflow-auto p-5">
-              {svg ? (
+        {bothPanes && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize panes"
+            tabIndex={0}
+            onPointerDown={startDrag}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowLeft") setSplit((value) => Math.max(MIN_SPLIT, value - 4));
+              if (event.key === "ArrowRight") setSplit((value) => Math.min(MAX_SPLIT, value + 4));
+            }}
+            // A 1px rule is a dexterity test, so the hit area is 9px with the
+            // visible line drawn inside it.
+            className="group relative hidden w-[9px] shrink-0 cursor-col-resize focus:outline-none lg:block"
+          >
+            <span
+              aria-hidden="true"
+              className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-colors ${
+                dragging
+                  ? "bg-[var(--fl-accent)]"
+                  : "bg-[var(--fl-border)] group-hover:bg-[var(--fl-accent)] group-focus:bg-[var(--fl-accent)]"
+              }`}
+            />
+          </div>
+        )}
+
+        {showDiagram && (
+          <div className="flex min-h-[240px] min-w-0 flex-1 flex-col bg-[var(--fl-surface)]">
+            <div className="flex shrink-0 items-center gap-2 px-4 pb-1 pt-2.5">
+              <PaneHeading bare>
+                {effectiveView === "canvas" ? "Canvas — drag to edit" : "Preview"}
+              </PaneHeading>
+
+              {canvasAvailable && (
                 <div
-                  className="fl-diagram-preview max-w-full [&_svg]:h-auto [&_svg]:max-w-full"
-                  // Sanitised by the diagram renderer before it reaches here.
-                  dangerouslySetInnerHTML={{ __html: svg }}
-                />
-              ) : (
-                <p className="text-sm text-[var(--fl-muted)]">
-                  {code.trim() ? "Rendering…" : "Your diagram will appear here."}
-                </p>
+                  className="ml-auto flex rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] p-0.5"
+                  role="tablist"
+                  aria-label="Diagram view"
+                >
+                  <PaneToggle
+                    active={effectiveView === "canvas"}
+                    onClick={() => setView("canvas")}
+                    title="Drag boxes and arrows on a canvas"
+                  >
+                    Canvas
+                  </PaneToggle>
+                  <PaneToggle
+                    active={effectiveView === "preview"}
+                    onClick={() => setView("preview")}
+                    title="See exactly what Mermaid renders"
+                  >
+                    Preview
+                  </PaneToggle>
+                </div>
               )}
             </div>
+
+            {effectiveView === "canvas" && graph ? (
+              <VisualBuilder graph={graph} onChange={handleGraphChange} />
+            ) : (
+              <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-5">
+                {svg ? (
+                  <div
+                    className="fl-diagram-preview max-w-full [&_svg]:h-auto [&_svg]:max-w-full"
+                    // Sanitised by the diagram renderer before it reaches here.
+                    dangerouslySetInnerHTML={{ __html: svg }}
+                  />
+                ) : (
+                  <p className="text-sm text-[var(--fl-muted)]">
+                    {code.trim() ? "Rendering…" : "Your diagram will appear here."}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {!canvasAvailable && (
+              <p className="shrink-0 border-t border-[var(--fl-border)] px-4 py-2 text-[12px] leading-relaxed text-[var(--fl-muted)]">
+                {kind ? `${kind} diagrams` : "This diagram type"} has no drag-and-drop canvas yet —
+                edit it as source on the left, with autocomplete and inline errors. Flowcharts and
+                state diagrams can be drawn directly.
+              </p>
+            )}
 
             {error && (
               <div
                 role="alert"
-                // Pinned to the bottom of the preview column so the message is
-                // always on screen, which is the whole point of showing it.
+                // Pinned to the bottom of the pane so the message is always on
+                // screen, which is the whole point of showing it.
                 className="shrink-0 border-t border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/5 px-4 py-2.5 text-xs"
               >
                 <p className="font-medium text-[var(--fl-danger)]">
@@ -286,61 +395,26 @@ export function DiagramStudio({
   );
 }
 
-/**
- * Shown when the visual tab is opened on a diagram type the canvas has no model
- * for — a sequence chart, a gantt, a pie. It says which types the canvas does
- * edit and offers the two ways forward, rather than leaving a dead button.
- */
-function NoCanvasYet({
-  kind,
-  onEditSource,
-  onChangeType,
-}: {
-  kind: string | null;
-  onEditSource: () => void;
-  onChangeType: () => void;
-}) {
+/** The small caption above each pane, so neither column is an unlabelled slab. */
+function PaneHeading({ children, bare = false }: { children: React.ReactNode; bare?: boolean }) {
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-10">
-      <div className="max-w-sm text-center">
-        <p className="text-[14px] font-medium text-[var(--fl-text)]">
-          {kind ? `No canvas for ${kind} diagrams yet` : "No canvas for this diagram yet"}
-        </p>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--fl-muted)]">
-          Flowcharts and state diagrams can be drawn by dragging boxes and arrows. Everything else
-          is written as source — with autocomplete, inline errors and a syntax reference beside the
-          editor.
-        </p>
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-          <button
-            type="button"
-            onClick={onEditSource}
-            className="rounded-lg bg-[var(--fl-accent)] px-3 py-1.5 text-[13px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
-          >
-            Edit the source
-          </button>
-          <button
-            type="button"
-            onClick={onChangeType}
-            className="rounded-lg border border-[var(--fl-border)] px-3 py-1.5 text-[13px] text-[var(--fl-text)] transition-colors hover:border-[var(--fl-border-strong)]"
-          >
-            Change diagram type
-          </button>
-        </div>
-      </div>
-    </div>
+    <p
+      className={`shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)] ${
+        bare ? "" : "px-4 pb-1 pt-2.5"
+      }`}
+    >
+      {children}
+    </p>
   );
 }
 
-function StudioTab({
+function PaneToggle({
   active,
-  disabled = false,
   onClick,
   title,
   children,
 }: {
   active: boolean;
-  disabled?: boolean;
   onClick: () => void;
   title: string;
   children: React.ReactNode;
@@ -348,15 +422,13 @@ function StudioTab({
   return (
     <button
       type="button"
-      role="tab"
-      aria-selected={active}
-      disabled={disabled}
+      aria-pressed={active}
       onClick={onClick}
       title={title}
       className={`rounded-[6px] px-3 py-1 text-[13px] font-medium transition-colors ${
         active
           ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
-          : "text-[var(--fl-muted)] hover:text-[var(--fl-text)] disabled:opacity-40 disabled:hover:text-[var(--fl-muted)]"
+          : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
       }`}
     >
       {children}

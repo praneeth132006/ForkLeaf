@@ -19,6 +19,10 @@ export interface EditorSidebarProps {
   onCreateNote: (folder: string) => void;
   onDeleteNote: (path: string) => void;
   onRenameNote: (path: string) => void;
+  /** Make a folder inside `parent`. An empty string means the repository root. */
+  onCreateFolder: (parent: string) => void;
+  onRenameFolder: (path: string) => void;
+  onDeleteFolder: (path: string) => void;
   user: SessionUser | null;
   onSignIn: () => void;
   onSignOut: () => void;
@@ -52,12 +56,10 @@ export function EditorSidebar(props: EditorSidebarProps) {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Top-level folders, so "new note" can mean "new note somewhere in
-  // particular" without making the reader find the folder and right-click it.
-  const folders = useMemo(
-    () => props.tree.filter((node) => node.kind === "folder").map((node) => node.path),
-    [props.tree],
-  );
+  // Every folder at every depth, so "new note" can mean "new note somewhere in
+  // particular" without making the reader find the folder first. Listing only
+  // the top level meant a note could never be put in a subfolder from here.
+  const folders = useMemo(() => collectFolders(props.tree), [props.tree]);
 
   if (props.collapsed) {
     return (
@@ -236,6 +238,28 @@ export function EditorSidebar(props: EditorSidebarProps) {
           New Note
         </button>
 
+        <button
+          type="button"
+          onClick={() => props.onCreateFolder("")}
+          title="New folder"
+          aria-label="New folder"
+          className="flex w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--fl-border)] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)]"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            aria-hidden="true"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          >
+            <path d="M1.75 4.25c0-.83.67-1.5 1.5-1.5h2.4c.5 0 .96.24 1.25.65l.6.85h5.25c.83 0 1.5.67 1.5 1.5v6.5c0 .83-.67 1.5-1.5 1.5H3.25c-.83 0-1.5-.67-1.5-1.5z" />
+            <path d="M8 7.75v4M6 9.75h4" />
+          </svg>
+        </button>
+
         {folders.length > 0 && (
           <button
             type="button"
@@ -267,9 +291,10 @@ export function EditorSidebar(props: EditorSidebarProps) {
                   props.onCreateNote(folder);
                   setShowFolders(false);
                 }}
-                className="block w-full truncate rounded-lg px-2.5 py-1.5 text-left text-[12.5px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
+                style={{ paddingLeft: `${0.625 + folder.split("/").length * 0.6}rem` }}
+                className="block w-full truncate rounded-lg py-1.5 pr-2.5 text-left text-[12.5px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
               >
-                {folder}
+                {folder.split("/").pop()}
               </button>
             ))}
           </div>
@@ -308,6 +333,9 @@ export function EditorSidebar(props: EditorSidebarProps) {
           onDelete={props.onDeleteNote}
           onRename={props.onRenameNote}
           onCreateIn={props.onCreateNote}
+          onCreateFolder={props.onCreateFolder}
+          onRenameFolder={props.onRenameFolder}
+          onDeleteFolder={props.onDeleteFolder}
           filter={filter}
         />
       </div>
@@ -369,7 +397,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
 
             {showAccount && (
               <div className="absolute bottom-full left-0 right-0 z-30 mb-1 overflow-hidden rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1 shadow-[var(--fl-shadow-lg)]">
-                <MenuLink href="/account">Account &amp; plan</MenuLink>
+                <MenuLink href="/profile">Your profile</MenuLink>
                 <MenuLink href="/docs">Documentation</MenuLink>
                 <button
                   type="button"
@@ -402,6 +430,22 @@ export function EditorSidebar(props: EditorSidebarProps) {
       </div>
     </nav>
   );
+}
+
+/** Every folder path in the tree, depth-first, so nesting reads in order. */
+function collectFolders(nodes: TreeNode[]): string[] {
+  const paths: string[] = [];
+
+  const walk = (list: TreeNode[]) => {
+    for (const node of list) {
+      if (node.kind !== "folder") continue;
+      paths.push(node.path);
+      walk(node.children ?? []);
+    }
+  };
+
+  walk(nodes);
+  return paths;
 }
 
 function RailButton({

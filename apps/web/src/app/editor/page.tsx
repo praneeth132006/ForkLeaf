@@ -143,6 +143,62 @@ export default function EditorPage() {
     [notebook],
   );
 
+  const handleCreateFolder = useCallback(
+    (parent: string) => {
+      setPrompt({
+        title: parent ? `New folder in ${parent}` : "New folder",
+        label: "Folder name",
+        initialValue: "",
+        confirmLabel: "Create",
+        body: "Folders are made of the notes inside them, so this one appears in your repository as soon as it holds its first note.",
+        onConfirm: async (value) => {
+          const name = value.trim();
+          if (!name) return;
+          await notebook.createFolder(parent ? `${parent}/${name}` : name);
+        },
+      });
+    },
+    [notebook],
+  );
+
+  const handleRenameFolder = useCallback(
+    (path: string) => {
+      const currentName = path.split("/").pop() ?? path;
+
+      setPrompt({
+        title: "Rename folder",
+        label: "Folder name",
+        initialValue: currentName,
+        confirmLabel: "Rename",
+        body: "Every note in the folder moves with it, which on a connected repository is committed as a set of renames.",
+        onConfirm: async (value) => {
+          const name = value.trim();
+          if (!name || name === currentName) return;
+
+          const parent = path.split("/").slice(0, -1).join("/");
+          await notebook.renameFolder(path, parent ? `${parent}/${name}` : name);
+        },
+      });
+    },
+    [notebook],
+  );
+
+  const handleDeleteFolder = useCallback(
+    (path: string) => {
+      setPrompt({
+        title: "Delete folder",
+        label: "",
+        destructive: true,
+        confirmLabel: "Delete",
+        body: `“${path}” and every note inside it will be deleted. On a connected repository this is committed to GitHub, so it stays recoverable from your git history.`,
+        onConfirm: async () => {
+          await notebook.deleteFolder(path);
+        },
+      });
+    },
+    [notebook],
+  );
+
   const handleDelete = useCallback(
     (path: string) => {
       setPrompt({
@@ -241,6 +297,9 @@ export default function EditorPage() {
             onCreateNote={handleCreate}
             onDeleteNote={handleDelete}
             onRenameNote={handleRename}
+            onCreateFolder={handleCreateFolder}
+            onRenameFolder={handleRenameFolder}
+            onDeleteFolder={handleDeleteFolder}
             user={user}
             onSignIn={signIn}
             onSignOut={handleSignOut}
@@ -255,25 +314,29 @@ export default function EditorPage() {
               the handful of controls that act on the window rather than on the
               document. The note's title used to sit here too, duplicating the
               one in the properties panel; there is now one place to edit it. */}
-          <header className="grid h-[52px] shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-[var(--fl-border)] px-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <Link href="/" className="shrink-0 px-1 text-[var(--fl-text)] md:hidden">
-                <ForkLeafLogo markClassName="h-6 w-6" textClassName="text-[15px]" />
-              </Link>
+          {/* Flex, not a three-column grid: the grid gave the tab strip a fixed
+              third of the row, so the seventh open note was clipped while the
+              controls beside it sat in empty space. Now the tabs take whatever
+              is left after the controls have what they need, and scroll when
+              that is not enough — which is what makes this fit every width. */}
+          <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-2">
+            <Link href="/" className="shrink-0 px-1 text-[var(--fl-text)] md:hidden">
+              <ForkLeafLogo markClassName="h-6 w-6" textClassName="text-[15px]" />
+            </Link>
 
-              <EditorTabs
-                notes={notebook.openNotes}
-                activePath={notebook.activePath}
-                onSelect={notebook.openNote}
-                onClose={notebook.closeNote}
-              />
-            </div>
+            <EditorTabs
+              notes={notebook.openNotes}
+              activePath={notebook.activePath}
+              onSelect={notebook.openNote}
+              onClose={notebook.closeNote}
+              className="h-9 flex-1"
+            />
 
             {note ? (
               <div
                 role="tablist"
                 aria-label="Editor mode"
-                className="hidden rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] p-0.5 sm:flex"
+                className="hidden shrink-0 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] p-0.5 sm:flex"
               >
                 {MODES.map((option) => (
                   <button
@@ -293,11 +356,9 @@ export default function EditorPage() {
                   </button>
                 ))}
               </div>
-            ) : (
-              <span />
-            )}
+            ) : null}
 
-            <div className="flex items-center justify-end gap-1">
+            <div className="flex shrink-0 items-center justify-end gap-1">
               <IconButton onClick={() => setDialog("help")} label="Help (⌘⇧?)">
                 <svg
                   viewBox="0 0 16 16"
