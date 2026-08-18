@@ -1,11 +1,18 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
+import type { CursorPosition } from "@forkleaf/editor";
 import type { EditorViewMode } from "@forkleaf/types";
-import { deriveTitle, dirname, joinPath, slugifyFilename } from "@forkleaf/markdown-engine";
+import {
+  deriveTitle,
+  dirname,
+  documentStats,
+  joinPath,
+  slugifyFilename,
+} from "@forkleaf/markdown-engine";
 import { useNotebook } from "@/hooks/useNotebook";
 import { useTheme } from "@/hooks/useTheme";
 import { EditorSidebar } from "@/components/EditorSidebar";
@@ -60,6 +67,9 @@ export default function EditorPage() {
   // Conflicts open their own dialog as soon as they appear. Dismissing it hides
   // it until they are resolved; the status bar stays as the way back in.
   const [conflictsDismissed, setConflictsDismissed] = useState(false);
+  // Where the caret is, when there is a source surface to ask. Null in rich
+  // text, where a line and column would be a fiction.
+  const [cursor, setCursor] = useState<CursorPosition | null>(null);
   const [theme, , toggleTheme] = useTheme();
 
   const note = notebook.note;
@@ -67,6 +77,8 @@ export default function EditorPage() {
   const title = note ? deriveTitle(note.content, note.frontmatter.title, note.path) : "";
   const workspace = notebook.activeWorkspace;
   const user = notebook.session?.user ?? null;
+
+  const words = useMemo(() => (note ? documentStats(note.content).words : 0), [note]);
 
   const conflicts = notebook.sync.conflicts;
   // Derived rather than pushed into state by an effect, which would cause a
@@ -125,6 +137,62 @@ export default function EditorPage() {
             target,
             joinPath(dirname(path), `${slugifyFilename(value)}.md`),
           );
+        },
+      });
+    },
+    [notebook],
+  );
+
+  const handleCreateFolder = useCallback(
+    (parent: string) => {
+      setPrompt({
+        title: parent ? `New folder in ${parent}` : "New folder",
+        label: "Folder name",
+        initialValue: "",
+        confirmLabel: "Create",
+        body: "Folders are made of the notes inside them, so this one appears in your repository as soon as it holds its first note.",
+        onConfirm: async (value) => {
+          const name = value.trim();
+          if (!name) return;
+          await notebook.createFolder(parent ? `${parent}/${name}` : name);
+        },
+      });
+    },
+    [notebook],
+  );
+
+  const handleRenameFolder = useCallback(
+    (path: string) => {
+      const currentName = path.split("/").pop() ?? path;
+
+      setPrompt({
+        title: "Rename folder",
+        label: "Folder name",
+        initialValue: currentName,
+        confirmLabel: "Rename",
+        body: "Every note in the folder moves with it, which on a connected repository is committed as a set of renames.",
+        onConfirm: async (value) => {
+          const name = value.trim();
+          if (!name || name === currentName) return;
+
+          const parent = path.split("/").slice(0, -1).join("/");
+          await notebook.renameFolder(path, parent ? `${parent}/${name}` : name);
+        },
+      });
+    },
+    [notebook],
+  );
+
+  const handleDeleteFolder = useCallback(
+    (path: string) => {
+      setPrompt({
+        title: "Delete folder",
+        label: "",
+        destructive: true,
+        confirmLabel: "Delete",
+        body: `“${path}” and every note inside it will be deleted. On a connected repository this is committed to GitHub, so it stays recoverable from your git history.`,
+        onConfirm: async () => {
+          await notebook.deleteFolder(path);
         },
       });
     },
@@ -229,6 +297,9 @@ export default function EditorPage() {
             onCreateNote={handleCreate}
             onDeleteNote={handleDelete}
             onRenameNote={handleRename}
+            onCreateFolder={handleCreateFolder}
+            onRenameFolder={handleRenameFolder}
+            onDeleteFolder={handleDeleteFolder}
             user={user}
             onSignIn={signIn}
             onSignOut={handleSignOut}
@@ -239,62 +310,55 @@ export default function EditorPage() {
 
         <main className="flex min-w-0 flex-1 flex-col">
           {/* ── Header ────────────────────────────────────────────────── */}
-          <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-3">
-            <Link href="/" className="shrink-0 text-[var(--fl-text)] md:hidden">
+          {/* One row: which notes are open, how this one is being viewed, and
+              the handful of controls that act on the window rather than on the
+              document. The note's title used to sit here too, duplicating the
+              one in the properties panel; there is now one place to edit it. */}
+          {/* Flex, not a three-column grid: the grid gave the tab strip a fixed
+              third of the row, so the seventh open note was clipped while the
+              controls beside it sat in empty space. Now the tabs take whatever
+              is left after the controls have what they need, and scroll when
+              that is not enough — which is what makes this fit every width. */}
+          <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-2">
+            <Link href="/" className="shrink-0 px-1 text-[var(--fl-text)] md:hidden">
               <ForkLeafLogo markClassName="h-6 w-6" textClassName="text-[15px]" />
             </Link>
 
+            <EditorTabs
+              notes={notebook.openNotes}
+              activePath={notebook.activePath}
+              onSelect={notebook.openNote}
+              onClose={notebook.closeNote}
+              className="h-9 flex-1"
+            />
+
             {note ? (
-              <input
-                value={(note.frontmatter.title as string) ?? title}
-                onChange={(event) =>
-                  notebook.updateFrontmatter({ ...note.frontmatter, title: event.target.value })
-                }
-                aria-label="Note title"
-                placeholder="Untitled"
-                className="min-w-0 flex-1 truncate rounded-lg bg-transparent px-2 py-1 text-[17px] font-semibold tracking-tight text-[var(--fl-text)] outline-none transition-colors placeholder:text-[var(--fl-muted)] hover:bg-[var(--fl-elevated)] focus:bg-[var(--fl-elevated)]"
-              />
-            ) : (
-              <span className="flex-1 px-2 text-sm text-[var(--fl-muted)]">No note open</span>
-            )}
+              <div
+                role="tablist"
+                aria-label="Editor mode"
+                className="hidden shrink-0 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] p-0.5 sm:flex"
+              >
+                {MODES.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={mode === option.value}
+                    title={option.hint}
+                    onClick={() => notebook.setViewMode(option.value)}
+                    className={`rounded-[6px] px-3 py-1 text-[12.5px] font-medium transition-colors ${
+                      mode === option.value
+                        ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
+                        : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
-            <div className="flex shrink-0 items-center gap-1">
-              {note && (
-                <div
-                  role="tablist"
-                  aria-label="Editor mode"
-                  className="hidden rounded-lg border border-[var(--fl-border)] p-0.5 sm:flex"
-                >
-                  {MODES.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      role="tab"
-                      aria-selected={mode === option.value}
-                      title={option.hint}
-                      onClick={() => notebook.setViewMode(option.value)}
-                      className={`rounded-[6px] px-2.5 py-1 text-[12.5px] font-medium transition-colors ${
-                        mode === option.value
-                          ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
-                          : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {note && (
-                <button
-                  type="button"
-                  onClick={() => setDialog("export")}
-                  className="rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
-                >
-                  Export
-                </button>
-              )}
-
+            <div className="flex shrink-0 items-center justify-end gap-1">
               <IconButton onClick={() => setDialog("help")} label="Help (⌘⇧?)">
                 <svg
                   viewBox="0 0 16 16"
@@ -318,7 +382,7 @@ export default function EditorPage() {
 
               <IconButton
                 onClick={() => setPanelCollapsed((value) => !value)}
-                label="Toggle properties panel"
+                label="Toggle document panel"
                 className="hidden lg:inline-flex"
               >
                 <svg
@@ -334,14 +398,6 @@ export default function EditorPage() {
               </IconButton>
             </div>
           </header>
-
-          {/* ── Open notes ───────────────────────────────────────────── */}
-          <EditorTabs
-            notes={notebook.openNotes}
-            activePath={notebook.activePath}
-            onSelect={notebook.openNote}
-            onClose={notebook.closeNote}
-          />
 
           {/* ── Banners ──────────────────────────────────────────────── */}
           {notebook.error && (
@@ -378,6 +434,7 @@ export default function EditorPage() {
                 onChange={notebook.saveNote}
                 mode={mode}
                 theme={theme}
+                onCursorChange={setCursor}
                 hideModeSwitcher
                 placeholder="Type / for headings, lists, tables and diagrams…"
                 className="min-h-0 flex-1"
@@ -402,6 +459,8 @@ export default function EditorPage() {
               onFrontmatterChange={notebook.updateFrontmatter}
               onExport={() => setDialog("export")}
               onShowHistory={() => setDialog("history")}
+              syncMode={notebook.syncPreference.mode}
+              onSyncNow={notebook.syncNow}
             />
           </div>
         )}
@@ -413,6 +472,8 @@ export default function EditorPage() {
         sync={notebook.sync}
         workspace={workspace}
         notePath={note?.path ?? null}
+        cursor={cursor}
+        words={words}
         syncPreference={notebook.syncPreference}
         onSyncModeChange={notebook.setSyncMode}
         onSyncNow={notebook.syncNow}

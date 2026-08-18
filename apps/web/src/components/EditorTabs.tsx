@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import type { Note } from "@forkleaf/types";
 import { deriveTitle } from "@forkleaf/markdown-engine";
 
@@ -9,6 +9,8 @@ export interface EditorTabsProps {
   activePath: string | null;
   onSelect: (path: string) => void;
   onClose: (path: string) => void;
+  /** Layout from the header, which owns how the row divides its width. */
+  className?: string;
 }
 
 /**
@@ -23,14 +25,49 @@ export interface EditorTabsProps {
  * The note is already saved locally and its changes stay queued for sync;
  * closing only takes it off the strip.
  */
-export function EditorTabs({ notes, activePath, onSelect, onClose }: EditorTabsProps) {
-  if (notes.length === 0) return null;
+export function EditorTabs({ notes, activePath, onSelect, onClose, className }: EditorTabsProps) {
+  const stripRef = useRef<HTMLDivElement>(null);
+  const activeRef = useRef<HTMLDivElement>(null);
+
+  // Bring the current note's tab into view whenever it changes.
+  //
+  // The strip scrolls, but nothing scrolled it: open a seventh note and its
+  // tab was created off the right-hand edge, so the note you were looking at
+  // had no tab anywhere on screen. Opening a note from the sidebar looked like
+  // it had done nothing at all.
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [activePath, notes.length]);
+
+  // A trackpad's vertical gesture is how most people scroll anything, and this
+  // strip only moves sideways.
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaX !== 0 || event.shiftKey) return;
+      if (strip.scrollWidth <= strip.clientWidth) return;
+
+      event.preventDefault();
+      strip.scrollLeft += event.deltaY;
+    };
+
+    strip.addEventListener("wheel", onWheel, { passive: false });
+    return () => strip.removeEventListener("wheel", onWheel);
+  }, []);
+
+  if (notes.length === 0) return <div className={className} />;
 
   return (
     <div
+      ref={stripRef}
       role="tablist"
       aria-label="Open notes"
-      className="flex h-9 shrink-0 items-stretch gap-px overflow-x-auto border-b border-[var(--fl-border)] bg-[var(--fl-bg)] px-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      // `min-w-0` is what makes the flex parent allow this to be narrower than
+      // its content; without it the strip grows to fit every tab and pushes
+      // the controls beside it off the window instead of scrolling.
+      className={`flex min-w-0 items-stretch gap-px overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${className ?? ""}`}
     >
       {notes.map((note) => {
         const active = note.path === activePath;
@@ -39,7 +76,10 @@ export function EditorTabs({ notes, activePath, onSelect, onClose }: EditorTabsP
         return (
           <div
             key={note.id}
-            className={`group flex min-w-0 shrink-0 items-center self-center rounded-lg transition-colors ${
+            ref={active ? activeRef : null}
+            // Tabs shrink before they scroll, so a handful of notes all stay
+            // readable and only a genuinely full strip starts scrolling.
+            className={`group flex min-w-[6rem] shrink items-center self-center rounded-lg transition-colors ${
               active ? "bg-[var(--fl-elevated)]" : "hover:bg-[var(--fl-elevated)]/60"
             }`}
           >
@@ -56,12 +96,16 @@ export function EditorTabs({ notes, activePath, onSelect, onClose }: EditorTabsP
                   onClose(note.path);
                 }
               }}
-              className={`flex max-w-[16ch] items-center gap-1.5 py-1 pl-2.5 pr-1 text-[12.5px] transition-colors ${
+              className={`flex min-w-0 max-w-[20ch] flex-1 items-center gap-1.5 py-1 pl-2.5 pr-1 text-[12.5px] transition-colors ${
                 active
                   ? "font-medium text-[var(--fl-text)]"
                   : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
               }`}
             >
+              <FileGlyph
+                className={active ? "text-[var(--fl-accent)]" : "text-[var(--fl-muted)]"}
+              />
+              <span className="truncate">{label}</span>
               {note.dirty && (
                 <span
                   aria-label="Unpushed changes"
@@ -69,7 +113,6 @@ export function EditorTabs({ notes, activePath, onSelect, onClose }: EditorTabsP
                   className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fl-warn)]"
                 />
               )}
-              <span className="truncate">{label}</span>
             </button>
 
             <button
@@ -99,5 +142,22 @@ export function EditorTabs({ notes, activePath, onSelect, onClose }: EditorTabsP
         );
       })}
     </div>
+  );
+}
+
+function FileGlyph({ className }: { className: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className={`h-3.5 w-3.5 shrink-0 ${className}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    >
+      <path d="M9 1.75H4.5A1.75 1.75 0 0 0 2.75 3.5v9c0 .97.78 1.75 1.75 1.75h7a1.75 1.75 0 0 0 1.75-1.75V6z" />
+      <path d="M9 1.75V6h4.25" />
+    </svg>
   );
 }

@@ -42,6 +42,14 @@ export interface SourceEditorProps {
   ariaLabel?: string;
   /** Lets a toolbar insert text at the caret instead of at the end of the file. */
   handleRef?: React.Ref<SourceEditorHandle>;
+  /** Reports where the caret is, for a status bar. Both numbers are 1-based. */
+  onCursorChange?: (position: CursorPosition) => void;
+}
+
+/** Caret location, in the terms a status bar uses. */
+export interface CursorPosition {
+  line: number;
+  column: number;
 }
 
 export interface SourceEditorHandle {
@@ -75,6 +83,7 @@ export function SourceEditor({
   autoFocus = false,
   ariaLabel = "Markdown source",
   handleRef,
+  onCursorChange,
 }: SourceEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -83,6 +92,19 @@ export function SourceEditor({
   // parent re-renders would drop focus mid-keystroke.
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onCursorChangeRef = useRef(onCursorChange);
+  onCursorChangeRef.current = onCursorChange;
+
+  /**
+   * Every document this editor has reported upwards.
+   *
+   * The parent owns the text and hands it straight back, so our own edit
+   * returns as a `value` prop a render later. Typing again before it lands
+   * made that prop stale, and replacing the whole document with it dropped the
+   * newer keystrokes and moved the caret — which reads as the editor
+   * scrambling text while you type.
+   */
+  const emitted = useRef<string[]>([]);
 
   // Extensions supplied by the caller can change (the mermaid linter closes
   // over the current error), so they live in a compartment we can reconfigure.
@@ -118,13 +140,19 @@ export function SourceEditor({
         ...(language === "markdown"
           ? [markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: true })]
           : []),
-        // Accepting a completion has to outrank everything else: `defaultKeymap`
-        // binds Enter to "insert a newline", which silently won the race and
-        // made the slash menu impossible to accept with the key every other
-        // editor uses. Tab accepts too, since half of people reach for that.
+        // Accepting a completion has to outrank `defaultKeymap`, which binds
+        // both of these to something else and silently won the race.
+        //
+        // Enter is claimed only in markdown, where the completion source is the
+        // `/` block menu: every entry there was deliberately summoned, so Enter
+        // meaning "accept" is what anyone would expect. The mermaid source
+        // editor suggests on any word character, and taking Enter there meant a
+        // newline typed after `flowchart TD` swallowed the line and pasted a
+        // template over it — you could not write a diagram by hand at all.
+        // Tab accepts in both, and is unambiguous in neither case.
         Prec.highest(
           keymap.of([
-            { key: "Enter", run: acceptCompletion },
+            ...(language === "markdown" ? [{ key: "Enter", run: acceptCompletion }] : []),
             { key: "Tab", run: acceptCompletion },
           ]),
         ),
@@ -143,7 +171,22 @@ export function SourceEditor({
         editorTheme(),
         EditorView.contentAttributes.of({ "aria-label": ariaLabel }),
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) onChangeRef.current(update.state.doc.toString());
+          if (update.docChanged) {
+            const text = update.state.doc.toString();
+            emitted.current.push(text);
+            // Only the recent past matters; the list would otherwise grow for
+            // as long as the note stays open.
+            if (emitted.current.length > 60) emitted.current.shift();
+            onChangeRef.current(text);
+          }
+
+          // Editing moves the caret too, so a doc change has to report as well
+          // — otherwise the status bar goes stale the moment you type.
+          if (update.selectionSet || update.docChanged) {
+            const head = update.state.selection.main.head;
+            const line = update.state.doc.lineAt(head);
+            onCursorChangeRef.current?.({ line: line.number, column: head - line.from + 1 });
+          }
         }),
         dynamicCompartment.of(extensions ?? []),
       ],
@@ -152,6 +195,12 @@ export function SourceEditor({
     const view = new EditorView({ state, parent: host });
     viewRef.current = view;
     if (autoFocus) view.focus();
+
+    // The update listener only fires on a change; without this the status bar
+    // would sit empty until the reader first touched the document.
+    const head = view.state.selection.main.head;
+    const line = view.state.doc.lineAt(head);
+    onCursorChangeRef.current?.({ line: line.number, column: head - line.from + 1 });
 
     return () => {
       view.destroy();
@@ -170,12 +219,18 @@ export function SourceEditor({
     const current = view.state.doc.toString();
     if (current === value) return;
 
+    // Our own edit echoing back late. The document is already at least as new
+    // as this, so writing the prop over it would undo what was just typed.
+    if (emitted.current.includes(value)) return;
+
     view.dispatch({
       changes: { from: 0, to: current.length, insert: value },
       // Clamp rather than drop the selection so switching modes or loading a
       // note keeps the caret somewhere sensible.
       selection: { anchor: Math.min(view.state.selection.main.anchor, value.length) },
     });
+    // The history above describes a document that no longer exists.
+    emitted.current = [];
   }, [value]);
 
   useImperativeHandle(

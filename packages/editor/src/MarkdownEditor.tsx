@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Editor } from "@tiptap/core";
 import type { EditorViewMode } from "@forkleaf/types";
 import { WysiwygEditor } from "./WysiwygEditor";
-import { SourceEditor, type SourceEditorHandle } from "./SourceEditor";
+import { SourceEditor, type CursorPosition, type SourceEditorHandle } from "./SourceEditor";
 import { Preview } from "./Preview";
 import { EditorToolbar } from "./EditorToolbar";
 import { insertActionsFor, runRichAction, runSourceAction } from "./insert-actions";
@@ -22,6 +22,14 @@ export interface MarkdownEditorProps {
   hideModeSwitcher?: boolean;
   /** Hides the insert toolbar, for embedded or read-mostly surfaces. */
   hideToolbar?: boolean;
+  /**
+   * Reports the caret's line and column, for a status bar.
+   *
+   * Only the markdown source surface has a meaningful line and column — in
+   * rich text the document is a node tree and "line 12" would be a fiction —
+   * so this stays silent in wysiwyg mode rather than inventing a number.
+   */
+  onCursorChange?: (position: CursorPosition | null) => void;
 }
 
 const MODES: { value: EditorViewMode; label: string; hint: string }[] = [
@@ -51,6 +59,7 @@ export function MarkdownEditor({
   className,
   hideModeSwitcher = false,
   hideToolbar = false,
+  onCursorChange,
 }: MarkdownEditorProps) {
   // Split view: the divider position, as a percentage of the container width.
   const [splitRatio, setSplitRatio] = useState(50);
@@ -66,6 +75,12 @@ export function MarkdownEditor({
   const handleTiptapReady = useCallback((editor: Editor | null) => {
     setTiptap(editor);
   }, []);
+
+  // Rich text has no source surface to report from, so the status bar is told
+  // to drop the reading rather than keep showing where the caret used to be.
+  useEffect(() => {
+    if (mode === "wysiwyg") onCursorChange?.(null);
+  }, [mode, onCursorChange]);
 
   // Keep the toolbar's active states honest.
   //
@@ -222,6 +237,7 @@ export function MarkdownEditor({
             onChange={onChange}
             handleRef={sourceHandle}
             {...(placeholder ? { placeholder } : {})}
+            {...(onCursorChange ? { onCursorChange } : {})}
             showLineNumbers
           />
         </div>
@@ -239,6 +255,7 @@ export function MarkdownEditor({
               onChange={onChange}
               handleRef={sourceHandle}
               {...(placeholder ? { placeholder } : {})}
+              {...(onCursorChange ? { onCursorChange } : {})}
               showLineNumbers
               className="min-h-0 w-full flex-1 overflow-hidden"
             />

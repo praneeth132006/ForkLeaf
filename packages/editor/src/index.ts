@@ -1,6 +1,11 @@
 export { MarkdownEditor, type MarkdownEditorProps } from "./MarkdownEditor";
 export { WysiwygEditor, type WysiwygEditorProps } from "./WysiwygEditor";
-export { SourceEditor, type SourceEditorProps, type SourceEditorHandle } from "./SourceEditor";
+export {
+  SourceEditor,
+  type SourceEditorProps,
+  type SourceEditorHandle,
+  type CursorPosition,
+} from "./SourceEditor";
 export { Preview, type PreviewProps } from "./Preview";
 export { EditorToolbar, type EditorToolbarProps, type InsertAction } from "./EditorToolbar";
 export {
@@ -15,7 +20,7 @@ export {
 } from "./insert-actions";
 export { Modal, type ModalProps } from "./ui/Modal";
 
-export { DiagramStudio, type DiagramStudioProps, type StudioMode } from "./mermaid/DiagramStudio";
+export { DiagramStudio, type DiagramStudioProps, type StudioView } from "./mermaid/DiagramStudio";
 export { VisualBuilder, type VisualBuilderProps } from "./mermaid/VisualBuilder";
 export { TemplateGallery, type TemplateGalleryProps } from "./mermaid/TemplateGallery";
 export { TemplateThumbnail } from "./mermaid/TemplateThumbnail";

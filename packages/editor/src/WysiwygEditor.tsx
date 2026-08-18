@@ -61,6 +61,27 @@ export function WysiwygEditor({
   // straight back in and resets the cursor to the top on every keystroke.
   const applyingExternal = useRef(false);
 
+  /**
+   * Every markdown string this editor has handed upwards.
+   *
+   * The parent stores the value and passes it back, so a render or two later
+   * our own edit arrives as a `value` prop. If more was typed in the meantime
+   * that prop is already stale, and applying it silently threw the newer
+   * keystrokes away — which is what made blocks disappear and characters land
+   * in the paragraph above the one being typed in.
+   *
+   * Recognising the echo is the whole fix: anything in here came from us and
+   * must never be written back over a document that has since moved on.
+   */
+  const emitted = useRef<string[]>([]);
+
+  const remember = useCallback((markdown: string) => {
+    emitted.current.push(markdown);
+    // Only the recent past matters; an unbounded list would grow for as long
+    // as the note stays open.
+    if (emitted.current.length > 60) emitted.current.shift();
+  }, []);
+
   const extensions = useMemo(
     () => [
       StarterKit.configure({
@@ -115,7 +136,10 @@ export function WysiwygEditor({
     },
     onUpdate: ({ editor: instance }) => {
       if (applyingExternal.current) return;
-      onChangeRef.current(markdownOf(instance));
+
+      const markdown = markdownOf(instance);
+      remember(markdown);
+      onChangeRef.current(markdown);
     },
   });
 
@@ -137,9 +161,15 @@ export function WysiwygEditor({
     const current = markdownOf(editor);
     if (current === value) return;
 
+    // A value we produced ourselves, arriving late. The document is already
+    // at least as new as this, so rebuilding it from the prop would undo work.
+    if (emitted.current.includes(value)) return;
+
     applyingExternal.current = true;
     editor.commands.setContent(value, { emitUpdate: false });
     applyingExternal.current = false;
+    // The history above describes a document that no longer exists.
+    emitted.current = [];
   }, [value, editor]);
 
   if (!editor) {

@@ -56,6 +56,50 @@ function sizeOf(node: { shape: NodeShape }): { width: number; height: number } {
   }
 }
 
+/**
+ * The nearest place a new box fits without landing on one already there.
+ *
+ * Spirals outward from `centre` in grid steps and takes the first position
+ * whose footprint — plus a gutter, so boxes are never touching — is clear.
+ * Falls back to the centre if the canvas is somehow packed solid, which is
+ * still better than refusing to add the node.
+ */
+function freeSpotNear(
+  centre: Point,
+  size: { width: number; height: number },
+  nodes: GraphNode[],
+): Point {
+  const GUTTER = 24;
+  const STEP = NODE_WIDTH / 2 + GUTTER;
+
+  const clear = (x: number, y: number) =>
+    nodes.every((node) => {
+      const other = sizeOf(node);
+      return (
+        Math.abs(x - (node.x + other.width / 2)) > (size.width + other.width) / 2 + GUTTER ||
+        Math.abs(y - (node.y + other.height / 2)) > (size.height + other.height) / 2 + GUTTER
+      );
+    });
+
+  if (clear(centre.x, centre.y)) return centre;
+
+  // Rings of candidate positions, closest first.
+  for (let ring = 1; ring <= 8; ring += 1) {
+    for (let dy = -ring; dy <= ring; dy += 1) {
+      for (let dx = -ring; dx <= ring; dx += 1) {
+        // Only the edge of each ring; the inside was covered by earlier ones.
+        if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+
+        const x = centre.x + dx * STEP;
+        const y = centre.y + dy * (NODE_HEIGHT + GUTTER);
+        if (clear(x, y)) return { x, y };
+      }
+    }
+  }
+
+  return centre;
+}
+
 /** Pseudo-states have no text of their own — mermaid draws them as marks. */
 function isMarker(shape: NodeShape): boolean {
   return shape === "start" || shape === "end" || shape === "fork";
@@ -287,8 +331,12 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
     const contentWidth = maxX - minX + FIT_PADDING * 2;
     const contentHeight = maxY - minY + FIT_PADDING * 2;
+    // Never magnified past life size. Fitting a two-box diagram to the pane
+    // zoomed it to 250%, which turned two small boxes into two slabs wider
+    // than the canvas — "fit" should mean everything is visible, not that the
+    // content is stretched to fill the space it happens to have.
     const next = clamp(
-      Math.min(viewport.width / contentWidth, viewport.height / contentHeight),
+      Math.min(viewport.width / contentWidth, viewport.height / contentHeight, 1),
       MIN_ZOOM,
       MAX_ZOOM,
     );
@@ -322,9 +370,19 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
     (shape: NodeShape, centre?: Point): string => {
       const id = nextNodeId(graph);
       const size = sizeOf({ shape });
-      const offset = centre ? 0 : (graph.nodes.length % 6) * 24;
-      const x = (centre?.x ?? view.x + view.width / 2 + offset) - size.width / 2;
-      const y = (centre?.y ?? view.y + view.height / 2 + offset * 0.8) - size.height / 2;
+      const spot =
+        centre ??
+        // Added from the palette rather than by double-clicking a spot, so the
+        // canvas has to choose one. It used to cascade by 24px per node, which
+        // on a 150×56 box means the second one lands almost exactly on the
+        // first: clicking two shapes in a row looked like it had added one.
+        freeSpotNear(
+          { x: view.x + view.width / 2, y: view.y + view.height / 2 },
+          size,
+          graph.nodes,
+        );
+      const x = spot.x - size.width / 2;
+      const y = spot.y - size.height / 2;
 
       onChange(
         addNode(graph, {
@@ -705,6 +763,10 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             return (
               <input
                 autoFocus
+                // Selected on open, so double-clicking a box and typing
+                // replaces its name. Without this the caret landed at one end
+                // and "Process" became "ProcessBuild step".
+                onFocus={(event) => event.currentTarget.select()}
                 value={node.label}
                 onChange={(event) =>
                   onChange(updateNode(graph, node.id, { label: event.target.value }))

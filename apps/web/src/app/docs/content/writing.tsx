@@ -86,8 +86,15 @@ export function Editor() {
           <Code>Q3 planning</Code> becomes <Code>q3-planning.md</Code>.
         </LI>
         <LI>
-          Folders are real directories. Use the <Code>+</Code> on a folder row in the sidebar to
-          create a note inside it.
+          Folders are real directories, nested as deeply as you like. The folder button beside{" "}
+          <strong>New Note</strong> makes one at the top level; hovering a folder row gives you a
+          note, a subfolder, a rename and a delete for that folder.
+        </LI>
+        <LI>
+          A folder you have just made shows as <em>Empty</em> and lives on this device only, because
+          Git has no concept of an empty directory — it becomes part of the repository as soon as
+          its first note lands in it. Renaming or deleting a folder moves or deletes every note
+          inside it, which is what those words mean in a repository.
         </LI>
         <LI>
           Renaming rewrites the path. On a connected repository that is a delete and a create in one
@@ -117,8 +124,8 @@ export function Diagrams() {
     <>
       <Lead>
         Mermaid&rsquo;s real barrier is not the feature set, it is remembering the syntax. ForkLeaf
-        gives you a gallery to start from, a canvas to drag on, and an editor that tells you which
-        line is wrong.
+        gives you a blank canvas to drag on, the source beside it, and an editor that tells you
+        which line is wrong.
       </Lead>
 
       <H2 id="insert">Inserting a diagram</H2>
@@ -128,10 +135,14 @@ export function Diagrams() {
           <strong>Diagram</strong> on the toolbar.
         </li>
         <li>
-          The diagram studio opens as an overlay, showing the template gallery because the diagram
-          is empty.
+          The diagram studio opens as an overlay: an empty canvas with a shape palette on the right,
+          and the Mermaid source on the left.
         </li>
-        <li>Pick a type. It fills in working example code, which you then edit.</li>
+        <li>
+          Double-click the canvas to add your first box, or pick a shape from the palette. Prefer to
+          start from something finished? <strong>Templates</strong> has a diagram of every type,
+          ready to edit.
+        </li>
         <li>
           Press <strong>Done</strong> or <Code>Esc</Code>. The diagram appears in your note as a
           rendered picture.
@@ -139,10 +150,26 @@ export function Diagrams() {
       </OL>
       <P>Click any diagram in a note to reopen the studio.</P>
 
+      <H2 id="panes">Source and canvas, side by side</H2>
+      <P>
+        Both panes are live views of the same Mermaid string, not two modes you switch between: type
+        a node in the source and it appears on the canvas, drag a box and the source updates under
+        your cursor. Drag the divider to give either one more room, or use the{" "}
+        <strong>Source</strong> and <strong>Diagram</strong> toggles to hand one of them the whole
+        width.
+      </P>
+      <P>
+        For flowcharts and state diagrams the right pane offers <strong>Canvas</strong> and{" "}
+        <strong>Preview</strong>. Every other diagram type shows the preview, since the canvas has
+        no model for it yet — those are written as source, which is what the autocomplete, inline
+        errors and syntax reference are for.
+      </P>
+
       <H2 id="types">The diagram types</H2>
       <P>
-        The gallery is grouped by what you are trying to show rather than by Mermaid&rsquo;s
-        internal names, and every card draws a small silhouette of the shape it produces.
+        The template gallery is grouped by what you are trying to show rather than by
+        Mermaid&rsquo;s internal names, and every card draws a small silhouette of the shape it
+        produces.
       </P>
       <Table
         head={["Group", "Types", "Use when"]}
@@ -170,11 +197,11 @@ export function Diagrams() {
         ]}
       />
 
-      <H2 id="visual">The visual builder</H2>
+      <H2 id="visual">The canvas</H2>
       <P>
-        Available for flowcharts. Drag nodes to move them, drag from a node&rsquo;s edge to draw an
-        arrow, double-click a node to rename it, and press Delete to remove the selection. The
-        Mermaid source is regenerated as you go.
+        Available for flowcharts and state diagrams. Drag nodes to move them, drag from a
+        node&rsquo;s edge handle to draw an arrow, double-click a node to rename it, and press
+        Delete to remove the selection. The Mermaid source is regenerated as you go.
       </P>
       <P>Node positions are preserved in the file as a comment:</P>
       <Pre label="a flowchart with saved layout">{`flowchart TD
@@ -188,8 +215,8 @@ export function Diagrams() {
         the right trade for keeping the file portable.
       </P>
       <Note>
-        The Visual tab is disabled rather than hidden for diagram types it cannot draw. That way it
-        is obvious the feature exists and simply does not apply here.
+        For a diagram type the canvas cannot draw, the pane says so and points at the source editor
+        rather than leaving a tab that does nothing.
       </Note>
 
       <H2 id="source">The source editor</H2>

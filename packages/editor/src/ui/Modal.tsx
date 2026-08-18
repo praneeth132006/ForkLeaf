@@ -52,6 +52,14 @@ export function Modal({
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        // An open suggestion list owns Escape first. This handler is bound in
+        // the capture phase so it can trap Tab, which also meant it beat
+        // CodeMirror to Escape: typing Mermaid, getting a completion popup and
+        // pressing the key that dismisses one everywhere else closed the whole
+        // diagram studio instead. Let the inner surface have it, and the next
+        // Escape — with no popup left open — closes the dialog.
+        if (panelRef.current?.querySelector(".cm-tooltip-autocomplete")) return;
+
         event.stopPropagation();
         onClose();
         return;

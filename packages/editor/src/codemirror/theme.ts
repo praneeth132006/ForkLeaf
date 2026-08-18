@@ -82,11 +82,21 @@ const base = EditorView.theme({
   ".cm-diagnostic-error": { borderLeftColor: "var(--fl-danger)" },
 });
 
-/** Syntax colours for markdown and embedded code. */
+/**
+ * Syntax colours for markdown and embedded code.
+ *
+ * Deliberately no font sizes. This is the source view: `# Title` is two
+ * characters and a word, and blowing it up to 1.5em made the raw markdown
+ * ragged, pushed the line numbers out of alignment with the text they number,
+ * and left people wondering why a heading looked different here than in the
+ * fenced block below it. Headings are still obvious — they are the bold ones —
+ * and the actual heading size belongs to the rendered output, which is what
+ * the preview and the rich-text view are for.
+ */
 const highlight = HighlightStyle.define([
-  { tag: tags.heading1, fontSize: "1.5em", fontWeight: "700", color: "var(--fl-text)" },
-  { tag: tags.heading2, fontSize: "1.3em", fontWeight: "700", color: "var(--fl-text)" },
-  { tag: tags.heading3, fontSize: "1.15em", fontWeight: "650", color: "var(--fl-text)" },
+  { tag: tags.heading1, fontWeight: "700", color: "var(--fl-text)" },
+  { tag: tags.heading2, fontWeight: "700", color: "var(--fl-text)" },
+  { tag: tags.heading3, fontWeight: "650", color: "var(--fl-text)" },
   {
     tag: [tags.heading4, tags.heading5, tags.heading6],
     fontWeight: "650",

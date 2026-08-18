@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import type { Note, NoteFrontmatter, Workspace } from "@forkleaf/types";
-import { extractOutline, documentStats } from "@forkleaf/markdown-engine";
+import React, { useCallback, useMemo, useState } from "react";
+import type { Note, NoteFrontmatter, SyncMode, Workspace } from "@forkleaf/types";
+import { extractOutline, documentStats, serializeDocument } from "@forkleaf/markdown-engine";
+import { exportNote, printToPdf, downloadResult } from "@forkleaf/exporter";
+import { deriveTitle } from "@forkleaf/markdown-engine";
 
 export interface EditorRightPanelProps {
   collapsed: boolean;
@@ -10,21 +12,29 @@ export interface EditorRightPanelProps {
   note: Note | null;
   workspace: Workspace | null;
   onFrontmatterChange: (frontmatter: NoteFrontmatter) => void;
+  /** Opens the full export dialog, for the formats and options not shortcut here. */
   onExport: () => void;
   onShowHistory: () => void;
+  /** Drives the auto-save indicator in the panel header. */
+  syncMode: SyncMode;
+  onSyncNow: () => void;
 }
 
 /** Frontmatter keys that get a dedicated editor rather than the generic list. */
 const RESERVED = new Set(["title", "tags", "created", "updated"]);
 
 /**
- * Right panel: document properties and outline.
+ * Right panel: everything true about the document that is not the document.
+ *
+ * Properties and the outline used to be two tabs, which meant the panel could
+ * only ever answer one of "what is this note" and "what is in it" — and the
+ * reader had to remember which tab the thing they wanted was behind. It is one
+ * scrolling column now: identity, then measurements, then the things you can
+ * do with it, then its shape. Nothing is hidden behind a tab.
  *
  * Properties are the note's YAML frontmatter, edited directly — what is shown
  * here is literally what is written into the file, so notes stay portable to
- * Obsidian, Jekyll, Hugo or plain git. Version history reads the repository's
- * commits and renders them in a panel here, rather than sending you to a
- * different website mid-sentence.
+ * Obsidian, Jekyll, Hugo or plain git.
  */
 export function EditorRightPanel({
   collapsed,
@@ -34,20 +44,76 @@ export function EditorRightPanel({
   onFrontmatterChange,
   onExport,
   onShowHistory,
+  syncMode,
+  onSyncNow,
 }: EditorRightPanelProps) {
-  const [tab, setTab] = useState<"properties" | "outline">("properties");
   const [newKey, setNewKey] = useState("");
+  const [newTag, setNewTag] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const outline = useMemo(() => (note ? extractOutline(note.content) : []), [note]);
   const stats = useMemo(() => (note ? documentStats(note.content) : null), [note]);
+
+  // Memoised because `update` closes over it: a fresh `{}` each render would
+  // rebuild that callback on every keystroke.
+  const frontmatter = useMemo(() => note?.frontmatter ?? {}, [note?.frontmatter]);
+  const tags = Array.isArray(frontmatter.tags) ? (frontmatter.tags as string[]) : [];
+  const custom = Object.entries(frontmatter).filter(([key]) => !RESERVED.has(key));
+
+  const update = useCallback(
+    (patch: NoteFrontmatter) => {
+      const next = { ...frontmatter, ...patch };
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === undefined) delete next[key];
+      }
+      onFrontmatterChange(next);
+    },
+    [frontmatter, onFrontmatterChange],
+  );
+
+  const copyMarkdown = useCallback(async () => {
+    if (!note) return;
+    // The frontmatter goes with it: what is copied is the file, not a view of
+    // the file, which is what "Copy Markdown" has to mean in an app whose
+    // whole premise is that the file is the real thing.
+    await navigator.clipboard.writeText(serializeDocument(note.content, note.frontmatter));
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }, [note]);
+
+  const runExport = useCallback(
+    async (format: "html" | "pdf") => {
+      if (!note) return;
+
+      setBusy(format);
+      try {
+        const options = {
+          format,
+          title: deriveTitle(note.content, note.frontmatter.title, note.path),
+          includeFrontmatter: false,
+          renderDiagrams: true,
+          theme: "light" as const,
+        };
+
+        // PDF goes through the browser's print pipeline, which is the only way
+        // to get selectable text without shipping a rendering engine.
+        if (format === "pdf") await printToPdf(note, options);
+        else downloadResult(await exportNote(note, options));
+      } finally {
+        setBusy(null);
+      }
+    },
+    [note],
+  );
 
   if (collapsed) {
     return (
       <button
         type="button"
         onClick={onToggle}
-        title="Show properties"
-        aria-label="Show properties"
+        title="Show document panel"
+        aria-label="Show document panel"
         className="w-8 shrink-0 border-l border-[var(--fl-border)] bg-[var(--fl-bg)] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
       >
         ‹
@@ -55,229 +121,444 @@ export function EditorRightPanel({
     );
   }
 
-  const frontmatter = note?.frontmatter ?? {};
-  const tags = Array.isArray(frontmatter.tags) ? (frontmatter.tags as string[]) : [];
-  const custom = Object.entries(frontmatter).filter(([key]) => !RESERVED.has(key));
-
-  const update = (patch: NoteFrontmatter) => {
-    const next = { ...frontmatter, ...patch };
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === undefined) delete next[key];
-    }
-    onFrontmatterChange(next);
-  };
-
   // History comes from the repository, so it only exists once one is connected.
   const hasHistory = Boolean(workspace && !workspace.isLocal && note);
 
   return (
     <aside className="flex w-72 shrink-0 flex-col border-l border-[var(--fl-border)] bg-[var(--fl-bg)]">
-      <div className="flex shrink-0 items-center gap-1 border-b border-[var(--fl-border)] px-2 py-2">
-        <div role="tablist" className="flex flex-1 gap-0.5">
-          {(["properties", "outline"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={tab === value}
-              onClick={() => setTab(value)}
-              className={`rounded-lg px-2.5 py-1 text-[12.5px] font-medium capitalize transition-colors ${
-                tab === value
-                  ? "bg-[var(--fl-elevated)] text-[var(--fl-text)]"
-                  : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
-              }`}
-            >
-              {value}
-            </button>
-          ))}
-        </div>
+      {/* ── Header: the one thing people check without looking away ─────── */}
+      <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-3">
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[12px]">
+          {syncMode === "auto" ? (
+            <>
+              <CheckGlyph />
+              <span className="truncate text-[var(--fl-text)]">Auto-save ON</span>
+            </>
+          ) : (
+            <>
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[var(--fl-warn)]" />
+              <span className="truncate text-[var(--fl-muted)]">
+                {syncMode === "manual" ? "Auto-save off" : "Auto-save on a timer"}
+              </span>
+            </>
+          )}
+        </span>
+
+        <button
+          type="button"
+          onClick={onSyncNow}
+          title="Sync now (⌘S)"
+          aria-label="Sync now"
+          className="shrink-0 rounded-lg p-1.5 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+        >
+          <RefreshGlyph />
+        </button>
+
         <button
           type="button"
           onClick={onToggle}
           title="Hide panel"
           aria-label="Hide panel"
-          className="rounded-lg p-1.5 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+          className="shrink-0 rounded-lg p-1.5 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
         >
           ›
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {!note && (
-          <p className="py-8 text-center text-[12.5px] text-[var(--fl-muted)]">
-            Open a note to see its properties.
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {!note ? (
+          <p className="px-4 py-10 text-center text-[12.5px] leading-relaxed text-[var(--fl-muted)]">
+            Open a note to see its properties, statistics and outline.
           </p>
-        )}
+        ) : (
+          <>
+            {/* ── Document ──────────────────────────────────────────────── */}
+            <Section title="Document">
+              <label className="block">
+                <span className="mb-1.5 block text-[12px] text-[var(--fl-muted)]">Title</span>
+                <input
+                  value={(frontmatter.title as string) ?? ""}
+                  onChange={(event) => update({ title: event.target.value })}
+                  placeholder="Untitled"
+                  className="fl-input"
+                />
+              </label>
 
-        {note && tab === "properties" && (
-          <div className="space-y-3.5">
-            <Field label="Title">
-              <input
-                value={(frontmatter.title as string) ?? ""}
-                onChange={(event) => update({ title: event.target.value })}
-                placeholder="Untitled"
-                className="fl-input"
-              />
-            </Field>
+              <div className="mt-3">
+                <span className="mb-1.5 block text-[12px] text-[var(--fl-muted)]">Tags</span>
 
-            <Field label="Tags">
-              <input
-                value={tags.join(", ")}
-                onChange={(event) =>
-                  update({
-                    tags: event.target.value
-                      .split(",")
-                      .map((tag) => tag.trim())
-                      .filter(Boolean),
-                  })
-                }
-                placeholder="research, draft"
-                className="fl-input"
-              />
-              {tags.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap gap-1">
+                <div className="flex min-h-[38px] flex-wrap items-center gap-1.5 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2 py-1.5">
                   {tags.map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-md bg-[var(--fl-accent-soft)] px-1.5 py-0.5 text-[11px] text-[var(--fl-accent)]"
+                      className="flex items-center gap-1 rounded-md bg-[var(--fl-accent-soft)] px-1.5 py-0.5 text-[11.5px] text-[var(--fl-accent)]"
                     >
                       {tag}
+                      <button
+                        type="button"
+                        onClick={() => update({ tags: tags.filter((t) => t !== tag) })}
+                        aria-label={`Remove tag ${tag}`}
+                        className="opacity-70 transition-opacity hover:opacity-100"
+                      >
+                        <CrossGlyph />
+                      </button>
                     </span>
                   ))}
-                </div>
-              )}
-            </Field>
 
-            {custom.map(([key, value]) => (
-              <Field key={key} label={key}>
-                <div className="flex gap-1">
-                  <input
-                    value={String(value ?? "")}
-                    onChange={(event) => update({ [key]: event.target.value })}
-                    className="fl-input min-w-0 flex-1"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => update({ [key]: undefined })}
-                    title={`Remove ${key}`}
-                    aria-label={`Remove ${key}`}
-                    className="shrink-0 rounded-lg px-2 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-danger)]"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </Field>
-            ))}
+                  {newTag === null ? (
+                    <button
+                      type="button"
+                      onClick={() => setNewTag("")}
+                      aria-label="Add a tag"
+                      className="ml-auto rounded p-0.5 text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]"
+                    >
+                      <PlusGlyph />
+                    </button>
+                  ) : (
+                    <input
+                      autoFocus
+                      value={newTag}
+                      onChange={(event) => setNewTag(event.target.value)}
+                      onBlur={() => setNewTag(null)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") setNewTag(null);
+                        if (event.key !== "Enter") return;
 
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                const key = newKey.trim();
-                if (key && !(key in frontmatter)) update({ [key]: "" });
-                setNewKey("");
-              }}
-              className="flex gap-1"
-            >
-              <input
-                value={newKey}
-                onChange={(event) => setNewKey(event.target.value)}
-                placeholder="Add a property…"
-                aria-label="New property name"
-                className="fl-input min-w-0 flex-1 border-dashed !bg-transparent"
-              />
-              <button
-                type="submit"
-                aria-label="Add property"
-                className="shrink-0 rounded-lg px-2 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+                        event.preventDefault();
+                        const value = newTag.trim();
+                        // Silently ignoring a duplicate is right: the tag the
+                        // user wanted is already there.
+                        if (value && !tags.includes(value)) update({ tags: [...tags, value] });
+                        setNewTag("");
+                      }}
+                      placeholder="Add a tag…"
+                      aria-label="New tag"
+                      className="min-w-[6rem] flex-1 bg-transparent text-[12px] text-[var(--fl-text)] outline-none placeholder:text-[var(--fl-muted)]"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {custom.map(([key, value]) => (
+                <div key={key} className="mt-3">
+                  <span className="mb-1.5 block text-[12px] text-[var(--fl-muted)]">{key}</span>
+                  <div className="flex gap-1">
+                    <input
+                      value={String(value ?? "")}
+                      onChange={(event) => update({ [key]: event.target.value })}
+                      className="fl-input min-w-0 flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => update({ [key]: undefined })}
+                      title={`Remove ${key}`}
+                      aria-label={`Remove ${key}`}
+                      className="shrink-0 rounded-lg px-2 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-danger)]"
+                    >
+                      <CrossGlyph />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const key = newKey.trim();
+                  if (key && !(key in frontmatter)) update({ [key]: "" });
+                  setNewKey("");
+                }}
+                className="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed border-[var(--fl-border)] px-2.5 py-1.5"
               >
-                +
-              </button>
-            </form>
+                <CheckGlyph muted />
+                <input
+                  value={newKey}
+                  onChange={(event) => setNewKey(event.target.value)}
+                  placeholder="Add property"
+                  aria-label="New property name"
+                  className="min-w-0 flex-1 bg-transparent text-[12.5px] text-[var(--fl-text)] outline-none placeholder:text-[var(--fl-muted)]"
+                />
+                <button
+                  type="submit"
+                  aria-label="Add property"
+                  className="shrink-0 rounded p-0.5 text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]"
+                >
+                  <PlusGlyph />
+                </button>
+              </form>
+            </Section>
 
+            {/* ── Stats ─────────────────────────────────────────────────── */}
             {stats && (
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5 border-t border-[var(--fl-border)] pt-3.5 text-[12px]">
-                <Stat label="Words" value={stats.words.toLocaleString()} />
-                <Stat label="Read time" value={`${stats.readingMinutes} min`} />
-                <Stat label="Headings" value={String(stats.headings)} />
-                <Stat label="Diagrams" value={String(stats.diagrams)} />
-                {stats.tasks.total > 0 && (
-                  <Stat label="Tasks" value={`${stats.tasks.done}/${stats.tasks.total}`} />
-                )}
-              </dl>
+              <Section title="Stats">
+                <dl className="space-y-2 text-[12.5px]">
+                  <Stat label="Words" value={stats.words.toLocaleString()} />
+                  <Stat label="Characters" value={stats.characters.toLocaleString()} />
+                  <Stat label="Read time" value={`${stats.readingMinutes} min`} />
+                  <Stat label="Headings" value={String(stats.headings)} />
+                  <Stat label="Code blocks" value={String(stats.codeBlocks)} />
+                  <Stat label="Links" value={String(stats.links)} />
+                  <Stat label="Images" value={String(stats.images)} />
+                  {/* Only when there are any: an unbroken row of zeroes is
+                      noise, and these two are not true of most notes. */}
+                  {stats.diagrams > 0 && <Stat label="Diagrams" value={String(stats.diagrams)} />}
+                  {stats.tasks.total > 0 && (
+                    <Stat label="Tasks" value={`${stats.tasks.done}/${stats.tasks.total}`} />
+                  )}
+                </dl>
+              </Section>
             )}
 
-            <div className="space-y-1.5 border-t border-[var(--fl-border)] pt-3.5">
-              <button
-                type="button"
-                onClick={onExport}
-                className="w-full rounded-lg border border-[var(--fl-border)] px-3 py-2 text-[13px] font-medium text-[var(--fl-text)] transition-colors hover:border-[var(--fl-accent)] hover:bg-[var(--fl-elevated)]"
-              >
-                Export…
-              </button>
-
-              {hasHistory && (
+            {/* ── Actions ───────────────────────────────────────────────── */}
+            <Section title="Actions">
+              <div className="space-y-1.5">
+                <PanelButton onClick={() => void copyMarkdown()} icon={<CopyGlyph />}>
+                  {copied ? "Copied" : "Copy Markdown"}
+                </PanelButton>
+                <PanelButton
+                  onClick={() => void runExport("html")}
+                  icon={<FileGlyph />}
+                  busy={busy === "html"}
+                >
+                  Export HTML
+                </PanelButton>
+                <PanelButton
+                  onClick={() => void runExport("pdf")}
+                  icon={<FileGlyph />}
+                  busy={busy === "pdf"}
+                >
+                  Export PDF
+                </PanelButton>
+                {hasHistory && (
+                  <PanelButton onClick={onShowHistory} icon={<HistoryGlyph />}>
+                    Version history
+                  </PanelButton>
+                )}
                 <button
                   type="button"
-                  onClick={onShowHistory}
-                  className="w-full rounded-lg border border-[var(--fl-border)] px-3 py-2 text-[13px] font-medium text-[var(--fl-text)] transition-colors hover:border-[var(--fl-accent)] hover:bg-[var(--fl-elevated)]"
+                  onClick={onExport}
+                  className="w-full px-1 pt-1 text-left text-[12px] text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]"
                 >
-                  Version history…
+                  More formats and options…
                 </button>
+              </div>
+            </Section>
+
+            {/* ── Outline ───────────────────────────────────────────────── */}
+            <Section title="Outline" last>
+              {outline.length === 0 ? (
+                <p className="text-[12.5px] leading-relaxed text-[var(--fl-muted)]">
+                  Add headings to build an outline. Type <span className="font-mono">/</span> and
+                  pick Heading 1.
+                </p>
+              ) : (
+                <nav aria-label="Document outline">
+                  <ul className="space-y-0.5">
+                    {outline.map((heading, index) => (
+                      <li key={`${heading.slug}-${index}`}>
+                        <a
+                          href={`#${heading.slug}`}
+                          style={{ paddingLeft: `${(heading.depth - 1) * 0.75}rem` }}
+                          className="flex items-center gap-1.5 truncate rounded-lg py-1 pr-2 text-[12.5px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="shrink-0 text-[9px] text-[var(--fl-muted)]"
+                          >
+                            {heading.depth === 1 ? "▾" : "•"}
+                          </span>
+                          <span className="truncate">{heading.text}</span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
               )}
-            </div>
 
-            <p className="pt-1 font-mono text-[10.5px] leading-snug text-[var(--fl-muted)]">
-              {note.path}
-            </p>
-          </div>
-        )}
-
-        {note && tab === "outline" && (
-          <nav aria-label="Document outline">
-            {outline.length === 0 ? (
-              <p className="py-8 text-center text-[12.5px] leading-relaxed text-[var(--fl-muted)]">
-                Add headings to build an outline.
-                <br />
-                Type <span className="font-mono">/</span> and pick Heading 1.
+              <p className="mt-3 truncate font-mono text-[10.5px] text-[var(--fl-muted)]">
+                {note.path}
               </p>
-            ) : (
-              <ul className="space-y-0.5">
-                {outline.map((heading, index) => (
-                  <li key={`${heading.slug}-${index}`}>
-                    <a
-                      href={`#${heading.slug}`}
-                      style={{ paddingLeft: `${0.5 + (heading.depth - 1) * 0.75}rem` }}
-                      className="block truncate rounded-lg py-1 pr-2 text-[13px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
-                    >
-                      {heading.text}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </nav>
+            </Section>
+          </>
         )}
       </div>
     </aside>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/* ── Pieces ───────────────────────────────────────────────────────────────── */
+
+function Section({
+  title,
+  children,
+  last = false,
+}: {
+  title: string;
+  children: React.ReactNode;
+  last?: boolean;
+}) {
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-[10.5px] font-semibold uppercase tracking-[0.12em] text-[var(--fl-muted)]">
-        {label}
-      </span>
+    <section className={`px-3 py-3.5 ${last ? "" : "border-b border-[var(--fl-border)]"}`}>
+      <h2 className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
+        {title}
+      </h2>
       {children}
-    </label>
+    </section>
   );
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div>
+    <div className="flex items-baseline justify-between gap-3">
       <dt className="text-[var(--fl-muted)]">{label}</dt>
-      <dd className="mt-0.5 font-medium text-[var(--fl-text)]">{value}</dd>
+      <dd className="font-medium tabular-nums text-[var(--fl-text)]">{value}</dd>
     </div>
+  );
+}
+
+function PanelButton({
+  onClick,
+  icon,
+  children,
+  busy = false,
+}: {
+  onClick: () => void;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  busy?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--fl-border)] px-3 py-2 text-[12.5px] font-medium text-[var(--fl-text)] transition-colors hover:border-[var(--fl-border-strong)] hover:bg-[var(--fl-elevated)] disabled:opacity-50"
+    >
+      <span aria-hidden="true" className="shrink-0 text-[var(--fl-muted)]">
+        {icon}
+      </span>
+      {busy ? "Working…" : children}
+    </button>
+  );
+}
+
+/* ── Glyphs ───────────────────────────────────────────────────────────────── */
+
+function CheckGlyph({ muted = false }: { muted?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className={`h-3.5 w-3.5 shrink-0 ${muted ? "text-[var(--fl-muted)]" : "text-[var(--fl-accent)]"}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m3 8.5 3.5 3.5L13 4.5" />
+    </svg>
+  );
+}
+
+function RefreshGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M13.5 7a5.5 5.5 0 0 0-9.9-3.1M2.5 9a5.5 5.5 0 0 0 9.9 3.1" />
+      <path d="M13.5 3.5V7H10M2.5 12.5V9H6" />
+    </svg>
+  );
+}
+
+function PlusGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+    >
+      <path d="M8 3.5v9M3.5 8h9" />
+    </svg>
+  );
+}
+
+function CrossGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3 w-3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+    >
+      <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" />
+    </svg>
+  );
+}
+
+function CopyGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    >
+      <rect x="5.5" y="5.5" width="8" height="8" rx="1.75" />
+      <path d="M10.5 5.5v-1a1.75 1.75 0 0 0-1.75-1.75H4.25A1.75 1.75 0 0 0 2.5 4.5v4.5c0 .97.78 1.75 1.75 1.75h1" />
+    </svg>
+  );
+}
+
+function FileGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    >
+      <path d="M9 1.75H4.5A1.75 1.75 0 0 0 2.75 3.5v9c0 .97.78 1.75 1.75 1.75h7a1.75 1.75 0 0 0 1.75-1.75V6z" />
+      <path d="M9 1.75V6h4.25" />
+    </svg>
+  );
+}
+
+function HistoryGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2.75 8a5.25 5.25 0 1 0 1.6-3.78" />
+      <path d="M2.5 3v2.75h2.75M8 5v3.25l2 1.25" />
+    </svg>
   );
 }
