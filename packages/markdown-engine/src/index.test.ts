@@ -114,6 +114,48 @@ describe("analysis", () => {
     expect(documentStats("").readingMinutes).toBe(0);
   });
 
+  it("counts code blocks, links and images", () => {
+    const md = [
+      "See [the docs](https://example.com) and [a ref][ref].",
+      "",
+      "![a picture](cat.png)",
+      "",
+      "```ts",
+      "const x = 1;",
+      "```",
+      "",
+      "```mermaid",
+      "graph TD",
+      "```",
+      "",
+      "Inline `code` is not a block.",
+      "",
+      "[ref]: https://example.com",
+    ].join("\n");
+
+    const stats = documentStats(md);
+
+    expect(stats.links).toBe(2);
+    expect(stats.images).toBe(1);
+    // Mermaid fences are code blocks too, and are also counted as diagrams.
+    expect(stats.codeBlocks).toBe(2);
+    expect(stats.diagrams).toBe(1);
+  });
+
+  it("counts an image inside a link as both", () => {
+    const stats = documentStats("[![badge](badge.svg)](https://example.com)");
+
+    expect(stats.links).toBe(1);
+    expect(stats.images).toBe(1);
+  });
+
+  it("leaves empty headings out of the count, as the outline does", () => {
+    const md = "# Real\n\n##\n\n### Also real\n";
+
+    expect(documentStats(md).headings).toBe(extractOutline(md).length);
+    expect(documentStats(md).headings).toBe(2);
+  });
+
   it("prefers a frontmatter title, then an H1, then the filename", () => {
     expect(deriveTitle("# Heading", "Front", "file.md")).toBe("Front");
     expect(deriveTitle("# Heading", undefined, "file.md")).toBe("Heading");

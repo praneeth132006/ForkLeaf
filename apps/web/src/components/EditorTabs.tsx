@@ -56,12 +56,16 @@ export function EditorTabs({ notes, activePath, onSelect, onClose }: EditorTabsP
                   onClose(note.path);
                 }
               }}
-              className={`flex max-w-[16ch] items-center gap-1.5 py-1 pl-2.5 pr-1 text-[12.5px] transition-colors ${
+              className={`flex max-w-[20ch] items-center gap-1.5 py-1 pl-2.5 pr-1 text-[12.5px] transition-colors ${
                 active
                   ? "font-medium text-[var(--fl-text)]"
                   : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
               }`}
             >
+              <FileGlyph
+                className={active ? "text-[var(--fl-accent)]" : "text-[var(--fl-muted)]"}
+              />
+              <span className="truncate">{label}</span>
               {note.dirty && (
                 <span
                   aria-label="Unpushed changes"
@@ -69,7 +73,6 @@ export function EditorTabs({ notes, activePath, onSelect, onClose }: EditorTabsP
                   className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fl-warn)]"
                 />
               )}
-              <span className="truncate">{label}</span>
             </button>
 
             <button
@@ -99,5 +102,22 @@ export function EditorTabs({ notes, activePath, onSelect, onClose }: EditorTabsP
         );
       })}
     </div>
+  );
+}
+
+function FileGlyph({ className }: { className: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className={`h-3.5 w-3.5 shrink-0 ${className}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    >
+      <path d="M9 1.75H4.5A1.75 1.75 0 0 0 2.75 3.5v9c0 .97.78 1.75 1.75 1.75h7a1.75 1.75 0 0 0 1.75-1.75V6z" />
+      <path d="M9 1.75V6h4.25" />
+    </svg>
   );
 }

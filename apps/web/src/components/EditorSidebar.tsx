@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { TreeNode, Workspace, SessionUser } from "@forkleaf/types";
 import { FileTree } from "./FileTree";
@@ -36,6 +36,28 @@ export function EditorSidebar(props: EditorSidebarProps) {
   const [filter, setFilter] = useState("");
   const [showWorkspaces, setShowWorkspaces] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
+  const [showFolders, setShowFolders] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // The ⌘K on the search field is a promise, so it has to be kept.
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey)) return;
+      event.preventDefault();
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Top-level folders, so "new note" can mean "new note somewhere in
+  // particular" without making the reader find the folder and right-click it.
+  const folders = useMemo(
+    () => props.tree.filter((node) => node.kind === "folder").map((node) => node.path),
+    [props.tree],
+  );
 
   if (props.collapsed) {
     return (
@@ -190,26 +212,20 @@ export function EditorSidebar(props: EditorSidebarProps) {
         )}
       </div>
 
-      {/* ── Search and new note ───────────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 p-2">
-        <input
-          type="search"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder="Search notes…"
-          aria-label="Search notes"
-          className="fl-input min-w-0 flex-1"
-        />
+      {/* ── New note ──────────────────────────────────────────────────── */}
+      {/* Creating a note is the one thing someone opens this app to do, and it
+          used to be a 34px square sharing a row with the search field. */}
+      <div className="relative flex items-stretch gap-1.5 px-2 pt-2">
         <button
           type="button"
           onClick={() => props.onCreateNote("")}
           title="New note (⌘⇧N)"
-          aria-label="New note"
-          className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
+          className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--fl-accent)] px-3 py-2 text-[13px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
         >
           <svg
             viewBox="0 0 16 16"
-            className="h-4 w-4"
+            aria-hidden="true"
+            className="h-3.5 w-3.5 shrink-0"
             fill="none"
             stroke="currentColor"
             strokeWidth="1.9"
@@ -217,11 +233,74 @@ export function EditorSidebar(props: EditorSidebarProps) {
           >
             <path d="M8 3.5v9M3.5 8h9" />
           </svg>
+          New Note
         </button>
+
+        {folders.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowFolders((value) => !value)}
+            aria-expanded={showFolders}
+            aria-haspopup="menu"
+            title="New note in a folder"
+            aria-label="New note in a folder"
+            className="flex w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
+          >
+            <ChevronDown className="text-current" />
+          </button>
+        )}
+
+        {showFolders && (
+          <div
+            role="menu"
+            className="absolute left-2 right-2 top-full z-30 mt-1 overflow-hidden rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1 shadow-[var(--fl-shadow-lg)]"
+          >
+            <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
+              New note in
+            </p>
+            {folders.map((folder) => (
+              <button
+                key={folder}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  props.onCreateNote(folder);
+                  setShowFolders(false);
+                }}
+                className="block w-full truncate rounded-lg px-2.5 py-1.5 text-left text-[12.5px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
+              >
+                {folder}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Search ────────────────────────────────────────────────────── */}
+      <div className="relative p-2">
+        <SearchGlyph />
+        <input
+          ref={searchRef}
+          type="search"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          placeholder="Search notes…"
+          aria-label="Search notes"
+          className="fl-input w-full !pl-8 !pr-11"
+        />
+        <kbd
+          aria-hidden="true"
+          className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 rounded border border-[var(--fl-border)] px-1 py-px font-sans text-[10px] text-[var(--fl-muted)]"
+        >
+          ⌘K
+        </kbd>
       </div>
 
       {/* ── Tree ──────────────────────────────────────────────────────── */}
       <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
+        <p className="px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
+          {props.activeWorkspace?.isLocal ? "Notes" : "Repository"}
+        </p>
         <FileTree
           nodes={props.tree}
           activePath={props.activePath}
@@ -256,26 +335,37 @@ export function EditorSidebar(props: EditorSidebarProps) {
 
         {props.user ? (
           <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowAccount((value) => !value)}
-              aria-expanded={showAccount}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-[var(--fl-elevated)]"
-            >
+            <div className="flex items-center gap-2.5 rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2.5 py-2">
               {/* eslint-disable-next-line @next/next/no-img-element -- avatars are
                   remote GitHub URLs; next/image would need a domain allowlist for
                   every possible avatar host. */}
               <img
                 src={props.user.avatarUrl}
                 alt=""
-                width={22}
-                height={22}
-                className="h-[22px] w-[22px] shrink-0 rounded-full"
+                width={30}
+                height={30}
+                className="h-[30px] w-[30px] shrink-0 rounded-full"
               />
-              <span className="min-w-0 flex-1 truncate text-left text-[12.5px] text-[var(--fl-text)]">
-                {props.user.name ?? props.user.login}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12.5px] font-medium text-[var(--fl-text)]">
+                  {props.user.name ?? props.user.login}
+                </span>
+                <span className="block truncate text-[11px] text-[var(--fl-muted)]">
+                  @{props.user.login}
+                </span>
               </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setShowAccount((value) => !value)}
+                aria-expanded={showAccount}
+                aria-haspopup="menu"
+                title="Account"
+                aria-label="Account"
+                className="shrink-0 rounded-lg p-1 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+              >
+                <GearGlyph />
+              </button>
+            </div>
 
             {showAccount && (
               <div className="absolute bottom-full left-0 right-0 z-30 mb-1 overflow-hidden rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1 shadow-[var(--fl-shadow-lg)]">
@@ -349,12 +439,46 @@ function MenuLink({ href, children }: { href: string; children: React.ReactNode 
   );
 }
 
-function ChevronDown() {
+function SearchGlyph() {
   return (
     <svg
       aria-hidden="true"
       viewBox="0 0 16 16"
-      className="h-3.5 w-3.5 shrink-0 text-[var(--fl-muted)]"
+      className="pointer-events-none absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--fl-muted)]"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+    >
+      <circle cx="7" cy="7" r="4.5" />
+      <path d="m10.5 10.5 3 3" />
+    </svg>
+  );
+}
+
+function GearGlyph() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    >
+      <circle cx="8" cy="8" r="2.1" />
+      <path d="M8 1.75h.01l.35 1.6a5 5 0 0 1 1.3.54l1.4-.86 1.42 1.42-.86 1.4c.24.4.42.84.54 1.3l1.6.35v2l-1.6.35a5 5 0 0 1-.54 1.3l.86 1.4-1.42 1.42-1.4-.86a5 5 0 0 1-1.3.54l-.35 1.6h-2l-.35-1.6a5 5 0 0 1-1.3-.54l-1.4.86-1.42-1.42.86-1.4a5 5 0 0 1-.54-1.3l-1.6-.35v-2l1.6-.35c.12-.46.3-.9.54-1.3l-.86-1.4 1.42-1.42 1.4.86a5 5 0 0 1 1.3-.54l.35-1.6Z" />
+    </svg>
+  );
+}
+
+function ChevronDown({ className = "text-[var(--fl-muted)]" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className={`h-3.5 w-3.5 shrink-0 ${className}`}
       fill="none"
       stroke="currentColor"
       strokeWidth="1.6"

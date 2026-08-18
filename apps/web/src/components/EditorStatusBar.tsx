@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import type { CursorPosition } from "@forkleaf/editor";
 import type { SyncMode, SyncPreference, SyncState, Workspace } from "@forkleaf/types";
 import { BranchMenu } from "./BranchMenu";
 import { SyncModeMenu } from "./SyncModeMenu";
@@ -9,6 +10,10 @@ export interface EditorStatusBarProps {
   sync: SyncState;
   workspace: Workspace | null;
   notePath: string | null;
+  /** Caret position, when a source surface is on screen to report one. */
+  cursor: CursorPosition | null;
+  /** Word count of the open note. */
+  words: number;
   /** How this workspace is configured to push, and how to change it. */
   syncPreference: SyncPreference;
   onSyncModeChange: (mode: SyncMode, intervalMinutes?: number) => void | Promise<void>;
@@ -31,6 +36,8 @@ export function EditorStatusBar({
   sync,
   workspace,
   notePath,
+  cursor,
+  words,
   syncPreference,
   onSyncModeChange,
   onSyncNow,
@@ -83,16 +90,36 @@ export function EditorStatusBar({
         </>
       )}
 
-      {notePath && (
-        <span className="ml-auto hidden truncate font-mono md:inline" title={notePath}>
-          {notePath}
-        </span>
-      )}
-
       {sync.lastError && (
         <span className="ml-auto truncate text-[var(--fl-danger)]" title={sync.lastError}>
           {sync.lastError}
         </span>
+      )}
+
+      {notePath && !sync.lastError && (
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+          <span className="hidden truncate font-mono lg:inline" title={notePath}>
+            {notePath}
+          </span>
+
+          {/* Only shown when a source surface is live: rich text has no lines
+              to count, and a stale reading is worse than none. */}
+          {cursor && (
+            <span className="hidden tabular-nums sm:inline">
+              Ln {cursor.line}, Col {cursor.column}
+            </span>
+          )}
+
+          {/* Facts about the bytes on disk. ForkLeaf always writes UTF-8 with
+              LF endings, so these are statements rather than settings. */}
+          <span className="hidden md:inline">UTF-8</span>
+          <span className="hidden md:inline">LF</span>
+          <span className="hidden md:inline">Markdown</span>
+
+          <span className="tabular-nums">
+            {words.toLocaleString()} {words === 1 ? "word" : "words"}
+          </span>
+        </div>
       )}
     </footer>
   );

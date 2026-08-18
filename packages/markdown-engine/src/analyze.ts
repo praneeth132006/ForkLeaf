@@ -70,7 +70,13 @@ export interface DocumentStats {
   /** Characters excluding whitespace. */
   charactersNoSpaces: number;
   headings: number;
+  /** Fenced and indented code blocks, mermaid ones included. */
+  codeBlocks: number;
+  /** The mermaid subset of `codeBlocks`. */
   diagrams: number;
+  /** Inline and reference links. An image inside a link counts as both. */
+  links: number;
+  images: number;
   tasks: { total: number; done: number };
   /** Estimated minutes at 225 wpm, minimum 1 for non-empty documents. */
   readingMinutes: number;
@@ -79,7 +85,7 @@ export interface DocumentStats {
 const WORD_RE = /[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu;
 const TASK_RE = /^[ \t]*[-*+] \[( |x|X)\]/gm;
 
-/** Cheap document statistics for the status bar. Runs on a debounce, not per keystroke. */
+/** Cheap document statistics for the properties panel. */
 export function documentStats(markdown: string): DocumentStats {
   const words = markdown.match(WORD_RE)?.length ?? 0;
 
@@ -90,12 +96,46 @@ export function documentStats(markdown: string): DocumentStats {
     if (match[1] !== " ") done += 1;
   }
 
+  // One parse and one walk. This used to call extractOutline and
+  // extractMermaidBlocks, which parsed the whole document again each — three
+  // passes to answer four questions, on a function the panel calls on every
+  // keystroke.
+  let headings = 0;
+  let codeBlocks = 0;
+  let diagrams = 0;
+  let links = 0;
+  let images = 0;
+
+  visit(parseToAst(markdown), (node) => {
+    switch (node.type) {
+      case "heading":
+        // Matches extractOutline, which leaves out headings with no text.
+        if (mdastToString(node).trim()) headings += 1;
+        break;
+      case "code":
+        codeBlocks += 1;
+        if ((node as Code).lang === "mermaid") diagrams += 1;
+        break;
+      case "link":
+      case "linkReference":
+        links += 1;
+        break;
+      case "image":
+      case "imageReference":
+        images += 1;
+        break;
+    }
+  });
+
   return {
     words,
     characters: markdown.length,
     charactersNoSpaces: markdown.replace(/\s/g, "").length,
-    headings: extractOutline(markdown).length,
-    diagrams: extractMermaidBlocks(markdown).length,
+    headings,
+    codeBlocks,
+    diagrams,
+    links,
+    images,
     tasks: { total, done },
     readingMinutes: words === 0 ? 0 : Math.max(1, Math.round(words / 225)),
   };

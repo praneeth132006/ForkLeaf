@@ -42,6 +42,14 @@ export interface SourceEditorProps {
   ariaLabel?: string;
   /** Lets a toolbar insert text at the caret instead of at the end of the file. */
   handleRef?: React.Ref<SourceEditorHandle>;
+  /** Reports where the caret is, for a status bar. Both numbers are 1-based. */
+  onCursorChange?: (position: CursorPosition) => void;
+}
+
+/** Caret location, in the terms a status bar uses. */
+export interface CursorPosition {
+  line: number;
+  column: number;
 }
 
 export interface SourceEditorHandle {
@@ -75,6 +83,7 @@ export function SourceEditor({
   autoFocus = false,
   ariaLabel = "Markdown source",
   handleRef,
+  onCursorChange,
 }: SourceEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -83,6 +92,8 @@ export function SourceEditor({
   // parent re-renders would drop focus mid-keystroke.
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onCursorChangeRef = useRef(onCursorChange);
+  onCursorChangeRef.current = onCursorChange;
 
   // Extensions supplied by the caller can change (the mermaid linter closes
   // over the current error), so they live in a compartment we can reconfigure.
@@ -144,6 +155,14 @@ export function SourceEditor({
         EditorView.contentAttributes.of({ "aria-label": ariaLabel }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) onChangeRef.current(update.state.doc.toString());
+
+          // Editing moves the caret too, so a doc change has to report as well
+          // — otherwise the status bar goes stale the moment you type.
+          if (update.selectionSet || update.docChanged) {
+            const head = update.state.selection.main.head;
+            const line = update.state.doc.lineAt(head);
+            onCursorChangeRef.current?.({ line: line.number, column: head - line.from + 1 });
+          }
         }),
         dynamicCompartment.of(extensions ?? []),
       ],
@@ -152,6 +171,12 @@ export function SourceEditor({
     const view = new EditorView({ state, parent: host });
     viewRef.current = view;
     if (autoFocus) view.focus();
+
+    // The update listener only fires on a change; without this the status bar
+    // would sit empty until the reader first touched the document.
+    const head = view.state.selection.main.head;
+    const line = view.state.doc.lineAt(head);
+    onCursorChangeRef.current?.({ line: line.number, column: head - line.from + 1 });
 
     return () => {
       view.destroy();
