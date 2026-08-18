@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import type { Conflict, ConflictResolution } from "@forkleaf/types";
 import { diffLines, diffStats } from "@forkleaf/markdown-engine";
 import { Dialog } from "./Dialog";

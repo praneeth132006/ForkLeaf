@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { DIAGRAM_TEMPLATES, type DiagramTemplate } from "@forkleaf/diagrams";
 import { TemplateThumbnail } from "./TemplateThumbnail";
 

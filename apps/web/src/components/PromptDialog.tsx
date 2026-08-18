@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { Dialog } from "./Dialog";
 
 export interface PromptRequest {
@@ -30,15 +30,21 @@ export function PromptDialog({ request, onClose }: PromptDialogProps) {
   const [value, setValue] = useState(request.initialValue ?? "");
   const [busy, setBusy] = useState(false);
 
-  const submit = async (event: React.FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!request.destructive && !value.trim()) return;
 
     setBusy(true);
     try {
+      // Execute the confirmation callback with the trimmed input value
       await request.onConfirm(value.trim());
+      // Close the dialog only on success — errors leave it open for retry
       onClose();
+    } catch (error: unknown) {
+      // Surface the error so the user knows the action failed
+      console.error("[forkleaf] Prompt action failed:", error);
     } finally {
+      // Always re-enable the form regardless of success or failure
       setBusy(false);
     }
   };

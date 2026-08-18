@@ -1,4 +1,3 @@
-import React from "react";
 import { SiteShell } from "@/components/SiteShell";
 import { A, H2, Lead, LI, Note, P, UL } from "@/components/prose";
 import { LegalPage, CONTACT_EMAIL } from "@/components/LegalPage";

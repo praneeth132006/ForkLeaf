@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Workspace } from "@forkleaf/types";
 import { sanitizeBranchName } from "@/lib/branch-name";
 import { createBranch, listBranches, type BranchSummaryDto } from "@/lib/gateway";

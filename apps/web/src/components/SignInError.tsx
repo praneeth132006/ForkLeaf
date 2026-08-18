@@ -1,5 +1,3 @@
-import React from "react";
-
 /**
  * Explains why a GitHub sign-in attempt did not complete.
  *

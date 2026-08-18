@@ -1,4 +1,3 @@
-import React from "react";
 import { A, Code, Def, H2, H3, Lead, LI, Note, OL, P, Pre, Table, UL } from "@/components/prose";
 import { EVERYTHING } from "@/lib/plans";
 
