@@ -1,5 +1,5 @@
 import React from "react";
-import { SectionHeading } from "./HowItWorks";
+import { SectionHeading } from "./SectionHeading";
 
 /**
  * Feature grid.

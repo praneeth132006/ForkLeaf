@@ -3,6 +3,7 @@ import type {
   ConflictResolution,
   Note,
   PendingChange,
+  SyncMode,
   SyncState,
   SyncStatus,
 } from "@forkleaf/types";
@@ -22,6 +23,10 @@ export interface SyncEngineOptions {
   clearTimeout?: (handle: unknown) => void;
   /** Reports whether the device currently has a network connection. */
   isOnline?: () => boolean;
+  /** How eagerly to push. Defaults to `auto`, the original behaviour. */
+  mode?: SyncMode;
+  /** Minutes between pushes in `interval` mode. */
+  intervalMinutes?: number;
 }
 
 type Listener = (state: SyncState) => void;
@@ -29,6 +34,9 @@ type Listener = (state: SyncState) => void;
 const DEFAULT_DEBOUNCE_MS = 4000;
 const DEFAULT_SQUASH_WINDOW_MS = 5 * 60_000;
 const MAX_ATTEMPTS = 5;
+/** Backoff between retries after a failed push: 5s, 10s, 20s … capped. */
+const RETRY_BASE_MS = 5_000;
+const RETRY_MAX_MS = 5 * 60_000;
 
 /**
  * Local-first sync.
@@ -58,6 +66,10 @@ export class SyncEngine {
   /** Set when an edit lands mid-flush, so we push again straight after. */
   private dirtyDuringFlush = false;
   private status: SyncStatus = "idle";
+  private mode: SyncMode;
+  private intervalMinutes: number;
+  /** Current backoff delay; zero when the last push succeeded. */
+  private retryDelay = 0;
   private lastSyncedAt: string | null = null;
   private lastError: string | null = null;
   private readonly listeners = new Set<Listener>();
@@ -71,6 +83,39 @@ export class SyncEngine {
     this.schedule = options.setTimeout ?? ((fn, ms) => setTimeout(fn, ms));
     this.cancel = options.clearTimeout ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
     this.isOnline = options.isOnline ?? defaultIsOnline;
+    this.mode = options.mode ?? "auto";
+    this.intervalMinutes = options.intervalMinutes ?? 15;
+  }
+
+  /**
+   * Changes how eagerly the engine pushes.
+   *
+   * Switching *to* auto or interval flushes what is already queued, so turning
+   * automatic syncing back on does not leave yesterday's edits sitting there
+   * waiting for the next keystroke to notice them.
+   */
+  setMode(mode: SyncMode, intervalMinutes?: number): void {
+    this.mode = mode;
+    if (intervalMinutes !== undefined) this.intervalMinutes = intervalMinutes;
+
+    if (mode === "manual") {
+      // Stop the pending timer: in manual mode nothing pushes unbidden.
+      if (this.timer !== null) {
+        this.cancel(this.timer);
+        this.timer = null;
+      }
+      this.setStatus(this.queue.length > 0 ? "pending" : "idle");
+      this.emit();
+      return;
+    }
+
+    this.retryDelay = 0;
+    if (this.queue.length > 0) this.scheduleFlush();
+    this.emit();
+  }
+
+  get syncMode(): SyncMode {
+    return this.mode;
   }
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────
@@ -91,6 +136,7 @@ export class SyncEngine {
   get state(): SyncState {
     return {
       status: this.status,
+      mode: this.mode,
       pendingCount: this.queue.length,
       lastSyncedAt: this.lastSyncedAt,
       lastError: this.lastError,
@@ -163,12 +209,22 @@ export class SyncEngine {
 
   private scheduleFlush(): void {
     if (this.timer !== null) this.cancel(this.timer);
+    // User activity: try promptly rather than inheriting a long backoff.
+    this.retryDelay = 0;
 
     this.setStatus(this.queue.length > 0 ? "pending" : "idle");
+
+    // Manual mode queues and waits. The local write has already happened, so
+    // nothing is at risk — the change simply does not leave the device until
+    // the user says so.
+    if (this.mode === "manual") return;
+
+    const delay = this.mode === "interval" ? this.intervalMinutes * 60_000 : this.debounceMs;
+
     this.timer = this.schedule(() => {
       this.timer = null;
       void this.flush();
-    }, this.debounceMs);
+    }, delay);
   }
 
   /** Pushes everything pending right now, bypassing the debounce. */
@@ -193,6 +249,8 @@ export class SyncEngine {
     }
     if (!this.isOnline()) {
       this.setStatus("offline");
+      // Nothing else would wake us: keep asking until the connection is back.
+      this.scheduleRetry();
       return;
     }
 
@@ -208,17 +266,52 @@ export class SyncEngine {
 
       this.lastSyncedAt = this.now().toISOString();
       this.lastError = null;
+      this.retryDelay = 0;
       this.setStatus(
         this.conflicts.length > 0 ? "conflict" : this.queue.length > 0 ? "pending" : "idle",
       );
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err);
       this.setStatus(this.isOnline() ? "error" : "offline");
+      // A failed push used to sit there until the user happened to type again,
+      // which is why notes could stay unsynced indefinitely after one blip.
+      this.scheduleRetry();
     } finally {
       this.flushing = false;
       // Edits that arrived mid-push still need their own commit.
       if (this.dirtyDuringFlush && this.queue.length > 0) this.scheduleFlush();
     }
+  }
+
+  /**
+   * Queues another attempt after a failed or skipped push.
+   *
+   * Backs off so a repo that is gone, or a token that has been revoked, does not
+   * hammer the API — but never gives up, because the alternative is a queue that
+   * silently stops draining. `scheduleFlush` resets the delay, so any new edit
+   * gets a prompt attempt rather than inheriting a long backoff.
+   */
+  private scheduleRetry(): void {
+    if (this.queue.length === 0) return;
+
+    this.retryDelay = this.retryDelay ? Math.min(this.retryDelay * 2, RETRY_MAX_MS) : RETRY_BASE_MS;
+
+    if (this.timer !== null) this.cancel(this.timer);
+    this.timer = this.schedule(() => {
+      this.timer = null;
+      void this.flush();
+    }, this.retryDelay);
+  }
+
+  /**
+   * Pushes now, discarding any backoff.
+   *
+   * The app calls this when the browser reports the network is back, so
+   * reconnecting syncs immediately instead of waiting out the current delay.
+   */
+  retryNow(): void {
+    this.retryDelay = 0;
+    if (this.queue.length > 0) this.scheduleFlush();
   }
 
   private async flushWorkspace(workspaceId: string, changes: PendingChange[]): Promise<void> {

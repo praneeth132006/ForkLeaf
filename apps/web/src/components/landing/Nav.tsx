@@ -2,6 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { ForkLeafLogo } from "@/components/Brand";
 import { REPO_URL } from "@/lib/constants";
+import { ThemeToggle } from "./ThemeToggle";
 
 /**
  * Landing navigation.
@@ -38,6 +39,8 @@ export function Nav({ githubAvailable }: { githubAvailable: boolean }) {
         </nav>
 
         <div className="flex items-center gap-2">
+          <ThemeToggle />
+
           <Link
             href="/editor"
             className="rounded-lg px-3 py-2 text-sm font-medium text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"

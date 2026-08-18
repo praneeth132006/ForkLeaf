@@ -2,6 +2,8 @@ import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import remarkRehype from "remark-rehype";
+import rehypeHighlight from "rehype-highlight";
+import { all as allLanguages } from "lowlight";
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
 import remarkStringify from "remark-stringify";
@@ -24,7 +26,10 @@ const schema: SanitizeSchema = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
-    code: [...(defaultSchema.attributes?.code ?? []), ["className", /^language-./]],
+    // `hljs` sits alongside `language-*` on the <code> the highlighter wraps;
+    // without it the stylesheet has nothing to hook onto.
+    code: [...(defaultSchema.attributes?.code ?? []), ["className", /^language-./, "hljs"]],
+    pre: [...(defaultSchema.attributes?.pre ?? []), ["className", "hljs"]],
     span: [...(defaultSchema.attributes?.span ?? []), ["className", /^hljs-/]],
     input: [
       ...(defaultSchema.attributes?.input ?? []),
@@ -43,6 +48,16 @@ const htmlPipeline = unified()
   .use(remarkGfm)
   // allowDangerousHtml is deliberately off — inline HTML in notes is escaped.
   .use(remarkRehype)
+  // Highlighting runs *before* sanitising, so the `hljs-` spans it emits are
+  // subject to the same schema as everything else.
+  //
+  // The full language set, not highlight.js's `common` bundle: common is ~35
+  // languages and silently renders anything outside it — Zig, Nim, Elixir,
+  // Haskell — as flat grey text, which is exactly the case someone writing
+  // documentation for an unusual project runs into. `detect` stays off, since
+  // guessing the language of an unlabelled three-line snippet is usually wrong
+  // and colours it misleadingly.
+  .use(rehypeHighlight, { detect: false, languages: allLanguages })
   .use(rehypeSanitize, schema)
   .use(rehypeStringify);
 

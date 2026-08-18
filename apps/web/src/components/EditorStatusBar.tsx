@@ -1,14 +1,23 @@
 "use client";
 
 import React from "react";
-import type { SyncState, Workspace } from "@forkleaf/types";
+import type { SyncMode, SyncPreference, SyncState, Workspace } from "@forkleaf/types";
+import { BranchMenu } from "./BranchMenu";
+import { SyncModeMenu } from "./SyncModeMenu";
 
 export interface EditorStatusBarProps {
   sync: SyncState;
   workspace: Workspace | null;
   notePath: string | null;
+  /** How this workspace is configured to push, and how to change it. */
+  syncPreference: SyncPreference;
+  onSyncModeChange: (mode: SyncMode, intervalMinutes?: number) => void | Promise<void>;
   onSyncNow: () => void;
   onShowConflicts: () => void;
+  /** Moves the workspace to another branch of the same repository. */
+  onSwitchBranch: (branch: string) => void | Promise<void>;
+  /** Opens the pull-request flow for the current work. */
+  onPropose: () => void;
 }
 
 /**
@@ -22,8 +31,12 @@ export function EditorStatusBar({
   sync,
   workspace,
   notePath,
+  syncPreference,
+  onSyncModeChange,
   onSyncNow,
   onShowConflicts,
+  onSwitchBranch,
+  onPropose,
 }: EditorStatusBarProps) {
   const status = describe(sync);
 
@@ -39,18 +52,35 @@ export function EditorStatusBar({
         <span className={status.className}>{status.label}</span>
       </button>
 
-      {workspace && (
-        <span className="hidden truncate sm:inline">
-          {workspace.isLocal ? (
-            "Local storage"
-          ) : (
-            <>
-              {workspace.repo.owner}/{workspace.repo.repo}
-              <span className="mx-1 opacity-50">·</span>
-              {workspace.repo.branch}
-            </>
-          )}
-        </span>
+      {workspace?.isLocal && <span className="hidden truncate sm:inline">Local storage</span>}
+
+      {workspace && !workspace.isLocal && (
+        <>
+          <span className="hidden truncate sm:inline">
+            {workspace.repo.owner}/{workspace.repo.repo}
+          </span>
+
+          {/* The branch is a control now, not a label: writing documentation
+              straight onto a repository's default branch is rarely what anyone
+              wants, and there was previously no way to see or change it. */}
+          <BranchMenu workspace={workspace} onSwitch={onSwitchBranch} />
+
+          <SyncModeMenu
+            preference={syncPreference}
+            onChange={onSyncModeChange}
+            onSyncNow={onSyncNow}
+            pendingCount={sync.pendingCount}
+          />
+
+          <button
+            type="button"
+            onClick={onPropose}
+            title="Open a pull request for these changes"
+            className="hidden rounded px-1.5 py-0.5 transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] sm:inline"
+          >
+            Propose changes…
+          </button>
+        </>
       )}
 
       {notePath && (
@@ -87,8 +117,13 @@ function describe(sync: SyncState): { label: string; className: string; dot: str
 
     case "pending":
       return {
-        // Naming both halves is the point: nothing has been lost.
-        label: `Saved locally · ${sync.pendingCount} to push`,
+        // Naming both halves is the point: nothing has been lost. In manual
+        // mode the queue is not a delay to apologise for, it is the setting
+        // working, so the wording stops implying something is running late.
+        label:
+          sync.mode === "manual"
+            ? `Saved locally · ${sync.pendingCount} waiting for you`
+            : `Saved locally · ${sync.pendingCount} to push`,
         className: "",
         dot: "bg-[var(--fl-warn)]",
       };

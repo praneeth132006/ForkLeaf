@@ -23,6 +23,7 @@ import type { Editor } from "@tiptap/core";
 function markdownOf(editor: Editor): string {
   return (editor.storage as unknown as { markdown: MarkdownStorage }).markdown.getMarkdown();
 }
+import { CodeBlock } from "./extensions/CodeBlock";
 import { MermaidBlock } from "./extensions/MermaidBlock";
 import { readSlashState } from "./extensions/SlashCommands";
 import { filterInsertActions, type InsertDefinition } from "./insert-actions";
@@ -64,7 +65,9 @@ export function WysiwygEditor({
     () => [
       StarterKit.configure({
         heading: { levels: [1, 2, 3, 4, 5, 6] },
-        codeBlock: { HTMLAttributes: { class: "fl-code-block" } },
+        // Replaced below by the highlighting one, which also carries the
+        // language picker. Two extensions cannot both own the `codeBlock` node.
+        codeBlock: false,
         link: false,
       }),
       Placeholder.configure({ placeholder }),
@@ -84,6 +87,7 @@ export function WysiwygEditor({
       TableRow,
       TableHeader,
       TableCell,
+      CodeBlock,
       MermaidBlock,
       Markdown.configure({
         html: false,

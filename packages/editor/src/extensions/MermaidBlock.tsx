@@ -80,7 +80,10 @@ function MermaidNodeView({ node, updateAttributes, editor, selected }: NodeViewP
           title="Diagram"
           subtitle="Saved into the note as a ```mermaid block, so it also renders on GitHub"
           onClose={close}
-          fullScreen
+          // Windowed rather than the whole viewport — taking over the screen to
+          // edit one diagram loses the note you are writing it for — but wide,
+          // because a canvas and a preview side by side need the room.
+          widthClassName="max-w-[92rem]"
           actions={
             <button
               type="button"

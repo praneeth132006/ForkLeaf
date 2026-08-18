@@ -1,40 +1,31 @@
 import React from "react";
 import { A, Code, Def, H2, H3, Lead, LI, Note, OL, P, Pre, Table, UL } from "@/components/prose";
-import { PLANS, formatPrice } from "@/lib/plans";
+import { EVERYTHING } from "@/lib/plans";
 
 export function Plans() {
   return (
     <>
       <Lead>
-        The editor is free and will stay free. Your notes sit in your own GitHub account, so there
-        is no storage for anyone to charge you for. The paid tiers buy convenience on top of that —
-        never access to your own writing.
+        ForkLeaf is free, all of it, with no tiers and no paid upgrade. Your notes sit in your own
+        GitHub account, so there is no storage for anyone to charge you for — and a paywall would
+        only ever stand between you and your own writing.
       </Lead>
 
       <Note>
-        <strong>Pro and Team are not on sale yet.</strong> No payment provider is connected, the
-        buttons say &ldquo;Coming soon&rdquo;, and everyone is on Free. This page describes what is
-        planned so you can judge whether the free tier is going to be quietly hollowed out later. It
-        is not.
+        <strong>There used to be Pro and Team tiers here.</strong> They were announced but never
+        sold, and they are gone: every feature they listed now ships to everyone. Funding comes from{" "}
+        <A href="https://github.com/sponsors/praneeth132006">GitHub Sponsors</A>, which unlocks
+        nothing and is meant not to.
       </Note>
 
-      <H2 id="tiers">The tiers</H2>
-      {PLANS.map((plan) => (
-        <div key={plan.id}>
-          <H3 id={plan.id}>
-            {plan.name} — {formatPrice(plan)}
-            {plan.amount > 0 && <span className="text-[var(--fl-muted)]"> / month</span>}
-          </H3>
-          <P>{plan.tagline}</P>
-          <UL>
-            {plan.features.map((feature) => (
-              <LI key={feature}>{feature}</LI>
-            ))}
-          </UL>
-        </div>
-      ))}
+      <H2 id="tiers">What you get</H2>
+      <UL>
+        {EVERYTHING.map((feature) => (
+          <LI key={feature}>{feature}</LI>
+        ))}
+      </UL>
 
-      <H2 id="promise">What Free will always include</H2>
+      <H2 id="promise">What will always be free</H2>
       <P>
         A free tier is only meaningful if its boundaries are stated. These will not move behind a
         paywall:
@@ -49,28 +40,20 @@ export function Plans() {
         <LI>Self-hosting the whole thing under Apache-2.0.</LI>
       </UL>
       <P>
-        The paid tiers are about scale — more repositories, search across all of them, org-level
-        administration — not about withholding the editor.
+        Scale is not a paywall here either: more repositories, search across all of them, and branch
+        and pull-request workflows are part of the same free application.
       </P>
 
-      <H2 id="billing">How billing will work</H2>
-      <P>When a payment provider is connected, the flow will be:</P>
-      <OL>
-        <li>You choose a plan and go through the provider&rsquo;s own hosted checkout.</li>
-        <li>
-          ForkLeaf never sees your card. Card details go to the provider, and the provider returns a
-          subscription identifier.
-        </li>
-        <li>
-          A webhook writes your plan and its status into Firestore at{" "}
-          <Code>users/&#123;uid&#125;/billing/subscription</Code>.
-        </li>
-        <li>The app reads that document and unlocks the paid features.</li>
-      </OL>
+      <H2 id="billing">How funding works</H2>
       <P>
-        That document is <strong>read-only from the browser</strong>, enforced in the Firestore
-        security rules. A client that could write its own plan would make the whole thing
-        decorative.
+        There is no billing. Nothing in ForkLeaf takes a payment, so there is no checkout, no card
+        handling, and no subscription record anywhere — the Firestore entitlement document and the
+        code that read it were removed along with the tiers.
+      </P>
+      <P>
+        The project is funded by{" "}
+        <A href="https://github.com/sponsors/praneeth132006">GitHub Sponsors</A>. Sponsoring grants
+        no extra features, changes nothing in the app, and is not linked to your account in any way.
       </P>
 
       <H2 id="shutdown">If ForkLeaf disappears</H2>

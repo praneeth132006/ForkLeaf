@@ -5,7 +5,6 @@ import Link from "next/link";
 import type { TreeNode, Workspace, SessionUser } from "@forkleaf/types";
 import { FileTree } from "./FileTree";
 import { ForkLeafMark } from "./Brand";
-import { PlanBadge } from "./PlanBadge";
 
 export interface EditorSidebarProps {
   collapsed: boolean;
@@ -94,6 +93,18 @@ export function EditorSidebar(props: EditorSidebarProps) {
       {/* ── Workspace switcher ────────────────────────────────────────── */}
       <div className="relative border-b border-[var(--fl-border)] p-2">
         <div className="flex items-center gap-1">
+          {/* The leaf reads as a logo, so it behaves like one and goes home.
+              It used to open the workspace menu, which left the editor with no
+              way back to the landing page at this width. */}
+          <Link
+            href="/"
+            title="ForkLeaf home"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--fl-accent-soft)] text-[var(--fl-accent)] transition-opacity hover:opacity-80"
+          >
+            <ForkLeafMark className="h-4 w-4" />
+            <span className="sr-only">ForkLeaf home</span>
+          </Link>
+
           <button
             type="button"
             onClick={() => setShowWorkspaces((value) => !value)}
@@ -101,12 +112,6 @@ export function EditorSidebar(props: EditorSidebarProps) {
             aria-haspopup="listbox"
             className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--fl-elevated)]"
           >
-            <span
-              aria-hidden="true"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--fl-accent-soft)] text-[var(--fl-accent)]"
-            >
-              <ForkLeafMark className="h-4 w-4" />
-            </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px] font-medium text-[var(--fl-text)]">
                 {props.activeWorkspace?.name ?? "No workspace"}
@@ -270,7 +275,6 @@ export function EditorSidebar(props: EditorSidebarProps) {
               <span className="min-w-0 flex-1 truncate text-left text-[12.5px] text-[var(--fl-text)]">
                 {props.user.name ?? props.user.login}
               </span>
-              <PlanBadge />
             </button>
 
             {showAccount && (

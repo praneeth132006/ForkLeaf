@@ -21,11 +21,12 @@
     "@codemirror/search": "^6.6.0",
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.39.4",
-    "@lezer/highlight": "^1.2.1",
     "@forkleaf/diagrams": "workspace:*",
     "@forkleaf/markdown-engine": "workspace:*",
     "@forkleaf/types": "workspace:*",
+    "@lezer/highlight": "^1.2.1",
     "@tiptap/core": "^3.30.1",
+    "@tiptap/extension-code-block-lowlight": "^3.30.1",
     "@tiptap/extension-highlight": "^3.30.1",
     "@tiptap/extension-image": "^3.30.1",
     "@tiptap/extension-link": "^3.30.1",
@@ -37,6 +38,7 @@
     "@tiptap/pm": "^3.30.1",
     "@tiptap/react": "^3.30.1",
     "@tiptap/starter-kit": "^3.30.1",
+    "lowlight": "^3.3.0",
     "tiptap-markdown": "^0.9.0"
   },
   "peerDependencies": {

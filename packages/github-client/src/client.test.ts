@@ -403,3 +403,148 @@ function json(payload: unknown): Response {
     headers: { "content-type": "application/json" },
   });
 }
+
+describe("branches", () => {
+  const branchRoutes = {
+    "GET /repos/octo/notes/branches?per_page=100": [
+      { name: "docs-fix", commit: { sha: "b1" }, protected: false },
+      { name: "main", commit: { sha: "b2" }, protected: true },
+      { name: "another", commit: { sha: "b3" } },
+    ],
+    "GET /repos/octo/notes": {
+      name: "notes",
+      full_name: "octo/notes",
+      private: false,
+      default_branch: "main",
+      permissions: { push: true },
+      owner: { login: "octo" },
+      updated_at: "2026-01-01T00:00:00Z",
+      description: null,
+    },
+  };
+
+  it("puts the default branch first and flags protection", async () => {
+    const { fetchImpl } = fakeGitHub(branchRoutes);
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    const branches = await client.listBranchSummaries("octo", "notes");
+
+    expect(branches.map((b) => b.name)).toEqual(["main", "another", "docs-fix"]);
+    expect(branches[0]).toMatchObject({ isDefault: true, protected: true, sha: "b2" });
+    expect(branches[2]).toMatchObject({ isDefault: false, protected: false });
+  });
+
+  it("returns an existing branch instead of failing to recreate it", async () => {
+    const { calls, fetchImpl } = fakeGitHub({
+      "GET /repos/octo/notes/branches/docs-fix": {
+        name: "docs-fix",
+        commit: { sha: "b1" },
+      },
+    });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    const branch = await client.createBranch("octo", "notes", "docs-fix", "main");
+
+    expect(branch).toMatchObject({ name: "docs-fix", sha: "b1" });
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+  });
+
+  it("creates a ref at the source branch's head", async () => {
+    const { calls, fetchImpl } = fakeGitHub({
+      "GET /repos/octo/notes/branches/main": { name: "main", commit: { sha: "head-sha" } },
+      "POST /repos/octo/notes/git/refs": {},
+    });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    const branch = await client.createBranch("octo", "notes", "new-topic", "main");
+
+    expect(branch).toMatchObject({ name: "new-topic", sha: "head-sha" });
+    expect(calls).toContainEqual({
+      method: "POST",
+      url: "/repos/octo/notes/git/refs",
+      body: { ref: "refs/heads/new-topic", sha: "head-sha" },
+    });
+  });
+
+  it("refuses to branch from something that does not exist", async () => {
+    const { fetchImpl } = fakeGitHub();
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    await expect(client.createBranch("octo", "notes", "x", "nope")).rejects.toThrow(GitHubError);
+  });
+});
+
+describe("pull requests", () => {
+  const openPr = {
+    number: 7,
+    html_url: "https://github.com/octo/notes/pull/7",
+    state: "open",
+    title: "Docs",
+    draft: false,
+    head: { ref: "docs-fix" },
+    base: { ref: "main" },
+  };
+
+  it("reuses an already-open pull request rather than duplicating it", async () => {
+    const { calls, fetchImpl } = fakeGitHub({
+      "GET /repos/octo/notes/pulls?state=open&head=octo%3Adocs-fix&base=main&per_page=10": [openPr],
+    });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    const pr = await client.createPullRequest({
+      owner: "octo",
+      repo: "notes",
+      title: "Docs",
+      head: "docs-fix",
+      base: "main",
+    });
+
+    expect(pr).toMatchObject({ number: 7, url: openPr.html_url, head: "docs-fix" });
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+  });
+
+  it("opens one when none exists, carrying title, body and draft", async () => {
+    const { calls, fetchImpl } = fakeGitHub({
+      "GET /repos/octo/notes/pulls?state=open&head=octo%3Adocs-fix&base=main&per_page=10": [],
+      "POST /repos/octo/notes/pulls": { ...openPr, draft: true },
+    });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    const pr = await client.createPullRequest({
+      owner: "octo",
+      repo: "notes",
+      title: "Fix the docs",
+      body: "Typos.",
+      head: "docs-fix",
+      base: "main",
+      draft: true,
+    });
+
+    expect(pr.draft).toBe(true);
+    expect(calls.find((c) => c.method === "POST")?.body).toEqual({
+      title: "Fix the docs",
+      head: "docs-fix",
+      base: "main",
+      body: "Typos.",
+      draft: true,
+    });
+  });
+
+  it("qualifies a cross-fork head with its owner when searching", async () => {
+    const { calls, fetchImpl } = fakeGitHub({
+      "GET /repos/upstream/docs/pulls?state=open&head=me%3Atopic&base=main&per_page=10": [],
+      "POST /repos/upstream/docs/pulls": openPr,
+    });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    await client.createPullRequest({
+      owner: "upstream",
+      repo: "docs",
+      title: "t",
+      head: "me:topic",
+      base: "main",
+    });
+
+    expect(calls[0]!.url).toContain("head=me%3Atopic");
+  });
+});

@@ -5,6 +5,7 @@ import {
   addNode,
   addEdge,
   removeNode,
+  updateNode,
   nextNodeId,
   type Graph,
 } from "./graph-model";
@@ -13,6 +14,7 @@ import { parseMermaidError } from "./errors";
 import { completionsFor, expandSnippet } from "./completions";
 
 const graph: Graph = {
+  kind: "flowchart",
   direction: "TD",
   nodes: [
     { id: "a", label: "Start", shape: "stadium", x: 100, y: 50 },
@@ -46,6 +48,7 @@ describe("graphToMermaid", () => {
 
   it("quotes labels containing characters that would break the syntax", () => {
     const code = graphToMermaid({
+      kind: "flowchart",
       direction: "LR",
       nodes: [{ id: "n1", label: "Cost [USD]", shape: "rect", x: 0, y: 0 }],
       edges: [],
@@ -55,6 +58,7 @@ describe("graphToMermaid", () => {
 
   it("emits subgraphs for grouped nodes", () => {
     const code = graphToMermaid({
+      kind: "flowchart",
       direction: "LR",
       nodes: [
         { id: "a", label: "A", shape: "rect", x: 0, y: 0, group: "Phase one" },
@@ -68,6 +72,7 @@ describe("graphToMermaid", () => {
 
   it("replaces characters that are illegal in a node id", () => {
     const code = graphToMermaid({
+      kind: "flowchart",
       direction: "TD",
       nodes: [{ id: "my node!", label: "X", shape: "rect", x: 0, y: 0 }],
       edges: [],
@@ -282,5 +287,140 @@ describe("completions", () => {
     for (const completion of completionsFor("flowchart")) {
       expect(expandSnippet(completion.snippet).text.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("state diagrams", () => {
+  // The diagram from the bug report: a plain hand-written state machine that
+  // the canvas used to refuse to open at all.
+  const source = `stateDiagram-v2
+    [*] --> Idle
+    Idle --> Editing : user types
+    Editing --> Pending : stops typing
+    Pending --> Syncing : debounce elapsed
+    Syncing --> Idle : success
+    Syncing --> Conflict : remote changed
+    Conflict --> [*] : resolved`;
+
+  it("parses a state diagram into a graph the canvas can edit", () => {
+    const parsed = mermaidToGraph(source)!;
+
+    expect(parsed).not.toBeNull();
+    expect(parsed.kind).toBe("state");
+    expect(parsed.nodes.map((n) => n.id)).toEqual([
+      "__start",
+      "Idle",
+      "Editing",
+      "Pending",
+      "Syncing",
+      "Conflict",
+      "__end",
+    ]);
+    expect(parsed.edges).toHaveLength(7);
+    expect(parsed.edges[1]).toMatchObject({ from: "Idle", to: "Editing", label: "user types" });
+  });
+
+  it("folds every [*] in a scope into one start and one end marker", () => {
+    const parsed = mermaidToGraph(`stateDiagram-v2
+    [*] --> A
+    [*] --> B
+    A --> [*]
+    B --> [*]`)!;
+
+    expect(parsed.nodes.filter((n) => n.shape === "start")).toHaveLength(1);
+    expect(parsed.nodes.filter((n) => n.shape === "end")).toHaveLength(1);
+  });
+
+  it("round-trips back to state syntax rather than to a flowchart", () => {
+    const code = graphToMermaid(mermaidToGraph(source)!);
+
+    expect(code.startsWith("stateDiagram-v2")).toBe(true);
+    expect(code).toContain("[*] --> Idle");
+    expect(code).toContain("Idle --> Editing : user types");
+    expect(code).toContain("Conflict --> [*] : resolved");
+    expect(code).not.toContain("flowchart");
+  });
+
+  it("survives a full parse → serialise → parse cycle unchanged", () => {
+    const once = mermaidToGraph(source)!;
+    const twice = mermaidToGraph(graphToMermaid(once))!;
+
+    expect(twice.nodes.map((n) => [n.id, n.label, n.shape])).toEqual(
+      once.nodes.map((n) => [n.id, n.label, n.shape]),
+    );
+    expect(twice.edges.map((e) => [e.from, e.to, e.label])).toEqual(
+      once.edges.map((e) => [e.from, e.to, e.label]),
+    );
+  });
+
+  it("keeps a renamed state's label without breaking its id", () => {
+    const parsed = mermaidToGraph(source)!;
+    const renamed = graphToMermaid(updateNode(parsed, "Idle", { label: "Waiting for input" }));
+
+    expect(renamed).toContain('state "Waiting for input" as Idle');
+    expect(renamed).toContain("[*] --> Idle");
+  });
+
+  it("understands aliases, annotations and descriptions", () => {
+    const parsed = mermaidToGraph(`stateDiagram-v2
+    state "Waiting for input" as Idle
+    state Pick <<choice>>
+    Busy : doing the work
+    Idle --> Pick`)!;
+
+    expect(parsed.nodes.find((n) => n.id === "Idle")!.label).toBe("Waiting for input");
+    expect(parsed.nodes.find((n) => n.id === "Pick")!.shape).toBe("choice");
+    expect(parsed.nodes.find((n) => n.id === "Busy")!.label).toBe("doing the work");
+  });
+
+  it("assigns members of a composite state to that group", () => {
+    const parsed = mermaidToGraph(`stateDiagram-v2
+    state Working {
+        Fetch --> Parse
+    }
+    Idle --> Fetch`)!;
+
+    expect(parsed.nodes.find((n) => n.id === "Fetch")!.group).toBe("Working");
+    expect(parsed.nodes.find((n) => n.id === "Idle")!.group).toBeUndefined();
+    expect(graphToMermaid(parsed)).toContain("state Working {");
+  });
+
+  it("carries the layout comment through, so positions survive", () => {
+    const moved = updateNode(mermaidToGraph(source)!, "Idle", { x: 320, y: 180 });
+    const reparsed = mermaidToGraph(graphToMermaid(moved))!;
+
+    expect(reparsed.nodes.find((n) => n.id === "Idle")).toMatchObject({ x: 320, y: 180 });
+  });
+
+  it("maps the direction onto one mermaid understands", () => {
+    const parsed = mermaidToGraph("stateDiagram-v2\n    direction LR\n    A --> B")!;
+    expect(parsed.direction).toBe("LR");
+    expect(graphToMermaid(parsed)).toContain("direction LR");
+  });
+});
+
+describe("preserving what the model has no concept of", () => {
+  it("writes styling and notes back out instead of dropping them", () => {
+    const flowchart = mermaidToGraph(`flowchart TD
+    A --> B
+    classDef warn fill:#f00
+    class A warn`)!;
+
+    const code = graphToMermaid(flowchart);
+    expect(code).toContain("classDef warn fill:#f00");
+    expect(code).toContain("class A warn");
+  });
+
+  it("keeps a multi-line note attached to a state diagram", () => {
+    const parsed = mermaidToGraph(`stateDiagram-v2
+    A --> B
+    note right of A
+        Retries three times
+    end note`)!;
+
+    const code = graphToMermaid(parsed);
+    expect(code).toContain("note right of A");
+    expect(code).toContain("Retries three times");
+    expect(code).toContain("end note");
   });
 });

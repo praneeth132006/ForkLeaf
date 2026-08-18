@@ -11,9 +11,11 @@ import { useTheme } from "@/hooks/useTheme";
 import { EditorSidebar } from "@/components/EditorSidebar";
 import { EditorRightPanel } from "@/components/EditorRightPanel";
 import { EditorStatusBar } from "@/components/EditorStatusBar";
+import { EditorTabs } from "@/components/EditorTabs";
 import { ConflictDialog } from "@/components/ConflictDialog";
 import { ExportDialog } from "@/components/ExportDialog";
 import { ConnectRepoDialog } from "@/components/ConnectRepoDialog";
+import { ProposeChangesDialog } from "@/components/ProposeChangesDialog";
 import { HelpDialog } from "@/components/HelpDialog";
 import { HistoryDialog } from "@/components/HistoryDialog";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
@@ -51,7 +53,9 @@ export default function EditorPage() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
-  const [dialog, setDialog] = useState<"export" | "connect" | "help" | "history" | null>(null);
+  const [dialog, setDialog] = useState<
+    "export" | "connect" | "help" | "history" | "propose" | null
+  >(null);
   const [prompt, setPrompt] = useState<PromptRequest | null>(null);
   // Conflicts open their own dialog as soon as they appear. Dismissing it hides
   // it until they are resolved; the status bar stays as the way back in.
@@ -331,6 +335,14 @@ export default function EditorPage() {
             </div>
           </header>
 
+          {/* ── Open notes ───────────────────────────────────────────── */}
+          <EditorTabs
+            notes={notebook.openNotes}
+            activePath={notebook.activePath}
+            onSelect={notebook.openNote}
+            onClose={notebook.closeNote}
+          />
+
           {/* ── Banners ──────────────────────────────────────────────── */}
           {notebook.error && (
             <div
@@ -396,9 +408,13 @@ export default function EditorPage() {
       </div>
 
       <EditorStatusBar
+        onSwitchBranch={notebook.switchBranch}
+        onPropose={() => setDialog("propose")}
         sync={notebook.sync}
         workspace={workspace}
         notePath={note?.path ?? null}
+        syncPreference={notebook.syncPreference}
+        onSyncModeChange={notebook.setSyncMode}
         onSyncNow={notebook.syncNow}
         onShowConflicts={() => setConflictsDismissed(false)}
       />
@@ -441,6 +457,16 @@ export default function EditorPage() {
       )}
 
       {prompt && <PromptDialog request={prompt} onClose={() => setPrompt(null)} />}
+
+      {dialog === "propose" && workspace && !workspace.isLocal && user && (
+        <ProposeChangesDialog
+          workspace={workspace}
+          login={user.login}
+          subject={title || note?.path || "update documentation"}
+          onClose={() => setDialog(null)}
+          onSwitchBranch={notebook.switchBranch}
+        />
+      )}
 
       {dialog === "connect" && (
         <ConnectRepoDialog

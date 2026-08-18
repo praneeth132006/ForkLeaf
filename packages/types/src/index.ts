@@ -127,8 +127,36 @@ export type SyncStatus =
   | "conflict" // remote moved on; needs user resolution
   | "error";
 
+/**
+ * How eagerly changes are pushed to GitHub.
+ *
+ * `auto` is the default and the behaviour ForkLeaf shipped with: edits drain
+ * to GitHub a few seconds after you stop typing. The others exist because that
+ * is not always what someone wants — writing in another project's repository,
+ * or wanting one deliberate commit per session rather than thirty automatic
+ * ones — and every one of them still saves locally the instant you type.
+ */
+export type SyncMode =
+  | "auto" // push a few seconds after the last keystroke (default)
+  | "interval" // push on a timer, however much was written in between
+  | "manual"; // push only when explicitly asked
+
+/** Sync preferences for one workspace. */
+export interface SyncPreference {
+  mode: SyncMode;
+  /** Minutes between pushes when the mode is `interval`. */
+  intervalMinutes: number;
+}
+
+export const DEFAULT_SYNC_PREFERENCE: SyncPreference = {
+  mode: "auto",
+  intervalMinutes: 15,
+};
+
 export interface SyncState {
   status: SyncStatus;
+  /** How this workspace is configured to push. */
+  mode: SyncMode;
   /** Number of notes with unpushed changes. */
   pendingCount: number;
   lastSyncedAt: string | null;

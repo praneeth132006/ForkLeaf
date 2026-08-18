@@ -10,7 +10,10 @@ import {
 } from "@forkleaf/store";
 import {
   workspaceId,
+  DEFAULT_SYNC_PREFERENCE,
   type Note,
+  type SyncMode,
+  type SyncPreference,
   type SyncState,
   type TreeNode,
   type Workspace,
@@ -49,12 +52,43 @@ export interface NotebookState {
   workspaces: Workspace[];
   activeWorkspace: Workspace | null;
   tree: TreeNode[];
-  note: Note | null;
+  /**
+   * Every note the user currently has open, in tab order. Notes stay loaded
+   * when you switch between them, so moving between two files you are editing
+   * together is instant and neither loses its place.
+   */
+  openNotes: Note[];
+  /** Path of the note the editor is showing. */
+  activePath: string | null;
   sync: SyncState;
+  /**
+   * How the active workspace is configured to push. Kept alongside the sync
+   * state because the state reports the mode but not the interval, and the
+   * settings UI has to show the number the user picked.
+   */
+  syncPreference: SyncPreference;
   error: string | null;
   /** Set while a slow operation (bootstrap, opening a note) is running. */
   busy: string | null;
 }
+
+/** Keys the open set is remembered under, so a reload reopens the same tabs. */
+const openTabsKey = (workspace: string) => `openNotes:${workspace}`;
+const activeTabKey = (workspace: string) => `activeNote:${workspace}`;
+/**
+ * Sync preferences are stored per repository, not globally: "commit whenever
+ * you like" is the right answer for your own notes repository and the wrong one
+ * for a colleague's documentation repo, and most people have both connected.
+ *
+ * Keyed on the repository rather than the workspace id, which carries the
+ * branch — how you want to commit is a fact about the repository, and having
+ * the setting silently reset every time you moved to a branch would be a bug.
+ */
+const syncPrefKey = (workspace: Workspace) =>
+  `syncPreference:${workspace.repo.owner}/${workspace.repo.repo}`;
+
+/** How many notes may be open at once, to bound memory and tab-strip width. */
+const MAX_OPEN_NOTES = 12;
 
 export function useNotebook() {
   const [state, setState] = useState<NotebookState>({
@@ -63,8 +97,17 @@ export function useNotebook() {
     workspaces: [],
     activeWorkspace: null,
     tree: [],
-    note: null,
-    sync: { status: "idle", pendingCount: 0, lastSyncedAt: null, lastError: null, conflicts: [] },
+    openNotes: [],
+    activePath: null,
+    sync: {
+      status: "idle",
+      mode: DEFAULT_SYNC_PREFERENCE.mode,
+      pendingCount: 0,
+      lastSyncedAt: null,
+      lastError: null,
+      conflicts: [],
+    },
+    syncPreference: DEFAULT_SYNC_PREFERENCE,
     error: null,
     busy: null,
   });
@@ -175,6 +218,43 @@ export function useNotebook() {
       await dbRef.current?.putMeta("activeWorkspace", workspace.id);
       await notes.touchWorkspace(workspace.id);
 
+      // The engine outlives the workspace switch, so its mode has to be reset
+      // to this workspace's choice — otherwise the manual mode you set on a
+      // colleague's repo silently follows you into your own notes.
+      const preference =
+        (await dbRef.current?.getMeta<SyncPreference>(syncPrefKey(workspace))) ??
+        DEFAULT_SYNC_PREFERENCE;
+
+      if (!cancelled) {
+        syncRef.current?.setMode(preference.mode, preference.intervalMinutes);
+        patch({ syncPreference: preference });
+      }
+
+      // Reopen the tabs this workspace had last time. A note that has since
+      // been deleted simply fails to load and is left out.
+      const remembered = (await dbRef.current?.getMeta<string[]>(openTabsKey(workspace.id))) ?? [];
+      const rememberedActive = await dbRef.current?.getMeta<string>(activeTabKey(workspace.id));
+
+      if (remembered.length > 0 && !cancelled) {
+        const restored = (
+          await Promise.all(
+            remembered
+              .slice(0, MAX_OPEN_NOTES)
+              .map((path) => notes.openNote(workspace.id, path).catch(() => null)),
+          )
+        ).filter((note): note is Note => note !== null);
+
+        if (!cancelled && restored.length > 0) {
+          patch({
+            openNotes: restored,
+            activePath:
+              restored.find((note) => note.path === rememberedActive)?.path ??
+              restored[0]?.path ??
+              null,
+          });
+        }
+      }
+
       if (workspace.isLocal) {
         // Local mode has no remote tree; build one from what is stored.
         const localNotes = await notes.listNotes(workspace.id);
@@ -209,7 +289,9 @@ export function useNotebook() {
 
   // ── Flush pending changes when the connection returns ───────────────────
   useEffect(() => {
-    const onOnline = () => void syncRef.current?.flushNow();
+    // retryNow rather than flushNow: a reconnect should also clear any backoff
+    // the engine built up while the network was down.
+    const onOnline = () => syncRef.current?.retryNow();
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
   }, []);
@@ -229,16 +311,38 @@ export function useNotebook() {
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
+  /** Remembers the tab set so a reload comes back to the same desks. */
+  const rememberTabs = useCallback((workspace: string, notes: Note[], active: string | null) => {
+    void dbRef.current?.putMeta(
+      openTabsKey(workspace),
+      notes.map((note) => note.path),
+    );
+    void dbRef.current?.putMeta(activeTabKey(workspace), active);
+  }, []);
+
   const openNote = useCallback(
     async (path: string) => {
       const workspace = state.activeWorkspace;
       const notes = repoRef.current;
       if (!workspace || !notes) return;
 
+      // Already open: this is a tab switch, which should be instant and must
+      // not throw away unsaved-to-remote edits by re-reading from storage.
+      if (state.openNotes.some((note) => note.path === path)) {
+        patch({ activePath: path });
+        rememberTabs(workspace.id, state.openNotes, path);
+        return;
+      }
+
       patch({ busy: "Opening…", error: null });
       try {
         const note = await notes.openNote(workspace.id, path);
-        patch({ note, busy: null });
+        // Past the cap, the least recently used tab gives way rather than the
+        // strip growing until the labels are unreadable.
+        const next = [...state.openNotes, note].slice(-MAX_OPEN_NOTES);
+
+        patch({ openNotes: next, activePath: note.path, busy: null });
+        rememberTabs(workspace.id, next, note.path);
       } catch (error) {
         patch({
           busy: null,
@@ -246,7 +350,32 @@ export function useNotebook() {
         });
       }
     },
-    [state.activeWorkspace, patch],
+    [state.activeWorkspace, state.openNotes, patch, rememberTabs],
+  );
+
+  /**
+   * Closes one tab.
+   *
+   * Nothing is discarded: the note is already saved locally, and its pending
+   * changes stay queued for sync. Closing only takes it off the strip.
+   */
+  const closeNote = useCallback(
+    (path: string) => {
+      const workspace = state.activeWorkspace;
+      const remaining = state.openNotes.filter((note) => note.path !== path);
+
+      // Focus moves to the neighbour on the left, which is where the eye
+      // already is after closing something.
+      const closedAt = state.openNotes.findIndex((note) => note.path === path);
+      const activePath =
+        state.activePath === path
+          ? (remaining[Math.max(0, closedAt - 1)]?.path ?? null)
+          : state.activePath;
+
+      patch({ openNotes: remaining, activePath });
+      if (workspace) rememberTabs(workspace.id, remaining, activePath);
+    },
+    [state.activeWorkspace, state.openNotes, state.activePath, patch, rememberTabs],
   );
 
   /**
@@ -271,31 +400,42 @@ export function useNotebook() {
     [state.activeWorkspace, patch],
   );
 
+  const activeNote = useMemo(
+    () => state.openNotes.find((note) => note.path === state.activePath) ?? null,
+    [state.openNotes, state.activePath],
+  );
+
+  /** Replaces one open note in place, leaving the rest of the tabs untouched. */
+  const patchOpenNote = useCallback((path: string, changes: Partial<Note>) => {
+    setState((previous) => ({
+      ...previous,
+      openNotes: previous.openNotes.map((note) =>
+        note.path === path ? { ...note, ...changes } : note,
+      ),
+    }));
+  }, []);
+
   const saveNote = useCallback(
     async (content: string) => {
       const notes = repoRef.current;
-      const current = state.note;
-      if (!notes || !current) return;
+      if (!notes || !activeNote) return;
 
       // Optimistic: show the new content immediately, persist in the background.
-      const updated = { ...current, content, dirty: true };
-      setState((previous) => ({ ...previous, note: updated }));
-      await notes.saveNote(current, content);
+      patchOpenNote(activeNote.path, { content, dirty: true });
+      await notes.saveNote(activeNote, content);
     },
-    [state.note],
+    [activeNote, patchOpenNote],
   );
 
   const updateFrontmatter = useCallback(
     async (frontmatter: Note["frontmatter"]) => {
       const notes = repoRef.current;
-      const current = state.note;
-      if (!notes || !current) return;
+      if (!notes || !activeNote) return;
 
-      const updated = { ...current, frontmatter, dirty: true };
-      setState((previous) => ({ ...previous, note: updated }));
-      await notes.saveNote(current, current.content, frontmatter);
+      patchOpenNote(activeNote.path, { frontmatter, dirty: true });
+      await notes.saveNote(activeNote, activeNote.content, frontmatter);
     },
-    [state.note],
+    [activeNote, patchOpenNote],
   );
 
   const createNote = useCallback(
@@ -312,13 +452,16 @@ export function useNotebook() {
         existingPaths: existing,
       });
 
+      const open = [...state.openNotes, note].slice(-MAX_OPEN_NOTES);
       patch({
-        note,
+        openNotes: open,
+        activePath: note.path,
         tree: insertIntoTree(state.tree, note.path),
       });
+      rememberTabs(workspace.id, open, note.path);
       return note;
     },
-    [state.activeWorkspace, state.tree, patch],
+    [state.activeWorkspace, state.tree, state.openNotes, patch, rememberTabs],
   );
 
   const deleteNote = useCallback(
@@ -327,12 +470,15 @@ export function useNotebook() {
       if (!notes) return;
 
       await notes.deleteNote(note);
-      patch({
-        tree: removeFromTree(state.tree, note.path),
-        note: state.note?.path === note.path ? null : state.note,
-      });
+
+      const open = state.openNotes.filter((candidate) => candidate.path !== note.path);
+      const activePath =
+        state.activePath === note.path ? (open[0]?.path ?? null) : state.activePath;
+
+      patch({ tree: removeFromTree(state.tree, note.path), openNotes: open, activePath });
+      if (state.activeWorkspace) rememberTabs(state.activeWorkspace.id, open, activePath);
     },
-    [state.tree, state.note, patch],
+    [state.tree, state.openNotes, state.activePath, state.activeWorkspace, patch, rememberTabs],
   );
 
   const renameNote = useCallback(
@@ -341,36 +487,84 @@ export function useNotebook() {
       if (!notes) return;
 
       const renamed = await notes.renameNote(note, toPath);
+
+      const open = state.openNotes.map((candidate) =>
+        candidate.path === note.path ? renamed : candidate,
+      );
+      const activePath = state.activePath === note.path ? renamed.path : state.activePath;
+
       patch({
         tree: insertIntoTree(removeFromTree(state.tree, note.path), toPath),
-        note: renamed,
+        openNotes: open,
+        activePath,
       });
+      if (state.activeWorkspace) rememberTabs(state.activeWorkspace.id, open, activePath);
       return renamed;
     },
-    [state.tree, patch],
+    [state.tree, state.openNotes, state.activePath, state.activeWorkspace, patch, rememberTabs],
   );
 
   const setViewMode = useCallback(
     async (mode: EditorViewMode) => {
       const notes = repoRef.current;
-      const current = state.note;
-      if (!notes || !current) return;
+      if (!notes || !activeNote) return;
 
-      setState((previous) => ({
-        ...previous,
-        note: previous.note ? { ...previous.note, viewMode: mode } : null,
-      }));
-      await notes.setViewMode(current, mode);
+      patchOpenNote(activeNote.path, { viewMode: mode });
+      await notes.setViewMode(activeNote, mode);
       await dbRef.current?.putMeta("defaultViewMode", mode);
     },
-    [state.note],
+    [activeNote, patchOpenNote],
   );
 
   const switchWorkspace = useCallback(
     (workspace: Workspace) => {
-      patch({ activeWorkspace: workspace, note: null, tree: [] });
+      patch({ activeWorkspace: workspace, openNotes: [], activePath: null, tree: [] });
     },
     [patch],
+  );
+
+  /**
+   * Moves the current workspace onto another branch, or onto a fork.
+   *
+   * A branch is not a different workspace as far as the user is concerned — it
+   * is the same notes, one revision sideways — so this edits the workspace in
+   * place rather than creating a second entry for every branch. Open notes are
+   * cleared because their content and base SHAs belong to the old branch.
+   */
+  const switchBranch = useCallback(
+    async (branch: string, repo?: { owner: string; repo: string }) => {
+      const notes = repoRef.current;
+      const current = state.activeWorkspace;
+      if (!notes || !current || current.isLocal) return;
+
+      const nextRepo = {
+        ...current.repo,
+        ...(repo ? { owner: repo.owner, repo: repo.repo } : {}),
+        branch,
+      };
+
+      const next: Workspace = {
+        ...current,
+        id: workspaceId(nextRepo),
+        name: repo ? repo.repo : current.name,
+        repo: nextRepo,
+        lastOpenedAt: new Date().toISOString(),
+      };
+
+      await notes.addWorkspace(next);
+      if (gatewayRef.current instanceof GitHubGateway) {
+        gatewayRef.current.register(next);
+      }
+
+      patch({
+        workspaces: [...state.workspaces.filter((w) => w.id !== next.id), next],
+        activeWorkspace: next,
+        openNotes: [],
+        activePath: null,
+        tree: [],
+      });
+    },
+    [state.activeWorkspace, state.workspaces, patch],
   );
 
   const addWorkspace = useCallback(
@@ -386,7 +580,8 @@ export function useNotebook() {
       patch({
         workspaces: [...state.workspaces.filter((w) => w.id !== workspace.id), workspace],
         activeWorkspace: workspace,
-        note: null,
+        openNotes: [],
+        activePath: null,
         tree: [],
       });
     },
@@ -405,7 +600,7 @@ export function useNotebook() {
       patch({
         workspaces: remaining,
         ...(state.activeWorkspace?.id === id
-          ? { activeWorkspace: remaining[0] ?? null, note: null, tree: [] }
+          ? { activeWorkspace: remaining[0] ?? null, openNotes: [], activePath: null, tree: [] }
           : {}),
       });
     },
@@ -414,6 +609,30 @@ export function useNotebook() {
 
   const syncNow = useCallback(() => syncRef.current?.flushNow(), []);
 
+  /**
+   * Changes how eagerly this workspace pushes.
+   *
+   * Auto is the default and stays the default; this only exists for the people
+   * who want their commit log to read as deliberate work rather than as a
+   * transcript of their typing. Nothing here affects local saving, which is
+   * always immediate whatever the mode.
+   */
+  const setSyncMode = useCallback(
+    async (mode: SyncMode, intervalMinutes?: number) => {
+      const workspace = state.activeWorkspace;
+      const preference: SyncPreference = {
+        mode,
+        intervalMinutes: intervalMinutes ?? state.syncPreference.intervalMinutes,
+      };
+
+      syncRef.current?.setMode(preference.mode, preference.intervalMinutes);
+      patch({ syncPreference: preference });
+
+      if (workspace) await dbRef.current?.putMeta(syncPrefKey(workspace), preference);
+    },
+    [state.activeWorkspace, state.syncPreference.intervalMinutes, patch],
+  );
+
   const resolveConflict = useCallback(
     async (path: string, resolution: "keep-local" | "keep-remote" | "keep-both") => {
       const workspace = state.activeWorkspace;
@@ -421,10 +640,15 @@ export function useNotebook() {
 
       await syncRef.current?.resolveConflict(workspace.id, path, resolution);
 
-      // Re-read the note so the editor shows whatever the resolution produced.
-      if (state.note?.path === path) await openNote(path);
+      // Re-read the note so every tab showing it gets whatever the resolution
+      // produced, rather than keeping the copy that lost.
+      const notes = repoRef.current;
+      if (notes && state.openNotes.some((note) => note.path === path)) {
+        const fresh = await notes.openNote(workspace.id, path);
+        patchOpenNote(path, fresh);
+      }
     },
-    [state.activeWorkspace, state.note, openNote],
+    [state.activeWorkspace, state.openNotes, patchOpenNote],
   );
 
   const allNotes = useCallback(async () => {
@@ -437,7 +661,10 @@ export function useNotebook() {
   return useMemo(
     () => ({
       ...state,
+      /** The note the editor is showing. Derived from the open set. */
+      note: activeNote,
       openNote,
+      closeNote,
       openNoteAndReturn,
       saveNote,
       updateFrontmatter,
@@ -446,16 +673,20 @@ export function useNotebook() {
       renameNote,
       setViewMode,
       switchWorkspace,
+      switchBranch,
       addWorkspace,
       removeWorkspace,
       syncNow,
+      setSyncMode,
       resolveConflict,
       allNotes,
       dismissError: () => patch({ error: null }),
     }),
     [
       state,
+      activeNote,
       openNote,
+      closeNote,
       openNoteAndReturn,
       saveNote,
       updateFrontmatter,
@@ -464,9 +695,11 @@ export function useNotebook() {
       renameNote,
       setViewMode,
       switchWorkspace,
+      switchBranch,
       addWorkspace,
       removeWorkspace,
       syncNow,
+      setSyncMode,
       resolveConflict,
       allNotes,
       patch,

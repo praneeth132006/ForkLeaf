@@ -317,6 +317,83 @@ h3 {
   color: inherit;
 }
 
+/* ── Syntax highlighting ──────────────────────────────────────────────────
+   Token colours for highlight.js output, which covers ~190 languages, so a
+   fenced block in any language renders as code rather than as flat text.
+
+   Drawn from the existing palette rather than importing one of highlight.js's
+   own stylesheets: those ship their own background and their own hues, which
+   would put a foreign colour scheme inside ForkLeaf's. Code blocks sit on the
+   inverse surface in both themes, so these are tuned against that one
+   background and need no light/dark variants. */
+.fl-prose pre code.hljs {
+  display: block;
+  background: none;
+  padding: 0;
+}
+
+.fl-prose .hljs-comment,
+.fl-prose .hljs-quote {
+  color: color-mix(in srgb, var(--fl-inverse-text) 45%, transparent);
+  font-style: italic;
+}
+
+.fl-prose .hljs-keyword,
+.fl-prose .hljs-selector-tag,
+.fl-prose .hljs-literal,
+.fl-prose .hljs-doctag,
+.fl-prose .hljs-name {
+  color: #c9a2f5;
+}
+
+.fl-prose .hljs-string,
+.fl-prose .hljs-regexp,
+.fl-prose .hljs-addition,
+.fl-prose .hljs-attribute {
+  color: #7fd8a8;
+}
+
+.fl-prose .hljs-number,
+.fl-prose .hljs-symbol,
+.fl-prose .hljs-bullet,
+.fl-prose .hljs-link,
+.fl-prose .hljs-meta {
+  color: #f0b072;
+}
+
+.fl-prose .hljs-title,
+.fl-prose .hljs-section,
+.fl-prose .hljs-selector-id,
+.fl-prose .hljs-function .hljs-title {
+  color: #74c0f5;
+}
+
+.fl-prose .hljs-type,
+.fl-prose .hljs-class .hljs-title,
+.fl-prose .hljs-built_in,
+.fl-prose .hljs-builtin-name {
+  color: #6fd3d0;
+}
+
+.fl-prose .hljs-variable,
+.fl-prose .hljs-template-variable,
+.fl-prose .hljs-attr,
+.fl-prose .hljs-selector-attr,
+.fl-prose .hljs-property {
+  color: #f2909c;
+}
+
+.fl-prose .hljs-deletion {
+  color: var(--fl-danger);
+}
+
+.fl-prose .hljs-emphasis {
+  font-style: italic;
+}
+.fl-prose .hljs-strong {
+  font-weight: 600;
+}
+
 .fl-prose hr {
   border: none;
   border-top: 1px solid var(--fl-border);
@@ -434,4 +511,75 @@ h3 {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ── Code blocks in the rich editor ────────────────────────────────────────
+   The block carries its own header: the language it is highlighted as, and a
+   copy button. Previously the language could only be set by switching to
+   source view and typing it after the opening fence, which nobody finds.
+
+   The header sits on the same inverse surface as the code, lifted slightly,
+   rather than on the page background — a light-grey strip above a black block
+   reads as two unrelated elements. */
+.fl-prose .fl-code-node {
+  margin: 1.5rem 0;
+  border: 1px solid var(--fl-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--fl-inverse-bg);
+}
+
+.fl-prose .fl-code-node pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.fl-code-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  background: color-mix(in srgb, var(--fl-inverse-text) 7%, var(--fl-inverse-bg));
+  border-bottom: 1px solid color-mix(in srgb, var(--fl-inverse-text) 12%, transparent);
+}
+
+.fl-code-lang,
+.fl-code-copy {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: color-mix(in srgb, var(--fl-inverse-text) 70%, transparent);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.125rem 0.375rem;
+  transition:
+    color 0.12s,
+    background 0.12s,
+    border-color 0.12s;
+}
+
+.fl-code-lang {
+  max-width: 12rem;
+}
+
+.fl-code-lang:hover,
+.fl-code-copy:hover,
+.fl-code-lang:focus-visible {
+  color: var(--fl-inverse-text);
+  background: color-mix(in srgb, var(--fl-inverse-text) 10%, transparent);
+  border-color: color-mix(in srgb, var(--fl-inverse-text) 18%, transparent);
+  outline: none;
+}
+
+/* The dropdown itself is drawn by the OS, which uses the page colours rather
+   than the inverse surface the trigger sits on. */
+.fl-code-lang option,
+.fl-code-lang optgroup {
+  background: var(--fl-surface);
+  color: var(--fl-text);
+}
+
+.fl-code-copy {
+  margin-left: auto;
 }
