@@ -209,7 +209,9 @@ export function useNotebook() {
 
   // ── Flush pending changes when the connection returns ───────────────────
   useEffect(() => {
-    const onOnline = () => void syncRef.current?.flushNow();
+    // retryNow rather than flushNow: a reconnect should also clear any backoff
+    // the engine built up while the network was down.
+    const onOnline = () => syncRef.current?.retryNow();
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
   }, []);

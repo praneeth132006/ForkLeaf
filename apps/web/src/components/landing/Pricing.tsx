@@ -2,90 +2,97 @@
 
 import React from "react";
 import Link from "next/link";
-import { PLANS, formatPrice, type Plan } from "@/lib/plans";
-import { track } from "@/lib/firebase/analytics";
+import { EVERYTHING } from "@/lib/plans";
 import { SectionHeading } from "./HowItWorks";
 
 /**
- * Pricing.
+ * Pricing — or rather, the absence of it.
  *
- * The paid tiers are announced rather than sellable: no payment provider is
- * connected yet, so their buttons register interest instead of pretending to
- * take money. Saying "coming soon" out loud is better than a checkout button
- * that 404s.
+ * There are no tiers. Every feature ships to everyone, because the expensive
+ * part of a notes app is storage and ForkLeaf has none: the notes live in the
+ * user's own GitHub account. What is left to charge for would be access to
+ * their own writing, which is the one thing this app exists to avoid.
+ *
+ * Funding is a sponsorship, asked for once, next to the thing it pays for.
  */
 export function Pricing() {
   return (
     <section id="pricing" className="mx-auto w-full max-w-6xl px-6 py-24">
       <SectionHeading
         eyebrow="Pricing"
-        title="The editor is free. It always will be."
-        body="Your notes sit in your own GitHub account, so there is no storage for us to charge you for. The paid tiers buy convenience on top of that — never access to your own writing."
+        title="Free. All of it. No tiers."
+        body="Your notes sit in your own GitHub account, so there is no storage for us to charge you for and no paywall between you and your writing. If ForkLeaf ever disappears, your notes are already in your repository and keep working without it."
       />
 
-      <div className="mt-12 grid gap-4 lg:grid-cols-3">
-        {PLANS.map((plan) => (
-          <PlanCard key={plan.id} plan={plan} />
-        ))}
-      </div>
+      <div className="mt-12 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <article className="fl-card flex flex-col border-[var(--fl-accent)] p-7 shadow-[var(--fl-shadow)]">
+          <h3 className="text-[17px] font-semibold tracking-tight text-[var(--fl-text)]">
+            Everything
+          </h3>
+          <p className="mt-1 text-[14px] text-[var(--fl-muted)]">
+            The whole application, for everyone.
+          </p>
 
-      <p className="mt-6 text-[13px] text-[var(--fl-muted)]">
-        Pro and Team are not on sale yet. If ForkLeaf ever shuts down, your notes are already in
-        your repository and keep working without it.
-      </p>
+          <p className="mt-5 flex items-baseline gap-1.5">
+            <span className="text-4xl font-semibold tracking-tight text-[var(--fl-text)]">
+              Free
+            </span>
+            <span className="text-[14px] text-[var(--fl-muted)]">forever</span>
+          </p>
+
+          <Link href="/editor" className="fl-btn fl-btn-primary mt-6 w-full">
+            Start writing
+          </Link>
+
+          <ul className="mt-7 grid gap-2.5 text-[14px] text-[var(--fl-muted)] sm:grid-cols-2">
+            {EVERYTHING.map((feature) => (
+              <li key={feature} className="flex gap-2.5">
+                <Check />
+                <span>{feature}</span>
+              </li>
+            ))}
+          </ul>
+        </article>
+
+        <Sponsor />
+      </div>
     </section>
   );
 }
 
-function PlanCard({ plan }: { plan: Plan }) {
-  const isFree = plan.amount === 0;
-
+/**
+ * The sponsorship ask.
+ *
+ * GitHub's own card is an iframe, which cannot inherit the page's theme and
+ * cannot be styled — so it sits inside a card that carries the framing, and the
+ * iframe supplies only the button and the tier count.
+ */
+function Sponsor() {
   return (
-    <article
-      className={`fl-card relative flex flex-col p-7 ${
-        plan.highlighted ? "border-[var(--fl-accent)] shadow-[var(--fl-shadow)]" : ""
-      }`}
-    >
-      {plan.highlighted && (
-        <span className="absolute -top-2.5 left-7 rounded-full bg-[var(--fl-accent)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--fl-accent-contrast)]">
-          Planned
-        </span>
-      )}
-
+    <article className="fl-card flex flex-col p-7">
       <h3 className="text-[17px] font-semibold tracking-tight text-[var(--fl-text)]">
-        {plan.name}
+        Sponsor the work
       </h3>
-      <p className="mt-1 text-[14px] text-[var(--fl-muted)]">{plan.tagline}</p>
-
-      <p className="mt-5 flex items-baseline gap-1.5">
-        <span className="text-4xl font-semibold tracking-tight text-[var(--fl-text)]">
-          {formatPrice(plan)}
-        </span>
-        {!isFree && <span className="text-[14px] text-[var(--fl-muted)]">/ month</span>}
+      <p className="mt-1 text-[14px] text-[var(--fl-muted)]">
+        ForkLeaf is built by one person in the open. Sponsoring is entirely
+        optional and buys you nothing extra — every feature is already yours. It
+        just means the work continues.
       </p>
 
-      {isFree ? (
-        <Link href="/editor" className="fl-btn fl-btn-primary mt-6 w-full">
-          Start writing
-        </Link>
-      ) : (
-        <button
-          type="button"
-          onClick={() => track("upgrade_viewed", { plan: plan.id })}
-          className="fl-btn fl-btn-ghost mt-6 w-full"
-        >
-          Coming soon
-        </button>
-      )}
-
-      <ul className="mt-7 space-y-2.5 text-[14px] text-[var(--fl-muted)]">
-        {plan.features.map((feature) => (
-          <li key={feature} className="flex gap-2.5">
-            <Check />
-            <span>{feature}</span>
-          </li>
-        ))}
-      </ul>
+      {/* GitHub fixes the card at 225px and fills most of it with nothing when
+          there are no tiers to show. The frame is clipped to the height its
+          content actually occupies rather than left as a well of dead space. */}
+      <div className="mt-6 h-[150px] overflow-hidden rounded-xl border border-[var(--fl-border)]">
+        <iframe
+          src="https://github.com/sponsors/praneeth132006/card"
+          title="Sponsor praneeth132006"
+          height="225"
+          width="600"
+          loading="lazy"
+          className="block w-full"
+          style={{ border: 0 }}
+        />
+      </div>
     </article>
   );
 }

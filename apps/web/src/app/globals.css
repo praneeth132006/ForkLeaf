@@ -317,6 +317,83 @@ h3 {
   color: inherit;
 }
 
+/* ── Syntax highlighting ──────────────────────────────────────────────────
+   Token colours for highlight.js output, which covers ~190 languages, so a
+   fenced block in any language renders as code rather than as flat text.
+
+   Drawn from the existing palette rather than importing one of highlight.js's
+   own stylesheets: those ship their own background and their own hues, which
+   would put a foreign colour scheme inside ForkLeaf's. Code blocks sit on the
+   inverse surface in both themes, so these are tuned against that one
+   background and need no light/dark variants. */
+.fl-prose pre code.hljs {
+  display: block;
+  background: none;
+  padding: 0;
+}
+
+.fl-prose .hljs-comment,
+.fl-prose .hljs-quote {
+  color: color-mix(in srgb, var(--fl-inverse-text) 45%, transparent);
+  font-style: italic;
+}
+
+.fl-prose .hljs-keyword,
+.fl-prose .hljs-selector-tag,
+.fl-prose .hljs-literal,
+.fl-prose .hljs-doctag,
+.fl-prose .hljs-name {
+  color: #c9a2f5;
+}
+
+.fl-prose .hljs-string,
+.fl-prose .hljs-regexp,
+.fl-prose .hljs-addition,
+.fl-prose .hljs-attribute {
+  color: #7fd8a8;
+}
+
+.fl-prose .hljs-number,
+.fl-prose .hljs-symbol,
+.fl-prose .hljs-bullet,
+.fl-prose .hljs-link,
+.fl-prose .hljs-meta {
+  color: #f0b072;
+}
+
+.fl-prose .hljs-title,
+.fl-prose .hljs-section,
+.fl-prose .hljs-selector-id,
+.fl-prose .hljs-function .hljs-title {
+  color: #74c0f5;
+}
+
+.fl-prose .hljs-type,
+.fl-prose .hljs-class .hljs-title,
+.fl-prose .hljs-built_in,
+.fl-prose .hljs-builtin-name {
+  color: #6fd3d0;
+}
+
+.fl-prose .hljs-variable,
+.fl-prose .hljs-template-variable,
+.fl-prose .hljs-attr,
+.fl-prose .hljs-selector-attr,
+.fl-prose .hljs-property {
+  color: #f2909c;
+}
+
+.fl-prose .hljs-deletion {
+  color: var(--fl-danger);
+}
+
+.fl-prose .hljs-emphasis {
+  font-style: italic;
+}
+.fl-prose .hljs-strong {
+  font-weight: 600;
+}
+
 .fl-prose hr {
   border: none;
   border-top: 1px solid var(--fl-border);

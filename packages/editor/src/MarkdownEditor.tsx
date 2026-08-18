@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Editor } from "@tiptap/core";
 import type { EditorViewMode } from "@forkleaf/types";
 import { WysiwygEditor } from "./WysiwygEditor";
@@ -65,12 +65,39 @@ export function MarkdownEditor({
 
   const handleTiptapReady = useCallback((editor: Editor | null) => {
     setTiptap(editor);
-    if (!editor) return;
-
-    const bump = () => forceRender((n) => n + 1);
-    editor.on("selectionUpdate", bump);
-    editor.on("transaction", bump);
   }, []);
+
+  // Keep the toolbar's active states honest.
+  //
+  // Subscribing here rather than in the ready callback means the listeners are
+  // removed again when the editor goes away; registering them inside a callback
+  // the child may call more than once leaked a listener each time.
+  //
+  // Re-rendering on every transaction also fed back on itself: a render can
+  // dispatch a transaction of its own, which re-rendered, which dispatched —
+  // React eventually gave up with "Maximum update depth exceeded". So compare
+  // the marks under the caret and only re-render when they actually differ,
+  // which is both loop-free and far less work while typing.
+  useEffect(() => {
+    if (!tiptap) return;
+
+    let previous = signatureOf(tiptap);
+
+    const check = () => {
+      const next = signatureOf(tiptap);
+      if (next === previous) return;
+      previous = next;
+      forceRender((n) => n + 1);
+    };
+
+    tiptap.on("selectionUpdate", check);
+    tiptap.on("transaction", check);
+
+    return () => {
+      tiptap.off("selectionUpdate", check);
+      tiptap.off("transaction", check);
+    };
+  }, [tiptap]);
 
   const handleDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const container = event.currentTarget.parentElement;
@@ -256,6 +283,13 @@ export function MarkdownEditor({
       )}
     </div>
   );
+}
+
+/** The marks the toolbar can show as active, in a form cheap to compare. */
+const TOOLBAR_MARKS = ["bold", "italic", "strike", "code"] as const;
+
+function signatureOf(editor: Editor): string {
+  return TOOLBAR_MARKS.map((mark) => (editor.isActive(mark) ? "1" : "0")).join("");
 }
 
 /**

@@ -225,6 +225,8 @@ export function bootstrapWorkspace(options?: {
   name?: string;
   directory?: string;
   private?: boolean;
+  /** Seed an inbox/notes/projects/archive layout rather than a lone welcome note. */
+  scaffold?: boolean;
 }): Promise<{ repo: RepoSummaryDto; workspace: RepoRef; seeded: boolean }> {
   return call("/api/gh/bootstrap", {
     method: "POST",

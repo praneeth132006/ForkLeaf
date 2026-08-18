@@ -19,7 +19,11 @@ import { parseMermaidError } from "./errors";
  *    caller keeps displaying the previous SVG.
  */
 
-let initialized = false;
+// Which theme mermaid is currently configured with. Mermaid keeps its config
+// as module-level global state, so re-initialising is the only way to change
+// it — and a boolean "did we init" flag meant a theme switch was silently
+// ignored, leaving diagrams drawn in the previous palette.
+let initializedTheme: MermaidTheme | null = null;
 
 export interface MermaidTheme {
   background: string;
@@ -77,13 +81,27 @@ export async function initMermaid(theme: MermaidTheme = LIGHT_THEME): Promise<vo
       secondaryColor: theme.secondary,
       tertiaryColor: theme.tertiary,
       fontFamily: theme.fontFamily,
+      // Stated rather than derived. Mermaid computes these from the primary
+      // colour's luminance when they are absent, which is how node labels ended
+      // up the same colour as the nodes they sit inside — invisible text.
+      mainBkg: theme.primary,
+      nodeBorder: theme.primaryBorder,
+      textColor: theme.primaryText,
+      nodeTextColor: theme.primaryText,
+      titleColor: theme.primaryText,
+      labelColor: theme.primaryText,
+      secondaryTextColor: theme.primaryText,
+      tertiaryTextColor: theme.primaryText,
+      clusterBkg: theme.tertiary,
+      clusterBorder: theme.primaryBorder,
+      edgeLabelBackground: theme.background,
     },
     flowchart: { htmlLabels: false, curve: "basis" },
     sequence: { useMaxWidth: true },
     gantt: { useMaxWidth: true },
   });
 
-  initialized = true;
+  initializedTheme = theme;
 }
 
 export interface RenderResult {
@@ -106,7 +124,7 @@ export async function renderDiagram(
 ): Promise<RenderResult> {
   if (!code.trim()) return { svg: null, error: null };
 
-  if (!initialized) await initMermaid(theme);
+  if (initializedTheme !== theme) await initMermaid(theme);
 
   const mermaid = (await import("mermaid")).default;
   // Mermaid keys internal state by element id; a collision produces a blank or

@@ -29,6 +29,9 @@ type Listener = (state: SyncState) => void;
 const DEFAULT_DEBOUNCE_MS = 4000;
 const DEFAULT_SQUASH_WINDOW_MS = 5 * 60_000;
 const MAX_ATTEMPTS = 5;
+/** Backoff between retries after a failed push: 5s, 10s, 20s … capped. */
+const RETRY_BASE_MS = 5_000;
+const RETRY_MAX_MS = 5 * 60_000;
 
 /**
  * Local-first sync.
@@ -58,6 +61,8 @@ export class SyncEngine {
   /** Set when an edit lands mid-flush, so we push again straight after. */
   private dirtyDuringFlush = false;
   private status: SyncStatus = "idle";
+  /** Current backoff delay; zero when the last push succeeded. */
+  private retryDelay = 0;
   private lastSyncedAt: string | null = null;
   private lastError: string | null = null;
   private readonly listeners = new Set<Listener>();
@@ -163,6 +168,8 @@ export class SyncEngine {
 
   private scheduleFlush(): void {
     if (this.timer !== null) this.cancel(this.timer);
+    // User activity: try promptly rather than inheriting a long backoff.
+    this.retryDelay = 0;
 
     this.setStatus(this.queue.length > 0 ? "pending" : "idle");
     this.timer = this.schedule(() => {
@@ -193,6 +200,8 @@ export class SyncEngine {
     }
     if (!this.isOnline()) {
       this.setStatus("offline");
+      // Nothing else would wake us: keep asking until the connection is back.
+      this.scheduleRetry();
       return;
     }
 
@@ -208,17 +217,54 @@ export class SyncEngine {
 
       this.lastSyncedAt = this.now().toISOString();
       this.lastError = null;
+      this.retryDelay = 0;
       this.setStatus(
         this.conflicts.length > 0 ? "conflict" : this.queue.length > 0 ? "pending" : "idle",
       );
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err);
       this.setStatus(this.isOnline() ? "error" : "offline");
+      // A failed push used to sit there until the user happened to type again,
+      // which is why notes could stay unsynced indefinitely after one blip.
+      this.scheduleRetry();
     } finally {
       this.flushing = false;
       // Edits that arrived mid-push still need their own commit.
       if (this.dirtyDuringFlush && this.queue.length > 0) this.scheduleFlush();
     }
+  }
+
+  /**
+   * Queues another attempt after a failed or skipped push.
+   *
+   * Backs off so a repo that is gone, or a token that has been revoked, does not
+   * hammer the API — but never gives up, because the alternative is a queue that
+   * silently stops draining. `scheduleFlush` resets the delay, so any new edit
+   * gets a prompt attempt rather than inheriting a long backoff.
+   */
+  private scheduleRetry(): void {
+    if (this.queue.length === 0) return;
+
+    this.retryDelay = this.retryDelay
+      ? Math.min(this.retryDelay * 2, RETRY_MAX_MS)
+      : RETRY_BASE_MS;
+
+    if (this.timer !== null) this.cancel(this.timer);
+    this.timer = this.schedule(() => {
+      this.timer = null;
+      void this.flush();
+    }, this.retryDelay);
+  }
+
+  /**
+   * Pushes now, discarding any backoff.
+   *
+   * The app calls this when the browser reports the network is back, so
+   * reconnecting syncs immediately instead of waiting out the current delay.
+   */
+  retryNow(): void {
+    this.retryDelay = 0;
+    if (this.queue.length > 0) this.scheduleFlush();
   }
 
   private async flushWorkspace(workspaceId: string, changes: PendingChange[]): Promise<void> {
