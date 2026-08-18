@@ -60,14 +60,11 @@ export function DiagramStudio({
 
   const kind = useMemo(() => detectKind(code), [code]);
 
-  // The visual builder can only handle flowcharts. For anything else the tab is
-  // disabled rather than hidden, so it is clear the feature exists.
+  // The canvas edits flowcharts and state diagrams. For anything else the tab
+  // stays clickable and explains itself — a greyed-out button with a tooltip
+  // reads as broken, which is exactly how it was reported.
   const graph = useMemo(() => mermaidToGraph(code), [code]);
   const visualAvailable = graph !== null;
-
-  useEffect(() => {
-    if (!visualAvailable && mode === "visual" && code.trim() !== "") setMode("source");
-  }, [visualAvailable, mode, code]);
 
   // ── Live preview ────────────────────────────────────────────────────────
   // Debounced so mermaid is not re-invoked on every keystroke, and the last
@@ -129,7 +126,7 @@ export function DiagramStudio({
         onPick={(template) => {
           onChange(template.code);
           setShowTemplates(false);
-          setMode(template.kind === "flowchart" ? "visual" : "source");
+          setMode(template.kind === "flowchart" || template.kind === "state" ? "visual" : "source");
         }}
         {...(code.trim() !== "" ? { onCancel: () => setShowTemplates(false) } : {})}
       />
@@ -147,12 +144,11 @@ export function DiagramStudio({
         >
           <StudioTab
             active={mode === "visual"}
-            disabled={!visualAvailable}
             onClick={() => setMode("visual")}
             title={
               visualAvailable
                 ? "Drag boxes and arrows on a canvas"
-                : "The visual builder currently supports flowcharts only"
+                : "This diagram type has no canvas yet — the source editor covers it"
             }
           >
             Visual
@@ -219,6 +215,12 @@ export function DiagramStudio({
         >
           {mode === "visual" && graph ? (
             <VisualBuilder graph={graph} onChange={handleGraphChange} />
+          ) : mode === "visual" ? (
+            <NoCanvasYet
+              kind={kind}
+              onEditSource={() => setMode("source")}
+              onChangeType={() => setShowTemplates(true)}
+            />
           ) : (
             <div className="flex min-h-0 flex-1">
               <div className="min-w-0 flex-1 overflow-hidden">
@@ -279,6 +281,52 @@ export function DiagramStudio({
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Shown when the visual tab is opened on a diagram type the canvas has no model
+ * for — a sequence chart, a gantt, a pie. It says which types the canvas does
+ * edit and offers the two ways forward, rather than leaving a dead button.
+ */
+function NoCanvasYet({
+  kind,
+  onEditSource,
+  onChangeType,
+}: {
+  kind: string | null;
+  onEditSource: () => void;
+  onChangeType: () => void;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-10">
+      <div className="max-w-sm text-center">
+        <p className="text-[14px] font-medium text-[var(--fl-text)]">
+          {kind ? `No canvas for ${kind} diagrams yet` : "No canvas for this diagram yet"}
+        </p>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--fl-muted)]">
+          Flowcharts and state diagrams can be drawn by dragging boxes and arrows. Everything else
+          is written as source — with autocomplete, inline errors and a syntax reference beside the
+          editor.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={onEditSource}
+            className="rounded-lg bg-[var(--fl-accent)] px-3 py-1.5 text-[13px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
+          >
+            Edit the source
+          </button>
+          <button
+            type="button"
+            onClick={onChangeType}
+            className="rounded-lg border border-[var(--fl-border)] px-3 py-1.5 text-[13px] text-[var(--fl-text)] transition-colors hover:border-[var(--fl-border-strong)]"
+          >
+            Change diagram type
+          </button>
+        </div>
       </div>
     </div>
   );

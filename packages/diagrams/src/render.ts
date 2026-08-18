@@ -72,6 +72,16 @@ export async function initMermaid(theme: MermaidTheme = LIGHT_THEME): Promise<vo
     securityLevel: "strict",
     theme: "base",
     fontFamily: theme.fontFamily,
+    // Every label as real SVG <text>, for every diagram type.
+    //
+    // Mermaid's default is HTML labels wrapped in <foreignObject>, and the
+    // sanitiser strips foreignObject — it is the classic vector for smuggling
+    // scripted markup into an SVG. The two together drew state, class and ER
+    // diagrams as rows of empty boxes: the shapes survived, the words inside
+    // them did not. `flowchart.htmlLabels` used to cover only flowcharts;
+    // this root-level flag applies to all of them and takes precedence over
+    // the per-diagram settings.
+    htmlLabels: false,
     themeVariables: {
       background: theme.background,
       primaryColor: theme.primary,
@@ -95,6 +105,51 @@ export async function initMermaid(theme: MermaidTheme = LIGHT_THEME): Promise<vo
       clusterBkg: theme.tertiary,
       clusterBorder: theme.primaryBorder,
       edgeLabelBackground: theme.background,
+
+      // Per-diagram palettes. Mermaid keeps a separate set of variables for
+      // each diagram type and derives the unset ones from primaryColor's
+      // luminance, which lands on its own idea of a readable colour rather
+      // than ours. Pinning them keeps a state chart and a flowchart in the
+      // same note looking like they belong to the same app.
+      stateBkg: theme.primary,
+      stateBorder: theme.primaryBorder,
+      stateLabelColor: theme.primaryText,
+      altBackground: theme.tertiary,
+      compositeBackground: theme.tertiary,
+      compositeTitleBackground: theme.tertiary,
+      compositeBorder: theme.primaryBorder,
+      transitionColor: theme.line,
+      transitionLabelColor: theme.primaryText,
+      specialStateColor: theme.line,
+      innerEndBackground: theme.primaryBorder,
+      labelBackgroundColor: theme.background,
+
+      classText: theme.primaryText,
+      relationColor: theme.line,
+      relationLabelColor: theme.primaryText,
+      relationLabelBackground: theme.background,
+
+      actorBkg: theme.primary,
+      actorBorder: theme.primaryBorder,
+      actorTextColor: theme.primaryText,
+      actorLineColor: theme.line,
+      signalColor: theme.primaryText,
+      signalTextColor: theme.primaryText,
+      labelBoxBkgColor: theme.primary,
+      labelBoxBorderColor: theme.primaryBorder,
+      labelTextColor: theme.primaryText,
+      loopTextColor: theme.primaryText,
+      noteBkgColor: theme.tertiary,
+      noteBorderColor: theme.primaryBorder,
+      noteTextColor: theme.primaryText,
+
+      attributeBackgroundColorOdd: theme.primary,
+      attributeBackgroundColorEven: theme.tertiary,
+
+      pieTitleTextColor: theme.primaryText,
+      pieSectionTextColor: theme.primaryText,
+      pieLegendTextColor: theme.primaryText,
+      pieStrokeColor: theme.primaryBorder,
     },
     flowchart: { htmlLabels: false, curve: "basis" },
     sequence: { useMaxWidth: true },

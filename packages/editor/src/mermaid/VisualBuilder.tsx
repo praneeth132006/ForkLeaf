@@ -9,6 +9,7 @@ import {
   removeNode,
   updateNode,
   SHAPE_LABELS,
+  SHAPES_FOR_KIND,
   EDGE_LABELS,
   type EdgeStyle,
   type Graph,
@@ -28,6 +29,37 @@ const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2.5;
 /** Padding left around the content when fitting the view to the graph. */
 const FIT_PADDING = 80;
+
+/** The shape a plain new node takes in each dialect. */
+function defaultShapeFor(kind: Graph["kind"]): NodeShape {
+  return kind === "state" ? "state" : "rect";
+}
+
+/**
+ * Node footprints.
+ *
+ * A state diagram's `[*]` markers and choice diamonds are landmarks rather than
+ * boxes with words in them; drawing them at the size of a process step makes a
+ * state chart read like a flowchart with four blank boxes in it.
+ */
+function sizeOf(node: { shape: NodeShape }): { width: number; height: number } {
+  switch (node.shape) {
+    case "start":
+    case "end":
+      return { width: 40, height: 40 };
+    case "choice":
+      return { width: 64, height: 64 };
+    case "fork":
+      return { width: 130, height: 14 };
+    default:
+      return { width: NODE_WIDTH, height: NODE_HEIGHT };
+  }
+}
+
+/** Pseudo-states have no text of their own — mermaid draws them as marks. */
+function isMarker(shape: NodeShape): boolean {
+  return shape === "start" || shape === "end" || shape === "fork";
+}
 
 interface Point {
   x: number;
@@ -160,9 +192,29 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
       if (drag.kind === "move" && drag.moved) {
         onChange(updateNode(graph, drag.nodeId, { x: drag.preview.x, y: drag.preview.y }));
       } else if (drag.kind === "connect") {
-        const target = nodeAt(graph, toWorld(event));
+        const world = toWorld(event);
+        const target = nodeAt(graph, world);
+
         if (target && target.id !== drag.fromId) {
           onChange(addEdge(graph, drag.fromId, target.id));
+        } else if (!target) {
+          // Dropping an arrow on empty space creates the node it was reaching
+          // for. Otherwise every new step is add-then-drag-then-connect, and
+          // the arrow you already drew is thrown away.
+          const shape = defaultShapeFor(graph.kind);
+          const size = sizeOf({ shape });
+          const id = nextNodeId(graph);
+          const placed = addNode(graph, {
+            id,
+            label: SHAPE_LABELS[shape],
+            shape,
+            x: snap(world.x - size.width / 2),
+            y: snap(world.y - size.height / 2),
+          });
+
+          onChange(addEdge(placed, drag.fromId, id));
+          setSelected(id);
+          setEditingLabel(id);
         }
       }
 
@@ -230,8 +282,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
     const minX = Math.min(...graph.nodes.map((n) => n.x));
     const minY = Math.min(...graph.nodes.map((n) => n.y));
-    const maxX = Math.max(...graph.nodes.map((n) => n.x + NODE_WIDTH));
-    const maxY = Math.max(...graph.nodes.map((n) => n.y + NODE_HEIGHT));
+    const maxX = Math.max(...graph.nodes.map((n) => n.x + sizeOf(n).width));
+    const maxY = Math.max(...graph.nodes.map((n) => n.y + sizeOf(n).height));
 
     const contentWidth = maxX - minX + FIT_PADDING * 2;
     const contentHeight = maxY - minY + FIT_PADDING * 2;
@@ -257,7 +309,68 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
     fit();
   }, [graph.nodes.length, viewport.width, fit]);
 
+  // ── Actions ─────────────────────────────────────────────────────────────
+
+  /**
+   * Creates a node and puts it straight into rename mode.
+   *
+   * `centre` is where the node should sit, in world coordinates; without one it
+   * lands in the middle of what is currently on screen rather than at a fixed
+   * origin that may be scrolled far out of view.
+   */
+  const createNode = useCallback(
+    (shape: NodeShape, centre?: Point): string => {
+      const id = nextNodeId(graph);
+      const size = sizeOf({ shape });
+      const offset = centre ? 0 : (graph.nodes.length % 6) * 24;
+      const x = (centre?.x ?? view.x + view.width / 2 + offset) - size.width / 2;
+      const y = (centre?.y ?? view.y + view.height / 2 + offset * 0.8) - size.height / 2;
+
+      onChange(
+        addNode(graph, {
+          id,
+          // Markers have no text; a named default would just have to be
+          // deleted before the diagram read correctly.
+          label: isMarker(shape) ? "" : SHAPE_LABELS[shape],
+          shape,
+          x: snap(x),
+          y: snap(y),
+        }),
+      );
+
+      setSelected(id);
+      if (!isMarker(shape)) setEditingLabel(id);
+      return id;
+    },
+    [graph, onChange, view],
+  );
+
+  /** Adds a node already wired to the current selection, for keyboard flow. */
+  const createConnectedNode = useCallback(() => {
+    const source = graph.nodes.find((n) => n.id === selected);
+    if (!source) return;
+
+    const shape: NodeShape = defaultShapeFor(graph.kind);
+    const size = sizeOf(source);
+    const id = nextNodeId(graph);
+    const horizontal = graph.direction === "LR" || graph.direction === "RL";
+
+    const placed = addNode(graph, {
+      id,
+      label: SHAPE_LABELS[shape],
+      shape,
+      x: snap(source.x + (horizontal ? size.width + 90 : 0)),
+      y: snap(source.y + (horizontal ? 0 : size.height + 80)),
+    });
+
+    onChange(addEdge(placed, source.id, id));
+    setSelected(id);
+    setEditingLabel(id);
+  }, [graph, onChange, selected]);
+
   // ── Keyboard ────────────────────────────────────────────────────────────
+  // Declared after the actions it calls, so the dependency array is not
+  // evaluated before those consts exist.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
@@ -276,6 +389,30 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         return;
       }
 
+      // Enter renames, Tab continues the chain: the two things you do over and
+      // over while sketching, neither of which should need the mouse.
+      if (event.key === "Enter" && selected && !editingLabel) {
+        const node = graph.nodes.find((n) => n.id === selected);
+        if (node && !isMarker(node.shape)) {
+          event.preventDefault();
+          setEditingLabel(selected);
+        }
+        return;
+      }
+
+      if (event.key === "Tab" && selected && !editingLabel) {
+        if (graph.nodes.some((n) => n.id === selected)) {
+          event.preventDefault();
+          createConnectedNode();
+        }
+        return;
+      }
+
+      if (event.key === "Escape") {
+        setSelected(null);
+        return;
+      }
+
       if (event.key === "0" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
         fit();
@@ -284,27 +421,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected, editingLabel, graph, onChange, fit]);
-
-  // ── Actions ─────────────────────────────────────────────────────────────
-
-  const handleAddNode = (shape: NodeShape) => {
-    const id = nextNodeId(graph);
-    // Drop it into the middle of what is currently on screen, not at a fixed
-    // origin that may be scrolled far out of view.
-    const offset = graph.nodes.length % 6;
-    onChange(
-      addNode(graph, {
-        id,
-        label: SHAPE_LABELS[shape],
-        shape,
-        x: snap(view.x + view.width / 2 - NODE_WIDTH / 2 + offset * 24),
-        y: snap(view.y + view.height / 2 - NODE_HEIGHT / 2 + offset * 20),
-      }),
-    );
-    setSelected(id);
-    setEditingLabel(id);
-  };
+  }, [selected, editingLabel, graph, onChange, fit, createConnectedNode]);
 
   const selectedNode = graph.nodes.find((n) => n.id === selected) ?? null;
   const selectedEdge = graph.edges.find((e) => e.id === selected) ?? null;
@@ -323,11 +440,11 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
           Add
         </span>
 
-        {(Object.keys(SHAPE_LABELS) as NodeShape[]).map((shape) => (
+        {SHAPES_FOR_KIND[graph.kind].map((shape) => (
           <button
             key={shape}
             type="button"
-            onClick={() => handleAddNode(shape)}
+            onClick={() => createNode(shape)}
             title={`Add a ${SHAPE_LABELS[shape].toLowerCase()} node`}
             className="flex items-center gap-1.5 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] py-1 pl-1.5 pr-2.5 text-[12.5px] text-[var(--fl-text)] transition-colors hover:border-[var(--fl-accent)] hover:text-[var(--fl-accent)]"
           >
@@ -348,8 +465,10 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             >
               <option value="TD">Top to bottom</option>
               <option value="LR">Left to right</option>
-              <option value="BT">Bottom to top</option>
-              <option value="RL">Right to left</option>
+              {/* Mermaid's state renderer only lays out downwards or
+                  rightwards; offering the other two would silently do nothing. */}
+              {graph.kind === "flowchart" && <option value="BT">Bottom to top</option>}
+              {graph.kind === "flowchart" && <option value="RL">Right to left</option>}
             </select>
           </label>
 
@@ -388,6 +507,11 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         <svg
           className="h-full w-full touch-none select-none"
           viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
+          onDoubleClick={(event) => {
+            // Empty space only — double-clicking a node renames it.
+            if (event.target !== event.currentTarget) return;
+            createNode(defaultShapeFor(graph.kind), toWorld(event));
+          }}
           onPointerDown={(event) => {
             // Empty canvas: clear the selection and start panning. Middle-click
             // pans from anywhere.
@@ -512,8 +636,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
               return (
                 <>
                   <line
-                    x1={from.x + NODE_WIDTH / 2}
-                    y1={from.y + NODE_HEIGHT / 2}
+                    x1={from.x + sizeOf(from).width / 2}
+                    y1={from.y + sizeOf(from).height / 2}
                     x2={drag.cursor.x}
                     y2={drag.cursor.y}
                     stroke="var(--fl-accent)"
@@ -526,8 +650,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                     <rect
                       x={target.x - 4}
                       y={target.y - 4}
-                      width={NODE_WIDTH + 8}
-                      height={NODE_HEIGHT + 8}
+                      width={sizeOf(target).width + 8}
+                      height={sizeOf(target).height + 8}
                       rx={12}
                       fill="none"
                       stroke="var(--fl-accent)"
@@ -563,7 +687,9 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                 event.stopPropagation();
                 setDrag({ kind: "connect", fromId: node.id, cursor: toWorld(event) });
               }}
-              onDoubleClick={() => setEditingLabel(node.id)}
+              onDoubleClick={() => {
+                if (!isMarker(node.shape)) setEditingLabel(node.id);
+              }}
             />
           ))}
         </svg>
@@ -592,8 +718,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                 className="absolute rounded-md border-2 border-[var(--fl-accent)] bg-[var(--fl-surface)] px-1 text-center text-[var(--fl-text)] outline-none"
                 style={{
                   left: (node.x - view.x) * zoom + 8 * zoom,
-                  top: (node.y - view.y) * zoom + (NODE_HEIGHT / 2 - 14) * zoom,
-                  width: (NODE_WIDTH - 16) * zoom,
+                  top: (node.y - view.y) * zoom + (sizeOf(node).height / 2 - 14) * zoom,
+                  width: (sizeOf(node).width - 16) * zoom,
                   height: 28 * zoom,
                   fontSize: 13 * zoom,
                 }}
@@ -606,8 +732,9 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             <div className="max-w-sm text-center">
               <p className="text-[14px] font-medium text-[var(--fl-text)]">Empty canvas</p>
               <p className="mt-1.5 text-[13px] leading-relaxed text-[var(--fl-muted)]">
-                Add a shape from the toolbar, then drag from a node&rsquo;s edge handle onto another
-                node to connect them.
+                Double-click anywhere to add your first box, or pick a shape from the toolbar. Drag
+                from a box&rsquo;s edge handle onto empty space to add the next one already
+                connected.
               </p>
             </div>
           </div>
@@ -620,9 +747,10 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             drag.kind === "none" ? "opacity-100" : "opacity-0"
           }`}
         >
-          <span>Scroll to pan</span>
+          <span>Double-click empty space to add</span>
+          <span>Drag a handle onto empty space to add and connect</span>
+          <span>Tab to continue</span>
           <span>⌘ + scroll to zoom</span>
-          <span>Double-click to rename</span>
           <span>{freeform ? "Snapping off" : "Alt to disable snapping"}</span>
         </div>
       </div>
@@ -650,7 +778,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                 aria-label="Node shape"
                 className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-[var(--fl-text)]"
               >
-                {(Object.keys(SHAPE_LABELS) as NodeShape[]).map((shape) => (
+                {SHAPES_FOR_KIND[graph.kind].map((shape) => (
                   <option key={shape} value={shape}>
                     {SHAPE_LABELS[shape]}
                   </option>
@@ -745,6 +873,8 @@ function NodeShapeView({
 }: NodeShapeViewProps) {
   const stroke = selected ? "var(--fl-accent)" : "var(--fl-border-strong)";
   const strokeWidth = selected ? 2.5 : 1.5;
+  const { width, height } = sizeOf(node);
+  const marker = isMarker(node.shape);
 
   return (
     <g
@@ -756,25 +886,29 @@ function NodeShapeView({
     >
       {renderShape(node.shape, stroke, strokeWidth, "var(--fl-surface)")}
 
-      <text
-        x={NODE_WIDTH / 2}
-        y={NODE_HEIGHT / 2}
-        textAnchor="middle"
-        dominantBaseline="central"
-        className="pointer-events-none select-none fill-[var(--fl-text)] text-[13px]"
-      >
-        {truncate(node.label, 18)}
-      </text>
+      {/* Markers are drawn, not labelled. A choice diamond is small, so its
+          label sits underneath rather than being squeezed inside. */}
+      {!marker && (
+        <text
+          x={width / 2}
+          y={node.shape === "choice" ? height + 14 : height / 2}
+          textAnchor="middle"
+          dominantBaseline="central"
+          className="pointer-events-none select-none fill-[var(--fl-text)] text-[13px]"
+        >
+          {truncate(node.label, node.shape === "choice" ? 14 : 18)}
+        </text>
+      )}
 
       {/* Connection handles on all four edges rather than only the right one:
           with a single handle, an arrow that should go upward has to be dragged
           around the box. Each has a generous invisible hit area. */}
       {(
         [
-          { x: NODE_WIDTH, y: NODE_HEIGHT / 2 },
-          { x: 0, y: NODE_HEIGHT / 2 },
-          { x: NODE_WIDTH / 2, y: 0 },
-          { x: NODE_WIDTH / 2, y: NODE_HEIGHT },
+          { x: width, y: height / 2 },
+          { x: 0, y: height / 2 },
+          { x: width / 2, y: 0 },
+          { x: width / 2, y: height },
         ] as const
       ).map((handle) => (
         <g
@@ -802,18 +936,19 @@ function NodeShapeView({
 
 /** Draws each mermaid shape as its SVG equivalent, so the canvas matches the output. */
 function renderShape(shape: NodeShape, stroke: string, strokeWidth: number, fill: string) {
-  const w = NODE_WIDTH;
-  const h = NODE_HEIGHT;
+  const { width: w, height: h } = sizeOf({ shape });
   const common = { stroke, strokeWidth, fill };
 
   switch (shape) {
     case "round":
+    case "state":
       return <rect width={w} height={h} rx={10} {...common} />;
     case "stadium":
       return <rect width={w} height={h} rx={h / 2} {...common} />;
     case "circle":
       return <ellipse cx={w / 2} cy={h / 2} rx={w / 2} ry={h / 2} {...common} />;
     case "diamond":
+    case "choice":
       return <polygon points={`${w / 2},0 ${w},${h / 2} ${w / 2},${h} 0,${h / 2}`} {...common} />;
     case "hexagon":
       return (
@@ -839,6 +974,44 @@ function renderShape(shape: NodeShape, stroke: string, strokeWidth: number, fill
           />
         </g>
       );
+    // The state-diagram markers, drawn the way mermaid draws them: a filled
+    // disc to start, a ringed disc to finish, a solid bar to fork or join.
+    case "start":
+      return (
+        <circle
+          cx={w / 2}
+          cy={h / 2}
+          r={w / 2 - 4}
+          fill="var(--fl-accent)"
+          stroke={stroke}
+          strokeWidth={strokeWidth}
+        />
+      );
+    case "end":
+      return (
+        <g>
+          <circle
+            cx={w / 2}
+            cy={h / 2}
+            r={w / 2 - 2}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={strokeWidth}
+          />
+          <circle cx={w / 2} cy={h / 2} r={w / 2 - 8} fill="var(--fl-accent)" />
+        </g>
+      );
+    case "fork":
+      return (
+        <rect
+          width={w}
+          height={h}
+          rx={3}
+          fill="var(--fl-border-strong)"
+          stroke={stroke}
+          strokeWidth={strokeWidth}
+        />
+      );
     case "rect":
     default:
       return <rect width={w} height={h} rx={3} {...common} />;
@@ -855,7 +1028,20 @@ function ShapeIcon({ shape }: { shape: NodeShape }) {
 
   return (
     <svg viewBox="0 0 20 14" aria-hidden="true" className="h-3.5 w-5 shrink-0 opacity-70">
-      {shape === "diamond" ? (
+      {shape === "start" ? (
+        <circle cx="10" cy="7" r="4.5" fill="currentColor" />
+      ) : shape === "end" ? (
+        <g>
+          <circle cx="10" cy="7" r="5.5" {...common} />
+          <circle cx="10" cy="7" r="2.75" fill="currentColor" />
+        </g>
+      ) : shape === "fork" ? (
+        <rect x="2" y="6" width="16" height="2.5" fill="currentColor" />
+      ) : shape === "state" ? (
+        <rect x="1" y="1" width="18" height="12" rx="4" {...common} />
+      ) : shape === "choice" ? (
+        <polygon points="10,1 17,7 10,13 3,7" {...common} />
+      ) : shape === "diamond" ? (
         <polygon points="10,1 19,7 10,13 1,7" {...common} />
       ) : shape === "circle" ? (
         <ellipse cx="10" cy="7" rx="9" ry="6" {...common} />
@@ -905,10 +1091,12 @@ function ZoomButton({
 
 /** Where an edge should meet a node: on the border, pointing at the other node. */
 function anchorPoint(node: GraphNode, toward: GraphNode): Point {
-  const cx = node.x + NODE_WIDTH / 2;
-  const cy = node.y + NODE_HEIGHT / 2;
-  const tx = toward.x + NODE_WIDTH / 2;
-  const ty = toward.y + NODE_HEIGHT / 2;
+  const size = sizeOf(node);
+  const towardSize = sizeOf(toward);
+  const cx = node.x + size.width / 2;
+  const cy = node.y + size.height / 2;
+  const tx = toward.x + towardSize.width / 2;
+  const ty = toward.y + towardSize.height / 2;
 
   const dx = tx - cx;
   const dy = ty - cy;
@@ -916,8 +1104,8 @@ function anchorPoint(node: GraphNode, toward: GraphNode): Point {
 
   // Scale the direction vector until it hits the box edge, whichever axis it
   // crosses first.
-  const scaleX = dx === 0 ? Infinity : NODE_WIDTH / 2 / Math.abs(dx);
-  const scaleY = dy === 0 ? Infinity : NODE_HEIGHT / 2 / Math.abs(dy);
+  const scaleX = dx === 0 ? Infinity : size.width / 2 / Math.abs(dx);
+  const scaleY = dy === 0 ? Infinity : size.height / 2 / Math.abs(dy);
   const scale = Math.min(scaleX, scaleY);
 
   return { x: cx + dx * scale, y: cy + dy * scale };
@@ -927,11 +1115,12 @@ function nodeAt(graph: Graph, point: Point): GraphNode | null {
   // Reverse order so the topmost node wins when two overlap.
   for (let i = graph.nodes.length - 1; i >= 0; i -= 1) {
     const node = graph.nodes[i]!;
+    const size = sizeOf(node);
     if (
       point.x >= node.x &&
-      point.x <= node.x + NODE_WIDTH &&
+      point.x <= node.x + size.width &&
       point.y >= node.y &&
-      point.y <= node.y + NODE_HEIGHT
+      point.y <= node.y + size.height
     ) {
       return node;
     }

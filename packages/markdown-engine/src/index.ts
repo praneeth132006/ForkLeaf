@@ -32,3 +32,15 @@ export {
   isInsideFolder,
   relativeToDirectory,
 } from "./paths";
+
+export {
+  diffLines,
+  diffStats,
+  diffWords,
+  toHunks,
+  type ChangeKind,
+  type DiffHunk,
+  type DiffLine,
+  type DiffStats,
+  type WordSpan,
+} from "./diff";

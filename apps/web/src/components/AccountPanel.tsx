@@ -104,8 +104,8 @@ export function AccountPanel({ user, githubAvailable }: AccountPanelProps) {
           Sponsor
         </h2>
         <p className="mt-3 max-w-2xl text-[14.5px] leading-relaxed text-[var(--fl-muted)]">
-          ForkLeaf is built in the open by one person. Sponsoring unlocks nothing
-          — there is nothing left to unlock — it just keeps the work going.
+          ForkLeaf is built in the open by one person. Sponsoring unlocks nothing — there is nothing
+          left to unlock — it just keeps the work going.
         </p>
         <div className="mt-4 max-w-[600px] overflow-hidden rounded-xl border border-[var(--fl-border)]">
           <iframe

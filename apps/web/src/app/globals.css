@@ -512,3 +512,74 @@ h3 {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Code blocks in the rich editor ────────────────────────────────────────
+   The block carries its own header: the language it is highlighted as, and a
+   copy button. Previously the language could only be set by switching to
+   source view and typing it after the opening fence, which nobody finds.
+
+   The header sits on the same inverse surface as the code, lifted slightly,
+   rather than on the page background — a light-grey strip above a black block
+   reads as two unrelated elements. */
+.fl-prose .fl-code-node {
+  margin: 1.5rem 0;
+  border: 1px solid var(--fl-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--fl-inverse-bg);
+}
+
+.fl-prose .fl-code-node pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.fl-code-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  background: color-mix(in srgb, var(--fl-inverse-text) 7%, var(--fl-inverse-bg));
+  border-bottom: 1px solid color-mix(in srgb, var(--fl-inverse-text) 12%, transparent);
+}
+
+.fl-code-lang,
+.fl-code-copy {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: color-mix(in srgb, var(--fl-inverse-text) 70%, transparent);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.125rem 0.375rem;
+  transition:
+    color 0.12s,
+    background 0.12s,
+    border-color 0.12s;
+}
+
+.fl-code-lang {
+  max-width: 12rem;
+}
+
+.fl-code-lang:hover,
+.fl-code-copy:hover,
+.fl-code-lang:focus-visible {
+  color: var(--fl-inverse-text);
+  background: color-mix(in srgb, var(--fl-inverse-text) 10%, transparent);
+  border-color: color-mix(in srgb, var(--fl-inverse-text) 18%, transparent);
+  outline: none;
+}
+
+/* The dropdown itself is drawn by the OS, which uses the page colours rather
+   than the inverse surface the trigger sits on. */
+.fl-code-lang option,
+.fl-code-lang optgroup {
+  background: var(--fl-surface);
+  color: var(--fl-text);
+}
+
+.fl-code-copy {
+  margin-left: auto;
+}

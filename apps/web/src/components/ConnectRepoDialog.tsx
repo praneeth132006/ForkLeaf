@@ -62,7 +62,6 @@ export function ConnectRepoDialog({ onConnect, onClose }: ConnectRepoDialogProps
   );
 }
 
-
 /**
  * Turns a failure into something the user can act on.
  *
@@ -80,8 +79,8 @@ function ErrorNotice({ error }: { error: unknown }) {
         className="mb-3 rounded-md border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3 text-sm"
       >
         <p className="mb-2 text-[var(--fl-text)]">
-          Your GitHub sign-in is no longer valid. This happens when the token is
-          revoked or the app&rsquo;s access is withdrawn.
+          Your GitHub sign-in is no longer valid. This happens when the token is revoked or the
+          app&rsquo;s access is withdrawn.
         </p>
         <a
           href="/api/auth/github"

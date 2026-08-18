@@ -74,9 +74,8 @@ function Sponsor() {
         Sponsor the work
       </h3>
       <p className="mt-1 text-[14px] text-[var(--fl-muted)]">
-        ForkLeaf is built by one person in the open. Sponsoring is entirely
-        optional and buys you nothing extra — every feature is already yours. It
-        just means the work continues.
+        ForkLeaf is built by one person in the open. Sponsoring is entirely optional and buys you
+        nothing extra — every feature is already yours. It just means the work continues.
       </p>
 
       {/* GitHub fixes the card at 225px and fills most of it with nothing when

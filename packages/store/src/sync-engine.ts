@@ -245,9 +245,7 @@ export class SyncEngine {
   private scheduleRetry(): void {
     if (this.queue.length === 0) return;
 
-    this.retryDelay = this.retryDelay
-      ? Math.min(this.retryDelay * 2, RETRY_MAX_MS)
-      : RETRY_BASE_MS;
+    this.retryDelay = this.retryDelay ? Math.min(this.retryDelay * 2, RETRY_MAX_MS) : RETRY_BASE_MS;
 
     if (this.timer !== null) this.cancel(this.timer);
     this.timer = this.schedule(() => {

@@ -6,18 +6,16 @@ export function Plans() {
   return (
     <>
       <Lead>
-        ForkLeaf is free, all of it, with no tiers and no paid upgrade. Your notes
-        sit in your own GitHub account, so there is no storage for anyone to
-        charge you for — and a paywall would only ever stand between you and your
-        own writing.
+        ForkLeaf is free, all of it, with no tiers and no paid upgrade. Your notes sit in your own
+        GitHub account, so there is no storage for anyone to charge you for — and a paywall would
+        only ever stand between you and your own writing.
       </Lead>
 
       <Note>
-        <strong>There used to be Pro and Team tiers here.</strong> They were
-        announced but never sold, and they are gone: every feature they listed
-        now ships to everyone. Funding comes from{" "}
-        <A href="https://github.com/sponsors/praneeth132006">GitHub Sponsors</A>,
-        which unlocks nothing and is meant not to.
+        <strong>There used to be Pro and Team tiers here.</strong> They were announced but never
+        sold, and they are gone: every feature they listed now ships to everyone. Funding comes from{" "}
+        <A href="https://github.com/sponsors/praneeth132006">GitHub Sponsors</A>, which unlocks
+        nothing and is meant not to.
       </Note>
 
       <H2 id="tiers">What you get</H2>
@@ -42,23 +40,20 @@ export function Plans() {
         <LI>Self-hosting the whole thing under Apache-2.0.</LI>
       </UL>
       <P>
-        Scale is not a paywall here either: more repositories, search across all
-        of them, and branch and pull-request workflows are part of the same free
-        application.
+        Scale is not a paywall here either: more repositories, search across all of them, and branch
+        and pull-request workflows are part of the same free application.
       </P>
 
       <H2 id="billing">How funding works</H2>
       <P>
-        There is no billing. Nothing in ForkLeaf takes a payment, so there is no
-        checkout, no card handling, and no subscription record anywhere — the
-        Firestore entitlement document and the code that read it were removed
-        along with the tiers.
+        There is no billing. Nothing in ForkLeaf takes a payment, so there is no checkout, no card
+        handling, and no subscription record anywhere — the Firestore entitlement document and the
+        code that read it were removed along with the tiers.
       </P>
       <P>
         The project is funded by{" "}
-        <A href="https://github.com/sponsors/praneeth132006">GitHub Sponsors</A>.
-        Sponsoring grants no extra features, changes nothing in the app, and is
-        not linked to your account in any way.
+        <A href="https://github.com/sponsors/praneeth132006">GitHub Sponsors</A>. Sponsoring grants
+        no extra features, changes nothing in the app, and is not linked to your account in any way.
       </P>
 
       <H2 id="shutdown">If ForkLeaf disappears</H2>
