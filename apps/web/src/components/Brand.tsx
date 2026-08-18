@@ -1,5 +1,3 @@
-import React from "react";
-
 /**
  * The ForkLeaf mark: a git fork whose branches terminate in leaves.
  *

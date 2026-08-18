@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { Note } from "@forkleaf/types";
 import { deriveTitle } from "@forkleaf/markdown-engine";
 

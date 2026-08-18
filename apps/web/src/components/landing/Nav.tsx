@@ -1,4 +1,3 @@
-import React from "react";
 import Link from "next/link";
 import { ForkLeafLogo } from "@/components/Brand";
 import { REPO_URL } from "@/lib/constants";

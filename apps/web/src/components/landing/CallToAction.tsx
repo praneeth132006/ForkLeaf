@@ -1,4 +1,3 @@
-import React from "react";
 import Link from "next/link";
 import { ForkLeafMark } from "@/components/Brand";
 import { GitHubGlyph } from "./Nav";

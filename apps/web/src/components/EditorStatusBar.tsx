@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import type { CursorPosition } from "@forkleaf/editor";
 import type { SyncMode, SyncPreference, SyncState, Workspace } from "@forkleaf/types";
 import { BranchMenu } from "./BranchMenu";

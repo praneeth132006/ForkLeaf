@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { workspaceId, type Workspace } from "@forkleaf/types";
 import { ApiGatewayError, bootstrapWorkspace, listRepos, type RepoSummaryDto } from "@/lib/gateway";
 import { Dialog } from "./Dialog";

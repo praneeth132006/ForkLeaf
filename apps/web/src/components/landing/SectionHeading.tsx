@@ -1,5 +1,3 @@
-import React from "react";
-
 /**
  * The heading every landing section below the fold shares.
  *

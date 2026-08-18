@@ -1,4 +1,3 @@
-import React from "react";
 import { SiteShell } from "@/components/SiteShell";
 import { ProfilePanel } from "@/components/ProfilePanel";
 import { getSession, githubOAuthConfigured } from "@/lib/session";

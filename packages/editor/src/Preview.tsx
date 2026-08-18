@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { markdownToHtml, extractMermaidBlocks } from "@forkleaf/markdown-engine";
 import { renderDiagram, LIGHT_THEME, DARK_THEME } from "@forkleaf/diagrams";
 import { useDocumentTheme } from "./useDocumentTheme";

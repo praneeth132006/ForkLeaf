@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { diffLines, diffStats, diffWords, toHunks, type DiffLine } from "@forkleaf/markdown-engine";
 
 export interface DiffViewProps {

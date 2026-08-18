@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { cheatsheetFor, expandSnippet, type DiagramKind } from "@forkleaf/diagrams";
 
 export interface CheatsheetProps {
