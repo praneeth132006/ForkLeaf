@@ -5,11 +5,12 @@ import type { RepoRef } from "@forkleaf/types";
 const DEFAULT_REPO_NAME = "forkleaf-notes";
 
 /**
- * Sets up the user's default notes repository.
+ * Creates a notes repository on request.
  *
- * Called once after sign-in. Creates a private `forkleaf-notes` repo if it does
- * not exist, seeds it with a welcome note, and returns the workspace to open.
- * Idempotent — running it against an existing repo just returns that repo.
+ * Called from the repository chooser when the user picks "create a new one" —
+ * never automatically. Creates the repo if it does not exist, seeds it with a
+ * welcome note, and returns the workspace to open. Idempotent: running it
+ * against an existing repo just returns that repo untouched.
  *
  * With `scaffold`, the seed is a small folder layout rather than a single note,
  * so a fresh repo starts organised instead of accumulating notes flat at the

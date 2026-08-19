@@ -98,8 +98,8 @@ export const DOC_SECTIONS: DocSection[] = [
     pages: [
       {
         slug: "plans",
-        title: "Plans & billing",
-        summary: "What is free forever, what Pro and Team add, and how billing will work.",
+        title: "What it costs",
+        summary: "Free, all of it, with no tiers — and what funds the project instead.",
       },
       {
         slug: "privacy-and-data",
@@ -125,7 +125,7 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         slug: "firebase",
         title: "Firebase setup",
-        summary: "Wiring up analytics, user records and the billing scaffold.",
+        summary: "Wiring up product analytics and the thin user record.",
       },
       {
         slug: "troubleshooting",

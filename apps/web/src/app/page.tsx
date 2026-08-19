@@ -1,4 +1,4 @@
-import { githubOAuthConfigured } from "@/lib/session";
+import { getSession, githubOAuthConfigured } from "@/lib/session";
 import { SignInError } from "@/components/SignInError";
 import { Nav } from "@/components/landing/Nav";
 import { Hero } from "@/components/landing/Hero";
@@ -22,13 +22,14 @@ export default async function Home({
 }) {
   const { error } = await searchParams;
   const githubAvailable = githubOAuthConfigured();
+  const session = await getSession();
 
   // `clip` rather than `hidden` on the root below: hidden makes it a scroll
   // container, and a scroll container that never scrolls silently breaks
   // `position: sticky` inside it — which is the entire scroll story.
   return (
     <div className="flex min-h-screen flex-col overflow-x-clip bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
-      <Nav githubAvailable={githubAvailable} />
+      <Nav githubAvailable={githubAvailable} signedIn={Boolean(session?.user)} />
 
       {error && (
         <div className="mx-auto mt-4 w-full max-w-3xl px-6">

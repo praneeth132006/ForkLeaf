@@ -14,7 +14,7 @@ export function SelfHosting() {
         <LI>A GitHub account, to register an OAuth app.</LI>
         <LI>Somewhere to deploy. Vercel, Fly, Railway, a container, or your own box.</LI>
         <LI>
-          Optionally a Firebase project, if you want analytics and the billing scaffold — see{" "}
+          Optionally a Firebase project, if you want analytics and the user record — see{" "}
           <A href="/docs/firebase">Firebase setup</A>. Everything works without it.
         </LI>
       </UL>
@@ -150,9 +150,8 @@ export function Firebase() {
   return (
     <>
       <Lead>
-        Firebase is optional. It powers product analytics, the user record and the billing scaffold
-        on the hosted deployment. With no Firebase configuration, ForkLeaf works identically and
-        collects nothing.
+        Firebase is optional. It powers product analytics and the thin user record on the hosted
+        deployment. With no Firebase configuration, ForkLeaf works identically and collects nothing.
       </Lead>
 
       <H2 id="what-for">What it is used for</H2>
@@ -259,7 +258,6 @@ service cloud.firestore {
           [<Code key="d">repo_connected</Code>, "A repository is connected"],
           [<Code key="e">github_sign_in_started</Code>, "The sign-in button is pressed"],
           [<Code key="f">diagram_inserted</Code>, "A diagram block is inserted"],
-          [<Code key="g">upgrade_viewed</Code>, "A paid plan's button is pressed"],
         ]}
       />
       <P>

@@ -292,13 +292,13 @@ export function ProfilePanel({ user, githubAvailable }: ProfilePanelProps) {
         ) : (
           <p className="fl-card mt-3 p-6 text-[14px] leading-relaxed text-[var(--fl-muted)]">
             {library
-              ? "Nothing connected yet. Open the editor and connect a repository to back your notes up."
+              ? "Nothing connected yet. Open the dashboard and choose a repository to back your notes up."
               : "Reading your library…"}
           </p>
         )}
 
-        <Link href="/editor" className="fl-btn fl-btn-ghost mt-3 !py-2 !text-[13px]">
-          Open the editor
+        <Link href="/dashboard" className="fl-btn fl-btn-ghost mt-3 !py-2 !text-[13px]">
+          Open the dashboard
         </Link>
       </section>
 

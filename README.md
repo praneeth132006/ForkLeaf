@@ -33,6 +33,8 @@ your notes at all:
 - **Slash commands** (`/`) for headings, lists, tables, to-dos, code and diagrams.
 - **Properties panel** that edits the note's YAML frontmatter directly, so notes
   stay compatible with Obsidian, Jekyll, Hugo and friends.
+- **Command palette** (`⌘K`) — jump to any note by title, or run any editor
+  command, without leaving the keyboard.
 - Document outline, word count, reading time and task progress.
 
 ### Diagrams
@@ -63,11 +65,19 @@ github.com and anywhere else Mermaid is supported.
 - **Conflict handling.** If a note changed both here and on GitHub, you're asked
   what to keep — nothing is silently overwritten.
 
+### Dashboard
+
+- Signing in lands on a **dashboard**, not an empty editor: every note across
+  every connected repository, indexed by title, tag and folder rather than
+  filename, and searchable from one box.
+- Recently edited notes, per-repository statistics, and one click into any note.
+
 ### Workspaces
 
-- A private `forkleaf-notes` repo is created for you on first sign-in.
-- Connect any other repository (optionally scoped to a subfolder like `docs/`)
-  and switch between them.
+- **You choose where your notes live.** On first sign-in ForkLeaf asks: connect a
+  repository you already have, optionally scoped to a subfolder like `docs/`, or
+  create a new one. Nothing is created on your account without you asking.
+- Connect as many repositories as you like and switch between them.
 
 ---
 
@@ -77,7 +87,7 @@ github.com and anywhere else Mermaid is supported.
 
 ```bash
 git clone https://github.com/praneeth132006/ForkLeaf.git
-cd MarkDown
+cd ForkLeaf
 pnpm install
 pnpm dev
 ```

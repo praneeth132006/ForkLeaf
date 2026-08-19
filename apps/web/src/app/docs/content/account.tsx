@@ -117,7 +117,7 @@ export function PrivacyAndData() {
 
       <H2 id="firebase">Analytics and account records</H2>
       <P>
-        The hosted deployment uses Firebase for product analytics and for the billing scaffold. A
+        The hosted deployment uses Firebase for product analytics and for a thin account record. A
         self-hosted copy with no Firebase configuration collects none of this and works identically.
       </P>
       <H3>Analytics</H3>
@@ -286,9 +286,9 @@ export function Security() {
 
       <H2 id="firestore">Firestore rules</H2>
       <P>
-        Users can read and write their own profile document and nothing else. The billing document
-        is readable by its owner and writable only by the server, so a browser cannot promote itself
-        to a paid plan:
+        Users can read and write their own profile document and nothing else. There is no billing
+        collection, because there is nothing to bill for — rules that reserved room for a
+        subscription would read as a paywall waiting to be switched on:
       </P>
       <Pre label="firestore.rules">{`rules_version = '2';
 service cloud.firestore {
@@ -297,11 +297,9 @@ service cloud.firestore {
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
 
-      // Written only by the payment webhook, using the Admin SDK, which
-      // bypasses these rules. Never writable from a browser.
-      match /billing/{document} {
-        allow read: if request.auth != null && request.auth.uid == uid;
-        allow write: if false;
+      // No subcollection is expected under a user.
+      match /{other=**} {
+        allow read, write: if false;
       }
     }
 

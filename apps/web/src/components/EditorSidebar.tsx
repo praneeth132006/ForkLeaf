@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { TreeNode, Workspace, SessionUser } from "@forkleaf/types";
 import { FileTree } from "./FileTree";
@@ -27,6 +27,8 @@ export interface EditorSidebarProps {
   onSignIn: () => void;
   onSignOut: () => void;
   onOpenHelp: () => void;
+  /** Opens the command palette — the sidebar advertises it, the editor owns it. */
+  onOpenPalette: () => void;
   githubAvailable: boolean;
 }
 
@@ -42,19 +44,6 @@ export function EditorSidebar(props: EditorSidebarProps) {
   const [showAccount, setShowAccount] = useState(false);
   const [showFolders, setShowFolders] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-
-  // The ⌘K on the search field is a promise, so it has to be kept.
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== "k" || !(event.metaKey || event.ctrlKey)) return;
-      event.preventDefault();
-      searchRef.current?.focus();
-      searchRef.current?.select();
-    };
-
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
 
   // Every folder at every depth, so "new note" can mean "new note somewhere in
   // particular" without making the reader find the folder first. Listing only
@@ -95,6 +84,27 @@ export function EditorSidebar(props: EditorSidebarProps) {
             <path d="M8 3.5v9M3.5 8h9" />
           </svg>
         </RailButton>
+        <RailButton label="Search notes and commands (⌘K)" onClick={props.onOpenPalette}>
+          <svg
+            viewBox="0 0 16 16"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          >
+            <circle cx="7" cy="7" r="4.25" />
+            <path d="m10.2 10.2 3.05 3.05" />
+          </svg>
+        </RailButton>
+        <Link
+          href="/dashboard"
+          title="Dashboard (⌘⇧D)"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+        >
+          <DashboardGlyph />
+          <span className="sr-only">Dashboard</span>
+        </Link>
         <RailButton label="Help" onClick={props.onOpenHelp} className="mt-auto">
           <svg
             viewBox="0 0 16 16"
@@ -301,24 +311,51 @@ export function EditorSidebar(props: EditorSidebarProps) {
         )}
       </div>
 
-      {/* ── Search ────────────────────────────────────────────────────── */}
-      <div className="relative p-2">
+      {/* ── Filter ────────────────────────────────────────────────────── */}
+      {/* This narrows the tree by filename. Searching by title, across every
+          note whether or not it is open, is what ⌘K is for — the button below
+          says so rather than leaving people to discover it. */}
+      <div className="relative px-2 pt-2">
         <SearchGlyph />
         <input
           ref={searchRef}
           type="search"
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
-          placeholder="Search notes…"
-          aria-label="Search notes"
-          className="fl-input w-full !pl-8 !pr-11"
+          placeholder="Filter by filename…"
+          aria-label="Filter notes by filename"
+          className="fl-input w-full !pl-8"
         />
-        <kbd
-          aria-hidden="true"
-          className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 rounded border border-[var(--fl-border)] px-1 py-px font-sans text-[10px] text-[var(--fl-muted)]"
+      </div>
+
+      <div className="px-2 pb-1 pt-1.5">
+        <button
+          type="button"
+          onClick={props.onOpenPalette}
+          className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
         >
-          ⌘K
-        </kbd>
+          <span className="min-w-0 flex-1 truncate">Search everything by title</span>
+          <kbd className="shrink-0 rounded border border-[var(--fl-border)] px-1 py-px font-sans text-[10px]">
+            ⌘K
+          </kbd>
+        </button>
+      </div>
+
+      {/* ── Out of the editor ─────────────────────────────────────────── */}
+      {/* The editor used to be a room with no marked exits: once you were in
+          it, the only way back to the rest of the app was the logo, and the
+          dashboard could not be reached at all. */}
+      <div className="px-2 pb-1">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
+        >
+          <DashboardGlyph />
+          <span className="min-w-0 flex-1 truncate">Dashboard</span>
+          <kbd className="shrink-0 rounded border border-[var(--fl-border)] px-1 py-px font-sans text-[10px] text-[var(--fl-muted)]">
+            ⌘⇧D
+          </kbd>
+        </Link>
       </div>
 
       {/* ── Tree ──────────────────────────────────────────────────────── */}
@@ -429,6 +466,25 @@ export function EditorSidebar(props: EditorSidebarProps) {
         )}
       </div>
     </nav>
+  );
+}
+
+function DashboardGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-4 w-4 shrink-0 text-[var(--fl-muted)]"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    >
+      <rect x="2" y="2" width="5" height="5" rx="1.25" />
+      <rect x="9" y="2" width="5" height="5" rx="1.25" />
+      <rect x="2" y="9" width="5" height="5" rx="1.25" />
+      <rect x="9" y="9" width="5" height="5" rx="1.25" />
+    </svg>
   );
 }
 

@@ -136,7 +136,7 @@ export default function PrivacyPage() {
             ],
             [
               <strong key="b">Google (Firebase)</strong>,
-              "Analytics, account record, future billing state",
+              "Product analytics and the account record",
               "Anonymous usage events and the account record in section 3",
             ],
             [

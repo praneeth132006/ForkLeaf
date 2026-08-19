@@ -42,7 +42,6 @@ export type ForkLeafEvent =
   | "github_sign_in_started"
   | "sync_completed"
   | "diagram_inserted"
-  | "upgrade_viewed"
   | "checkout_started";
 
 /**

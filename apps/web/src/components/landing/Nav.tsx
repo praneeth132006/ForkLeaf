@@ -9,7 +9,14 @@ import { ThemeToggle } from "./ThemeToggle";
  * Sticky with a blurred backdrop so the hero's dot grid scrolls under it rather
  * than colliding with the links.
  */
-export function Nav({ githubAvailable }: { githubAvailable: boolean }) {
+export function Nav({
+  githubAvailable,
+  signedIn = false,
+}: {
+  githubAvailable: boolean;
+  /** Swaps the sign-in button for a way back into the signed-in app. */
+  signedIn?: boolean;
+}) {
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--fl-border)]/70 bg-[var(--fl-bg)]/80 backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-3.5">
@@ -47,11 +54,17 @@ export function Nav({ githubAvailable }: { githubAvailable: boolean }) {
             Open editor
           </Link>
 
-          {githubAvailable && (
-            <a href="/api/auth/github" className="fl-btn fl-btn-primary !px-4 !py-2 !text-sm">
-              <GitHubGlyph />
-              Sign in
-            </a>
+          {signedIn ? (
+            <Link href="/dashboard" className="fl-btn fl-btn-primary !px-4 !py-2 !text-sm">
+              Dashboard
+            </Link>
+          ) : (
+            githubAvailable && (
+              <a href="/api/auth/github" className="fl-btn fl-btn-primary !px-4 !py-2 !text-sm">
+                <GitHubGlyph />
+                Sign in
+              </a>
+            )
           )}
         </div>
       </div>

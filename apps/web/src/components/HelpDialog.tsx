@@ -74,9 +74,9 @@ export function HelpDialog({
             at the bottom says <Mono>Saved on this device</Mono> when that has happened.
           </Step>
           <Step n={2} title="Sign in with GitHub to keep them">
-            Browser storage is not a backup: clearing site data deletes it. Signing in creates a
-            private repository called <Mono>forkleaf-notes</Mono> in your GitHub account and starts
-            committing your notes there.
+            Browser storage is not a backup: clearing site data deletes it. Signing in asks which
+            repository your notes should live in — one you already have, or a new private one — and
+            then commits every note there.
             {!user &&
               (githubAvailable ? (
                 <button type="button" onClick={onSignIn} className="fl-btn fl-btn-primary mt-3">
@@ -184,9 +184,9 @@ export function HelpDialog({
               </>
             ) : (
               <>
-                Nothing is on GitHub yet — this workspace is local to this browser. Sign in and
-                ForkLeaf creates a private <Mono>forkleaf-notes</Mono> repository, then commits each
-                note to it as a plain <Mono>.md</Mono> file you can read, clone or edit anywhere.
+                Nothing is on GitHub yet — this workspace is local to this browser. Sign in, choose
+                a repository, and ForkLeaf commits each note to it as a plain <Mono>.md</Mono> file
+                you can read, clone or edit anywhere.
               </>
             )}
           </Item>
@@ -210,13 +210,18 @@ export function HelpDialog({
       {tab === "keys" && (
         <div className="grid gap-x-8 gap-y-1 sm:grid-cols-2">
           {[
+            ["⌘K / Ctrl+K", "Search every note, or run any command"],
             ["/", "Open the insert menu"],
             ["⌘S / Ctrl+S", "Push to GitHub now"],
             ["⌘⇧N", "New note"],
+            ["⌘⇧D", "Go to the dashboard"],
             ["⌘⇧E", "Export the current note"],
+            ["⌘1 / ⌘2 / ⌘3", "Rich, split and source views"],
+            ["⌘\\", "Show or hide the sidebar"],
             ["⌘B / ⌘I", "Bold / italic (rich text)"],
             ["⌘Z / ⌘⇧Z", "Undo / redo"],
             ["Tab", "Indent (source view)"],
+            ["⌘⇧?", "This dialog"],
             ["Esc", "Close a dialog or the diagram editor"],
           ].map(([keys, what]) => (
             <div

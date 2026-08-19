@@ -212,7 +212,7 @@ export class SyncEngine {
     // User activity: try promptly rather than inheriting a long backoff.
     this.retryDelay = 0;
 
-    this.setStatus(this.queue.length > 0 ? "pending" : "idle");
+    this.setStatus(this.restingStatus());
 
     // Manual mode queues and waits. The local write has already happened, so
     // nothing is at risk — the change simply does not leave the device until
@@ -267,9 +267,7 @@ export class SyncEngine {
       this.lastSyncedAt = this.now().toISOString();
       this.lastError = null;
       this.retryDelay = 0;
-      this.setStatus(
-        this.conflicts.length > 0 ? "conflict" : this.queue.length > 0 ? "pending" : "idle",
-      );
+      this.setStatus(this.restingStatus());
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err);
       this.setStatus(this.isOnline() ? "error" : "offline");
@@ -517,6 +515,20 @@ export class SyncEngine {
     for (const change of this.queue) {
       await this.db.putQueueItem(change);
     }
+  }
+
+  /**
+   * What the status should be when nothing is in flight.
+   *
+   * An unresolved conflict outranks a pending queue. `scheduleFlush` used to
+   * report "pending" unconditionally, so resolving one of two conflicts moved
+   * the status off "conflict" while the second was still open — and since the
+   * status bar is the only way back into the conflict dialog once it has been
+   * dismissed, that left the remaining conflict with no route back to it.
+   */
+  private restingStatus(): SyncStatus {
+    if (this.conflicts.length > 0) return "conflict";
+    return this.queue.length > 0 ? "pending" : "idle";
   }
 
   private setStatus(status: SyncStatus): void {
