@@ -122,9 +122,14 @@ export function Repositories() {
 
       <H2 id="default">The notes repository</H2>
       <P>
-        On first sign-in ForkLeaf looks for a repository called <Code>forkleaf-notes</Code> in your
-        account. If it is not there, it creates it — private, with a README and a short welcome
-        note. If it is there, it is used as-is and nothing is overwritten.
+        Signing in does not create anything. ForkLeaf asks where your notes should live, on the
+        dashboard: connect a repository you already have — optionally scoped to a subfolder such as{" "}
+        <Code>docs/</Code> — or have it create a new one for you.
+      </P>
+      <P>
+        If you ask it to create one, the default name is <Code>forkleaf-notes</Code> and it is
+        private, with a README and a short welcome note. If a repository of that name already
+        exists, it is used as-is and nothing is overwritten.
       </P>
       <P>
         This is a normal repository. Rename it, add collaborators, make it public, add a GitHub

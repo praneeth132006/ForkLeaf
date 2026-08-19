@@ -20,13 +20,8 @@ import {
   type EditorViewMode,
 } from "@forkleaf/types";
 import { dirname } from "@forkleaf/markdown-engine";
-import {
-  GitHubGateway,
-  LocalGateway,
-  fetchSession,
-  bootstrapWorkspace,
-  type SessionResponse,
-} from "@/lib/gateway";
+import { GitHubGateway, LocalGateway, fetchSession, type SessionResponse } from "@/lib/gateway";
+import { LOCAL_WORKSPACE } from "@/lib/workspaces";
 
 /**
  * The application's single source of truth.
@@ -35,16 +30,6 @@ import {
  * them to the UI as plain state. Everything the editor does goes through here,
  * so there is exactly one place where "what happens when you type" is decided.
  */
-
-const LOCAL_WORKSPACE: Workspace = {
-  id: "local",
-  name: "On this device",
-  repo: { owner: "local", repo: "local", branch: "local", directory: "" },
-  isDefault: true,
-  isLocal: true,
-  createdAt: new Date(0).toISOString(),
-  lastOpenedAt: new Date(0).toISOString(),
-};
 
 export interface NotebookState {
   ready: boolean;
@@ -81,6 +66,12 @@ export interface NotebookState {
    * becomes part of the repository and drops out of this list.
    */
   emptyFolders: string[];
+  /**
+   * True when this is a GitHub session with no repository connected yet. The
+   * editor turns it into the connect dialog; the dashboard turns it into the
+   * first-run repository chooser.
+   */
+  needsRepoChoice: boolean;
 }
 
 /** Keys the open set is remembered under, so a reload reopens the same tabs. */
@@ -103,7 +94,17 @@ const emptyFoldersKey = (workspace: string) => `emptyFolders:${workspace}`;
 /** How many notes may be open at once, to bound memory and tab-strip width. */
 const MAX_OPEN_NOTES = 12;
 
-export function useNotebook() {
+/** What the URL asked for: a specific workspace, and a note inside it. */
+export interface NotebookRequest {
+  workspaceId?: string | null;
+  path?: string | null;
+}
+
+export function useNotebook(request: NotebookRequest = {}) {
+  // Frozen at mount: this is where the session starts from, and re-reading it
+  // on every render would fight the user's own navigation between notes.
+  const [requested] = useState(request);
+
   const [state, setState] = useState<NotebookState>({
     ready: false,
     session: null,
@@ -124,6 +125,7 @@ export function useNotebook() {
     error: null,
     busy: null,
     emptyFolders: [],
+    needsRepoChoice: false,
   });
 
   // Long-lived singletons. Refs rather than state: replacing the sync engine
@@ -132,9 +134,20 @@ export function useNotebook() {
   const gatewayRef = useRef<GitHubGateway | LocalGateway | null>(null);
   const syncRef = useRef<SyncEngine | null>(null);
   const repoRef = useRef<NoteRepository | null>(null);
+  /** A URL-requested note is opened once, not on every workspace switch. */
+  const openedRequestRef = useRef(false);
 
   const patch = useCallback((updates: Partial<NotebookState>) => {
     setState((current) => ({ ...current, ...updates }));
+  }, []);
+
+  /** Remembers the tab set so a reload comes back to the same desks. */
+  const rememberTabs = useCallback((workspace: string, notes: Note[], active: string | null) => {
+    void dbRef.current?.putMeta(
+      openTabsKey(workspace),
+      notes.map((note) => note.path),
+    );
+    void dbRef.current?.putMeta(activeTabKey(workspace), active);
   }, []);
 
   // ── Boot ────────────────────────────────────────────────────────────────
@@ -170,39 +183,44 @@ export function useNotebook() {
         // Restore known workspaces, or set one up on first run.
         let workspaces = await notes.listWorkspaces();
 
-        if (session.mode === "github") {
-          if (gateway instanceof GitHubGateway) {
-            for (const workspace of workspaces) gateway.register(workspace);
-          }
+        if (session.mode === "github" && gateway instanceof GitHubGateway) {
+          for (const workspace of workspaces) gateway.register(workspace);
+        }
 
-          if (workspaces.length === 0) {
-            patch({ busy: "Setting up your notes repository…" });
-            const result = await bootstrapWorkspace();
-            const workspace: Workspace = {
-              id: workspaceId(result.workspace),
-              name: result.repo.name,
-              repo: result.workspace,
-              isDefault: true,
-              isLocal: false,
-              createdAt: new Date().toISOString(),
-              lastOpenedAt: new Date().toISOString(),
-            };
-            await notes.addWorkspace(workspace);
-            (gateway as GitHubGateway).register(workspace);
-            workspaces = [workspace];
-          }
-        } else if (workspaces.length === 0) {
+        // Signing in used to create a private `forkleaf-notes` repository on
+        // the user's account here, with nothing asked and nothing shown. Where
+        // the notes live is the user's decision, so an account with nothing
+        // connected gets the on-device workspace to write in now and a repo
+        // chooser — on the dashboard, or the connect dialog in the editor.
+        const needsRepoChoice =
+          session.mode === "github" && workspaces.every((workspace) => workspace.isLocal);
+
+        if (workspaces.length === 0) {
           await notes.addWorkspace(LOCAL_WORKSPACE);
           workspaces = [LOCAL_WORKSPACE];
         }
 
         if (cancelled) return;
 
-        // Reopen whatever was open last.
+        // A workspace named in the URL wins — that is the dashboard handing
+        // over a specific note — then whatever was open last.
         const lastId = await db.getMeta<string>("activeWorkspace");
-        const active = workspaces.find((w) => w.id === lastId) ?? workspaces[0] ?? null;
+        const active =
+          (requested.workspaceId
+            ? workspaces.find((w) => w.id === requested.workspaceId)
+            : undefined) ??
+          workspaces.find((w) => w.id === lastId) ??
+          workspaces[0] ??
+          null;
 
-        patch({ session, workspaces, activeWorkspace: active, ready: true, busy: null });
+        patch({
+          session,
+          workspaces,
+          activeWorkspace: active,
+          needsRepoChoice,
+          ready: true,
+          busy: null,
+        });
       } catch (error) {
         if (!cancelled) {
           patch({
@@ -218,7 +236,8 @@ export function useNotebook() {
     return () => {
       cancelled = true;
     };
-  }, [patch]);
+    // `requested` is frozen at mount, so this still runs exactly once.
+  }, [patch, requested.workspaceId]);
 
   // ── Load the tree whenever the workspace changes ────────────────────────
   useEffect(() => {
@@ -247,28 +266,43 @@ export function useNotebook() {
       const folders = (await dbRef.current?.getMeta<string[]>(emptyFoldersKey(workspace.id))) ?? [];
       if (!cancelled) patch({ emptyFolders: folders });
 
-      // Reopen the tabs this workspace had last time. A note that has since
-      // been deleted simply fails to load and is left out.
+      // Reopen the tabs this workspace had last time, plus whatever the URL
+      // asked for. A note that has since been deleted simply fails to load and
+      // is left out.
       const remembered = (await dbRef.current?.getMeta<string[]>(openTabsKey(workspace.id))) ?? [];
       const rememberedActive = await dbRef.current?.getMeta<string>(activeTabKey(workspace.id));
 
-      if (remembered.length > 0 && !cancelled) {
+      // Only for the workspace the link named — otherwise switching workspaces
+      // later in the session would keep dragging the same note along.
+      const wanted =
+        requested.path &&
+        (!requested.workspaceId || requested.workspaceId === workspace.id) &&
+        !openedRequestRef.current
+          ? requested.path
+          : null;
+      if (wanted) openedRequestRef.current = true;
+
+      const toOpen = wanted
+        ? [wanted, ...remembered.filter((path) => path !== wanted)]
+        : remembered;
+
+      if (toOpen.length > 0 && !cancelled) {
         const restored = (
           await Promise.all(
-            remembered
+            toOpen
               .slice(0, MAX_OPEN_NOTES)
               .map((path) => notes.openNote(workspace.id, path).catch(() => null)),
           )
         ).filter((note): note is Note => note !== null);
 
         if (!cancelled && restored.length > 0) {
-          patch({
-            openNotes: restored,
-            activePath:
-              restored.find((note) => note.path === rememberedActive)?.path ??
-              restored[0]?.path ??
-              null,
-          });
+          const active =
+            (wanted ? restored.find((note) => note.path === wanted) : undefined) ??
+            restored.find((note) => note.path === rememberedActive) ??
+            restored[0];
+
+          patch({ openNotes: restored, activePath: active?.path ?? null });
+          rememberTabs(workspace.id, restored, active?.path ?? null);
         }
       }
 
@@ -292,7 +326,7 @@ export function useNotebook() {
     return () => {
       cancelled = true;
     };
-  }, [state.activeWorkspace, patch]);
+  }, [state.activeWorkspace, requested.path, requested.workspaceId, patch, rememberTabs]);
 
   // ── Flush pending changes when the connection returns ───────────────────
   useEffect(() => {
@@ -317,15 +351,6 @@ export function useNotebook() {
   }, [state.sync.pendingCount]);
 
   // ── Actions ─────────────────────────────────────────────────────────────
-
-  /** Remembers the tab set so a reload comes back to the same desks. */
-  const rememberTabs = useCallback((workspace: string, notes: Note[], active: string | null) => {
-    void dbRef.current?.putMeta(
-      openTabsKey(workspace),
-      notes.map((note) => note.path),
-    );
-    void dbRef.current?.putMeta(activeTabKey(workspace), active);
-  }, []);
 
   const openNote = useCallback(
     async (path: string) => {
@@ -759,6 +784,8 @@ export function useNotebook() {
         openNotes: [],
         activePath: null,
         tree: [],
+        // The question has been answered, so stop asking it.
+        ...(workspace.isLocal ? {} : { needsRepoChoice: false }),
       });
     },
     [state.workspaces, patch],

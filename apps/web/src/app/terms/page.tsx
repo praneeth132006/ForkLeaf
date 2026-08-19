@@ -108,16 +108,16 @@ export default function TermsPage() {
           Apache licence grants you.
         </P>
 
-        <H2 id="paid">7. Paid plans</H2>
+        <H2 id="paid">7. What it costs</H2>
         <P>
-          <strong>No paid plans are currently on sale.</strong> All features described as Pro or
-          Team are planned, not available, and nobody is being charged for anything. If and when
-          paid plans launch, prices, billing terms, renewal and refund policies will be published
-          before any charge is made, and these terms will be updated to cover them.
+          <strong>Nothing, and there are no tiers.</strong> There is no checkout, no card on file
+          and no plan attached to your account — the codebase contains no billing collection and no
+          payment integration. Funding comes from optional sponsorship, which unlocks nothing.
         </P>
         <P>
-          The editor is free and is intended to remain so; the commitments about what the free tier
-          includes are set out in <A href="/docs/plans">the documentation</A>.
+          Should that ever change, prices and billing terms would be published before any charge was
+          made and these terms updated to cover them. The commitments about what stays free are set
+          out in <A href="/docs/plans">the documentation</A>.
         </P>
 
         <H2 id="availability">8. Availability and changes</H2>

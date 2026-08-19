@@ -40,8 +40,9 @@ export function GettingStarted() {
           the browser as readable JavaScript and never appears in a URL.
         </li>
         <li>
-          A private repository called <Code>forkleaf-notes</Code> is created in your account, if you
-          do not already have one, with a welcome note inside it.
+          You land on the dashboard and are asked where your notes should live. Nothing is created
+          on your account until you choose — connect a repository you already have, or have one
+          created for you.
         </li>
         <li>
           Anything you wrote before signing in stays where it is, in local storage, under the{" "}

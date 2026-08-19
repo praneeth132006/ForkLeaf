@@ -52,7 +52,12 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.redirect(new URL("/editor", process.env.NEXT_PUBLIC_APP_URL ?? url.origin));
+    // The dashboard, not the editor: a fresh sign-in has no repository chosen
+    // yet, and dropping someone into an empty editor is how the repo choice
+    // used to get made silently on their behalf.
+    return NextResponse.redirect(
+      new URL("/dashboard", process.env.NEXT_PUBLIC_APP_URL ?? url.origin),
+    );
   } catch (error) {
     console.error("[forkleaf] OAuth callback failed:", error);
     return NextResponse.redirect(withError(home, "exchange_failed"));

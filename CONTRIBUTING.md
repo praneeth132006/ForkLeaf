@@ -7,7 +7,7 @@ merged pull request without guesswork.
 
 ```bash
 git clone https://github.com/praneeth132006/ForkLeaf.git
-cd MarkDown
+cd ForkLeaf
 pnpm install
 pnpm dev
 ```
@@ -104,10 +104,15 @@ and run the tests:
   the visual builder can open it).
 - Add Mermaid completions for a diagram type in `completions.ts`.
 - Improve an error message in `packages/diagrams/src/errors.ts`.
-- Add keyboard shortcuts, or a command palette.
+- Add a command to the palette (`apps/web/src/components/CommandPalette.tsx` is
+  fed a plain list from the editor — a new entry is a few lines).
 - Improve mobile layout for the editor shell.
 
 ## Reporting bugs
+
+Issues are open — [file one](https://github.com/praneeth132006/ForkLeaf/issues/new/choose).
+There are templates for bugs and for feature requests, and you do not need to
+fix a thing to report it.
 
 Please include what you expected, what happened, and the smallest note content
 that reproduces it. If it involves sync, the status-bar text at the time is very

@@ -9,8 +9,9 @@ import { ensureFirebaseUser, firestore } from "./client";
  *
  * Deliberately thin. Notes never come near this — they live in the user's own
  * GitHub repository, which is the entire premise of the product. This document
- * exists so billing has something to attach a plan to, and so an account screen
- * can show who you are signed in as.
+ * exists so an account screen can show who you are signed in as, and so the
+ * project can count how many people are using it. There is no plan field and no
+ * entitlement: ForkLeaf has no tiers.
  */
 export interface UserProfile {
   /** GitHub numeric id, when the user has connected GitHub. */
@@ -25,10 +26,10 @@ export interface UserProfile {
 /**
  * Creates or refreshes the caller's own user document.
  *
- * Writes with `merge: true` so that fields owned by other systems — notably the
- * plan and subscription fields a payment webhook writes — survive a sign-in.
- * `createdAt` is stamped only when the document does not yet exist, which costs
- * one read per session and is the reason this is not a blind `setDoc`.
+ * Writes with `merge: true` so a sign-in refreshes the identity fields without
+ * clearing anything else already on the document. `createdAt` is stamped only
+ * when the document does not yet exist, which costs one read per session and is
+ * the reason this is not a blind `setDoc`.
  */
 export async function upsertUserProfile(githubUser: SessionUser | null): Promise<void> {
   const db = firestore();

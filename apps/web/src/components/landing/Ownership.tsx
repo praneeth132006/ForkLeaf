@@ -48,6 +48,71 @@ export function Ownership() {
           ))}
         </div>
 
+        {/* ── What the OAuth screen will ask for ─────────────────────── */}
+        {/* Put here, in the open, because the sign-in screen is where a
+            security-minded reader decides whether to trust any of the above —
+            and "grant access to all your repositories" is what they see. An
+            explanation that only exists in the docs arrives after they have
+            already closed the tab. */}
+        <div className="mt-12 rounded-2xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-6 sm:p-7">
+          <h3 className="text-[17px] font-semibold tracking-tight text-[var(--fl-text)]">
+            Before you press sign in: what GitHub will ask you to grant
+          </h3>
+
+          <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-[var(--fl-muted)]">
+            The hosted app requests the{" "}
+            <code className="rounded bg-[var(--fl-elevated)] px-1.5 py-0.5 font-mono text-[13px] text-[var(--fl-text)]">
+              repo
+            </code>{" "}
+            scope. That is broad, and we would rather say so than have you discover it on the
+            consent screen. It is the narrowest <em>classic</em> scope GitHub offers that can write
+            to a private repository — there is no &ldquo;only this one repo&rdquo; classic scope to
+            ask for instead.
+          </p>
+
+          <dl className="mt-5 grid gap-4 sm:grid-cols-3">
+            <div>
+              <dt className="text-[13.5px] font-semibold text-[var(--fl-text)]">
+                What it is used for
+              </dt>
+              <dd className="mt-1 text-[13.5px] leading-relaxed text-[var(--fl-muted)]">
+                Reading and committing Markdown files in the repositories you connect. Nothing else
+                is ever fetched.
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[13.5px] font-semibold text-[var(--fl-text)]">
+                Where the token lives
+              </dt>
+              <dd className="mt-1 text-[13.5px] leading-relaxed text-[var(--fl-muted)]">
+                Encrypted in an httpOnly cookie on the server. It is never sent to the browser and
+                never appears in a URL.
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[13.5px] font-semibold text-[var(--fl-text)]">
+                If that is too much
+              </dt>
+              <dd className="mt-1 text-[13.5px] leading-relaxed text-[var(--fl-muted)]">
+                Run your own copy with a GitHub App and grant it a single repository — or use
+                ForkLeaf with no account at all, on this device only.
+              </dd>
+            </div>
+          </dl>
+
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Link
+              href="/docs/self-hosting#github-app"
+              className="fl-btn fl-btn-ghost !py-2 !text-[13.5px]"
+            >
+              Set it up with a GitHub App
+            </Link>
+            <Link href="/editor" className="fl-btn fl-btn-ghost !py-2 !text-[13.5px]">
+              Try it without an account
+            </Link>
+          </div>
+        </div>
+
         <div className="mt-10 flex flex-wrap gap-2">
           {LINKS.map((link) => (
             <Link

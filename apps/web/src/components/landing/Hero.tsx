@@ -60,7 +60,14 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
           <p className="mt-4 text-[13px] text-[var(--fl-muted)]">
             {githubAvailable ? (
               <>
-                Free · Opens in your browser ·{" "}
+                Free ·{" "}
+                <a
+                  href="#ownership"
+                  className="underline decoration-[var(--fl-border-strong)] underline-offset-[3px] transition-colors hover:text-[var(--fl-text)]"
+                >
+                  what GitHub access this asks for
+                </a>{" "}
+                ·{" "}
                 <Link
                   href="/editor"
                   className="underline decoration-[var(--fl-border-strong)] underline-offset-[3px] transition-colors hover:text-[var(--fl-text)]"

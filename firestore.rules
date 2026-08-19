@@ -3,9 +3,13 @@ rules_version = '2';
 // ForkLeaf Firestore security rules.
 //
 // ForkLeaf stores no note content in Firestore — notes live in the user's own
-// GitHub repository. What is here is one small profile document per user and
-// their subscription state, so these rules only need to answer one question:
-// "is this person reading or writing their own row?"
+// GitHub repository. What is here is one small profile document per user, so
+// these rules only need to answer one question: "is this person reading or
+// writing their own row?"
+//
+// There is deliberately no billing collection. ForkLeaf has no tiers and no
+// paywall, and rules that reserved space for a subscription the product does
+// not have read as a paywall waiting to be switched on.
 //
 // Deploy with:  firebase deploy --only firestore:rules
 
@@ -19,20 +23,10 @@ service cloud.firestore {
       allow read: if isOwner(uid);
       allow create, update: if isOwner(uid) && isValidProfile();
       // Deletion is handled out of band, on request, so a bug in the client
-      // cannot wipe someone's billing history.
+      // cannot wipe an account record while its owner is still using it.
       allow delete: if false;
 
-      match /billing/{document} {
-        // Read-only from the browser. Written exclusively by the payment
-        // webhook through the Admin SDK, which bypasses these rules.
-        //
-        // A client that could write its own plan would make every paid feature
-        // a suggestion rather than an entitlement.
-        allow read: if isOwner(uid);
-        allow write: if false;
-      }
-
-      // No other subcollection is expected under a user.
+      // No subcollection is expected under a user.
       match /{other=**} {
         allow read, write: if false;
       }
