@@ -28,6 +28,7 @@ import { HistoryDialog } from "@/components/HistoryDialog";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
 import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { StorageBlocked } from "@/components/StorageBlocked";
+import { BootScreen } from "@/components/BootScreen";
 import { ForkLeafLogo } from "@/components/Brand";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { signOut } from "@/lib/gateway";
@@ -548,16 +549,7 @@ export function EditorWorkspace() {
   // so the editor does not open at all.
   if (notebook.storage === "blocked") return <StorageBlocked />;
 
-  if (!notebook.ready) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-[var(--fl-bg)]">
-        <ForkLeafLogo markClassName="h-8 w-8" textClassName="text-xl" />
-        <p className="text-sm text-[var(--fl-muted)]" aria-busy="true">
-          {notebook.busy ?? "Starting ForkLeaf…"}
-        </p>
-      </div>
-    );
-  }
+  if (!notebook.ready) return <BootScreen message={notebook.busy ?? undefined} />;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">

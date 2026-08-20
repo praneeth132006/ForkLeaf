@@ -15,6 +15,7 @@ import {
   type MessageArrow,
   type SequenceDiagram,
 } from "@forkleaf/diagrams";
+import { DraftInput } from "./DraftInput";
 
 export interface SequenceCanvasProps {
   diagram: SequenceDiagram;
@@ -434,14 +435,10 @@ export function SequenceCanvas({ diagram, onChange }: SequenceCanvasProps) {
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-2 text-[12.5px]">
           {selectedParticipant && (
             <>
-              <input
+              <DraftInput
                 value={selectedParticipant.label}
-                onChange={(event) =>
-                  onChange(
-                    updateParticipant(diagram, selectedParticipant.id, {
-                      label: event.target.value,
-                    }),
-                  )
+                onValueChange={(next) =>
+                  onChange(updateParticipant(diagram, selectedParticipant.id, { label: next }))
                 }
                 aria-label="Participant name"
                 className="w-48 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
@@ -476,13 +473,11 @@ export function SequenceCanvas({ diagram, onChange }: SequenceCanvasProps) {
 
           {selectedMessage && (
             <>
-              <input
+              <DraftInput
                 value={selectedMessage.label}
                 placeholder="What is being sent"
-                onChange={(event) =>
-                  onChange(
-                    updateMessage(diagram, selectedMessage.id, { label: event.target.value }),
-                  )
+                onValueChange={(next) =>
+                  onChange(updateMessage(diagram, selectedMessage.id, { label: next }))
                 }
                 aria-label="Message"
                 className="w-56 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"

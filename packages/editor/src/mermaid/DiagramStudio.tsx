@@ -307,11 +307,21 @@ export function DiagramStudio({
       </div>
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      {/* Side by side once there is width for it, stacked below that.
+          Stacked, the whole body scrolls: two panes that each need a few
+          hundred pixels do not both fit in a dialog, and clipping them is
+          worse than letting the reader scroll to the one they are using. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-visible">
         {showSource && (
           <div
-            className={`flex min-h-[220px] min-w-0 flex-col border-b border-[var(--fl-border)] lg:border-b-0 ${
-              bothPanes ? "lg:w-[var(--fl-split)] lg:flex-none" : "flex-1"
+            className={`flex min-h-[200px] min-w-0 flex-col border-b border-[var(--fl-border)] lg:border-b-0 ${
+              bothPanes
+                ? // Stacked, the source is the pane that gives way: it stays
+                  // readable at a few lines, while a canvas needs room to be
+                  // usable at all. It used to be the other way round, which
+                  // left the canvas a 66px sliver on any screen under 1024px.
+                  "max-h-[38vh] shrink-0 lg:max-h-none lg:w-[var(--fl-split)] lg:flex-none"
+                : "flex-1"
             }`}
             // Carried as a custom property rather than an inline width: the
             // panes stack on a narrow screen, where a percentage width would
@@ -367,8 +377,11 @@ export function DiagramStudio({
           </div>
         )}
 
+        {/* The diagram pane is tall enough that what is left after the heading,
+            the two toolbar rows, the hint strip and the inspector is still a
+            canvas. */}
         {showDiagram && (
-          <div className="flex min-h-[240px] min-w-0 flex-1 flex-col bg-[var(--fl-surface)]">
+          <div className="flex min-h-[420px] min-w-0 flex-1 flex-col bg-[var(--fl-surface)]">
             <div className="flex shrink-0 items-center gap-2 px-4 pb-1 pt-2.5">
               <PaneHeading bare>
                 {effectiveView === "canvas" ? "Canvas — drag to edit" : "Preview"}

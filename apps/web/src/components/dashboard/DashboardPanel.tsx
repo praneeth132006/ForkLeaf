@@ -10,6 +10,7 @@ import { signOut } from "@/lib/gateway";
 import { useTheme } from "@/hooks/useTheme";
 import { useIndexView, type IndexView } from "@/hooks/useIndexView";
 import { StorageBlocked } from "@/components/StorageBlocked";
+import { BootScreen } from "@/components/BootScreen";
 import { ForkLeafLogo } from "@/components/Brand";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
 import { RepoChooser } from "./RepoChooser";
@@ -171,16 +172,7 @@ export function DashboardPanel({
   // empty dashboard would read as "you have no notes".
   if (library.storage === "blocked") return <StorageBlocked />;
 
-  if (!library.ready) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[var(--fl-bg)]">
-        <ForkLeafLogo markClassName="h-8 w-8" textClassName="text-xl" />
-        <p className="text-sm text-[var(--fl-muted)]" aria-busy="true">
-          Reading your library…
-        </p>
-      </div>
-    );
-  }
+  if (!library.ready) return <BootScreen message="Reading your library…" />;
 
   const firstRun = library.needsRepoChoice && !skippedChoice;
 

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { EditorWorkspace } from "@/components/editor/EditorWorkspace";
-import { ForkLeafLogo } from "@/components/Brand";
+import { BootScreen } from "@/components/BootScreen";
 
 export const metadata = {
   title: "Editor — ForkLeaf",
@@ -25,19 +25,8 @@ export const dynamic = "force-dynamic";
  */
 export default function EditorPage() {
   return (
-    <Suspense fallback={<Booting />}>
+    <Suspense fallback={<BootScreen />}>
       <EditorWorkspace />
     </Suspense>
-  );
-}
-
-function Booting() {
-  return (
-    <div className="flex h-screen flex-col items-center justify-center gap-4 bg-[var(--fl-bg)]">
-      <ForkLeafLogo markClassName="h-8 w-8" textClassName="text-xl" />
-      <p className="text-sm text-[var(--fl-muted)]" aria-busy="true">
-        Starting ForkLeaf…
-      </p>
-    </div>
   );
 }
