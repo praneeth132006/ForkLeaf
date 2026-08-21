@@ -59,6 +59,11 @@
   --fl-accent-hover: #324a63;
   --fl-accent-contrast: #ffffff;
   --fl-accent-soft: rgba(61, 90, 120, 0.1);
+  /* Selected text, which has to be *seen* — `--fl-accent-soft` is a tint for
+     hover states, and at a tenth of an opacity it left a selection you had to
+     hunt for. Strong enough to read at a glance, light enough to keep the text
+     on top of it legible. */
+  --fl-selection: rgba(61, 90, 120, 0.32);
 
   --fl-warn: #a76a0a;
   --fl-danger: #c2372d;
@@ -85,6 +90,7 @@
   --fl-accent-hover: #9db0cc;
   --fl-accent-contrast: #0c1018;
   --fl-accent-soft: rgba(138, 155, 184, 0.14);
+  --fl-selection: rgba(138, 155, 184, 0.42);
 
   --fl-warn: #d4b94f;
   --fl-danger: #d4544f;
@@ -190,8 +196,23 @@ h3 {
 }
 
 ::selection {
-  background: var(--fl-accent-soft);
+  background: var(--fl-selection);
   color: var(--fl-text);
+}
+
+/* Firefox keeps its own pseudo-element, and inherits nothing from the one
+   above. */
+::-moz-selection {
+  background: var(--fl-selection);
+  color: var(--fl-text);
+}
+
+/* A selection made in a window that has since lost focus stays visible, dimmer.
+   Without this the browser greys it out to near-invisibility, which is the
+   state you are in every time you reach for a menu mid-selection. */
+.ProseMirror-selectednode {
+  outline: 2px solid var(--fl-accent);
+  outline-offset: 2px;
 }
 
 /* ── Floating panels ───────────────────────────────────────────────────────

@@ -532,10 +532,18 @@ function FormatButton({
             break;
         }
       }}
+      /**
+       * `--fl-inverse-text`, not `--fl-elevated`.
+       *
+       * The bubble sits on `--fl-inverse-bg`, and the inactive glyphs were
+       * painted in `--fl-elevated` — a *surface* colour, near-black in the dark
+       * theme. Bold, italic, strikethrough and the rest were black letters on a
+       * black background: present, clickable, and invisible.
+       */
       className={`h-7 min-w-7 rounded px-1.5 text-sm transition ${
         active
           ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
-          : "text-[var(--fl-elevated)] hover:bg-white/10"
+          : "text-[var(--fl-inverse-text)] hover:bg-[var(--fl-inverse-text)]/15"
       } ${className ?? ""}`}
     >
       {glyph}

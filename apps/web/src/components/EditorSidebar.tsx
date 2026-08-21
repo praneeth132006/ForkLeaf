@@ -38,6 +38,10 @@ export interface EditorSidebarProps {
   onMoveNote: (path: string, toFolder: string) => void;
   /** Notes kept at the top, in the order they were put there. */
   pinnedPaths: readonly string[];
+  /** Folders the reader had open last time, in the order they opened them. */
+  openFolders?: readonly string[];
+  /** Called when that set changes, so it can be remembered for next time. */
+  onOpenFoldersChange?: (paths: string[]) => void;
   onTogglePin: (path: string) => void;
   onMovePin: (path: string, direction: -1 | 1) => void;
   user: SessionUser | null;
@@ -479,6 +483,10 @@ export function EditorSidebar(props: EditorSidebarProps) {
           pinnedPaths={props.pinnedPaths}
           onRenameFolder={props.onRenameFolder}
           onDeleteFolder={props.onDeleteFolder}
+          {...(props.openFolders ? { openFolders: props.openFolders } : {})}
+          {...(props.onOpenFoldersChange
+            ? { onOpenFoldersChange: props.onOpenFoldersChange }
+            : {})}
           filter={filter}
         />
       </div>

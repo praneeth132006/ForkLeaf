@@ -21,6 +21,15 @@ export interface FileTreeProps {
   onTogglePin?: (path: string) => void;
   /** Paths currently pinned, so the menu can say which way it will go. */
   pinnedPaths?: readonly string[];
+  /**
+   * Folders to open on arrival, in the order the reader opened them.
+   *
+   * Undefined means nothing has been remembered for this workspace, which is a
+   * first visit rather than a deliberately empty sidebar.
+   */
+  openFolders?: readonly string[];
+  /** Called whenever that set changes, so it can be kept for the next visit. */
+  onOpenFoldersChange?: (paths: string[]) => void;
   filter: string;
 }
 
@@ -51,13 +60,35 @@ export function FileTree({
   onMoveNote,
   onTogglePin,
   pinnedPaths,
+  openFolders,
+  onOpenFoldersChange,
   filter,
 }: FileTreeProps) {
-  // Which folders are open, by full path — so opening `a/b` says nothing about
-  // `a/c`, and the state survives the tree being rebuilt under it by a refresh
-  // from GitHub. Holding it here rather than in each row is also what lets a
-  // folder stay open across a re-render that replaces every node object.
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(rootFolders(nodes)));
+  /**
+   * Which folders are open, by full path.
+   *
+   * By path, so opening `a/b` says nothing about `a/c`, and so the state
+   * survives the tree being rebuilt underneath it by a refresh from GitHub.
+   * Holding it here rather than in each row is also what lets a folder stay
+   * open across a re-render that replaces every node object.
+   *
+   * Seeded from what the reader had open last time, in the order they opened
+   * it — a sidebar that forgets is one you have to re-navigate on every visit.
+   * Only a workspace with no record at all falls back to opening the top level,
+   * because that is a first visit rather than somebody who closed everything.
+   */
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set(openFolders ?? rootFolders(nodes)),
+  );
+
+  /** Reports the open set outwards, so it can be remembered for next time. */
+  const remember = useCallback(
+    (next: Set<string>) => {
+      onOpenFoldersChange?.([...next]);
+      return next;
+    },
+    [onOpenFoldersChange],
+  );
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const { menu, open: openMenu, close: closeMenu } = useContextMenu<TreeNode>();
 
@@ -66,19 +97,27 @@ export function FileTree({
     [nodes, filter],
   );
 
-  const toggle = useCallback((path: string) => {
-    setExpanded((current) => {
-      const next = new Set(current);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
-  }, []);
+  const toggle = useCallback(
+    (path: string) => {
+      setExpanded((current) => {
+        const next = new Set(current);
+        // Deleted and re-added rather than left in place, so the record keeps
+        // the order folders were opened in.
+        next.delete(path);
+        if (!current.has(path)) next.add(path);
+        return remember(next);
+      });
+    },
+    [remember],
+  );
 
   /** Opening a folder before creating something in it, so the result is visible. */
-  const reveal = useCallback((path: string) => {
-    setExpanded((current) => new Set(current).add(path));
-  }, []);
+  const reveal = useCallback(
+    (path: string) => {
+      setExpanded((current) => remember(new Set(current).add(path)));
+    },
+    [remember],
+  );
 
   const menuItems = useMemo((): MenuItem[] => {
     if (!menu) return [];

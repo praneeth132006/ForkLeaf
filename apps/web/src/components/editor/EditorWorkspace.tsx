@@ -904,6 +904,8 @@ export function EditorWorkspace() {
             onDeleteFolder={handleDeleteFolder}
             onMoveNote={handleMoveNote}
             pinnedPaths={notebook.pinnedPaths}
+            {...(notebook.expandedFolders ? { openFolders: notebook.expandedFolders } : {})}
+            onOpenFoldersChange={notebook.setExpandedFolders}
             onTogglePin={notebook.togglePinned}
             onMovePin={notebook.movePinned}
             user={user}

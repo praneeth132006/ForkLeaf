@@ -37,8 +37,16 @@ const base = EditorView.theme({
   },
   ".cm-activeLine": { backgroundColor: "var(--fl-elevated)" },
   ".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--fl-text)" },
+  // A selection you cannot see is not a selection. CodeMirror paints its own
+  // rather than using the browser's, so it needs the same colour the rest of
+  // the app uses — and it needs it on the unfocused case too, which is what
+  // you are looking at every time you reach for a menu mid-selection.
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection": {
-    backgroundColor: "color-mix(in srgb, var(--fl-accent) 25%, transparent)",
+    backgroundColor: "var(--fl-selection)",
+  },
+  "&:not(.cm-focused) .cm-selectionBackground": {
+    backgroundColor: "var(--fl-selection)",
+    opacity: "0.7",
   },
   ".cm-cursor, .cm-dropCursor": {
     borderLeftColor: "var(--fl-accent)",
