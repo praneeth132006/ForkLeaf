@@ -9,6 +9,7 @@ import type {
 } from "@forkleaf/types";
 import type { LocalDatabase, RemoteGateway } from "./ports";
 import { coalesce, describeChanges, changeId } from "./queue";
+import { parseDocument } from "@forkleaf/markdown-engine";
 
 export interface SyncEngineOptions {
   db: LocalDatabase;
@@ -667,6 +668,26 @@ export class SyncEngine {
         continue;
       }
 
+      /**
+       * The file moved on, but not in any way worth asking about.
+       *
+       * Every save stamps `updated` and `editedBy`, so two devices that opened
+       * the same note produce files that differ while saying exactly the same
+       * thing. Putting a "which version do you want to keep?" dialog in front
+       * of somebody over a timestamp teaches them to dismiss that dialog
+       * without reading it — which is the one habit it cannot afford, because
+       * the next one will be about their actual writing.
+       *
+       * So a difference confined to the stamps resolves itself: the newer
+       * stamp wins, based on what is on GitHub now, and nobody is asked.
+       */
+      if (onlyProvenanceDiffers(change.content ?? "", remote.content)) {
+        change.baseSha = remote.sha;
+        await this.db.putQueueItem(change);
+        safe.push(change);
+        continue;
+      }
+
       this.recordConflict({
         workspaceId,
         path: change.path,
@@ -918,4 +939,31 @@ export function plainly(err: unknown): string {
   }
 
   return "Could not push to GitHub just now. Your work is saved on this device and will be retried.";
+}
+
+/**
+ * Fields this app maintains rather than the person writing.
+ *
+ * A difference in these is a difference in bookkeeping, not in content.
+ */
+const PROVENANCE = new Set(["updated", "editedBy", "generator"]);
+
+/** True when two versions of a note say the same thing, stamps aside. */
+export function onlyProvenanceDiffers(local: string, remote: string): boolean {
+  if (local === remote) return true;
+
+  const ours = parseDocument(local);
+  const theirs = parseDocument(remote);
+
+  if (ours.content !== theirs.content) return false;
+
+  const significant = (frontmatter: Record<string, unknown>) =>
+    Object.entries(frontmatter)
+      .filter(([key, value]) => !PROVENANCE.has(key) && value !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b));
+
+  const mine = significant(ours.frontmatter);
+  const yours = significant(theirs.frontmatter);
+
+  return mine.length === yours.length && JSON.stringify(mine) === JSON.stringify(yours);
 }
