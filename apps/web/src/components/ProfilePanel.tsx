@@ -220,7 +220,7 @@ export function ProfilePanel({ user, githubAvailable }: ProfilePanelProps) {
               backed up, and they will not follow you to another machine.
             </p>
             {githubAvailable && (
-              <a href="/api/auth/github" className="fl-btn fl-btn-primary mt-4">
+              <a href="/sign-in" className="fl-btn fl-btn-primary mt-4">
                 Continue with GitHub
               </a>
             )}

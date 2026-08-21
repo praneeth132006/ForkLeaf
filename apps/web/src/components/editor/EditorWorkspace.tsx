@@ -320,11 +320,17 @@ export function EditorWorkspace() {
 
   const signIn = useCallback(() => {
     track("github_sign_in_started");
-    // Deliberately a full document navigation: this is an API route that 302s
-    // out to github.com, which the client router cannot follow.
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    window.location.assign("/api/auth/github");
-  }, []);
+    /**
+     * The permission choice comes first.
+     *
+     * Going straight to the OAuth route sends somebody to a GitHub screen
+     * saying "full control of private repositories" with nothing to explain
+     * why a notes app is asking, and no narrower option — which is a fair
+     * reason to close the tab. `/sign-in` says what each level is for and
+     * offers the public-repositories-only grant as an equal choice.
+     */
+    router.push("/sign-in");
+  }, [router]);
 
   // ── Actions ─────────────────────────────────────────────────────────────
 

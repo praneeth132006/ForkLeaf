@@ -39,7 +39,7 @@ export function CallToAction({ githubAvailable }: { githubAvailable: boolean }) 
 
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             {githubAvailable && (
-              <a href="/api/auth/github" className="fl-btn fl-btn-primary !rounded-full !px-6">
+              <a href="/sign-in" className="fl-btn fl-btn-primary !rounded-full !px-6">
                 <GitHubGlyph />
                 Continue with GitHub
               </a>

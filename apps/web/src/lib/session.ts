@@ -22,6 +22,16 @@ const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 export interface SessionPayload {
   token: string;
   user: SessionUser;
+  /**
+   * What GitHub actually granted, as it reported it back.
+   *
+   * Kept because it is the only way to tell a "not found" that means *not
+   * found* from one that means "you did not give this app access to private
+   * repositories". Those two need completely different things said to the
+   * person reading them, and guessing between them is how an app ends up
+   * telling somebody their repository does not exist.
+   */
+  scopes?: string[];
 }
 
 let cachedKey: Uint8Array | null = null;

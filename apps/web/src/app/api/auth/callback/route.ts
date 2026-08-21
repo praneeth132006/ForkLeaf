@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const token = await exchangeCodeForToken(
+    const { token, scopes } = await exchangeCodeForToken(
       code,
       appUrl(request, "/api/auth/callback").toString(),
     );
@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
 
     await setSessionCookie({
       token,
+      scopes,
       user: {
         id: user.id,
         login: user.login,
@@ -68,7 +69,10 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function exchangeCodeForToken(code: string, redirectUri: string): Promise<string> {
+async function exchangeCodeForToken(
+  code: string,
+  redirectUri: string,
+): Promise<{ token: string; scopes: string[] }> {
   const response = await fetch("https://github.com/login/oauth/access_token", {
     method: "POST",
     headers: {
@@ -85,6 +89,7 @@ async function exchangeCodeForToken(code: string, redirectUri: string): Promise<
 
   const data = (await response.json()) as {
     access_token?: string;
+    scope?: string;
     error?: string;
     error_description?: string;
   };
@@ -93,7 +98,14 @@ async function exchangeCodeForToken(code: string, redirectUri: string): Promise<
     throw new Error(data.error_description ?? data.error ?? "No access token returned");
   }
 
-  return data.access_token;
+  // What was granted, which is not always what was asked for: somebody can
+  // approve a narrower set on GitHub's own screen.
+  const scopes = (data.scope ?? "")
+    .split(",")
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+
+  return { token: data.access_token, scopes };
 }
 
 function withError(url: URL, code: string): URL {

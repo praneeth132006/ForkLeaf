@@ -16,6 +16,14 @@ export async function GET() {
       mode: session ? "github" : "local",
       user: session?.user ?? null,
       githubAvailable: githubOAuthConfigured(),
+      /**
+       * What GitHub granted — never the token itself.
+       *
+       * The UI needs this to tell a genuine "no such repository" from "you did
+       * not give this app access to private ones", which are the same 404 from
+       * GitHub and need entirely different things said about them.
+       */
+      scopes: session?.scopes ?? [],
     },
     { headers: { "Cache-Control": "no-store" } },
   );

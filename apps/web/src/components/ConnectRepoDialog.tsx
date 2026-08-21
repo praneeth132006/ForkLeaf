@@ -83,7 +83,7 @@ function ErrorNotice({ error }: { error: unknown }) {
           app&rsquo;s access is withdrawn.
         </p>
         <a
-          href="/api/auth/github"
+          href="/sign-in"
           className="inline-block rounded-md bg-[var(--fl-accent)] px-3 py-1.5 text-sm font-semibold text-[var(--fl-accent-contrast)] hover:opacity-90"
         >
           Sign in with GitHub again

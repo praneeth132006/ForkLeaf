@@ -167,6 +167,8 @@ export interface SessionResponse {
   mode: "github" | "local";
   user: { id: number; login: string; name: string | null; avatarUrl: string } | null;
   githubAvailable: boolean;
+  /** The OAuth scopes GitHub granted this session. Never includes the token. */
+  scopes?: string[];
 }
 
 /**

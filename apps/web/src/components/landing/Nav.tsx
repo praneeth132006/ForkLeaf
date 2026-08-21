@@ -73,7 +73,7 @@ export function Nav({
             </Link>
           ) : (
             githubAvailable && (
-              <a href="/api/auth/github" className="fl-btn fl-btn-primary !px-4 !py-2 !text-sm">
+              <a href="/sign-in" className="fl-btn fl-btn-primary !px-4 !py-2 !text-sm">
                 <GitHubGlyph />
                 Sign in
               </a>

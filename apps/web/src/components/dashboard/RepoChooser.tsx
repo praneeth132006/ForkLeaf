@@ -107,7 +107,7 @@ function ErrorNotice({ error }: { error: unknown }) {
           Your GitHub sign-in is no longer valid — the token was revoked, or the app&rsquo;s access
           was withdrawn.
         </p>
-        <a href="/api/auth/github" className="fl-btn fl-btn-primary !py-2 !text-sm">
+        <a href="/sign-in" className="fl-btn fl-btn-primary !py-2 !text-sm">
           Sign in with GitHub again
         </a>
       </div>
