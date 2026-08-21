@@ -34,3 +34,37 @@ describe("syntax highlighting", () => {
     expect(html).toContain("hljs");
   });
 });
+
+/**
+ * Highlighting in a colour.
+ *
+ * `==text==` carries no colour, so a second one has to be written some other
+ * way. `<mark class="fl-hl-green">` is the form that degrades honestly: GitHub
+ * renders a mark as a highlight, and anything showing raw HTML shows a tag
+ * whose meaning is obvious.
+ */
+describe("coloured highlights", () => {
+  it("renders the colour it was given", () => {
+    const html = markdownToHtml('<mark class="fl-hl-green">done</mark>');
+
+    expect(html).toContain('<mark class="fl-hl-green">done</mark>');
+  });
+
+  it("still renders the plain form as a plain highlight", () => {
+    expect(markdownToHtml("==done==")).toContain("<mark>done</mark>");
+  });
+
+  it("refuses a class that is not one of ours", () => {
+    const html = markdownToHtml('<mark class="fl-hl-chartreuse">x</mark>');
+
+    expect(html).not.toContain("fl-hl-chartreuse");
+    // The tag is dropped as the unparsed HTML it is; the words survive.
+    expect(html).toContain("x");
+  });
+
+  it("does not open the door to other HTML", () => {
+    const html = markdownToHtml('<mark class="fl-hl-green" onclick="alert(1)">x</mark>');
+
+    expect(html).not.toContain("onclick");
+  });
+});

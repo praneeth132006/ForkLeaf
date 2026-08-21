@@ -6,7 +6,6 @@ import type { EditorView } from "@tiptap/pm/view";
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import Highlight from "@tiptap/extension-highlight";
 import Typography from "@tiptap/extension-typography";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
@@ -64,6 +63,11 @@ export function markdownOf(editor: Editor): string {
 import { CodeBlock } from "./extensions/CodeBlock";
 import { ResolvedImage } from "./extensions/ResolvedImage";
 import { YoutubeEmbed } from "./extensions/YoutubeEmbed";
+import {
+  ColouredHighlight,
+  HIGHLIGHT_COLOURS,
+  DEFAULT_HIGHLIGHT,
+} from "./extensions/ColouredHighlight";
 import { TextSelection } from "@tiptap/pm/state";
 import { imagesFrom, type ImageBridge } from "./images";
 import { MermaidBlock } from "./extensions/MermaidBlock";
@@ -192,7 +196,7 @@ export function WysiwygEditor({
         link: false,
       }),
       Placeholder.configure({ placeholder }),
-      Highlight,
+      ColouredHighlight.configure({ multicolor: true }),
       Typography,
       TaskList,
       TaskItem.configure({ nested: true }),
@@ -466,7 +470,7 @@ export function WysiwygEditor({
           glyph="<>"
           className="font-mono text-xs"
         />
-        <FormatButton editor={editor} mark="highlight" label="Highlight" glyph="H" />
+        <HighlightPicker editor={editor} />
       </BubbleMenu>
 
       <EditorContent editor={editor} />
@@ -548,6 +552,56 @@ function FormatButton({
     >
       {glyph}
     </button>
+  );
+}
+
+// ─── Highlight colours ──────────────────────────────────────────────────────
+
+/**
+ * Highlight, in a choice of colours.
+ *
+ * The button itself does what it always did — toggle a plain highlight, the one
+ * that stays `==text==` in the file. The swatches beside it are the rest of the
+ * palette, and they are shown rather than hidden behind a menu: five colours
+ * take less room than the dropdown that would hold them, and picking a colour
+ * should not be two clicks deep.
+ */
+function HighlightPicker({ editor }: { editor: Editor }) {
+  const active = editor.isActive("highlight");
+
+  return (
+    <span className="flex items-center gap-0.5">
+      <FormatButton editor={editor} mark="highlight" label="Highlight" glyph="H" />
+
+      <span className="mx-0.5 h-4 w-px bg-[var(--fl-inverse-text)]/20" aria-hidden="true" />
+
+      {HIGHLIGHT_COLOURS.filter((colour) => colour.name !== DEFAULT_HIGHLIGHT).map((colour) => {
+        const on = active && editor.isActive("highlight", { color: colour.name });
+
+        return (
+          <button
+            key={colour.name}
+            type="button"
+            title={`${colour.label} highlight`}
+            aria-label={`${colour.label} highlight`}
+            aria-pressed={on}
+            onClick={() => {
+              const chain = editor.chain().focus();
+              // Clicking the colour already on removes the highlight, which is
+              // what a pressed button should do everywhere.
+              if (on) chain.unsetHighlight().run();
+              else chain.setHighlight({ color: colour.name }).run();
+            }}
+            className={`h-5 w-5 rounded-full border transition ${
+              on
+                ? "border-[var(--fl-inverse-text)] ring-2 ring-[var(--fl-inverse-text)]/40"
+                : "border-[var(--fl-inverse-text)]/25 hover:border-[var(--fl-inverse-text)]/60"
+            }`}
+            style={{ background: `var(--fl-hl-${colour.name})` }}
+          />
+        );
+      })}
+    </span>
   );
 }
 

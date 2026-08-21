@@ -59,6 +59,12 @@ const schema: SanitizeSchema = {
       ["type", "checkbox"],
     ],
     div: [...(defaultSchema.attributes?.div ?? []), "className", "dataMermaid"],
+    // Highlight colours, by name from a closed set — never an arbitrary class,
+    // which would let note content borrow any style in the app.
+    mark: [
+      ...(defaultSchema.attributes?.mark ?? []),
+      ["className", /^fl-hl-(yellow|green|blue|pink|purple|orange)$/],
+    ],
     // Wikilinks render as ordinary anchors carrying the target they were
     // written with, so a click can open the note in a tab rather than
     // navigating. The class list is constrained to our own three names —
@@ -162,6 +168,57 @@ function remarkHighlight() {
         return index + parts.length;
       },
     );
+  };
+}
+
+/** Colour names a highlight may carry. A closed set: these reach the DOM. */
+const HIGHLIGHT_COLOURS = /^(yellow|green|blue|pink|purple|orange)$/;
+
+/**
+ * `<mark class="fl-hl-green">text</mark>` → a highlight in that colour.
+ *
+ * `==text==` carries no colour, so a second one has to be written some other
+ * way or not exist at all. This is the way that degrades honestly everywhere
+ * else: GitHub renders a `<mark>` as a highlight (dropping the class, so the
+ * colour becomes its default), and an editor showing raw HTML shows a tag whose
+ * meaning is obvious. The words survive in every case.
+ *
+ * Recognised as a *pattern*, with HTML parsing left off. Note content can come
+ * from any repository the reader can see, so it is untrusted, and a renderer
+ * that executes the HTML in its files is a stored-XSS hole in every note. The
+ * opening tag is matched exactly — colour name from a closed set, nothing else
+ * permitted — and anything that does not match is left to be dropped as the
+ * unparsed HTML it is.
+ */
+function remarkColouredHighlight() {
+  const OPEN = /^<mark class="fl-hl-([a-z]+)">$/;
+
+  return (tree: MdastRoot) => {
+    visit(tree, (node: unknown) => {
+      const parent = node as Parent;
+      if (!Array.isArray(parent.children)) return;
+
+      for (let index = 0; index < parent.children.length; index += 1) {
+        const child = parent.children[index];
+        if (!child || child.type !== "html") continue;
+
+        const colour = OPEN.exec(child.value.trim())?.[1];
+        if (!colour || !HIGHLIGHT_COLOURS.test(colour)) continue;
+
+        const closing = parent.children.findIndex(
+          (candidate, at) =>
+            at > index && candidate.type === "html" && candidate.value.trim() === "</mark>",
+        );
+        if (closing === -1) continue;
+
+        const inner = parent.children.slice(index + 1, closing) as PhrasingContent[];
+        parent.children.splice(index, closing - index + 1, {
+          type: "emphasis",
+          children: inner,
+          data: { hName: "mark", hProperties: { className: [`fl-hl-${colour}`] } },
+        } as PhrasingContent);
+      }
+    });
   };
 }
 
@@ -281,6 +338,8 @@ const buildHtmlPipeline = (options: RenderOptions) =>
      */
     .use(remarkBreaks)
     .use(remarkHighlight)
+    // Before remark-rehype, which is where unparsed HTML nodes are dropped.
+    .use(remarkColouredHighlight)
     // Before remark-rehype, because it produces mdast link nodes.
     .use(remarkWikilink, { resolve: options.resolveWikilink })
     // allowDangerousHtml is deliberately off — inline HTML in notes is escaped.

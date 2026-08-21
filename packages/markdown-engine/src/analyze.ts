@@ -84,10 +84,19 @@ export interface DocumentStats {
 
 const WORD_RE = /[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu;
 const TASK_RE = /^[ \t]*[-*+] \[( |x|X)\]/gm;
+/**
+ * The markup a coloured highlight is written as.
+ *
+ * It is markup, not writing: counting `mark class fl hl blue` as five words
+ * made the word count jump every time somebody highlighted a sentence, which
+ * is the opposite of what a word count is for.
+ */
+const HIGHLIGHT_TAG_RE = /<\/?mark(?: class="fl-hl-[a-z]+")?>/g;
 
 /** Cheap document statistics for the properties panel. */
 export function documentStats(markdown: string): DocumentStats {
-  const words = markdown.match(WORD_RE)?.length ?? 0;
+  const prose = markdown.replace(HIGHLIGHT_TAG_RE, "");
+  const words = prose.match(WORD_RE)?.length ?? 0;
 
   let total = 0;
   let done = 0;
@@ -129,8 +138,8 @@ export function documentStats(markdown: string): DocumentStats {
 
   return {
     words,
-    characters: markdown.length,
-    charactersNoSpaces: markdown.replace(/\s/g, "").length,
+    characters: prose.length,
+    charactersNoSpaces: prose.replace(/\s/g, "").length,
     headings,
     codeBlocks,
     diagrams,

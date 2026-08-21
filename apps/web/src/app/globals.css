@@ -661,6 +661,55 @@ select:focus-visible {
   font-weight: 600;
 }
 
+/* ── Highlight colours ──────────────────────────────────────────────────────
+   By name rather than by value in the file, so each theme picks its own shade:
+   a highlight that reads on white is unreadable on black, and the note should
+   not carry a colour that stops working when the lights go out. */
+:root {
+  --fl-hl-yellow: rgba(250, 204, 21, 0.38);
+  --fl-hl-green: rgba(74, 222, 128, 0.34);
+  --fl-hl-blue: rgba(96, 165, 250, 0.34);
+  --fl-hl-pink: rgba(244, 114, 182, 0.32);
+  --fl-hl-purple: rgba(167, 139, 250, 0.34);
+  --fl-hl-orange: rgba(251, 146, 60, 0.34);
+}
+
+[data-theme="dark"] {
+  --fl-hl-yellow: rgba(250, 204, 21, 0.3);
+  --fl-hl-green: rgba(74, 222, 128, 0.28);
+  --fl-hl-blue: rgba(96, 165, 250, 0.3);
+  --fl-hl-pink: rgba(244, 114, 182, 0.28);
+  --fl-hl-purple: rgba(167, 139, 250, 0.3);
+  --fl-hl-orange: rgba(251, 146, 60, 0.28);
+}
+
+mark,
+.fl-prose mark {
+  background: var(--fl-hl-yellow);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0.05em 0.15em;
+}
+
+mark.fl-hl-yellow {
+  background: var(--fl-hl-yellow);
+}
+mark.fl-hl-green {
+  background: var(--fl-hl-green);
+}
+mark.fl-hl-blue {
+  background: var(--fl-hl-blue);
+}
+mark.fl-hl-pink {
+  background: var(--fl-hl-pink);
+}
+mark.fl-hl-purple {
+  background: var(--fl-hl-purple);
+}
+mark.fl-hl-orange {
+  background: var(--fl-hl-orange);
+}
+
 .fl-prose img {
   max-width: 100%;
   height: auto;

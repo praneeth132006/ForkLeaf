@@ -484,9 +484,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
           onRenameFolder={props.onRenameFolder}
           onDeleteFolder={props.onDeleteFolder}
           {...(props.openFolders ? { openFolders: props.openFolders } : {})}
-          {...(props.onOpenFoldersChange
-            ? { onOpenFoldersChange: props.onOpenFoldersChange }
-            : {})}
+          {...(props.onOpenFoldersChange ? { onOpenFoldersChange: props.onOpenFoldersChange } : {})}
           filter={filter}
         />
       </div>
