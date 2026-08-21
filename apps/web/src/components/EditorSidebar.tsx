@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { TreeNode, Workspace, SessionUser } from "@forkleaf/types";
 import { FileTree } from "./FileTree";
 import { ForkLeafMark } from "./Brand";
+import { useDismissable } from "@/hooks/useDismissable";
 
 export interface EditorSidebarProps {
   collapsed: boolean;
@@ -64,6 +65,21 @@ export function EditorSidebar(props: EditorSidebarProps) {
   const [showWorkspaces, setShowWorkspaces] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [showFolders, setShowFolders] = useState(false);
+
+  /**
+   * Each menu closes on Escape and on a click anywhere else.
+   *
+   * None of them did. A dropdown that only shuts when you click the exact
+   * button that opened it is one people leave open — they click elsewhere,
+   * nothing happens, and the panel sits over whatever they were reaching for.
+   */
+  const workspacesRef = useRef<HTMLDivElement | null>(null);
+  const foldersRef = useRef<HTMLDivElement | null>(null);
+  const accountRef = useRef<HTMLDivElement | null>(null);
+
+  useDismissable(workspacesRef, showWorkspaces, () => setShowWorkspaces(false));
+  useDismissable(foldersRef, showFolders, () => setShowFolders(false));
+  useDismissable(accountRef, showAccount, () => setShowAccount(false));
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Every folder at every depth, so "new note" can mean "new note somewhere in
@@ -156,7 +172,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
   return (
     <nav className="flex w-64 shrink-0 flex-col">
       {/* ── Workspace switcher ────────────────────────────────────────── */}
-      <div className="relative border-b border-[var(--fl-border)] p-2">
+      <div className="relative border-b border-[var(--fl-border)] p-2" ref={workspacesRef}>
         <div className="flex items-center gap-1">
           {/* The leaf reads as a logo, so it behaves like one and goes home.
               It used to open the workspace menu, which left the editor with no
@@ -258,7 +274,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
       {/* ── New note ──────────────────────────────────────────────────── */}
       {/* Creating a note is the one thing someone opens this app to do, and it
           used to be a 34px square sharing a row with the search field. */}
-      <div className="relative flex items-stretch gap-1.5 px-2 pt-2">
+      <div className="relative flex items-stretch gap-1.5 px-2 pt-2" ref={foldersRef}>
         <button
           type="button"
           onClick={() => props.onCreateNote(props.currentFolder)}
@@ -511,26 +527,38 @@ export function EditorSidebar(props: EditorSidebarProps) {
         </button>
 
         {props.user ? (
-          <div className="relative">
-            <div className="flex items-center gap-2.5 rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2.5 py-2">
-              {/* eslint-disable-next-line @next/next/no-img-element -- avatars are
-                  remote GitHub URLs; next/image would need a domain allowlist for
-                  every possible avatar host. */}
-              <img
-                src={props.user.avatarUrl}
-                alt=""
-                width={30}
-                height={30}
-                className="h-[30px] w-[30px] shrink-0 rounded-full"
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12.5px] font-medium text-[var(--fl-text)]">
-                  {props.user.name ?? props.user.login}
+          <div className="relative" ref={accountRef}>
+            <div className="flex items-center gap-1 rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] pr-1.5">
+              {/* The card itself goes to the profile.
+
+                  It looked exactly like a button — an avatar, a name, a handle,
+                  in a bordered card at the bottom of the sidebar, which is where
+                  every application in the world puts the way into your account —
+                  and it did nothing at all when clicked. */}
+              <Link
+                href="/profile"
+                title="Your profile"
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-l-xl px-2.5 py-2 transition-colors hover:bg-[var(--fl-elevated)]"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- avatars are
+                    remote GitHub URLs; next/image would need a domain allowlist for
+                    every possible avatar host. */}
+                <img
+                  src={props.user.avatarUrl}
+                  alt=""
+                  width={30}
+                  height={30}
+                  className="h-[30px] w-[30px] shrink-0 rounded-full"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[12.5px] font-medium text-[var(--fl-text)]">
+                    {props.user.name ?? props.user.login}
+                  </span>
+                  <span className="block truncate text-[11px] text-[var(--fl-muted)]">
+                    @{props.user.login}
+                  </span>
                 </span>
-                <span className="block truncate text-[11px] text-[var(--fl-muted)]">
-                  @{props.user.login}
-                </span>
-              </span>
+              </Link>
               <button
                 type="button"
                 onClick={() => setShowAccount((value) => !value)}

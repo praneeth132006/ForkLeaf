@@ -1144,7 +1144,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       patch({ expandedFolders: paths });
       if (workspace) void dbRef.current?.putMeta(expandedKey(workspace.id), paths);
     },
-    [state.activeWorkspace],
+    [state.activeWorkspace, patch],
   );
 
   const displayTree = useMemo(

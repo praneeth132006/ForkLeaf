@@ -12,6 +12,7 @@ import { useIndexView, type IndexView } from "@/hooks/useIndexView";
 import { StorageBlocked } from "@/components/StorageBlocked";
 import { BootScreen } from "@/components/BootScreen";
 import { ForkLeafLogo } from "@/components/Brand";
+import { Footer } from "@/components/landing/Footer";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
 import { RepoChooser } from "./RepoChooser";
 import { FolderNav } from "./FolderNav";
@@ -209,7 +210,7 @@ export function DashboardPanel({
   const firstRun = library.needsRepoChoice && !skippedChoice;
 
   return (
-    <div className="min-h-screen bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
+    <div className="flex min-h-screen flex-col bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
       <Header
         user={user}
         theme={theme}
@@ -218,7 +219,7 @@ export function DashboardPanel({
         githubAvailable={githubAvailable}
       />
 
-      <div className="mx-auto w-full max-w-6xl px-6 pb-20 pt-8">
+      <div className="mx-auto w-full max-w-6xl flex-1 px-6 pb-20 pt-8">
         {library.error && (
           <p
             role="alert"
@@ -527,6 +528,14 @@ export function DashboardPanel({
           )}
         </section>
       </div>
+
+      {/* The same footer every other page has.
+
+          The dashboard is where signing in lands, and it was the one page with
+          no way out to the documentation, the licence, the privacy page or the
+          source — the things somebody deciding whether to trust an app with
+          their notes goes looking for. */}
+      <Footer />
 
       {prompt && <PromptDialog request={prompt} onClose={() => setPrompt(null)} />}
     </div>
