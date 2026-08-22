@@ -27,13 +27,20 @@ export class ApiGatewayError extends Error {
   }
 }
 
-async function call<T>(url: string, init?: RequestInit): Promise<T> {
+async function call<T>(url: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
   let response: Response;
+  const { timeoutMs, ...rest } = init ?? {};
 
   try {
     response = await fetch(url, {
-      ...init,
+      ...rest,
       headers: { "Content-Type": "application/json", ...init?.headers },
+      // A `fetch` with no signal waits forever on a server that accepts the
+      // connection and then says nothing, which is not a hypothetical: a
+      // suspended laptop and a proxy that holds the socket both do it. Only
+      // the calls whose duration is bounded in principle opt in — a commit of
+      // fifty notes is allowed to take its time.
+      ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
     });
   } catch {
     // Genuine network failure — the sync engine treats this as "still offline"
@@ -162,9 +169,20 @@ export interface SessionResponse {
   githubAvailable: boolean;
 }
 
+/**
+ * Who the user is, according to the server.
+ *
+ * Bounded, because both the editor and the dashboard await this before they
+ * render anything at all: an unanswered request here is a loading screen with
+ * no way out. The callers already treat a failure as "local mode", which is
+ * the right answer when the server cannot be reached anyway.
+ */
 export function fetchSession(): Promise<SessionResponse> {
-  return call<SessionResponse>("/api/session");
+  return call<SessionResponse>("/api/session", { timeoutMs: SESSION_TIMEOUT_MS });
 }
+
+/** Generous — this is a guard against never, not a latency budget. */
+const SESSION_TIMEOUT_MS = 10_000;
 
 export function signOut(): Promise<{ ok: boolean }> {
   return call<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
