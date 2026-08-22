@@ -2,8 +2,10 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  blankDiagram,
   detectKind,
   graphToMermaid,
+  isDrawable,
   mermaidToGraph,
   renderDiagram,
   LIGHT_THEME,
@@ -16,6 +18,7 @@ import { useDocumentTheme } from "../useDocumentTheme";
 import { mermaidCompletions, mermaidLinter } from "../codemirror/mermaid-language";
 import { autocompletion } from "@codemirror/autocomplete";
 import { TemplateGallery } from "./TemplateGallery";
+import { DiagramTypePicker } from "./DiagramTypePicker";
 import { Cheatsheet } from "./Cheatsheet";
 import { VisualBuilder } from "./VisualBuilder";
 
@@ -64,12 +67,19 @@ export function DiagramStudio({
   const resolvedTheme = theme ?? documentTheme;
 
   const [view, setView] = useState<StudioView>(initialView);
-  // A new diagram opens on a blank canvas, not on a catalogue. Being handed a
-  // gallery of twelve diagram types before you have drawn anything is a
-  // decision you have not got the information to make yet; an empty canvas
-  // with a shape palette is somewhere to start. The gallery is still one click
-  // away under "Templates", for anyone who wants the shape handed to them.
+  // The gallery of worked examples, reached from the type picker or from
+  // "Change type" once there is a diagram.
   const [showTemplates, setShowTemplates] = useState(false);
+  /**
+   * True while the "what are you drawing?" step is on screen.
+   *
+   * An empty diagram starts here rather than on a canvas, because a canvas has
+   * to be a canvas *of something*: the palette, the arrow vocabulary and the
+   * syntax written underneath all differ per diagram type, and guessing
+   * "flowchart" meant anybody drawing a sequence or an ERD started by deleting
+   * the wrong thing.
+   */
+  const [choosingType, setChoosingType] = useState(code.trim() === "");
   const [showCheatsheet, setShowCheatsheet] = useState(false);
   // Either pane can be given the whole width — a diagram big enough to be worth
   // drawing carefully wants the room, and so does a long source file.
@@ -93,7 +103,7 @@ export function DiagramStudio({
   // blank until you had typed the word `flowchart` into the source yourself,
   // which is exactly the knowledge the canvas exists to not require.
   const graph = useMemo(() => mermaidToGraph(code.trim() === "" ? "flowchart TD" : code), [code]);
-  const canvasAvailable = graph !== null;
+  const canvasAvailable = graph !== null && isDrawable(kind ?? "flowchart");
   const effectiveView: StudioView = canvasAvailable ? view : "preview";
 
   // ── Live preview ────────────────────────────────────────────────────────
@@ -180,11 +190,32 @@ export function DiagramStudio({
         onPick={(template) => {
           onChange(template.code);
           setShowTemplates(false);
-          setView(
-            template.kind === "flowchart" || template.kind === "state" ? "canvas" : "preview",
-          );
+          setChoosingType(false);
+          setView(isDrawable(template.kind) ? "canvas" : "preview");
         }}
-        {...(code.trim() !== "" ? { onCancel: () => setShowTemplates(false) } : {})}
+        onCancel={() => {
+          setShowTemplates(false);
+          // With nothing drawn yet, "back" means back to the type question,
+          // not out of a step that has produced nothing.
+          if (code.trim() === "") setChoosingType(true);
+        }}
+      />
+    );
+  }
+
+  if (choosingType) {
+    return (
+      <DiagramTypePicker
+        onPick={(chosen) => {
+          onChange(blankDiagram(chosen));
+          setChoosingType(false);
+          setView(isDrawable(chosen) ? "canvas" : "preview");
+        }}
+        onBrowseTemplates={() => {
+          setChoosingType(false);
+          setShowTemplates(true);
+        }}
+        {...(code.trim() !== "" ? { onCancel: () => setChoosingType(false) } : {})}
       />
     );
   }
@@ -229,11 +260,11 @@ export function DiagramStudio({
         <div className="ml-auto flex items-center gap-1">
           <button
             type="button"
-            onClick={() => setShowTemplates(true)}
-            title="Start from a sequence chart, ERD, gantt, class diagram and more"
+            onClick={() => setChoosingType(true)}
+            title="Draw a sequence chart, ERD, class diagram, mindmap and more"
             className="rounded-lg px-2.5 py-1.5 text-[13px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
           >
-            {code.trim() === "" ? "Templates" : "Change type"}
+            Change type
           </button>
           {showSource && (
             <button
@@ -364,9 +395,10 @@ export function DiagramStudio({
 
             {!canvasAvailable && (
               <p className="shrink-0 border-t border-[var(--fl-border)] px-4 py-2 text-[12px] leading-relaxed text-[var(--fl-muted)]">
-                {kind ? `${kind} diagrams` : "This diagram type"} has no drag-and-drop canvas yet —
-                edit it as source on the left, with autocomplete and inline errors. Flowcharts and
-                state diagrams can be drawn directly.
+                {kind ? `${kind} diagrams` : "This diagram type"} are quicker to write than to drag,
+                so they are edited as source on the left, with autocomplete and inline errors.
+                Flowcharts, sequence, class, state, ER diagrams and mindmaps can be drawn directly
+                on a canvas.
               </p>
             )}
 

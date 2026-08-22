@@ -327,3 +327,150 @@ export function detectKind(code: string): DiagramKind | null {
   if (head.startsWith("quadrantchart")) return "quadrant";
   return null;
 }
+
+// ─── Starting from nothing ──────────────────────────────────────────────────
+
+/**
+ * What each diagram type is for, in the words somebody choosing would use.
+ *
+ * The template gallery answers "show me a diagram like the one I want"; this
+ * answers the question before it — "what am I drawing?" — which is the one you
+ * actually have when you press the diagram button on an empty note.
+ */
+export interface DiagramType {
+  kind: DiagramKind;
+  title: string;
+  /** What it is good for, not what it is called. */
+  description: string;
+  /** True when the type can be drawn on the canvas rather than only typed. */
+  drawable: boolean;
+}
+
+export const DIAGRAM_TYPES: DiagramType[] = [
+  {
+    kind: "flowchart",
+    title: "Flowchart",
+    description: "Steps, decisions and where they lead",
+    drawable: true,
+  },
+  {
+    kind: "sequence",
+    title: "Sequence",
+    description: "Messages between people or services, in order",
+    drawable: true,
+  },
+  {
+    kind: "class",
+    title: "Class diagram",
+    description: "Types, their fields, and how they relate",
+    drawable: true,
+  },
+  {
+    kind: "state",
+    title: "State machine",
+    description: "States and the events that move between them",
+    drawable: true,
+  },
+  {
+    kind: "er",
+    title: "Entity relationship",
+    description: "Tables, columns and their keys",
+    drawable: true,
+  },
+  {
+    kind: "mindmap",
+    title: "Mindmap",
+    description: "One idea, branching outwards",
+    drawable: true,
+  },
+  {
+    kind: "gantt",
+    title: "Gantt chart",
+    description: "Tasks along a calendar",
+    drawable: false,
+  },
+  {
+    kind: "timeline",
+    title: "Timeline",
+    description: "Events in the order they happened",
+    drawable: false,
+  },
+  {
+    kind: "journey",
+    title: "User journey",
+    description: "Steps through a task, scored by how they felt",
+    drawable: false,
+  },
+  {
+    kind: "pie",
+    title: "Pie chart",
+    description: "Parts of a whole",
+    drawable: false,
+  },
+  {
+    kind: "gitgraph",
+    title: "Git graph",
+    description: "Branches, commits and merges",
+    drawable: false,
+  },
+  {
+    kind: "quadrant",
+    title: "Quadrant chart",
+    description: "Compare items on two axes",
+    drawable: false,
+  },
+];
+
+/** The diagram types the drag-and-drop canvas can edit. */
+export const CANVAS_KINDS: DiagramKind[] = [
+  "flowchart",
+  "state",
+  "class",
+  "er",
+  "mindmap",
+  "sequence",
+];
+
+export function isDrawable(kind: DiagramKind | null): boolean {
+  return kind !== null && CANVAS_KINDS.includes(kind);
+}
+
+/**
+ * The least source that is a valid diagram of this kind — a blank canvas.
+ *
+ * Deliberately not a worked example. Being handed a finished flowchart about
+ * somebody else's login flow and told to edit it into your own is more work
+ * than starting empty, and it is why the gallery is a separate choice rather
+ * than the only one. The chart types that cannot be drawn get a little more,
+ * because their first two lines are configuration nobody remembers.
+ */
+export function blankDiagram(kind: DiagramKind): string {
+  switch (kind) {
+    case "flowchart":
+      return "flowchart TD";
+    case "state":
+      return "stateDiagram-v2\n    direction TB";
+    case "class":
+      return "classDiagram\n    direction TB";
+    case "er":
+      return "erDiagram";
+    case "mindmap":
+      return "mindmap";
+    case "sequence":
+      return "sequenceDiagram\n    autonumber";
+    case "gantt":
+      return "gantt\n    title Untitled plan\n    dateFormat YYYY-MM-DD\n    section Phase one\n";
+    case "timeline":
+      return "timeline\n    title Untitled timeline\n";
+    case "journey":
+      return "journey\n    title Untitled journey\n    section Getting started\n";
+    case "pie":
+      return "pie showData\n    title Untitled chart\n";
+    case "gitgraph":
+      return "gitGraph\n    commit\n";
+    case "quadrant":
+      return "quadrantChart\n    title Untitled comparison\n    x-axis Low --> High\n    y-axis Low --> High\n";
+    default:
+      return "flowchart TD";
+  }
+}

@@ -8,9 +8,14 @@ import {
   removeEdge,
   removeNode,
   updateNode,
+  updateEdge,
+  joinMembers,
   SHAPE_LABELS,
   SHAPES_FOR_KIND,
   EDGE_LABELS,
+  EDGE_STYLES_FOR_KIND,
+  DEFAULT_EDGE_STYLE,
+  splitMembers,
   type EdgeStyle,
   type Graph,
   type GraphNode,
@@ -32,8 +37,24 @@ const FIT_PADDING = 80;
 
 /** The shape a plain new node takes in each dialect. */
 function defaultShapeFor(kind: Graph["kind"]): NodeShape {
-  return kind === "state" ? "state" : "rect";
+  switch (kind) {
+    case "state":
+      return "state";
+    case "class":
+      return "class";
+    case "er":
+      return "entity";
+    case "mindmap":
+      return "mind-round";
+    default:
+      return "rect";
+  }
 }
+
+/** Height of one member line inside a class or entity box. */
+const MEMBER_HEIGHT = 17;
+/** Height of the name bar above the members. */
+const MEMBER_HEADER = 30;
 
 /**
  * Node footprints.
@@ -42,7 +63,7 @@ function defaultShapeFor(kind: Graph["kind"]): NodeShape {
  * boxes with words in them; drawing them at the size of a process step makes a
  * state chart read like a flowchart with four blank boxes in it.
  */
-function sizeOf(node: { shape: NodeShape }): { width: number; height: number } {
+function sizeOf(node: { shape: NodeShape; label?: string }): { width: number; height: number } {
   switch (node.shape) {
     case "start":
     case "end":
@@ -51,9 +72,35 @@ function sizeOf(node: { shape: NodeShape }): { width: number; height: number } {
       return { width: 64, height: 64 };
     case "fork":
       return { width: 130, height: 14 };
+    case "mind-circle":
+    case "mind-bang":
+      return { width: 96, height: 96 };
+    case "mind-round":
+    case "mind-square":
+    case "mind-cloud":
+    case "mind-hexagon":
+      return { width: 132, height: 48 };
+    case "class":
+    case "entity": {
+      // A class or entity box is as tall as what is in it. Drawing every one at
+      // a fixed height meant a class with six fields either overflowed its box
+      // or had its fields hidden, and hiding them removes the only reason the
+      // diagram was drawn.
+      const { name, members } = splitMembers(node.label ?? "");
+      const widest = Math.max(name.length, ...members.map((line) => line.length), 10);
+      return {
+        width: Math.min(300, Math.max(NODE_WIDTH, widest * 7.4 + 28)),
+        height: MEMBER_HEADER + Math.max(members.length, 0) * MEMBER_HEIGHT + 8,
+      };
+    }
     default:
       return { width: NODE_WIDTH, height: NODE_HEIGHT };
   }
+}
+
+/** True for the box shapes whose label is a name followed by a list. */
+function hasMembers(shape: NodeShape): boolean {
+  return shape === "class" || shape === "entity";
 }
 
 /**
@@ -240,7 +287,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         const target = nodeAt(graph, world);
 
         if (target && target.id !== drag.fromId) {
-          onChange(addEdge(graph, drag.fromId, target.id));
+          onChange(addEdge(graph, drag.fromId, target.id, DEFAULT_EDGE_STYLE[graph.kind]));
         } else if (!target) {
           // Dropping an arrow on empty space creates the node it was reaching
           // for. Otherwise every new step is add-then-drag-then-connect, and
@@ -256,7 +303,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             y: snap(world.y - size.height / 2),
           });
 
-          onChange(addEdge(placed, drag.fromId, id));
+          onChange(addEdge(placed, drag.fromId, id, DEFAULT_EDGE_STYLE[graph.kind]));
           setSelected(id);
           setEditingLabel(id);
         }
@@ -421,7 +468,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
       y: snap(source.y + (horizontal ? 0 : size.height + 80)),
     });
 
-    onChange(addEdge(placed, source.id, id));
+    onChange(addEdge(placed, source.id, id, DEFAULT_EDGE_STYLE[graph.kind]));
     setSelected(id);
     setEditingLabel(id);
   }, [graph, onChange, selected]);
@@ -512,23 +559,28 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         ))}
 
         <div className="ml-auto flex items-center gap-2">
-          <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--fl-muted)]">
-            Layout
-            <select
-              value={graph.direction}
-              onChange={(event) =>
-                onChange({ ...graph, direction: event.target.value as Graph["direction"] })
-              }
-              className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-[12.5px] text-[var(--fl-text)]"
-            >
-              <option value="TD">Top to bottom</option>
-              <option value="LR">Left to right</option>
-              {/* Mermaid's state renderer only lays out downwards or
+          {/* Mermaid lays out ER diagrams and mindmaps itself and ignores a
+              direction, so offering one here would be a control that does
+              nothing. */}
+          {(graph.kind === "flowchart" || graph.kind === "state" || graph.kind === "class") && (
+            <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--fl-muted)]">
+              Layout
+              <select
+                value={graph.direction}
+                onChange={(event) =>
+                  onChange({ ...graph, direction: event.target.value as Graph["direction"] })
+                }
+                className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-[12.5px] text-[var(--fl-text)]"
+              >
+                <option value="TD">Top to bottom</option>
+                <option value="LR">Left to right</option>
+                {/* Mermaid's state renderer only lays out downwards or
                   rightwards; offering the other two would silently do nothing. */}
-              {graph.kind === "flowchart" && <option value="BT">Bottom to top</option>}
-              {graph.kind === "flowchart" && <option value="RL">Right to left</option>}
-            </select>
-          </label>
+                {graph.kind === "flowchart" && <option value="BT">Bottom to top</option>}
+                {graph.kind === "flowchart" && <option value="RL">Right to left</option>}
+              </select>
+            </label>
+          )}
 
           <div className="flex items-center rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)]">
             <ZoomButton
@@ -587,28 +639,16 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
           }}
         >
           <defs>
-            <marker
-              id="fl-arrow"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--fl-border-strong)" />
-            </marker>
-            <marker
-              id="fl-arrow-active"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--fl-accent)" />
-            </marker>
+            {/* One set in the resting colour and one in the selection colour.
+                SVG markers cannot inherit the stroke of the line they sit on in
+                any browser we can rely on, so the alternative is a marker whose
+                arrowhead stays grey on a selected edge. */}
+            {EDGE_MARKERS.map((marker) => (
+              <React.Fragment key={marker.id}>
+                {renderMarker(marker, false)}
+                {renderMarker(marker, true)}
+              </React.Fragment>
+            ))}
             {/* Anchored in world space so the grid scrolls with the diagram
                 rather than sliding under it. */}
             <pattern id="fl-grid" width={GRID * 3} height={GRID * 3} patternUnits="userSpaceOnUse">
@@ -634,6 +674,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             const start = anchorPoint(from, to);
             const end = anchorPoint(to, from);
             const isSelected = selected === edge.id;
+            const decor = edgeDecor(edge.style, edge.dashed);
 
             return (
               <g
@@ -659,15 +700,10 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                   x2={end.x}
                   y2={end.y}
                   stroke={isSelected ? "var(--fl-accent)" : "var(--fl-border-strong)"}
-                  strokeWidth={edge.style === "thick" ? 3 : 1.8}
-                  strokeDasharray={edge.style === "dotted" ? "5 4" : undefined}
-                  markerEnd={
-                    edge.style === "open"
-                      ? undefined
-                      : isSelected
-                        ? "url(#fl-arrow-active)"
-                        : "url(#fl-arrow)"
-                  }
+                  strokeWidth={decor.width}
+                  strokeDasharray={decor.dash}
+                  markerStart={markerUrl(decor.start, isSelected)}
+                  markerEnd={markerUrl(decor.end, isSelected)}
                 />
                 {edge.label && (
                   <text
@@ -678,6 +714,32 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                     style={{ paintOrder: "stroke", stroke: "var(--fl-bg)", strokeWidth: 5 }}
                   >
                     {edge.label}
+                  </text>
+                )}
+
+                {/* Multiplicity sits at the end it describes, which is the only
+                    place it means anything: "1" in the middle of the line
+                    could belong to either side. */}
+                {edge.fromCardinality && (
+                  <text
+                    x={start.x + (end.x - start.x) * 0.16}
+                    y={start.y + (end.y - start.y) * 0.16 - 5}
+                    textAnchor="middle"
+                    className="fill-[var(--fl-muted)] text-[10.5px]"
+                    style={{ paintOrder: "stroke", stroke: "var(--fl-bg)", strokeWidth: 4 }}
+                  >
+                    {edge.fromCardinality}
+                  </text>
+                )}
+                {edge.toCardinality && (
+                  <text
+                    x={start.x + (end.x - start.x) * 0.84}
+                    y={start.y + (end.y - start.y) * 0.84 - 5}
+                    textAnchor="middle"
+                    className="fill-[var(--fl-muted)] text-[10.5px]"
+                    style={{ paintOrder: "stroke", stroke: "var(--fl-bg)", strokeWidth: 4 }}
+                  >
+                    {edge.toCardinality}
                   </text>
                 )}
               </g>
@@ -823,13 +885,49 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
           {selectedNode && (
             <>
               <input
-                value={selectedNode.label}
-                onChange={(event) =>
-                  onChange(updateNode(graph, selectedNode.id, { label: event.target.value }))
+                value={
+                  hasMembers(selectedNode.shape)
+                    ? splitMembers(selectedNode.label).name
+                    : selectedNode.label
                 }
-                aria-label="Node label"
-                className="w-48 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
+                onChange={(event) =>
+                  onChange(
+                    updateNode(graph, selectedNode.id, {
+                      label: hasMembers(selectedNode.shape)
+                        ? joinMembers(event.target.value, splitMembers(selectedNode.label).members)
+                        : event.target.value,
+                    }),
+                  )
+                }
+                aria-label={hasMembers(selectedNode.shape) ? "Name" : "Node label"}
+                className="w-40 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
               />
+
+              {/* Fields and methods, one per line — the same shape as the
+                  mermaid block, so what is typed here is what is written. */}
+              {hasMembers(selectedNode.shape) && (
+                <input
+                  value={splitMembers(selectedNode.label).members.join("; ")}
+                  placeholder={
+                    graph.kind === "er" ? "string name; int age" : "+string id; +save() void"
+                  }
+                  onChange={(event) =>
+                    onChange(
+                      updateNode(graph, selectedNode.id, {
+                        label: joinMembers(
+                          splitMembers(selectedNode.label).name,
+                          event.target.value
+                            .split(";")
+                            .map((member) => member.trim())
+                            .filter((member) => member !== ""),
+                        ),
+                      }),
+                    )
+                  }
+                  aria-label={graph.kind === "er" ? "Attributes" : "Members"}
+                  className="w-64 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 font-mono text-[11.5px] text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
+                />
+              )}
               <select
                 value={selectedNode.shape}
                 onChange={(event) =>
@@ -890,12 +988,44 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                 aria-label="Arrow style"
                 className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-[var(--fl-text)]"
               >
-                {(Object.keys(EDGE_LABELS) as EdgeStyle[]).map((style) => (
+                {EDGE_STYLES_FOR_KIND[graph.kind].map((style) => (
                   <option key={style} value={style}>
                     {EDGE_LABELS[style]}
                   </option>
                 ))}
               </select>
+              {/* The whole reason to draw a class or ER diagram rather than
+                  list the types is to say how many of each there are. */}
+              {(graph.kind === "class" || graph.kind === "er") && (
+                <>
+                  <input
+                    value={selectedEdge.fromCardinality ?? ""}
+                    placeholder="1"
+                    onChange={(event) =>
+                      onChange(
+                        updateEdge(graph, selectedEdge.id, {
+                          fromCardinality: event.target.value,
+                        }),
+                      )
+                    }
+                    aria-label="Multiplicity at the source"
+                    className="w-14 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-center text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
+                  />
+                  <span className="text-[var(--fl-muted)]">→</span>
+                  <input
+                    value={selectedEdge.toCardinality ?? ""}
+                    placeholder="*"
+                    onChange={(event) =>
+                      onChange(
+                        updateEdge(graph, selectedEdge.id, { toCardinality: event.target.value }),
+                      )
+                    }
+                    aria-label="Multiplicity at the target"
+                    className="w-14 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-center text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
+                  />
+                </>
+              )}
+
               <button
                 type="button"
                 onClick={() => {
@@ -912,6 +1042,120 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
       )}
     </div>
   );
+}
+
+// ─── Edge decoration ────────────────────────────────────────────────────────
+
+/**
+ * The ends and dashes each relationship is drawn with.
+ *
+ * A flowchart arrow, an inheritance triangle and a crow's foot are not one
+ * shape in three colours — they are what the diagram *says*, and drawing an ER
+ * "many" as a plain arrowhead loses the only information the relationship
+ * carries. Each dialect's vocabulary gets its own ends.
+ */
+interface EdgeDecor {
+  /** Marker at the source end, or null. */
+  start: string | null;
+  /** Marker at the target end, or null. */
+  end: string | null;
+  dash: string | undefined;
+  width: number;
+}
+
+function edgeDecor(style: EdgeStyle, dashed?: boolean): EdgeDecor {
+  const base = { start: null, end: null, dash: undefined, width: 1.8 } as EdgeDecor;
+
+  switch (style) {
+    case "open":
+      return base;
+    case "dotted":
+      return { ...base, end: "arrow", dash: "5 4" };
+    case "thick":
+      return { ...base, end: "arrow", width: 3 };
+
+    // Class relationships. Composition and aggregation put their diamond at
+    // the owning end, which is the source.
+    case "inherit":
+      return { ...base, end: "triangle" };
+    case "compose":
+      return { ...base, start: "diamond-filled" };
+    case "aggregate":
+      return { ...base, start: "diamond-open" };
+    case "depend":
+      return { ...base, end: "arrow", dash: "4 4" };
+    case "associate":
+      return { ...base, end: "arrow" };
+
+    // Entity relationships, drawn as crow's-foot notation: a bar is "one", a
+    // foot is "many", at whichever end it applies to.
+    case "one-one":
+      return { ...base, start: "bar", end: "bar", ...(dashed ? { dash: "5 4" } : {}) };
+    case "one-many":
+      return { ...base, start: "bar", end: "crow", ...(dashed ? { dash: "5 4" } : {}) };
+    case "many-one":
+      return { ...base, start: "crow", end: "bar", ...(dashed ? { dash: "5 4" } : {}) };
+    case "many-many":
+      return { ...base, start: "crow", end: "crow", ...(dashed ? { dash: "5 4" } : {}) };
+
+    // A mindmap branch is a line. Mermaid draws no arrowheads on one, and an
+    // arrow would suggest a direction the diagram does not mean.
+    case "branch":
+      return base;
+
+    case "arrow":
+    default:
+      return { ...base, end: "arrow" };
+  }
+}
+
+interface MarkerSpec {
+  id: string;
+  /** SVG path, drawn in a 0 0 12 12 viewBox pointing right. */
+  path: string;
+  /** Where the line should stop, along the marker's x axis. */
+  refX: number;
+  filled: boolean;
+  size: number;
+}
+
+const EDGE_MARKERS: MarkerSpec[] = [
+  { id: "arrow", path: "M 0 1 L 11 6 L 0 11 z", refX: 10, filled: true, size: 7 },
+  { id: "triangle", path: "M 0 0 L 12 6 L 0 12 z", refX: 11, filled: false, size: 9 },
+  { id: "diamond-filled", path: "M 0 6 L 6 1 L 12 6 L 6 11 z", refX: 1, filled: true, size: 9 },
+  { id: "diamond-open", path: "M 0 6 L 6 1 L 12 6 L 6 11 z", refX: 1, filled: false, size: 9 },
+  // Two bars: mermaid's "exactly one".
+  { id: "bar", path: "M 4 1 L 4 11 M 8 1 L 8 11", refX: 9, filled: false, size: 9 },
+  // The crow's foot: three lines fanning back from the entity.
+  { id: "crow", path: "M 12 6 L 2 1 M 12 6 L 2 6 M 12 6 L 2 11", refX: 11, filled: false, size: 9 },
+];
+
+function renderMarker(spec: MarkerSpec, active: boolean) {
+  const colour = active ? "var(--fl-accent)" : "var(--fl-border-strong)";
+
+  return (
+    <marker
+      id={active ? `fl-${spec.id}-active` : `fl-${spec.id}`}
+      viewBox="0 0 12 12"
+      refX={spec.refX}
+      refY="6"
+      markerWidth={spec.size}
+      markerHeight={spec.size}
+      orient="auto-start-reverse"
+    >
+      <path
+        d={spec.path}
+        fill={spec.filled ? colour : "var(--fl-bg)"}
+        stroke={colour}
+        strokeWidth={1.4}
+      />
+    </marker>
+  );
+}
+
+function markerUrl(id: string | null, active: boolean): string | undefined {
+  if (!id) return undefined;
+  return active ? `url(#fl-${id}-active)` : `url(#fl-${id})`;
 }
 
 // ─── Node rendering ─────────────────────────────────────────────────────────
@@ -937,6 +1181,8 @@ function NodeShapeView({
   const strokeWidth = selected ? 2.5 : 1.5;
   const { width, height } = sizeOf(node);
   const marker = isMarker(node.shape);
+  const boxed = hasMembers(node.shape);
+  const { name, members } = splitMembers(node.label);
 
   return (
     <g
@@ -946,11 +1192,38 @@ function NodeShapeView({
       className={dragging ? "cursor-grabbing" : "cursor-move"}
       opacity={dragging ? 0.85 : 1}
     >
-      {renderShape(node.shape, stroke, strokeWidth, "var(--fl-surface)")}
+      {renderShape(node.shape, stroke, strokeWidth, "var(--fl-surface)", node.label)}
+
+      {/* A class or entity is a name and a list, so it is laid out as one
+          rather than having its whole label crushed onto a single line. */}
+      {boxed && (
+        <g className="pointer-events-none select-none">
+          <text
+            x={width / 2}
+            y={16}
+            textAnchor="middle"
+            dominantBaseline="central"
+            className="fill-[var(--fl-text)] text-[13px] font-semibold"
+          >
+            {truncate(name, 26)}
+          </text>
+          {members.map((member, index) => (
+            <text
+              key={`${member}-${index}`}
+              x={10}
+              y={MEMBER_HEADER + index * MEMBER_HEIGHT + 4}
+              dominantBaseline="central"
+              className="fill-[var(--fl-muted)] font-mono text-[11px]"
+            >
+              {truncate(member, 34)}
+            </text>
+          ))}
+        </g>
+      )}
 
       {/* Markers are drawn, not labelled. A choice diamond is small, so its
           label sits underneath rather than being squeezed inside. */}
-      {!marker && (
+      {!marker && !boxed && (
         <text
           x={width / 2}
           y={node.shape === "choice" ? height + 14 : height / 2}
@@ -997,8 +1270,14 @@ function NodeShapeView({
 }
 
 /** Draws each mermaid shape as its SVG equivalent, so the canvas matches the output. */
-function renderShape(shape: NodeShape, stroke: string, strokeWidth: number, fill: string) {
-  const { width: w, height: h } = sizeOf({ shape });
+function renderShape(
+  shape: NodeShape,
+  stroke: string,
+  strokeWidth: number,
+  fill: string,
+  label = "",
+) {
+  const { width: w, height: h } = sizeOf({ shape, label });
   const common = { stroke, strokeWidth, fill };
 
   switch (shape) {
@@ -1074,10 +1353,78 @@ function renderShape(shape: NodeShape, stroke: string, strokeWidth: number, fill
           strokeWidth={strokeWidth}
         />
       );
+    // A class or entity is a titled box: the rule under the name is what makes
+    // it read as a type with fields rather than as a paragraph in a rectangle.
+    case "class":
+    case "entity": {
+      const { members } = splitMembers(label);
+      return (
+        <g>
+          <rect width={w} height={h} rx={4} {...common} />
+          {members.length > 0 && (
+            <line
+              x1={0}
+              y1={MEMBER_HEADER - 8}
+              x2={w}
+              y2={MEMBER_HEADER - 8}
+              stroke={stroke}
+              strokeWidth={1}
+            />
+          )}
+        </g>
+      );
+    }
+
+    // Mindmap branches. Mermaid draws its own shapes from the delimiters, so
+    // these are the canvas showing which delimiter a node will be written with.
+    case "mind-round":
+      return <rect width={w} height={h} rx={h / 2} {...common} />;
+    case "mind-square":
+      return <rect width={w} height={h} rx={3} {...common} />;
+    case "mind-hexagon":
+      return (
+        <polygon
+          points={`18,0 ${w - 18},0 ${w},${h / 2} ${w - 18},${h} 18,${h} 0,${h / 2}`}
+          {...common}
+        />
+      );
+    case "mind-circle":
+      return <circle cx={w / 2} cy={h / 2} r={w / 2 - 2} {...common} />;
+    case "mind-bang":
+      return <polygon points={burstPoints(w, h, 12)} {...common} />;
+    case "mind-cloud":
+      return <path d={cloudPath(w, h)} {...common} />;
+
     case "rect":
     default:
       return <rect width={w} height={h} rx={3} {...common} />;
   }
+}
+
+/** A star-ish outline for mermaid's `))burst((` shape. */
+function burstPoints(w: number, h: number, spikes: number): string {
+  const cx = w / 2;
+  const cy = h / 2;
+  const outer = Math.min(w, h) / 2 - 1;
+  const inner = outer * 0.78;
+
+  return Array.from({ length: spikes * 2 }, (_, index) => {
+    const radius = index % 2 === 0 ? outer : inner;
+    const angle = (Math.PI * index) / spikes - Math.PI / 2;
+    return `${(cx + radius * Math.cos(angle)).toFixed(1)},${(cy + radius * Math.sin(angle)).toFixed(1)}`;
+  }).join(" ");
+}
+
+/** Four overlapping arcs, for mermaid's `)cloud(` shape. */
+function cloudPath(w: number, h: number): string {
+  const r = h / 2;
+  return [
+    `M ${r},${h}`,
+    `A ${r},${r} 0 0 1 ${r},0`,
+    `L ${w - r},0`,
+    `A ${r},${r} 0 0 1 ${w - r},${h}`,
+    "Z",
+  ].join(" ");
 }
 
 /** A tiny silhouette of each shape, for the Add buttons. */
@@ -1120,6 +1467,24 @@ function ShapeIcon({ shape }: { shape: NodeShape }) {
           <path d="M1 3.5A9 2.5 0 0 1 19 3.5V10.5A9 2.5 0 0 1 1 10.5Z" />
           <path d="M1 3.5A9 2.5 0 0 0 19 3.5" />
         </g>
+      ) : shape === "class" || shape === "entity" ? (
+        <g {...common}>
+          <rect x="1" y="1" width="18" height="12" rx="1.5" />
+          <path d="M1 5.5h18" />
+        </g>
+      ) : shape === "mind-circle" ? (
+        <circle cx="10" cy="7" r="6" {...common} />
+      ) : shape === "mind-round" ? (
+        <rect x="1" y="2" width="18" height="10" rx="5" {...common} />
+      ) : shape === "mind-hexagon" ? (
+        <polygon points="5,1 15,1 19,7 15,13 5,13 1,7" {...common} />
+      ) : shape === "mind-bang" ? (
+        <polygon
+          points="10,1 12,5 16,3.5 15,8 19,9 15,10.5 16,13 12,11.5 10,13.5 8,11.5 4,13 5,10.5 1,9 5,8 4,3.5 8,5"
+          {...common}
+        />
+      ) : shape === "mind-cloud" ? (
+        <path d="M6 12a5 5 0 0 1 0-10h8a5 5 0 0 1 0 10z" {...common} />
       ) : (
         <rect x="1" y="1" width="18" height="12" rx="1.5" {...common} />
       )}

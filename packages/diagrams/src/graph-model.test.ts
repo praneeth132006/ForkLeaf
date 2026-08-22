@@ -7,6 +7,7 @@ import {
   removeNode,
   updateNode,
   nextNodeId,
+  splitMembers,
   type Graph,
 } from "./graph-model";
 import { detectKind, DIAGRAM_TEMPLATES } from "./templates";
@@ -422,5 +423,167 @@ describe("preserving what the model has no concept of", () => {
     expect(code).toContain("note right of A");
     expect(code).toContain("Retries three times");
     expect(code).toContain("end note");
+  });
+});
+
+// ─── Class diagrams ─────────────────────────────────────────────────────────
+
+describe("class diagrams", () => {
+  const source = `classDiagram
+    direction TB
+    class Note {
+        +string id
+        +save() void
+    }
+    class Workspace
+    Workspace "1" --> "*" Note : contains
+    Note --|> Entity`;
+
+  it("parses classes, their members and their relationships", () => {
+    const parsed = mermaidToGraph(source);
+    expect(parsed?.kind).toBe("class");
+
+    const note = parsed?.nodes.find((node) => node.id === "Note");
+    expect(splitMembers(note!.label)).toEqual({
+      name: "Note",
+      members: ["+string id", "+save() void"],
+    });
+
+    const contains = parsed?.edges.find((edge) => edge.label === "contains");
+    expect(contains).toMatchObject({
+      from: "Workspace",
+      to: "Note",
+      style: "associate",
+      fromCardinality: "1",
+      toCardinality: "*",
+    });
+  });
+
+  it("reads a reversed inheritance arrow in the direction it means", () => {
+    // `Parent <|-- Child` says the child inherits, so the edge runs from the
+    // child — the same direction `Child --|> Parent` would give.
+    const parsed = mermaidToGraph("classDiagram\n    Animal <|-- Dog");
+    expect(parsed?.edges[0]).toMatchObject({ from: "Dog", to: "Animal", style: "inherit" });
+  });
+
+  it("round-trips without losing members or cardinality", () => {
+    const parsed = mermaidToGraph(source)!;
+    const again = mermaidToGraph(graphToMermaid(parsed))!;
+
+    expect(splitMembers(again.nodes.find((n) => n.id === "Note")!.label).members).toEqual([
+      "+string id",
+      "+save() void",
+    ]);
+    expect(again.edges.find((edge) => edge.label === "contains")).toMatchObject({
+      fromCardinality: "1",
+      toCardinality: "*",
+    });
+  });
+});
+
+// ─── Entity-relationship diagrams ───────────────────────────────────────────
+
+describe("ER diagrams", () => {
+  const source = `erDiagram
+    CUSTOMER {
+        string name
+        int age
+    }
+    ORDER {
+        int id
+    }
+    CUSTOMER ||--o{ ORDER : "places"`;
+
+  it("parses entities, attributes and crow's-foot cardinality", () => {
+    const parsed = mermaidToGraph(source);
+    expect(parsed?.kind).toBe("er");
+
+    expect(splitMembers(parsed!.nodes[0]!.label)).toEqual({
+      name: "CUSTOMER",
+      members: ["string name", "int age"],
+    });
+    expect(parsed?.edges[0]).toMatchObject({
+      from: "CUSTOMER",
+      to: "ORDER",
+      style: "one-many",
+      label: "places",
+    });
+  });
+
+  it("reads each cardinality pair as its own relationship style", () => {
+    const styles = ["||--||", "}o--||", "||--o{", "}o--o{"].map(
+      (pair) => mermaidToGraph(`erDiagram\n    A ${pair} B : ""`)?.edges[0]?.style,
+    );
+    expect(styles).toEqual(["one-one", "many-one", "one-many", "many-many"]);
+  });
+
+  it("keeps a non-identifying relationship dotted", () => {
+    const parsed = mermaidToGraph(`erDiagram\n    A ||..o{ B : ""`);
+    expect(parsed?.edges[0]?.dashed).toBe(true);
+    expect(graphToMermaid(parsed!)).toContain("||..o{");
+  });
+
+  it("keeps an entity that has neither attributes nor relationships", () => {
+    // Without its own block such an entity appears nowhere in the source, and
+    // reopening the canvas would silently drop it.
+    const graph = mermaidToGraph("erDiagram\n    LONELY {\n    }")!;
+    expect(graphToMermaid(graph)).toContain("LONELY {");
+  });
+});
+
+// ─── Mindmaps ───────────────────────────────────────────────────────────────
+
+describe("mindmaps", () => {
+  const source = `mindmap
+  root((Ideas))
+    a[Origins]
+      b[Long history]
+    c(Research)`;
+
+  it("turns indentation into parent-child edges", () => {
+    const parsed = mermaidToGraph(source);
+    expect(parsed?.kind).toBe("mindmap");
+    expect(parsed?.nodes.map((node) => node.label)).toEqual([
+      "Ideas",
+      "Origins",
+      "Long history",
+      "Research",
+    ]);
+    expect(parsed?.edges.map((edge) => `${edge.from}->${edge.to}`)).toEqual([
+      "root->a",
+      "a->b",
+      "root->c",
+    ]);
+  });
+
+  it("writes the tree back out at the right depth", () => {
+    const parsed = mermaidToGraph(source)!;
+    const lines = graphToMermaid(parsed).split("\n");
+
+    expect(lines[1]).toBe("  root((Ideas))");
+    expect(lines[2]).toBe("    a[Origins]");
+    expect(lines[3]).toBe("      b[Long history]");
+    expect(lines[4]).toBe("    c(Research)");
+  });
+
+  it("does not loop forever on a cycle", () => {
+    // Half-edited source can describe something that is not a tree; refusing to
+    // hang matters more than refusing to draw.
+    const cyclic: Graph = {
+      kind: "mindmap",
+      direction: "TD",
+      nodes: [
+        { id: "a", label: "A", shape: "mind-square", x: 0, y: 0 },
+        { id: "b", label: "B", shape: "mind-square", x: 0, y: 0 },
+      ],
+      edges: [
+        { id: "e1", from: "a", to: "b", style: "branch" },
+        { id: "e2", from: "b", to: "a", style: "branch" },
+      ],
+    };
+
+    const code = graphToMermaid(cyclic);
+    expect(code).toContain("a[A]");
+    expect(code).toContain("b[B]");
   });
 });
