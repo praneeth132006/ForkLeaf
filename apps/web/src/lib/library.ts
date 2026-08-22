@@ -280,6 +280,59 @@ export function folderCounts(entries: IndexEntry[]): { path: string; count: numb
     .sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: "base" }));
 }
 
+/**
+ * The folders directly inside `parent`, each with how many notes sit under it.
+ *
+ * `folderCounts` returns every folder in the repository, which is the right
+ * answer for a small notebook and the wrong one for a real repository: a
+ * documentation tree of 128 notes has around a hundred folders, and rendering
+ * them all as filter chips produced a wall of them that was slower to read than
+ * the list it was meant to filter. Browsing one level at a time keeps the
+ * choice in front of the reader to a handful, at any size.
+ */
+export function subfolders(
+  entries: IndexEntry[],
+  parent: string | null,
+): { path: string; name: string; count: number }[] {
+  const prefix = parent ? `${parent}/` : "";
+  const counts = new Map<string, number>();
+
+  for (const entry of entries) {
+    if (!entry.folder) continue;
+    if (parent) {
+      if (entry.folder !== parent && !entry.folder.startsWith(prefix)) continue;
+      if (entry.folder === parent) continue;
+    }
+
+    const rest = entry.folder.slice(prefix.length);
+    const name = rest.split("/")[0];
+    if (!name) continue;
+
+    const path = `${prefix}${name}`;
+    counts.set(path, (counts.get(path) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .map(([path, count]) => ({ path, name: path.slice(prefix.length), count }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+}
+
+/** How many notes sit in this exact folder rather than in one below it. */
+export function directCount(entries: IndexEntry[], folder: string | null): number {
+  return entries.filter((entry) => entry.folder === (folder ?? "")).length;
+}
+
+/** `a/b/c` → the trail of ancestors, for a breadcrumb. */
+export function folderTrail(folder: string | null): { path: string; name: string }[] {
+  if (!folder) return [];
+
+  const segments = folder.split("/");
+  return segments.map((name, index) => ({
+    path: segments.slice(0, index + 1).join("/"),
+    name,
+  }));
+}
+
 /** Every tag in the index, most used first. */
 export function tagCounts(entries: IndexEntry[]): { tag: string; count: number }[] {
   const counts = new Map<string, number>();
@@ -307,4 +360,79 @@ export function totalsOf(entries: IndexEntry[]): LibraryTotals {
     diagrams: entries.reduce((total, entry) => total + entry.diagrams, 0),
     unindexed: entries.filter((entry) => !entry.indexed).length,
   };
+}
+
+// ─── Tree view ──────────────────────────────────────────────────────────────
+
+/**
+ * One folder in the dashboard's tree view.
+ *
+ * A repository's shape is information: which notes sit together, how deep the
+ * documentation goes, what is a stub and what is a section. A flat list sorted
+ * by "recently edited" throws all of that away, and for anyone whose notes are
+ * organised into folders it is the wrong default view of their own work.
+ */
+export interface NoteFolder {
+  /** Full path, `""` for the root. */
+  path: string;
+  /** Last segment, for display. */
+  name: string;
+  folders: NoteFolder[];
+  /** Notes directly in this folder, not in one below it. */
+  notes: IndexEntry[];
+  /** Notes at or below this folder. */
+  count: number;
+}
+
+/**
+ * Groups entries into a folder tree.
+ *
+ * Built from whatever entries it is given, which is what lets the tree respond
+ * to the search box: filter first, and the tree shows only the branches that
+ * still hold a match rather than the whole repository with three results
+ * hidden in it.
+ */
+export function buildNoteTree(entries: IndexEntry[]): NoteFolder {
+  const root: NoteFolder = { path: "", name: "", folders: [], notes: [], count: 0 };
+
+  const folderAt = (path: string): NoteFolder => {
+    if (!path) return root;
+
+    let node = root;
+    let prefix = "";
+
+    for (const segment of path.split("/")) {
+      prefix = prefix ? `${prefix}/${segment}` : segment;
+      let next = node.folders.find((child) => child.path === prefix);
+      if (!next) {
+        next = { path: prefix, name: segment, folders: [], notes: [], count: 0 };
+        node.folders.push(next);
+      }
+      node = next;
+    }
+
+    return node;
+  };
+
+  for (const entry of entries) {
+    folderAt(entry.folder).notes.push(entry);
+  }
+
+  // Counts roll up, and both lists sort by name so the tree is stable between
+  // renders and between sessions.
+  const finish = (node: NoteFolder): number => {
+    node.folders.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+    node.notes.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
+    node.count =
+      node.notes.length + node.folders.reduce((total, child) => total + finish(child), 0);
+    return node.count;
+  };
+
+  finish(root);
+  return root;
+}
+
+/** Every folder path in a tree, for expanding all of them at once. */
+export function allFolderPaths(node: NoteFolder): string[] {
+  return node.folders.flatMap((child) => [child.path, ...allFolderPaths(child)]);
 }

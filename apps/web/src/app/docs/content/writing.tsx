@@ -33,11 +33,34 @@ export function Editor() {
         your diff.
       </Note>
 
+      <H2 id="toolbar">The formatting bar</H2>
+      <P>
+        Above every view is a bar carrying everything Markdown can express: undo and redo, a
+        paragraph-style dropdown for headings, quotes and code blocks, the five inline marks, the
+        three kinds of list with indent and outdent, links, images, tables, dividers and diagrams.
+        Anything that does not fit has a <strong>More</strong> menu.
+      </P>
+      <P>
+        The bar drives whichever view is open. In Rich it runs an editor command; in Split and
+        Source it edits the Markdown itself — select a word and press <strong>B</strong> and it is
+        wrapped in <Code>**</Code>, choose <strong>Heading 2</strong> and the line gains a{" "}
+        <Code>##</Code> rather than a second one being pasted over the first.
+      </P>
+      <Note>
+        There are no fonts, colours or alignment controls, because none of those survive being
+        written to a <Code>.md</Code> file. A button that quietly did nothing to the saved document
+        would be worse than no button.
+      </Note>
+      <P>
+        While the caret is inside a table, a second row of controls appears for adding and removing
+        rows and columns, toggling the header row and merging cells.
+      </P>
+
       <H2 id="insert">The insert menu</H2>
       <P>
-        Press <Code>/</Code> anywhere, or click <strong>Insert</strong> on the toolbar. Both give
-        the same list, and it works in every view — in Rich it runs an editor command, in Split and
-        Source it inserts the equivalent Markdown at your caret.
+        Press <Code>/</Code> anywhere, or use the toolbar. Both give the same list, and it works in
+        every view — in Rich it runs an editor command, in Split and Source it inserts the
+        equivalent Markdown at your caret.
       </P>
       <Table
         head={["Item", "Rich text", "Markdown inserted"]}
@@ -56,8 +79,8 @@ export function Editor() {
           ["Quote", "Blockquote", <Code key="g">&gt; </Code>],
           ["Table", "3×3 with a header row", "Pipe table"],
           ["Divider", "Horizontal rule", <Code key="h">---</Code>],
-          ["Link", "Prompts for a URL", <Code key="i">[](…)</Code>],
-          ["Image", "Prompts for a URL", <Code key="j">![](…)</Code>],
+          ["Link", "Asks for the text and the address", <Code key="i">[](…)</Code>],
+          ["Image", "Opens the image picker", <Code key="j">![](…)</Code>],
         ]}
       />
       <P>
@@ -66,16 +89,47 @@ export function Editor() {
         Escape dismisses.
       </P>
       <Note kind="warn">
-        Links and images accept <Code>http://</Code>, <Code>https://</Code> and <Code>mailto:</Code>{" "}
-        only. A <Code>javascript:</Code> or <Code>data:</Code> URL in a note would be a stored
+        Links accept <Code>http://</Code>, <Code>https://</Code>, <Code>mailto:</Code> and paths
+        within the repository only. A <Code>javascript:</Code> URL in a note would be a stored
         cross-site-scripting vector in every renderer that later displays it, so those are rejected.
       </Note>
+
+      <H2 id="images">Images</H2>
+      <P>
+        Paste a screenshot straight into a note, drag a file onto it, or use the{" "}
+        <strong>Image</strong> button — all three work in Rich, Split and Source. PNG, JPEG, GIF,
+        WebP, AVIF, BMP and ICO are accepted, up to 10 MB each. SVG is not: it is a document format
+        that can carry script, and serving one back would be a hole in every note that embeds it.
+      </P>
+      <P>
+        On a connected repository the file is committed to an <Code>assets/</Code> folder as its own
+        commit, and the note links to it by a relative path —{" "}
+        <Code>../assets/2026-08-22-chart.png</Code> — exactly as a hand-written Markdown file would.
+        That is what keeps the note rendering correctly on github.com, in an IDE, or anywhere else
+        the repository is opened. ForkLeaf resolves the path back through its own server when it
+        displays the note, so images in a private repository load without the file ever being
+        public.
+      </P>
+      <Note>
+        With no repository connected there is nowhere to commit a file, so the image is embedded in
+        the note itself. It works, and it makes the file much larger — connect a repository and
+        images live beside your notes instead.
+      </Note>
+      <P>
+        You can also link to an image already on the web. Those are stored as the URL you give,
+        untouched.
+      </P>
 
       <H2 id="formatting">Inline formatting</H2>
       <P>
         In Rich view, select text to get bold, italic, strikethrough, inline code and highlight — or
-        use the toolbar, or <Code>⌘B</Code> and <Code>⌘I</Code>. In Split and Source, type the
-        Markdown.
+        use the toolbar, or <Code>⌘B</Code> and <Code>⌘I</Code>. In Split and Source, the same
+        toolbar buttons wrap the selection in the equivalent Markdown, and you can of course type it
+        yourself.
+      </P>
+      <P>
+        Highlighting writes <Code>==like this==</Code>, the convention Markdown note-taking tools
+        have settled on. ForkLeaf renders it; github.com does not, and shows the equals signs.
       </P>
 
       <H2 id="files">Notes, folders and names</H2>

@@ -12,7 +12,16 @@ import {
   highlightActiveLineGutter,
   lineNumbers,
 } from "@codemirror/view";
-import { history, defaultKeymap, historyKeymap, indentWithTab } from "@codemirror/commands";
+import {
+  history,
+  defaultKeymap,
+  historyKeymap,
+  indentWithTab,
+  undo as cmUndo,
+  redo as cmRedo,
+  undoDepth,
+  redoDepth,
+} from "@codemirror/commands";
 import {
   acceptCompletion,
   autocompletion,
@@ -26,7 +35,9 @@ import { indentOnInput, bracketMatching, foldGutter, foldKeymap } from "@codemir
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { lintKeymap } from "@codemirror/lint";
 import { editorTheme } from "./codemirror/theme";
-import { markdownSlashCommands } from "./codemirror/slash-markdown";
+import { imagesFrom } from "./images";
+import { markdownSlashSource } from "./codemirror/slash-markdown";
+import type { ActionContext } from "./insert-actions";
 
 export interface SourceEditorProps {
   value: string;
@@ -44,6 +55,22 @@ export interface SourceEditorProps {
   handleRef?: React.Ref<SourceEditorHandle>;
   /** Reports where the caret is, for a status bar. Both numbers are 1-based. */
   onCursorChange?: (position: CursorPosition) => void;
+  /**
+   * Handles images pasted or dropped into the raw markdown.
+   *
+   * Raw markdown is still markdown: dropping a screenshot into it should write
+   * an `![](…)` for you rather than doing nothing, which is what happened
+   * before and read as the editor being broken.
+   */
+  onImageFiles?: (files: File[], insert: (markdown: string) => void) => void;
+  /**
+   * What the app can do for the `/` menu that markdown cannot.
+   *
+   * Without this, `/image` in the source view typed a literal
+   * `![](https://)` while the same entry in rich text opened a picker — the
+   * kind of difference that makes one of the two views feel broken.
+   */
+  slashActions?: ActionContext;
 }
 
 /** Caret location, in the terms a status bar uses. */
@@ -62,6 +89,35 @@ export interface SourceEditorHandle {
    */
   insertAtCursor: (text: string, cursorOffset?: number) => void;
   focus: () => void;
+  /**
+   * Wraps the selection in `before`/`after`, or unwraps it if it already is.
+   *
+   * This is what makes a formatting button mean the same thing in raw markdown
+   * as it does in rich text. Inserting a bare `****` and leaving the caret in
+   * the middle — which is what the toolbar used to do — ignores the text you
+   * had selected, so pressing Bold with a word highlighted did not embolden
+   * that word.
+   */
+  wrapSelection: (before: string, after?: string) => void;
+  /**
+   * Adds `prefix` to every selected line, or strips it if every line has it.
+   *
+   * Headings, quotes and list items are all line prefixes in markdown, and all
+   * of them should toggle rather than stack: pressing "Heading 2" twice must
+   * not leave `## ## `.
+   */
+  toggleLinePrefix: (prefix: string, pattern?: RegExp) => void;
+  /** Indents or outdents the selected lines by two spaces, as lists nest. */
+  indent: (direction: 1 | -1) => void;
+  undo: () => void;
+  redo: () => void;
+  /** Whether there is anything to undo or redo, for the toolbar's buttons. */
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+  /** The text currently selected, empty when the selection is a caret. */
+  selection: () => string;
+  /** The whole line the caret is on, so a toolbar can show the block style. */
+  currentLine: () => string;
 }
 
 /**
@@ -84,6 +140,8 @@ export function SourceEditor({
   ariaLabel = "Markdown source",
   handleRef,
   onCursorChange,
+  onImageFiles,
+  slashActions,
 }: SourceEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -94,6 +152,10 @@ export function SourceEditor({
   onChangeRef.current = onChange;
   const onCursorChangeRef = useRef(onCursorChange);
   onCursorChangeRef.current = onCursorChange;
+  const onImageFilesRef = useRef(onImageFiles);
+  onImageFilesRef.current = onImageFiles;
+  const slashActionsRef = useRef(slashActions);
+  slashActionsRef.current = slashActions;
 
   /**
    * Every document this editor has reported upwards.
@@ -132,7 +194,13 @@ export function SourceEditor({
           // Markdown gets the same `/` block menu as the rich-text editor, so
           // the keystroke means the same thing in every view. The diagram
           // studio passes `language="plain"` and supplies its own source.
-          ...(language === "markdown" ? { override: [markdownSlashCommands] } : {}),
+          // Read through the ref so the source stays the same function for the
+          // editor's whole life while still seeing the current handlers.
+          ...(language === "markdown"
+            ? {
+                override: [markdownSlashSource(() => slashActionsRef.current ?? {})],
+              }
+            : {}),
         }),
         EditorState.allowMultipleSelections.of(true),
         EditorView.lineWrapping,
@@ -169,6 +237,29 @@ export function SourceEditor({
           indentWithTab,
         ]),
         editorTheme(),
+        EditorView.domEventHandlers({
+          paste: (event, view) => {
+            const files = imagesFrom(event.clipboardData);
+            if (files.length === 0 || !onImageFilesRef.current) return false;
+
+            event.preventDefault();
+            onImageFilesRef.current(files, (markdown) => insertInto(view, markdown));
+            return true;
+          },
+          drop: (event, view) => {
+            const files = imagesFrom(event.dataTransfer);
+            if (files.length === 0 || !onImageFilesRef.current) return false;
+
+            event.preventDefault();
+            // Drop where the pointer is, not where the caret was left.
+            const at = view.posAtCoords({ x: event.clientX, y: event.clientY });
+            if (at !== null) {
+              view.dispatch({ selection: { anchor: at } });
+            }
+            onImageFilesRef.current(files, (markdown) => insertInto(view, markdown));
+            return true;
+          },
+        }),
         EditorView.contentAttributes.of({ "aria-label": ariaLabel }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
@@ -248,7 +339,146 @@ export function SourceEditor({
         });
         view.focus();
       },
+
       focus: () => viewRef.current?.focus(),
+
+      wrapSelection: (before, after = before) => {
+        const view = viewRef.current;
+        if (!view) return;
+
+        const { from, to } = view.state.selection.main;
+        const selected = view.state.sliceDoc(from, to);
+
+        // Already wrapped, either inside the selection or just outside it.
+        const inside =
+          selected.length >= before.length + after.length &&
+          selected.startsWith(before) &&
+          selected.endsWith(after);
+
+        const around =
+          view.state.sliceDoc(Math.max(0, from - before.length), from) === before &&
+          view.state.sliceDoc(to, Math.min(view.state.doc.length, to + after.length)) === after;
+
+        if (inside) {
+          const stripped = selected.slice(before.length, selected.length - after.length);
+          view.dispatch({
+            changes: { from, to, insert: stripped },
+            selection: { anchor: from, head: from + stripped.length },
+          });
+        } else if (around) {
+          view.dispatch({
+            changes: [
+              { from: from - before.length, to: from, insert: "" },
+              { from: to, to: to + after.length, insert: "" },
+            ],
+            selection: { anchor: from - before.length, head: to - before.length },
+          });
+        } else {
+          view.dispatch({
+            changes: { from, to, insert: `${before}${selected}${after}` },
+            // With nothing selected the caret goes between the markers, ready
+            // to type; with a selection it stays around the now-wrapped text.
+            selection: selected
+              ? { anchor: from + before.length, head: from + before.length + selected.length }
+              : { anchor: from + before.length },
+          });
+        }
+
+        view.focus();
+      },
+
+      toggleLinePrefix: (prefix, pattern) => {
+        const view = viewRef.current;
+        if (!view) return;
+
+        const { from, to } = view.state.selection.main;
+        const first = view.state.doc.lineAt(from);
+        const last = view.state.doc.lineAt(to);
+
+        const lines = [];
+        for (let n = first.number; n <= last.number; n += 1) {
+          lines.push(view.state.doc.line(n));
+        }
+
+        // `pattern` describes the whole family — every heading level, say — so
+        // that "Heading 2" on an existing `# ` replaces it instead of nesting.
+        const match = pattern ?? new RegExp(`^${escapeRegExp(prefix)}`);
+        const allHave = lines.every((line) => line.text.startsWith(prefix));
+
+        view.dispatch({
+          changes: lines.map((line) => {
+            const existing = match.exec(line.text);
+            const stripped = existing ? line.text.slice(existing[0].length) : line.text;
+            return {
+              from: line.from,
+              to: line.to,
+              insert: allHave ? stripped : `${prefix}${stripped}`,
+            };
+          }),
+        });
+
+        view.focus();
+      },
+
+      indent: (direction) => {
+        const view = viewRef.current;
+        if (!view) return;
+
+        const { from, to } = view.state.selection.main;
+        const first = view.state.doc.lineAt(from);
+        const last = view.state.doc.lineAt(to);
+
+        const changes = [];
+        for (let n = first.number; n <= last.number; n += 1) {
+          const line = view.state.doc.line(n);
+          if (direction === 1) {
+            changes.push({ from: line.from, insert: "  " });
+          } else {
+            const lead = /^ {1,2}/.exec(line.text);
+            if (lead) changes.push({ from: line.from, to: line.from + lead[0].length, insert: "" });
+          }
+        }
+
+        if (changes.length > 0) view.dispatch({ changes });
+        view.focus();
+      },
+
+      undo: () => {
+        const view = viewRef.current;
+        if (!view) return;
+        cmUndo(view);
+        view.focus();
+      },
+
+      redo: () => {
+        const view = viewRef.current;
+        if (!view) return;
+        cmRedo(view);
+        view.focus();
+      },
+
+      canUndo: () => {
+        const view = viewRef.current;
+        return view ? undoDepth(view.state) > 0 : false;
+      },
+
+      canRedo: () => {
+        const view = viewRef.current;
+        return view ? redoDepth(view.state) > 0 : false;
+      },
+
+      selection: () => {
+        const view = viewRef.current;
+        if (!view) return "";
+        const { from, to } = view.state.selection.main;
+        return view.state.sliceDoc(from, to);
+      },
+
+      currentLine: () => {
+        const view = viewRef.current;
+        if (!view) return "";
+        return view.state.doc.lineAt(view.state.selection.main.head).text;
+      },
     }),
     [],
   );
@@ -267,4 +497,20 @@ export function SourceEditor({
       data-placeholder={placeholder}
     />
   );
+}
+
+/** Escapes a literal string for use inside a regular expression. */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Replaces the selection with `text`, leaving the caret after it. */
+function insertInto(view: EditorView, text: string): void {
+  const { from, to } = view.state.selection.main;
+  view.dispatch({
+    changes: { from, to, insert: text },
+    selection: { anchor: from + text.length },
+    scrollIntoView: true,
+  });
+  view.focus();
 }

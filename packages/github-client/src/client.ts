@@ -131,11 +131,21 @@ export interface FileContent {
   size: number;
 }
 
+/**
+ * How `content` is expressed.
+ *
+ * Notes are text, so `utf8` is the default and everything that existed before
+ * binary uploads keeps working untouched. An image, though, has no meaningful
+ * UTF-8 form: re-encoding its bytes as a string corrupts them. Those arrive
+ * already base64-encoded and are handed to GitHub as-is.
+ */
+export type ContentEncoding = "utf8" | "base64";
+
 /** One file operation to include in a commit. */
 export type FileChange =
-  | { op: "upsert"; path: string; content: string }
+  | { op: "upsert"; path: string; content: string; encoding?: ContentEncoding }
   | { op: "delete"; path: string }
-  | { op: "rename"; path: string; toPath: string; content: string };
+  | { op: "rename"; path: string; toPath: string; content: string; encoding?: ContentEncoding };
 
 export interface CommitOptions {
   message: string;
@@ -545,6 +555,40 @@ export class GitHubClient {
   }
 
   /**
+   * One file's raw bytes, still base64-encoded.
+   *
+   * Separate from `readFile` because that decodes as UTF-8, which is right for
+   * a note and destroys an image. The caller turns these bytes into whatever
+   * it needs — for the app that is an HTTP response the browser can render.
+   */
+  async readFileBase64(
+    repo: RepoRef,
+    path: string,
+  ): Promise<{ base64: string; sha: string; size: number } | null> {
+    const url =
+      `/repos/${repo.owner}/${repo.repo}/contents/${encodePath(path)}` +
+      `?ref=${encodeURIComponent(repo.branch)}`;
+
+    try {
+      const { data } = await this.transport.request<ApiContent>(url);
+      if (!data) throw new GitHubError("unknown", "Empty file response");
+
+      if (data.type !== "file" || data.content === undefined) {
+        throw new GitHubError("validation", `${path} is not a regular file`);
+      }
+
+      // Anything over 1MB comes back with an empty `content`, and has to be
+      // fetched through the blob API instead.
+      const base64 = data.content === "" ? await this.readBlobBase64(repo, data.sha) : data.content;
+
+      return { base64: base64.replace(/\s/g, ""), sha: data.sha, size: data.size };
+    } catch (err) {
+      if (err instanceof GitHubError && err.code === "not-found") return null;
+      throw err;
+    }
+  }
+
+  /**
    * The commit history of one file, newest first.
    *
    * Exists so ForkLeaf can show a note's history inside the app rather than
@@ -591,6 +635,17 @@ export class GitHubClient {
       if (err instanceof GitHubError && err.code === "not-found") return null;
       throw err;
     }
+  }
+
+  private async readBlobBase64(repo: RepoRef, sha: string): Promise<string> {
+    const { data } = await this.transport.request<{ content: string; encoding: string }>(
+      `/repos/${repo.owner}/${repo.repo}/git/blobs/${sha}`,
+    );
+    if (!data) throw new GitHubError("unknown", "Empty blob response");
+    if (data.encoding !== "base64") {
+      throw new GitHubError("validation", "Unexpected blob encoding");
+    }
+    return data.content;
   }
 
   private async readBlob(repo: RepoRef, sha: string): Promise<string> {
@@ -647,7 +702,7 @@ export class GitHubClient {
       }
 
       const targetPath = change.op === "rename" ? change.toPath : change.path;
-      const sha = await this.createBlob(repo, change.content);
+      const sha = await this.createBlob(repo, change.content, change.encoding ?? "utf8");
       blobShas[targetPath] = sha;
       treeEntries.push({ path: targetPath, mode: FILE_MODE, type: "blob", sha });
 
@@ -702,10 +757,18 @@ export class GitHubClient {
     return data;
   }
 
-  private async createBlob(repo: RepoRef, content: string): Promise<string> {
+  private async createBlob(
+    repo: RepoRef,
+    content: string,
+    encoding: ContentEncoding = "utf8",
+  ): Promise<string> {
+    // Either way GitHub is told the payload is base64 — the difference is
+    // whether we do the encoding or the caller already did.
+    const payload = encoding === "base64" ? content.replace(/\s/g, "") : encodeBase64(content);
+
     const { data } = await this.transport.request<{ sha: string }>(
       `/repos/${repo.owner}/${repo.repo}/git/blobs`,
-      { method: "POST", body: { content: encodeBase64(content), encoding: "base64" } },
+      { method: "POST", body: { content: payload, encoding: "base64" } },
     );
     if (!data) throw new GitHubError("unknown", "Empty blob creation response");
     return data.sha;

@@ -283,21 +283,26 @@ export function useLibrary() {
     [state.workspaces, patchWorkspace],
   );
 
-  const totals = useMemo(
-    () => ({
-      notes: state.workspaces.reduce((sum, slice) => sum + slice.entries.length, 0),
-      words: state.workspaces.reduce(
-        (sum, slice) => sum + slice.entries.reduce((inner, entry) => inner + entry.words, 0),
-        0,
-      ),
-      diagrams: state.workspaces.reduce(
-        (sum, slice) => sum + slice.entries.reduce((inner, entry) => inner + entry.diagrams, 0),
-        0,
-      ),
+  /**
+   * Library-wide figures, including how much of the library they are based on.
+   *
+   * `read` is the part that matters. Word and diagram counts can only be
+   * computed from notes that have actually been fetched, so on a freshly
+   * connected repository they start near zero and climb as the background pass
+   * works through it. Reporting the total without reporting the coverage is
+   * what made the word count look like it was inventing words by itself.
+   */
+  const totals = useMemo(() => {
+    const entries = state.workspaces.flatMap((slice) => slice.entries);
+
+    return {
+      notes: entries.length,
+      words: entries.reduce((sum, entry) => sum + entry.words, 0),
+      diagrams: entries.reduce((sum, entry) => sum + entry.diagrams, 0),
+      read: entries.filter((entry) => entry.indexed).length,
       pending: state.workspaces.reduce((sum, slice) => sum + slice.pending, 0),
-    }),
-    [state.workspaces],
-  );
+    };
+  }, [state.workspaces]);
 
   return useMemo(
     () => ({ ...state, totals, addWorkspace, removeWorkspace, createNote }),

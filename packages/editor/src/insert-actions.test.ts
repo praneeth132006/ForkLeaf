@@ -4,7 +4,35 @@ import {
   filterInsertActions,
   insertActionsFor,
   insertDefinitionsFor,
+  runSourceAction,
 } from "./insert-actions";
+import type { SourceEditorHandle } from "./SourceEditor";
+
+/** Records what a toolbar press asks the raw-markdown editor to do. */
+function fakeHandle(selection = "") {
+  const calls: { name: string; args: unknown[] }[] = [];
+  const record =
+    (name: string) =>
+    (...args: unknown[]) => {
+      calls.push({ name, args });
+    };
+
+  const handle = {
+    insertAtCursor: record("insertAtCursor"),
+    focus: record("focus"),
+    wrapSelection: record("wrapSelection"),
+    toggleLinePrefix: record("toggleLinePrefix"),
+    indent: record("indent"),
+    undo: record("undo"),
+    redo: record("redo"),
+    canUndo: () => false,
+    canRedo: () => false,
+    selection: () => selection,
+    currentLine: () => "",
+  } as unknown as SourceEditorHandle;
+
+  return { handle, calls };
+}
 
 /**
  * The insert menu is the `/` menu, and it is the main way anything other than
@@ -96,5 +124,66 @@ describe("filterInsertActions", () => {
 
   it("returns nothing rather than everything for a query that matches nothing", () => {
     expect(filterInsertActions("zzzznothing", "rich")).toEqual([]);
+  });
+});
+
+describe("runSourceAction", () => {
+  it("wraps the selection for an inline mark instead of typing empty markers", () => {
+    const { handle, calls } = fakeHandle("important");
+    runSourceAction(handle, "bold");
+
+    expect(calls).toEqual([{ name: "wrapSelection", args: ["**"] }]);
+  });
+
+  it("toggles a line prefix for a block style, so levels replace rather than stack", () => {
+    const { handle, calls } = fakeHandle();
+    runSourceAction(handle, "h2");
+
+    expect(calls[0]?.name).toBe("toggleLinePrefix");
+    expect(calls[0]?.args[0]).toBe("## ");
+  });
+
+  it("types its snippet for anything with no selection behaviour", () => {
+    const { handle, calls } = fakeHandle();
+    runSourceAction(handle, "table");
+
+    expect(calls[0]?.name).toBe("insertAtCursor");
+    expect(String(calls[0]?.args[0])).toContain("| --- |");
+  });
+
+  it("hands images and links to the app, which knows where files go", () => {
+    const { handle, calls } = fakeHandle();
+    let asked = "";
+
+    runSourceAction(handle, "image", { requestImage: () => (asked = "image") });
+    expect(asked).toBe("image");
+
+    runSourceAction(handle, "link", { requestLink: () => (asked = "link") });
+    expect(asked).toBe("link");
+
+    // Neither reached the editor directly.
+    expect(calls).toEqual([]);
+  });
+
+  it("does nothing at all without a live editor", () => {
+    expect(() => runSourceAction(null, "bold")).not.toThrow();
+  });
+});
+
+describe("source definitions", () => {
+  it("gives every heading, list and quote a selection-aware behaviour", () => {
+    const shouldToggle = ["h1", "h2", "h3", "h4", "h5", "h6", "bullet", "ordered", "task", "quote"];
+
+    for (const id of shouldToggle) {
+      const definition = INSERT_DEFINITIONS.find((item) => item.id === id);
+      expect(definition?.source, `${id} has no source behaviour`).toBeTypeOf("function");
+    }
+  });
+
+  it("gives every inline mark one too", () => {
+    for (const id of ["bold", "italic", "strike", "inline-code"]) {
+      const definition = INSERT_DEFINITIONS.find((item) => item.id === id);
+      expect(definition?.source, `${id} has no source behaviour`).toBeTypeOf("function");
+    }
   });
 });

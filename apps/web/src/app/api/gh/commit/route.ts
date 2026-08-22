@@ -1,6 +1,7 @@
 import { type NextRequest } from "next/server";
 import type { FileChange } from "@forkleaf/github-client";
 import { handle, requireClient, readRepoRefFromBody, normalize, ApiError } from "@/lib/api-helpers";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /** Largest single note we will accept, to keep one bad paste from wedging a repo. */
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -30,6 +31,11 @@ interface CommitBody {
  */
 export async function POST(request: NextRequest) {
   return handle(async () => {
+    // Writes are the expensive path: each one costs GitHub API calls and
+    // rewrites a branch. 60 commits a minute is far above what typing produces
+    // and far below what a stuck retry loop would.
+    enforceRateLimit(request, { name: "commit", limit: 60, windowMs: 60_000 });
+
     const { client } = await requireClient();
     const body = (await request.json()) as CommitBody;
 

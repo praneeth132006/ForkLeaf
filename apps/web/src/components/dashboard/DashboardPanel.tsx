@@ -5,13 +5,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { SessionUser, Workspace } from "@forkleaf/types";
 import { useLibrary } from "@/hooks/useLibrary";
-import { folderCounts, queryIndex, tagCounts, type IndexEntry, type SortKey } from "@/lib/library";
+import { queryIndex, tagCounts, type IndexEntry, type SortKey } from "@/lib/library";
 import { signOut } from "@/lib/gateway";
 import { useTheme } from "@/hooks/useTheme";
+import { useIndexView, type IndexView } from "@/hooks/useIndexView";
 import { ForkLeafLogo } from "@/components/Brand";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
 import { RepoChooser } from "./RepoChooser";
+import { FolderNav } from "./FolderNav";
 import { NoteList, formatWhen } from "./NoteList";
+import { NoteTree } from "./NoteTree";
+import { NoteGrid } from "./NoteGrid";
 
 /**
  * The dashboard.
@@ -22,6 +26,15 @@ import { NoteList, formatWhen } from "./NoteList";
  * which repositories are connected, what is in them, and a way into any note in
  * one click — with the repository choice made here rather than assumed.
  */
+
+/** Rows rendered at once. Enough to fill a screen and scroll a little. */
+const PAGE_SIZE = 40;
+
+const VIEWS: { value: IndexView; label: string; hint: string }[] = [
+  { value: "list", label: "List", hint: "One row per note, newest first" },
+  { value: "tree", label: "Tree", hint: "Folders, as they are in the repository" },
+  { value: "grid", label: "Cards", hint: "Larger cards showing the opening lines" },
+];
 
 const SORTS: { value: SortKey; label: string }[] = [
   { value: "recent", label: "Recently edited" },
@@ -46,6 +59,13 @@ export function DashboardPanel({
   const [folder, setFolder] = useState<string | null>(null);
   const [tag, setTag] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("recent");
+  // Remembered across visits: a view preference is not a per-session choice.
+  const [view, chooseView] = useIndexView();
+  const [showAllTags, setShowAllTags] = useState(false);
+  // How many rows of the index are on screen. A repository of a few hundred
+  // notes rendered every one of them into the DOM, which is both slow and an
+  // invitation to scroll rather than to search.
+  const [visible, setVisible] = useState(PAGE_SIZE);
   const [addingRepo, setAddingRepo] = useState(false);
   const [skippedChoice, setSkippedChoice] = useState(false);
   const [prompt, setPrompt] = useState<PromptRequest | null>(null);
@@ -64,8 +84,10 @@ export function DashboardPanel({
     [entries, query, folder, tag, sort],
   );
 
-  const folders = useMemo(() => folderCounts(entries), [entries]);
-  const tags = useMemo(() => tagCounts(entries).slice(0, 12), [entries]);
+  const tags = useMemo(() => tagCounts(entries), [entries]);
+
+  // Only the visible slice is rendered; every change to the filters resets it.
+  const page = useMemo(() => results.slice(0, visible), [results, visible]);
 
   const recent = useMemo(
     () =>
@@ -74,6 +96,11 @@ export function DashboardPanel({
         .slice(0, 5),
     [entries],
   );
+
+  const emptyMessage =
+    entries.length === 0
+      ? "Nothing here yet. Create your first note and it saves to this device instantly, and to GitHub as soon as a repository is connected."
+      : "No notes match that search.";
 
   const editorHref = useCallback(
     (entry: IndexEntry) =>
@@ -86,6 +113,17 @@ export function DashboardPanel({
     setFolder(null);
     setTag(null);
     setQuery("");
+    setVisible(PAGE_SIZE);
+  }, []);
+
+  const browseFolder = useCallback((next: string | null) => {
+    setFolder(next);
+    setVisible(PAGE_SIZE);
+  }, []);
+
+  const filterTag = useCallback((next: string | null) => {
+    setTag(next);
+    setVisible(PAGE_SIZE);
   }, []);
 
   const connect = useCallback(
@@ -169,7 +207,7 @@ export function DashboardPanel({
             </h1>
             <p className="mt-1 text-[14.5px] text-[var(--fl-muted)]">
               {library.indexing
-                ? "Indexing your notes — search and sorting improve as this fills in."
+                ? `Reading your notes — ${library.totals.read.toLocaleString()} of ${library.totals.notes.toLocaleString()} so far. Counts and search fill in as this runs.`
                 : describeLibrary(library.totals.notes, library.workspaces.length)}
             </p>
           </div>
@@ -199,8 +237,19 @@ export function DashboardPanel({
         {/* ── Stats ────────────────────────────────────────────────────── */}
         <section className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="Notes" value={library.totals.notes.toLocaleString()} />
-          <Stat label="Words" value={library.totals.words.toLocaleString()} />
-          <Stat label="Diagrams" value={library.totals.diagrams.toLocaleString()} />
+          {/* Word and diagram counts can only come from notes that have been
+              read. Saying so is the difference between a number that is filling
+              in and a number that appears to be changing on its own. */}
+          <Stat
+            label="Words"
+            value={library.totals.words.toLocaleString()}
+            hint={coverage(library.totals.read, library.totals.notes)}
+          />
+          <Stat
+            label="Diagrams"
+            value={library.totals.diagrams.toLocaleString()}
+            hint={coverage(library.totals.read, library.totals.notes)}
+          />
           <Stat
             label="Waiting to push"
             value={library.totals.pending.toLocaleString()}
@@ -326,10 +375,37 @@ export function DashboardPanel({
             </SectionLabel>
 
             <div className="flex flex-wrap items-center gap-2">
+              <div
+                role="tablist"
+                aria-label="How to show the notes"
+                className="flex shrink-0 rounded-lg border border-[var(--fl-border)] p-0.5"
+              >
+                {VIEWS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={view === option.value}
+                    title={option.hint}
+                    onClick={() => chooseView(option.value)}
+                    className={`rounded-[6px] px-2.5 py-1 text-[12.5px] font-medium transition-colors ${
+                      view === option.value
+                        ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
+                        : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
               <input
                 type="search"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setVisible(PAGE_SIZE);
+                }}
                 placeholder="Search titles, tags, paths…"
                 aria-label="Search notes"
                 className="fl-input w-56"
@@ -339,8 +415,14 @@ export function DashboardPanel({
               </label>
               <select
                 id="dashboard-sort"
+                // The tree is ordered by the repository's own structure, so a
+                // sort key would have nothing to act on.
+                disabled={view === "tree"}
                 value={sort}
-                onChange={(event) => setSort(event.target.value as SortKey)}
+                onChange={(event) => {
+                  setSort(event.target.value as SortKey);
+                  setVisible(PAGE_SIZE);
+                }}
                 className="fl-input !py-2 text-sm"
               >
                 {SORTS.map((option) => (
@@ -352,56 +434,57 @@ export function DashboardPanel({
             </div>
           </div>
 
-          {(folders.length > 0 || tags.length > 0) && (
-            <div className="mb-3 flex flex-wrap items-center gap-1.5">
-              <Chip
-                active={folder === null && tag === null}
-                onClick={() => {
-                  setFolder(null);
-                  setTag(null);
-                }}
-              >
-                Everything ({entries.length})
-              </Chip>
-
-              {folders.map((item) => (
-                <Chip
-                  key={item.path}
-                  active={folder === item.path}
-                  onClick={() => setFolder(folder === item.path ? null : item.path)}
-                >
-                  {item.path}/ ({item.count})
-                </Chip>
-              ))}
-
-              {tags.map((item) => (
-                <Chip
-                  key={`tag-${item.tag}`}
-                  active={tag === item.tag}
-                  onClick={() => setTag(tag === item.tag ? null : item.tag)}
-                >
-                  #{item.tag} ({item.count})
-                </Chip>
-              ))}
-            </div>
-          )}
-
-          <NoteList
-            entries={results}
-            editorHref={editorHref}
-            emptyMessage={
-              entries.length === 0
-                ? "Nothing here yet. Create your first note and it saves to this device instantly, and to GitHub as soon as a repository is connected."
-                : "No notes match that search."
-            }
+          <FolderNav
+            entries={entries}
+            folder={folder}
+            onFolder={browseFolder}
+            tags={tags}
+            tag={tag}
+            onTag={filterTag}
+            showAllTags={showAllTags}
+            onToggleTags={() => setShowAllTags((value) => !value)}
           />
 
-          {results.length > 0 && (
-            <p className="mt-3 text-[12.5px] text-[var(--fl-muted)]">
-              Showing {results.length} of {entries.length} note
-              {entries.length === 1 ? "" : "s"}
-              {library.indexing ? " — still indexing, so search will get better." : ""}
-            </p>
+          {view === "list" && (
+            <NoteList entries={page} editorHref={editorHref} emptyMessage={emptyMessage} />
+          )}
+
+          {view === "grid" && (
+            <NoteGrid entries={page} editorHref={editorHref} emptyMessage={emptyMessage} />
+          )}
+
+          {/* The tree draws every match rather than a page of them: a folder
+              showing 3 of its 11 notes, with a "show 40 more" button below the
+              whole tree, would be a lie about what is in the repository. */}
+          {view === "tree" && (
+            <NoteTree
+              entries={results}
+              editorHref={editorHref}
+              emptyMessage={emptyMessage}
+              expandAll={query.trim().length > 0 || tag !== null}
+            />
+          )}
+
+          {view !== "tree" && results.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[12.5px] text-[var(--fl-muted)]">
+                Showing {page.length.toLocaleString()} of {results.length.toLocaleString()}
+                {results.length === entries.length
+                  ? ""
+                  : ` matching note${results.length === 1 ? "" : "s"}`}
+                {library.indexing ? " — still reading, so search will get better." : ""}
+              </p>
+
+              {page.length < results.length && (
+                <button
+                  type="button"
+                  onClick={() => setVisible((count) => count + PAGE_SIZE)}
+                  className="fl-btn fl-btn-ghost !py-1.5 !text-[13px]"
+                >
+                  Show {Math.min(PAGE_SIZE, results.length - page.length)} more
+                </button>
+              )}
+            </div>
           )}
         </section>
       </div>
@@ -500,29 +583,11 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
-function Chip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-[12.5px] transition ${
-        active
-          ? "border-[var(--fl-accent)] bg-[var(--fl-accent-soft)] text-[var(--fl-accent)]"
-          : "border-[var(--fl-border)] text-[var(--fl-muted)] hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)]"
-      }`}
-    >
-      {children}
-    </button>
-  );
+/** "all 155 read" / "120 of 155 read" — never silent about what is missing. */
+function coverage(read: number, total: number): string {
+  if (total === 0) return "";
+  if (read >= total) return `from all ${total.toLocaleString()} notes`;
+  return `from ${read.toLocaleString()} of ${total.toLocaleString()} notes read so far`;
 }
 
 function describeLibrary(notes: number, repositories: number): string {

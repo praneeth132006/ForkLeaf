@@ -24,6 +24,16 @@ export interface NoteRepositoryOptions {
  * only when it must, so opening a note is instant on a second visit and works
  * with no connection at all.
  */
+/** The best date a note's own frontmatter can offer, if it offers one. */
+function frontmatterTimestamp(frontmatter: NoteFrontmatter): string | null {
+  for (const value of [frontmatter.updated, frontmatter.created]) {
+    if (typeof value !== "string") continue;
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) return new Date(parsed).toISOString();
+  }
+  return null;
+}
+
 export class NoteRepository {
   private readonly db: LocalDatabase;
   private readonly gateway: RemoteGateway;
@@ -116,7 +126,11 @@ export class NoteRepository {
           content: parsed.content,
           frontmatter: parsed.frontmatter,
           baseSha: remote.sha,
-          updatedAt: this.now().toISOString(),
+          // A read must not look like an edit. Any edit made here is still the
+          // most recent one we know of; failing that, the note's own
+          // frontmatter may say when it was written; failing that we genuinely
+          // do not know, and `null` says so instead of inventing "just now".
+          updatedAt: local?.updatedAt ?? frontmatterTimestamp(parsed.frontmatter),
           dirty: false,
           ...(local?.viewMode ? { viewMode: local.viewMode } : {}),
         };

@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import type { CursorPosition } from "@forkleaf/editor";
+import type { CursorPosition, ImageBridge } from "@forkleaf/editor";
 import type { EditorViewMode } from "@forkleaf/types";
 import {
   deriveTitle,
@@ -30,6 +30,8 @@ import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { ForkLeafLogo } from "@/components/Brand";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { signOut } from "@/lib/gateway";
+import { readAsDataUrl, resolveImageSrc, uploadImage } from "@/lib/assets";
+import { flattenTree } from "@/lib/library";
 import { track } from "@/lib/firebase/analytics";
 import { upsertUserProfile } from "@/lib/firebase/users";
 
@@ -106,6 +108,38 @@ export function EditorWorkspace() {
   const user = notebook.session?.user ?? null;
 
   const words = useMemo(() => (note ? documentStats(note.content).words : 0), [note]);
+
+  const notePath = note?.path ?? null;
+  const takenPaths = useMemo(() => flattenTree(notebook.tree), [notebook.tree]);
+
+  /**
+   * Where images in this note come from and go.
+   *
+   * On a connected repository an image becomes a real file next to the notes
+   * and the note links to it by relative path — so the note still renders on
+   * github.com, in an IDE, or anywhere else the repository is opened. With no
+   * repository there is nowhere to put a file, so the image is embedded in the
+   * note itself: larger, but it works, and it survives being pushed later.
+   */
+  const images = useMemo<ImageBridge>(
+    () => ({
+      canUpload: Boolean(workspace && !workspace.isLocal),
+      resolve: (src: string) => resolveImageSrc(workspace, notePath, src),
+      upload: async (file: File) => {
+        if (!workspace || workspace.isLocal || !notePath) {
+          return readAsDataUrl(file);
+        }
+        const { markdownSrc } = await uploadImage({
+          workspace,
+          notePath,
+          file,
+          taken: takenPaths,
+        });
+        return markdownSrc;
+      },
+    }),
+    [workspace, notePath, takenPaths],
+  );
 
   const conflicts = notebook.sync.conflicts;
   // Derived rather than pushed into state by an effect, which would cause a
@@ -648,6 +682,12 @@ export function EditorWorkspace() {
                 mode={mode}
                 theme={theme}
                 onCursorChange={setCursor}
+                images={images}
+                imageDestination={
+                  workspace && !workspace.isLocal
+                    ? `Committed to ${workspace.repo.owner}/${workspace.repo.repo}`
+                    : "Stored inside the note, on this device"
+                }
                 hideModeSwitcher
                 placeholder="Type / for headings, lists, tables and diagrams…"
                 className="min-h-0 flex-1"

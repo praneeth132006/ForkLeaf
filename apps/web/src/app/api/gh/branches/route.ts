@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { ApiError, handle, requireClient } from "@/lib/api-helpers";
+import { ApiError, assertRef, handle, readOwnerRepo, requireClient } from "@/lib/api-helpers";
 import { sanitizeBranchName } from "@/lib/branch-name";
 
 /** Lists the branches of a repository, default first. */
@@ -7,12 +7,10 @@ export async function GET(request: NextRequest) {
   return handle(async () => {
     const { client } = await requireClient();
     const params = request.nextUrl.searchParams;
-
-    const owner = params.get("owner");
-    const repo = params.get("repo");
-    if (!owner || !repo) {
-      throw new ApiError(400, "validation", "owner and repo are required");
-    }
+    const { owner, repo } = readOwnerRepo({
+      owner: params.get("owner"),
+      repo: params.get("repo"),
+    });
 
     return { branches: await client.listBranchSummaries(owner, repo) };
   });
@@ -36,15 +34,16 @@ export async function POST(request: NextRequest) {
       from?: string;
     };
 
-    const owner = body.owner?.trim();
-    const repo = body.repo?.trim();
+    const { owner, repo } = readOwnerRepo(body);
     const name = sanitizeBranchName(body.name ?? "");
     const from = body.from?.trim();
 
-    if (!owner || !repo || !name || !from) {
-      throw new ApiError(400, "validation", "owner, repo, name and from are all required");
+    if (!name || !from) {
+      throw new ApiError(400, "validation", "name and from are both required");
     }
 
-    return { branch: await client.createBranch(owner, repo, name, from) };
+    return {
+      branch: await client.createBranch(owner, repo, name, assertRef(from, "source branch")),
+    };
   });
 }

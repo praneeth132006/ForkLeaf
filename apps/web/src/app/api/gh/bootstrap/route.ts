@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
-import { handle, requireClient, normalize } from "@/lib/api-helpers";
+import { assertName, handle, requireClient, normalize } from "@/lib/api-helpers";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import type { RepoRef } from "@forkleaf/types";
 
 const DEFAULT_REPO_NAME = "forkleaf-notes";
@@ -19,6 +20,10 @@ const DEFAULT_REPO_NAME = "forkleaf-notes";
  */
 export async function POST(request: NextRequest) {
   return handle(async () => {
+    // This route creates a repository on the user's GitHub account. A loop here
+    // is a page of junk repositories on their profile.
+    enforceRateLimit(request, { name: "bootstrap", limit: 5, windowMs: 60_000 });
+
     const { client, login } = await requireClient();
 
     const body = (await request.json().catch(() => ({}))) as {
@@ -28,7 +33,9 @@ export async function POST(request: NextRequest) {
       scaffold?: boolean;
     };
 
-    const name = body.name?.trim() || DEFAULT_REPO_NAME;
+    // Goes into the GitHub API path as well as the creation body, so it is
+    // held to the same rules as any other repository name.
+    const name = assertName(body.name?.trim() || DEFAULT_REPO_NAME, "repository name");
     const directory = normalize(body.directory ?? "");
 
     const repo = await client.ensureRepo({

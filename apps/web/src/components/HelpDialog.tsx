@@ -113,8 +113,21 @@ export function HelpDialog({
           <Item title="Press / for anything">
             Type <Mono>/</Mono> on an empty line for headings, lists, tables, code blocks, images
             and diagrams. This works in <strong>all three views</strong> — in Split and Source it
-            inserts the Markdown directly. The same list is in the <strong>Insert</strong> button on
-            the toolbar.
+            inserts the Markdown directly.
+          </Item>
+          <Item title="Everything Markdown can do, on the toolbar">
+            Undo and redo, a paragraph-style dropdown, bold, italic, strikethrough, inline code and
+            highlight, the three kinds of list with indent and outdent, links, images, tables,
+            dividers and diagrams. It drives whichever view you are in: in Split and Source the
+            buttons edit the Markdown itself, so selecting a word and pressing <strong>B</strong>{" "}
+            wraps it in <Mono>**</Mono>. There are no fonts or colours, because none of those
+            survive being saved as a <Mono>.md</Mono> file.
+          </Item>
+          <Item title="Paste images straight in">
+            Paste a screenshot, drop a file, or use the <strong>Image</strong> button. On a
+            connected repository the file is committed to an <Mono>assets/</Mono> folder and the
+            note links to it by a relative path, so it still renders on github.com. With no
+            repository connected the image is embedded in the note instead.
           </Item>
           <Item title="Properties are real front matter">
             The Title and Tags fields in the right-hand panel are written into the file as a YAML

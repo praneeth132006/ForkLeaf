@@ -17,7 +17,7 @@ export {
   type DocumentStats,
 } from "./analyze";
 
-export { markdownToHtml, astToMarkdown, formatMarkdown } from "./render";
+export { markdownToHtml, astToMarkdown, formatMarkdown, type RenderOptions } from "./render";
 
 export {
   normalizePath,

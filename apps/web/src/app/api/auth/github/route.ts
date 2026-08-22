@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { appUrl } from "@/lib/app-url";
+import { clientKey } from "@/lib/rate-limit";
 import { createOAuthState, githubOAuthConfigured } from "@/lib/session";
 
 /**
@@ -12,14 +14,21 @@ import { createOAuthState, githubOAuthConfigured } from "@/lib/session";
  */
 export async function GET(request: NextRequest) {
   if (!githubOAuthConfigured()) {
-    return NextResponse.redirect(new URL("/?error=oauth_not_configured", request.url));
+    return NextResponse.redirect(appUrl(request, "/?error=oauth_not_configured"));
+  }
+
+  // Starting a sign-in is cheap for the client and not free for us: each one
+  // sets a cookie and sends someone to GitHub. Bounded so a script cannot use
+  // the route as a redirector or a cookie firehose.
+  if (tooManySignInAttempts(request)) {
+    return NextResponse.redirect(appUrl(request, "/?error=too_many_attempts"));
   }
 
   const state = await createOAuthState();
 
   const authorize = new URL("https://github.com/login/oauth/authorize");
   authorize.searchParams.set("client_id", process.env.GITHUB_OAUTH_CLIENT_ID!);
-  authorize.searchParams.set("redirect_uri", callbackUrl(request));
+  authorize.searchParams.set("redirect_uri", appUrl(request, "/api/auth/callback").toString());
   authorize.searchParams.set("scope", "repo read:user");
   authorize.searchParams.set("state", state);
 
@@ -27,13 +36,26 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Builds the callback URL.
+ * A fixed window over sign-in starts, kept local to this route.
  *
- * Prefers the configured app URL so the redirect target matches what is
- * registered on the OAuth app; behind a proxy, `request.url` may be the
- * internal address rather than the public one.
+ * Not `enforceRateLimit`: that throws an `ApiError` for the JSON routes, and
+ * this one answers with a redirect the browser can actually show.
  */
-function callbackUrl(request: NextRequest): string {
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
-  return new URL("/api/auth/callback", base).toString();
+const attempts = new Map<string, { count: number; resetAt: number }>();
+const ATTEMPT_LIMIT = 10;
+const ATTEMPT_WINDOW_MS = 60_000;
+
+function tooManySignInAttempts(request: NextRequest): boolean {
+  const now = Date.now();
+  const key = clientKey(request);
+  const window = attempts.get(key);
+
+  if (!window || window.resetAt <= now) {
+    if (attempts.size > 5_000) attempts.clear();
+    attempts.set(key, { count: 1, resetAt: now + ATTEMPT_WINDOW_MS });
+    return false;
+  }
+
+  window.count += 1;
+  return window.count > ATTEMPT_LIMIT;
 }

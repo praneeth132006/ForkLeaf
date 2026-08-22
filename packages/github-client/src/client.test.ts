@@ -335,6 +335,65 @@ describe("readFile", () => {
   });
 });
 
+describe("binary content", () => {
+  it("hands an already-base64 payload to GitHub untouched", async () => {
+    const { calls, fetchImpl } = fakeGitHub();
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    // Real PNG bytes: re-encoding these as UTF-8 would corrupt them, which is
+    // the whole reason `encoding` exists.
+    const png =
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+    await client.commitChanges(
+      repo,
+      [{ op: "upsert", path: "assets/dot.png", content: png, encoding: "base64" }],
+      { message: "add an image" },
+    );
+
+    const blob = calls.find((call) => call.url === "/repos/octo/notes/git/blobs");
+    expect(blob?.body).toEqual({ content: png, encoding: "base64" });
+  });
+
+  it("still encodes text content, so notes are unaffected", async () => {
+    const { calls, fetchImpl } = fakeGitHub();
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    await client.commitChanges(repo, [{ op: "upsert", path: "a.md", content: "# Hi" }], {
+      message: "update",
+    });
+
+    const blob = calls.find((call) => call.url === "/repos/octo/notes/git/blobs");
+    expect(blob?.body).toEqual({ content: encodeBase64("# Hi"), encoding: "base64" });
+  });
+
+  it("reads a file's bytes back without decoding them as text", async () => {
+    const png = "iVBORw0KGgo=";
+    const { fetchImpl } = fakeGitHub({
+      "GET /repos/octo/notes/contents/assets/dot.png?ref=main": {
+        type: "file",
+        // GitHub wraps its base64 at 60 characters.
+        content: `${png.slice(0, 4)}\n${png.slice(4)}`,
+        sha: "blob-9",
+        size: 8,
+      },
+    });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    expect(await client.readFileBase64(repo, "assets/dot.png")).toEqual({
+      base64: png,
+      sha: "blob-9",
+      size: 8,
+    });
+  });
+
+  it("returns null for a missing file rather than throwing", async () => {
+    const { fetchImpl } = fakeGitHub();
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+    expect(await client.readFileBase64(repo, "assets/missing.png")).toBeNull();
+  });
+});
+
 describe("error mapping", () => {
   it("classifies a 403 rate limit separately from a 403 permission denial", async () => {
     const rateLimited = vi.fn(

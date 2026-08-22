@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
+import type { EditorView } from "@tiptap/pm/view";
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -9,7 +10,6 @@ import Highlight from "@tiptap/extension-highlight";
 import Typography from "@tiptap/extension-typography";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
-import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
 import { Markdown, type MarkdownStorage } from "tiptap-markdown";
@@ -24,9 +24,11 @@ function markdownOf(editor: Editor): string {
   return (editor.storage as unknown as { markdown: MarkdownStorage }).markdown.getMarkdown();
 }
 import { CodeBlock } from "./extensions/CodeBlock";
+import { ResolvedImage } from "./extensions/ResolvedImage";
+import { imagesFrom, type ImageBridge } from "./images";
 import { MermaidBlock } from "./extensions/MermaidBlock";
 import { readSlashState } from "./extensions/SlashCommands";
-import { filterInsertActions, type InsertDefinition } from "./insert-actions";
+import { filterInsertActions, type ActionContext, type InsertDefinition } from "./insert-actions";
 
 export interface WysiwygEditorProps {
   /** Markdown body, excluding frontmatter. */
@@ -37,6 +39,17 @@ export interface WysiwygEditorProps {
   className?: string;
   /** Hands the Tiptap instance up so a shared toolbar can drive it. */
   onReady?: (editor: Editor | null) => void;
+  /** Where pasted and dropped images go, and how stored ones are displayed. */
+  images?: ImageBridge;
+  /** Called while an image is being stored, so the app can say something. */
+  onImageStatus?: (status: { busy: boolean; error: string | null }) => void;
+  /**
+   * What the app can do for the `/` menu that a markdown command cannot.
+   *
+   * `/image` has to open the same picker the toolbar's Image button does, or
+   * the two routes to the same feature behave differently.
+   */
+  slashActions?: ActionContext;
 }
 
 /**
@@ -53,9 +66,20 @@ export function WysiwygEditor({
   autoFocus = false,
   className,
   onReady,
+  images,
+  onImageStatus,
+  slashActions,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+
+  // Read through refs rather than captured in the extension list: the editor
+  // is built once, and an image bridge that arrives a render later (the
+  // workspace resolves asynchronously) has to reach the already-built editor.
+  const imagesRef = useRef<ImageBridge | undefined>(images);
+  imagesRef.current = images;
+  const onImageStatusRef = useRef(onImageStatus);
+  onImageStatusRef.current = onImageStatus;
 
   // Guards the value-sync effect: without it, our own serialised output feeds
   // straight back in and resets the cursor to the top on every keystroke.
@@ -96,7 +120,15 @@ export function WysiwygEditor({
       Typography,
       TaskList,
       TaskItem.configure({ nested: true }),
-      Image.configure({ inline: false, allowBase64: false }),
+      // `allowBase64` is on because a workspace with no repository behind it
+      // has nowhere to commit a file to, and inlining the image is the only
+      // way "paste a screenshot" can work there at all.
+      ResolvedImage.configure({
+        inline: false,
+        allowBase64: true,
+        resolveSrc: (src: string) => imagesRef.current?.resolve?.(src) ?? src,
+        HTMLAttributes: { loading: "lazy" },
+      }),
       Link.configure({
         openOnClick: false,
         autolink: true,
@@ -121,6 +153,46 @@ export function WysiwygEditor({
     [placeholder],
   );
 
+  /**
+   * Stores dropped or pasted images and puts them in the document.
+   *
+   * Uploading takes a round trip to GitHub, so the images are inserted when
+   * they land rather than optimistically: a placeholder that later fails would
+   * leave a broken node in a file that autosaves. The status callback is what
+   * tells the reader something is happening in the meantime.
+   */
+  const insertImages = useCallback(async (view: EditorView, files: File[], at?: number) => {
+    const bridge = imagesRef.current;
+    if (!bridge?.upload || files.length === 0) return;
+
+    onImageStatusRef.current?.({ busy: true, error: null });
+
+    let position = at;
+    try {
+      for (const file of files) {
+        const src = await bridge.upload(file);
+        if (!src) continue;
+
+        const node = view.state.schema.nodes.image?.create({ src, alt: file.name });
+        if (!node) continue;
+
+        const tr = view.state.tr;
+        // A drop knows where it landed; a paste goes wherever the caret is.
+        const target = position ?? tr.selection.to;
+        tr.insert(target, node);
+        view.dispatch(tr);
+        // Anything after the first lands below the one before it.
+        position = target + node.nodeSize;
+      }
+      onImageStatusRef.current?.({ busy: false, error: null });
+    } catch (error) {
+      onImageStatusRef.current?.({
+        busy: false,
+        error: error instanceof Error ? error.message : "That image could not be added.",
+      });
+    }
+  }, []);
+
   const editor = useEditor({
     extensions,
     content: value,
@@ -132,6 +204,32 @@ export function WysiwygEditor({
       attributes: {
         class: "fl-prose focus:outline-none min-h-[50vh]",
         "aria-label": "Note content",
+      },
+      handlePaste: (view, event) => {
+        const files = imagesFrom(event.clipboardData);
+        if (files.length === 0 || !imagesRef.current?.upload) return false;
+
+        // Claim the event: letting ProseMirror also handle it pastes the
+        // clipboard's HTML fallback, which for a screenshot is an <img> with a
+        // blob: URL that stops working the moment the page reloads.
+        event.preventDefault();
+        void insertImages(view, files);
+        return true;
+      },
+      handleDrop: (view, event, _slice, moved) => {
+        // A node being dragged within the document is not an upload.
+        if (moved) return false;
+
+        const files = imagesFrom((event as DragEvent).dataTransfer);
+        if (files.length === 0 || !imagesRef.current?.upload) return false;
+
+        event.preventDefault();
+        const at = view.posAtCoords({
+          left: (event as DragEvent).clientX,
+          top: (event as DragEvent).clientY,
+        })?.pos;
+        void insertImages(view, files, at);
+        return true;
       },
     },
     onUpdate: ({ editor: instance }) => {
@@ -178,7 +276,7 @@ export function WysiwygEditor({
 
   return (
     <div className={className}>
-      <SlashMenu editor={editor} />
+      <SlashMenu editor={editor} actions={slashActions ?? {}} />
 
       <BubbleMenu
         editor={editor}
@@ -271,7 +369,7 @@ function FormatButton({
 
 // ─── Slash menu ─────────────────────────────────────────────────────────────
 
-function SlashMenu({ editor }: { editor: Editor }) {
+function SlashMenu({ editor, actions }: { editor: Editor; actions: ActionContext }) {
   const [state, setState] = useState({ active: false, query: "", from: 0 });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [position, setPosition] = useState({ top: 0, left: 0 });
@@ -316,10 +414,15 @@ function SlashMenu({ editor }: { editor: Editor }) {
         .deleteRange({ from: state.from, to: state.from + state.query.length + 1 })
         .run();
 
-      command.rich(editor);
+      // Images and links defer to the app, which is the only thing that knows
+      // where a file would be stored.
+      if (command.id === "image" && actions.requestImage) actions.requestImage();
+      else if (command.id === "link" && actions.requestLink) actions.requestLink();
+      else command.rich(editor);
+
       setState({ active: false, query: "", from: 0 });
     },
-    [editor, state],
+    [editor, state, actions],
   );
 
   // Keyboard navigation is bound at the document level and captured, so it wins

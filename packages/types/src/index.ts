@@ -106,8 +106,15 @@ export interface Note {
    * `null` for a note that has never been pushed. Used for conflict detection.
    */
   baseSha: string | null;
-  /** ISO timestamp of the last local edit. */
-  updatedAt: string;
+  /**
+   * ISO timestamp of the last edit made to this note in ForkLeaf.
+   *
+   * `null` for a note that has only ever been *read* — opened from GitHub,
+   * or pulled in by the dashboard's background index. Reading is not editing,
+   * and stamping a read with the current time is what used to make every note
+   * in a freshly connected repository claim it had been touched a moment ago.
+   */
+  updatedAt: string | null;
   /** True when the local copy has edits not yet pushed to GitHub. */
   dirty: boolean;
   /** Per-note editor mode preference. Falls back to the global default. */

@@ -14,17 +14,24 @@ const nextConfig: NextConfig = {
     "@forkleaf/editor",
   ],
 
+  /**
+   * Baseline headers for every response, including the static assets that
+   * `src/proxy.ts` deliberately skips. The policy work that needs a per-request
+   * value — Content-Security-Policy with its nonce, HSTS, the cross-origin
+   * isolation headers — lives in the proxy instead.
+   */
   async headers() {
     return [
       {
         source: "/:path*",
         headers: [
-          // The app renders markdown from arbitrary repositories, so the usual
-          // clickjacking and sniffing protections matter here.
           { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          {
+            key: "Permissions-Policy",
+            value:
+              "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
+          },
         ],
       },
     ];

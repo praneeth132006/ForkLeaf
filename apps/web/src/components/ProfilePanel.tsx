@@ -98,9 +98,13 @@ export function ProfilePanel({ user, githubAvailable }: ProfilePanelProps) {
               diagrams: stats.reduce((total, stat) => total + stat.diagrams, 0),
               pending: queue.filter((item) => item.workspaceId === workspace.id).length,
               syncMode: workspace.isLocal ? "manual" : preference.mode,
+              // Notes that were only ever read carry no edit timestamp, and
+              // sorting them in alongside the real ones puts `null` last and
+              // hides the answer.
               lastEditedAt:
                 notes
                   .map((note) => note.updatedAt)
+                  .filter((value): value is string => value !== null)
                   .sort()
                   .pop() ?? null,
             };

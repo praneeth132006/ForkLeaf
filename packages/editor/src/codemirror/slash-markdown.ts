@@ -1,6 +1,6 @@
 import type { CompletionContext, CompletionResult, Completion } from "@codemirror/autocomplete";
 import type { EditorView } from "@codemirror/view";
-import { filterInsertActions, type InsertDefinition } from "../insert-actions";
+import { filterInsertActions, type ActionContext, type InsertDefinition } from "../insert-actions";
 
 /**
  * Slash commands for the raw-Markdown editor.
@@ -27,8 +27,21 @@ import { filterInsertActions, type InsertDefinition } from "../insert-actions";
  * because the inserted text and the searchable label are different things —
  * you type "/diagram" and get a fenced mermaid block.
  */
-function applyDefinition(definition: InsertDefinition) {
+function applyDefinition(definition: InsertDefinition, context: ActionContext) {
   return (view: EditorView, _completion: Completion, from: number, to: number) => {
+    // Images and links are questions for the app — it is the only thing that
+    // knows whether there is a repository to upload into. The typed `/query`
+    // still has to go, or the dialog would insert its result after it.
+    const ask =
+      (definition.id === "image" && context.requestImage) ||
+      (definition.id === "link" && context.requestLink);
+
+    if (ask) {
+      view.dispatch({ changes: { from, to, insert: "" }, selection: { anchor: from } });
+      ask();
+      return;
+    }
+
     const { text, cursor } = definition.markdown;
 
     view.dispatch({
@@ -43,7 +56,10 @@ function applyDefinition(definition: InsertDefinition) {
  * Completion source that fires on a `/` at the start of a line or after
  * whitespace — never mid-word, so URLs and file paths are left alone.
  */
-export function markdownSlashCommands(context: CompletionContext): CompletionResult | null {
+export function markdownSlashCommands(
+  context: CompletionContext,
+  actions: ActionContext = {},
+): CompletionResult | null {
   const match = context.matchBefore(/\/[a-zA-Z0-9]*/);
   if (!match) return null;
 
@@ -73,7 +89,7 @@ export function markdownSlashCommands(context: CompletionContext): CompletionRes
       detail: detailFor(definition),
       info: definition.hint,
       type: "keyword",
-      apply: applyDefinition(definition),
+      apply: applyDefinition(definition, actions),
     })),
   };
 }
@@ -86,4 +102,17 @@ function detailFor(definition: InsertDefinition): string {
   const firstLine = definition.markdown.text.split("\n")[0] ?? "";
   const trimmed = firstLine.trim();
   return trimmed.length > 0 && trimmed.length <= 12 ? trimmed : "";
+}
+
+/**
+ * The same source, bound to what the surrounding app can do.
+ *
+ * CodeMirror wants a plain `(context) => result` function and keeps it for the
+ * editor's whole life, so the app's capabilities are read through a getter
+ * rather than captured — a handler that arrives a render later still counts,
+ * and one that never arrives is correctly absent rather than a no-op stub.
+ */
+export function markdownSlashSource(getActions: () => ActionContext = () => ({})) {
+  return (context: CompletionContext): CompletionResult | null =>
+    markdownSlashCommands(context, getActions());
 }

@@ -40,7 +40,8 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         slug: "editor",
         title: "The editor",
-        summary: "Rich text, split and source view, the insert menu, and the slash commands.",
+        summary:
+          "Rich text, split and source view, the formatting bar, images, and the slash commands.",
       },
       {
         slug: "diagrams",

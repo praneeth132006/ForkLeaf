@@ -220,3 +220,43 @@ describe("paths", () => {
     expect(relativeToDirectory("a.md", "")).toBe("a.md");
   });
 });
+
+describe("images and highlights", () => {
+  it("rewrites a repository-relative image through the resolver", () => {
+    const html = markdownToHtml("![a chart](../assets/chart.png)", {
+      resolveImageSrc: (src) => `/api/gh/raw?path=${encodeURIComponent(src)}`,
+    });
+
+    expect(html).toContain('src="/api/gh/raw?path=..%2Fassets%2Fchart.png"');
+    expect(html).toContain('alt="a chart"');
+    expect(html).toContain('loading="lazy"');
+  });
+
+  it("leaves images alone when no resolver is given", () => {
+    expect(markdownToHtml("![](../assets/chart.png)")).toContain('src="../assets/chart.png"');
+  });
+
+  it("keeps a raster data URL, which is how an offline note stores its images", () => {
+    const html = markdownToHtml("![](data:image/png;base64,iVBORw0KGgo=)");
+    expect(html).toContain("data:image/png;base64,iVBORw0KGgo=");
+  });
+
+  it("drops a data URL that is a document rather than a raster image", () => {
+    const html = markdownToHtml("![](data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=)");
+    expect(html).not.toContain("svg+xml");
+    expect(html).toContain("<img");
+  });
+
+  it("renders ==highlight== as a mark, which is what the editor writes", () => {
+    expect(markdownToHtml("some ==important== text")).toContain("<mark>important</mark>");
+  });
+
+  it("leaves lone equals signs alone", () => {
+    const html = markdownToHtml("`2 == 2` and a == b");
+    expect(html).not.toContain("<mark>");
+  });
+
+  it("does not highlight across a line break", () => {
+    expect(markdownToHtml("==open\nclose==")).not.toContain("<mark>");
+  });
+});

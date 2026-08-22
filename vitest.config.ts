@@ -16,6 +16,12 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      // The web app's own path alias, so its modules can be unit tested the
+      // same way the packages are.
+      "@": r("./apps/web/src"),
+      // `server-only` throws on import outside a server bundle, so the modules
+      // that guard the API routes could not otherwise be unit tested.
+      "server-only": r("./test/server-only-stub.ts"),
       "@forkleaf/types": r("./packages/types/src/index.ts"),
       "@forkleaf/markdown-engine": r("./packages/markdown-engine/src/index.ts"),
       "@forkleaf/github-client": r("./packages/github-client/src/index.ts"),

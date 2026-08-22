@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SLASH_COMMANDS, filterSlashCommands, readSlashState } from "./SlashCommands";
+import { readSlashState } from "./SlashCommands";
 import type { Editor } from "@tiptap/core";
 
 /**
@@ -70,41 +70,5 @@ describe("readSlashState", () => {
   it("reports the document position of the slash, which is what gets replaced", () => {
     // Block starts at 10, the slash is the fifth character in "see /tab".
     expect(readSlashState(fakeEditor("see /tab", { blockStart: 10 })).from).toBe(14);
-  });
-});
-
-describe("filterSlashCommands", () => {
-  it("returns everything when nothing has been typed yet", () => {
-    expect(filterSlashCommands("")).toEqual(SLASH_COMMANDS);
-  });
-
-  it("matches on the title", () => {
-    expect(filterSlashCommands("heading").length).toBeGreaterThan(0);
-  });
-
-  it("matches on keywords", () => {
-    const titles = filterSlashCommands("mermaid").map((command) => command.title);
-    expect(titles).toContain("Diagram");
-  });
-
-  it("is case-insensitive", () => {
-    expect(filterSlashCommands("DIAGRAM")).toEqual(filterSlashCommands("diagram"));
-  });
-
-  it("returns nothing for a query that matches nothing", () => {
-    expect(filterSlashCommands("zzzznothing")).toEqual([]);
-  });
-
-  it("gives every command a title, an icon and something to run", () => {
-    for (const command of SLASH_COMMANDS) {
-      expect(command.title).toBeTruthy();
-      expect(command.icon).toBeTruthy();
-      expect(typeof command.run).toBe("function");
-    }
-  });
-
-  it("has no two commands with the same title, which would be unpickable", () => {
-    const titles = SLASH_COMMANDS.map((command) => command.title);
-    expect(new Set(titles).size).toBe(titles.length);
   });
 });
