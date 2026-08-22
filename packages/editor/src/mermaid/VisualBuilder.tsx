@@ -7,8 +7,14 @@ import {
   nextNodeId,
   removeEdge,
   removeNode,
+  removeMany,
+  moveNodes,
+  duplicateNodes,
+  tidyLayout,
   updateNode,
   updateEdge,
+  graphToMermaid,
+  mermaidToGraph,
   joinMembers,
   SHAPE_LABELS,
   SHAPES_FOR_KIND,
@@ -162,7 +168,87 @@ type Drag =
   /** Moving a node. `preview` is committed to the graph only on release. */
   | { kind: "move"; nodeId: string; grabX: number; grabY: number; preview: Point; moved: boolean }
   | { kind: "connect"; fromId: string; cursor: Point }
-  | { kind: "pan"; originX: number; originY: number; panX: number; panY: number };
+  | { kind: "pan"; originX: number; originY: number; panX: number; panY: number }
+  /** Rubber-band selection. `from` is where the press landed, in world space. */
+  | { kind: "marquee"; from: Point; to: Point; additive: boolean };
+
+/**
+ * Undo and redo for the canvas.
+ *
+ * The graph is owned by the parent, which holds mermaid source and reparses it
+ * on every change — so the object identity is new every render and cannot be
+ * compared. History is therefore kept as serialised snapshots, which is also
+ * exactly what has to be handed back to `onChange` to undo.
+ *
+ * Edits made in the *source* pane reset the history rather than joining it. A
+ * stack of canvas states interleaved with half-typed source would let undo
+ * restore a document that was never on screen, and losing the ability to undo
+ * is a much smaller harm than undoing into something the user never had.
+ */
+function useGraphHistory(graph: Graph, onChange: (next: Graph) => void) {
+  const past = useRef<string[]>([]);
+  const future = useRef<string[]>([]);
+  /** The source we last saw, whether we produced it or the other pane did. */
+  const current = useRef<string>(graphToMermaid(graph));
+  /** Set while applying our own change, so the sync below ignores the echo. */
+  const applying = useRef(false);
+  const [, tick] = useState(0);
+
+  const code = graphToMermaid(graph);
+
+  useEffect(() => {
+    if (code === current.current) return;
+
+    if (applying.current) {
+      applying.current = false;
+    } else {
+      past.current = [];
+      future.current = [];
+      tick((n) => n + 1);
+    }
+    current.current = code;
+  }, [code]);
+
+  /** Records the state being left behind, then applies the new one. */
+  const commit = useCallback(
+    (next: Graph) => {
+      past.current = [...past.current.slice(-99), current.current];
+      future.current = [];
+      current.current = graphToMermaid(next);
+      applying.current = true;
+      onChange(next);
+      tick((n) => n + 1);
+    },
+    [onChange],
+  );
+
+  const step = useCallback(
+    (from: React.RefObject<string[]>, to: React.RefObject<string[]>) => {
+      const target = from.current[from.current.length - 1];
+      if (target === undefined) return;
+
+      from.current = from.current.slice(0, -1);
+      to.current = [...to.current, current.current];
+
+      const restored = mermaidToGraph(target);
+      if (!restored) return;
+
+      current.current = target;
+      applying.current = true;
+      onChange(restored);
+      tick((n) => n + 1);
+    },
+    [onChange],
+  );
+
+  return {
+    commit,
+    undo: useCallback(() => step(past, future), [step]),
+    redo: useCallback(() => step(future, past), [step]),
+    canUndo: past.current.length > 0,
+    canRedo: future.current.length > 0,
+  };
+}
 
 /**
  * Drag-and-drop diagram builder.
@@ -182,8 +268,72 @@ type Drag =
 export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<Drag>({ kind: "none" });
-  const [selected, setSelected] = useState<string | null>(null);
+  /**
+   * Everything currently selected, by id — nodes and edges together.
+   *
+   * A set rather than one id because a diagram is edited in groups: three boxes
+   * moved together, a branch deleted, half a flowchart nudged left to make
+   * room. With a single selection each of those is one careful drag per box,
+   * which is why the canvas felt like a form and not like a drawing tool.
+   */
+  const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set());
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
+
+  const history = useGraphHistory(graph, onChange);
+  const { commit } = history;
+
+  /**
+   * Whether the space bar is down, which turns a drag into a pan.
+   *
+   * A ref rather than state: it is read inside a pointer handler and changing
+   * it must not re-render the canvas, which would be a full repaint every time
+   * somebody rests a thumb on the space bar.
+   */
+  const spaceHeld = useRef(false);
+
+  useEffect(() => {
+    const down = (event: KeyboardEvent) => {
+      if (event.code !== "Space") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === "INPUT" || target?.isContentEditable) return;
+      spaceHeld.current = true;
+    };
+    const up = (event: KeyboardEvent) => {
+      if (event.code === "Space") spaceHeld.current = false;
+    };
+    const blur = () => {
+      spaceHeld.current = false;
+    };
+
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    // Tabbing away mid-hold would otherwise leave the canvas stuck in pan mode.
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", blur);
+    };
+  }, []);
+
+  /** The single selected thing, when there is exactly one. */
+  const only = selection.size === 1 ? [...selection][0]! : null;
+
+  const selectOne = useCallback((id: string | null) => {
+    setSelection(id === null ? new Set() : new Set([id]));
+  }, []);
+
+  /** Shift-click adds to or removes from the selection, as everywhere else. */
+  const toggleSelected = useCallback((id: string, additive: boolean) => {
+    setSelection((current) => {
+      if (!additive) return current.has(id) && current.size === 1 ? current : new Set([id]);
+
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
@@ -263,6 +413,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
           x: drag.panX - (event.clientX - drag.originX) / zoom,
           y: drag.panY - (event.clientY - drag.originY) / zoom,
         });
+      } else if (drag.kind === "marquee") {
+        setDrag({ ...drag, to: toWorld(event) });
       }
     };
 
@@ -281,13 +433,22 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
       // Commit happens here, once, rather than on every frame.
       if (drag.kind === "move" && drag.moved) {
-        onChange(updateNode(graph, drag.nodeId, { x: drag.preview.x, y: drag.preview.y }));
+        // The whole selection moves with the node being dragged.
+        const moved = [...selection].filter((id) => graph.nodes.some((node) => node.id === id));
+        const dx = drag.preview.x - (graph.nodes.find((n) => n.id === drag.nodeId)?.x ?? 0);
+        const dy = drag.preview.y - (graph.nodes.find((n) => n.id === drag.nodeId)?.y ?? 0);
+
+        commit(
+          moved.length > 1 && moved.includes(drag.nodeId)
+            ? moveNodes(graph, moved, dx, dy)
+            : updateNode(graph, drag.nodeId, { x: drag.preview.x, y: drag.preview.y }),
+        );
       } else if (drag.kind === "connect") {
         const world = toWorld(event);
         const target = nodeAt(graph, world);
 
         if (target && target.id !== drag.fromId) {
-          onChange(addEdge(graph, drag.fromId, target.id, DEFAULT_EDGE_STYLE[graph.kind]));
+          commit(addEdge(graph, drag.fromId, target.id, DEFAULT_EDGE_STYLE[graph.kind]));
         } else if (!target) {
           // Dropping an arrow on empty space creates the node it was reaching
           // for. Otherwise every new step is add-then-drag-then-connect, and
@@ -303,10 +464,46 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             y: snap(world.y - size.height / 2),
           });
 
-          onChange(addEdge(placed, drag.fromId, id, DEFAULT_EDGE_STYLE[graph.kind]));
-          setSelected(id);
+          commit(addEdge(placed, drag.fromId, id, DEFAULT_EDGE_STYLE[graph.kind]));
+          selectOne(id);
           setEditingLabel(id);
         }
+      }
+
+      if (drag.kind === "marquee") {
+        // The release point, not the last move we happened to see. A drag fast
+        // enough to outrun the pointermove stream — or one delivered without
+        // intermediate moves at all — would otherwise select against a band
+        // that stopped updating somewhere in the middle.
+        const to = toWorld(event);
+
+        // Everything the band touches, rather than only what it wholly
+        // encloses: on a canvas of 150px-wide boxes, "fully contained" means
+        // dragging a band larger than the thing you are trying to select.
+        const box = {
+          left: Math.min(drag.from.x, to.x),
+          right: Math.max(drag.from.x, to.x),
+          top: Math.min(drag.from.y, to.y),
+          bottom: Math.max(drag.from.y, to.y),
+        };
+
+        const caught = graph.nodes
+          .filter((node) => {
+            const size = sizeOf(node);
+            return (
+              node.x < box.right &&
+              node.x + size.width > box.left &&
+              node.y < box.bottom &&
+              node.y + size.height > box.top
+            );
+          })
+          .map((node) => node.id);
+
+        setSelection((previous) => {
+          const next = drag.additive ? new Set(previous) : new Set<string>();
+          for (const id of caught) next.add(id);
+          return next;
+        });
       }
 
       setDrag({ kind: "none" });
@@ -431,7 +628,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
       const x = spot.x - size.width / 2;
       const y = spot.y - size.height / 2;
 
-      onChange(
+      commit(
         addNode(graph, {
           id,
           // Markers have no text; a named default would just have to be
@@ -443,7 +640,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         }),
       );
 
-      setSelected(id);
+      selectOne(id);
       if (!isMarker(shape)) setEditingLabel(id);
       return id;
     },
@@ -452,7 +649,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
   /** Adds a node already wired to the current selection, for keyboard flow. */
   const createConnectedNode = useCallback(() => {
-    const source = graph.nodes.find((n) => n.id === selected);
+    const source = graph.nodes.find((n) => n.id === only);
     if (!source) return;
 
     const shape: NodeShape = defaultShapeFor(graph.kind);
@@ -468,10 +665,48 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
       y: snap(source.y + (horizontal ? 0 : size.height + 80)),
     });
 
-    onChange(addEdge(placed, source.id, id, DEFAULT_EDGE_STYLE[graph.kind]));
-    setSelected(id);
+    commit(addEdge(placed, source.id, id, DEFAULT_EDGE_STYLE[graph.kind]));
+    selectOne(id);
     setEditingLabel(id);
-  }, [graph, onChange, selected]);
+  }, [graph, commit, only, selectOne]);
+
+  /**
+   * Straightens the diagram into layers that follow its own arrows.
+   *
+   * The re-frame is deferred to the effect below rather than done here: the
+   * layout has not been applied yet at this point, so fitting now frames where
+   * the diagram *was* — which is how tidying left everything neatly arranged
+   * just off the bottom of the canvas.
+   */
+  const refitWanted = useRef(false);
+
+  const tidy = useCallback(() => {
+    refitWanted.current = true;
+    commit(tidyLayout(graph));
+  }, [graph, commit]);
+
+  useEffect(() => {
+    if (!refitWanted.current) return;
+    refitWanted.current = false;
+    fit();
+  }, [graph.nodes, fit]);
+
+  const duplicateSelection = useCallback(() => {
+    const nodes = [...selection].filter((id) => graph.nodes.some((node) => node.id === id));
+    if (nodes.length === 0) return;
+
+    const next = duplicateNodes(graph, nodes);
+    commit(next);
+    // Select the copies, so the next drag moves what was just made rather than
+    // the originals sitting underneath them.
+    setSelection(new Set(next.nodes.slice(graph.nodes.length).map((node) => node.id)));
+  }, [graph, commit, selection]);
+
+  const deleteSelection = useCallback(() => {
+    if (selection.size === 0) return;
+    commit(removeMany(graph, [...selection]));
+    setSelection(new Set());
+  }, [graph, commit, selection]);
 
   // ── Keyboard ────────────────────────────────────────────────────────────
   // Declared after the actions it calls, so the dependency array is not
@@ -483,30 +718,67 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         return;
       }
 
-      if ((event.key === "Delete" || event.key === "Backspace") && selected && !editingLabel) {
+      const accel = event.metaKey || event.ctrlKey;
+
+      if (accel && event.key.toLowerCase() === "z") {
         event.preventDefault();
-        onChange(
-          graph.nodes.some((n) => n.id === selected)
-            ? removeNode(graph, selected)
-            : removeEdge(graph, selected),
-        );
-        setSelected(null);
+        if (event.shiftKey) history.redo();
+        else history.undo();
+        return;
+      }
+
+      if (accel && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        history.redo();
+        return;
+      }
+
+      if (accel && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        duplicateSelection();
+        return;
+      }
+
+      if (accel && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        setSelection(new Set(graph.nodes.map((node) => node.id)));
+        return;
+      }
+
+      if ((event.key === "Delete" || event.key === "Backspace") && !editingLabel) {
+        if (selection.size === 0) return;
+        event.preventDefault();
+        deleteSelection();
+        return;
+      }
+
+      // Nudging is what makes a diagram line up. A bare arrow moves by the
+      // grid; shift moves by ten of them, for crossing real distance.
+      if (event.key.startsWith("Arrow") && selection.size > 0 && !editingLabel) {
+        const nodes = [...selection].filter((id) => graph.nodes.some((node) => node.id === id));
+        if (nodes.length === 0) return;
+
+        event.preventDefault();
+        const step = event.shiftKey ? GRID * 10 : GRID;
+        const dx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
+        const dy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
+        commit(moveNodes(graph, nodes, dx, dy));
         return;
       }
 
       // Enter renames, Tab continues the chain: the two things you do over and
       // over while sketching, neither of which should need the mouse.
-      if (event.key === "Enter" && selected && !editingLabel) {
-        const node = graph.nodes.find((n) => n.id === selected);
+      if (event.key === "Enter" && only && !editingLabel) {
+        const node = graph.nodes.find((n) => n.id === only);
         if (node && !isMarker(node.shape)) {
           event.preventDefault();
-          setEditingLabel(selected);
+          setEditingLabel(only);
         }
         return;
       }
 
-      if (event.key === "Tab" && selected && !editingLabel) {
-        if (graph.nodes.some((n) => n.id === selected)) {
+      if (event.key === "Tab" && only && !editingLabel) {
+        if (graph.nodes.some((n) => n.id === only)) {
           event.preventDefault();
           createConnectedNode();
         }
@@ -514,11 +786,11 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
       }
 
       if (event.key === "Escape") {
-        setSelected(null);
+        setSelection(new Set());
         return;
       }
 
-      if (event.key === "0" && (event.metaKey || event.ctrlKey)) {
+      if (event.key === "0" && accel) {
         event.preventDefault();
         fit();
       }
@@ -526,10 +798,21 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected, editingLabel, graph, onChange, fit, createConnectedNode]);
+  }, [
+    only,
+    selection,
+    editingLabel,
+    graph,
+    commit,
+    history,
+    fit,
+    createConnectedNode,
+    duplicateSelection,
+    deleteSelection,
+  ]);
 
-  const selectedNode = graph.nodes.find((n) => n.id === selected) ?? null;
-  const selectedEdge = graph.edges.find((e) => e.id === selected) ?? null;
+  const selectedNode = graph.nodes.find((n) => n.id === only) ?? null;
+  const selectedEdge = graph.edges.find((e) => e.id === only) ?? null;
 
   /** A node's position, using the in-flight drag preview when it has one. */
   const positionOf = (node: GraphNode): Point =>
@@ -559,6 +842,30 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         ))}
 
         <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)]">
+            <ZoomButton label="Undo (⌘Z)" onClick={history.undo} disabled={!history.canUndo}>
+              <UndoGlyph />
+            </ZoomButton>
+            <ZoomButton
+              label="Redo (⌘⇧Z)"
+              onClick={history.redo}
+              disabled={!history.canRedo}
+              className="border-l border-[var(--fl-border)]"
+            >
+              <UndoGlyph flipped />
+            </ZoomButton>
+          </div>
+
+          <button
+            type="button"
+            onClick={tidy}
+            disabled={graph.nodes.length === 0}
+            title="Lay the diagram out in layers that follow its own arrows"
+            className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2.5 py-1 text-[12.5px] text-[var(--fl-text)] transition-colors hover:border-[var(--fl-accent)] hover:text-[var(--fl-accent)] disabled:opacity-40 disabled:hover:border-[var(--fl-border)] disabled:hover:text-[var(--fl-text)]"
+          >
+            Tidy up
+          </button>
+
           {/* Mermaid lays out ER diagrams and mindmaps itself and ignores a
               direction, so offering one here would be a control that does
               nothing. */}
@@ -623,19 +930,30 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             createNode(defaultShapeFor(graph.kind), toWorld(event));
           }}
           onPointerDown={(event) => {
-            // Empty canvas: clear the selection and start panning. Middle-click
-            // pans from anywhere.
+            // Middle-click pans from anywhere; otherwise this only fires on
+            // the empty canvas, because nodes and edges stop the event.
             if (event.target !== event.currentTarget && event.button !== 1) return;
 
-            setSelected(null);
             setEditingLabel(null);
-            setDrag({
-              kind: "pan",
-              originX: event.clientX,
-              originY: event.clientY,
-              panX: pan.x,
-              panY: pan.y,
-            });
+
+            // Space held, middle button, or the space bar down: pan. Anything
+            // else on empty canvas draws a selection band, which is what every
+            // other canvas tool does and what makes selecting six boxes one
+            // gesture instead of six.
+            if (event.button === 1 || spaceHeld.current) {
+              setDrag({
+                kind: "pan",
+                originX: event.clientX,
+                originY: event.clientY,
+                panX: pan.x,
+                panY: pan.y,
+              });
+              return;
+            }
+
+            const from = toWorld(event);
+            if (!event.shiftKey) setSelection(new Set());
+            setDrag({ kind: "marquee", from, to: from, additive: event.shiftKey });
           }}
         >
           <defs>
@@ -673,7 +991,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
             const start = anchorPoint(from, to);
             const end = anchorPoint(to, from);
-            const isSelected = selected === edge.id;
+            const isSelected = selection.has(edge.id);
             const decor = edgeDecor(edge.style, edge.dashed);
 
             return (
@@ -681,7 +999,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                 key={edge.id}
                 onPointerDown={(event) => {
                   event.stopPropagation();
-                  setSelected(edge.id);
+                  toggleSelected(edge.id, event.shiftKey);
                 }}
                 className="cursor-pointer"
               >
@@ -788,12 +1106,12 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             <NodeShapeView
               key={node.id}
               node={node}
-              selected={selected === node.id}
+              selected={selection.has(node.id)}
               dragging={drag.kind === "move" && drag.nodeId === node.id}
               onPointerDown={(event) => {
                 event.stopPropagation();
                 const world = toWorld(event);
-                setSelected(node.id);
+                toggleSelected(node.id, event.shiftKey);
                 setDrag({
                   kind: "move",
                   nodeId: node.id,
@@ -812,6 +1130,20 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
               }}
             />
           ))}
+
+          {drag.kind === "marquee" && (
+            <rect
+              x={Math.min(drag.from.x, drag.to.x)}
+              y={Math.min(drag.from.y, drag.to.y)}
+              width={Math.abs(drag.to.x - drag.from.x)}
+              height={Math.abs(drag.to.y - drag.from.y)}
+              fill="var(--fl-accent)"
+              fillOpacity={0.08}
+              stroke="var(--fl-accent)"
+              strokeWidth={1 / zoom}
+              pointerEvents="none"
+            />
+          )}
         </svg>
 
         {/* Label editing uses a real input overlaid on the node, so typing
@@ -873,8 +1205,11 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         >
           <span>Double-click empty space to add</span>
           <span>Drag a handle onto empty space to add and connect</span>
+          <span>Drag empty space to select many</span>
+          <span>Space to pan</span>
           <span>Tab to continue</span>
-          <span>⌘ + scroll to zoom</span>
+          <span>⌘D duplicate</span>
+          <span>Arrows nudge</span>
           <span>{freeform ? "Snapping off" : "Alt to disable snapping"}</span>
         </div>
       </div>
@@ -947,8 +1282,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
               <button
                 type="button"
                 onClick={() => {
-                  onChange(removeNode(graph, selectedNode.id));
-                  setSelected(null);
+                  commit(removeNode(graph, selectedNode.id));
+                  setSelection(new Set());
                 }}
                 className="ml-auto rounded-lg px-2 py-1 text-[var(--fl-danger)] transition-colors hover:bg-[var(--fl-elevated)]"
               >
@@ -1029,8 +1364,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
               <button
                 type="button"
                 onClick={() => {
-                  onChange(removeEdge(graph, selectedEdge.id));
-                  setSelected(null);
+                  commit(removeEdge(graph, selectedEdge.id));
+                  setSelection(new Set());
                 }}
                 className="ml-auto rounded-lg px-2 py-1 text-[var(--fl-danger)] transition-colors hover:bg-[var(--fl-elevated)]"
               >
@@ -1495,22 +1830,46 @@ function ShapeIcon({ shape }: { shape: NodeShape }) {
 function ZoomButton({
   label,
   onClick,
+  disabled = false,
+  className = "",
   children,
 }: {
   label: string;
   onClick: () => void;
+  disabled?: boolean;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       title={label}
       aria-label={label}
-      className="w-7 py-1 text-center text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]"
+      className={`flex h-[26px] w-8 items-center justify-center text-[13px] text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)] disabled:opacity-35 disabled:hover:text-[var(--fl-muted)] ${className}`}
     >
       {children}
     </button>
+  );
+}
+
+function UndoGlyph({ flipped = false }: { flipped?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={flipped ? { transform: "scaleX(-1)" } : undefined}
+    >
+      <path d="M3 7h7a3.5 3.5 0 0 1 0 7H6.5" />
+      <path d="M5.75 4.25 3 7l2.75 2.75" />
+    </svg>
   );
 }
 

@@ -1247,6 +1247,141 @@ export function removeEdge(graph: Graph, id: string): Graph {
   return { ...graph, edges: graph.edges.filter((e) => e.id !== id) };
 }
 
+/**
+ * Lays the graph out in layers, so a diagram dragged into a mess can be
+ * straightened without being redrawn.
+ *
+ * Depth comes from the edges: a node sits one layer below the deepest thing
+ * pointing at it. That is what makes the result meaningful rather than merely
+ * tidy — the layers *are* the flow, so reading down the page reads the diagram
+ * in order. Nodes nothing points at start at the top, and a cycle stops adding
+ * depth rather than looping forever.
+ *
+ * `direction` decides which way the layers run, matching what mermaid will do
+ * with the same graph.
+ */
+export function tidyLayout(graph: Graph): Graph {
+  if (graph.nodes.length === 0) return graph;
+
+  const depth = new Map<string, number>();
+  const incoming = new Map<string, string[]>();
+
+  for (const node of graph.nodes) incoming.set(node.id, []);
+  for (const edge of graph.edges) incoming.get(edge.to)?.push(edge.from);
+
+  // Longest path from a root, computed with an explicit visited set so a cycle
+  // resolves to a depth instead of hanging.
+  const depthOf = (id: string, seen: Set<string>): number => {
+    const known = depth.get(id);
+    if (known !== undefined) return known;
+    if (seen.has(id)) return 0;
+
+    seen.add(id);
+    const parents = incoming.get(id) ?? [];
+    const value =
+      parents.length === 0 ? 0 : Math.max(...parents.map((parent) => depthOf(parent, seen) + 1));
+    seen.delete(id);
+
+    depth.set(id, value);
+    return value;
+  };
+
+  for (const node of graph.nodes) depthOf(node.id, new Set());
+
+  // Group into layers, keeping each layer in the graph's own node order so the
+  // result is stable: tidying twice in a row must not shuffle anything.
+  const layers = new Map<number, GraphNode[]>();
+  for (const node of graph.nodes) {
+    const level = depth.get(node.id) ?? 0;
+    const bucket = layers.get(level);
+    if (bucket) bucket.push(node);
+    else layers.set(level, [node]);
+  }
+
+  const horizontal = graph.direction === "LR" || graph.direction === "RL";
+  const ALONG = horizontal ? 260 : 150;
+  const ACROSS = horizontal ? 110 : 210;
+  const ORIGIN = 80;
+
+  const placed = new Map<string, { x: number; y: number }>();
+  for (const [level, nodes] of layers) {
+    nodes.forEach((node, index) => {
+      // Each layer is centred on the widest one, so the result is a column
+      // rather than everything hanging off the left edge.
+      const offset = (index - (nodes.length - 1) / 2) * ACROSS;
+      placed.set(
+        node.id,
+        horizontal
+          ? { x: ORIGIN + level * ALONG, y: ORIGIN + 300 + offset }
+          : { x: ORIGIN + 300 + offset, y: ORIGIN + level * ALONG },
+      );
+    });
+  }
+
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) => ({ ...node, ...(placed.get(node.id) ?? {}) })),
+  };
+}
+
+/**
+ * Copies nodes, and any edge that runs between two of them.
+ *
+ * Edges to nodes *outside* the copied set are deliberately dropped: a duplicate
+ * that stays wired into the original is not a duplicate, it is a second arrow
+ * into the same box, which is never what a copy was meant to produce.
+ */
+export function duplicateNodes(graph: Graph, ids: string[], offset = 40): Graph {
+  const wanted = new Set(ids);
+  const nodes = graph.nodes.filter((node) => wanted.has(node.id));
+  if (nodes.length === 0) return graph;
+
+  const renamed = new Map<string, string>();
+  let next = graph;
+
+  for (const node of nodes) {
+    const id = nextNodeId(next, "n");
+    renamed.set(node.id, id);
+    next = addNode(next, { ...node, id, x: node.x + offset, y: node.y + offset });
+  }
+
+  for (const edge of graph.edges) {
+    const from = renamed.get(edge.from);
+    const to = renamed.get(edge.to);
+    if (!from || !to) continue;
+
+    next = {
+      ...next,
+      edges: [...next.edges, { ...edge, id: `${from}->${to}-${next.edges.length}`, from, to }],
+    };
+  }
+
+  return next;
+}
+
+/** Moves several nodes at once, for a multi-node drag or a keyboard nudge. */
+export function moveNodes(graph: Graph, ids: string[], dx: number, dy: number): Graph {
+  const wanted = new Set(ids);
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) =>
+      wanted.has(node.id) ? { ...node, x: node.x + dx, y: node.y + dy } : node,
+    ),
+  };
+}
+
+/** Removes several nodes and edges in one step, by id. */
+export function removeMany(graph: Graph, ids: string[]): Graph {
+  const wanted = new Set(ids);
+  return {
+    ...graph,
+    nodes: graph.nodes.filter((node) => !wanted.has(node.id)),
+    edges: graph.edges.filter(
+      (edge) => !wanted.has(edge.id) && !wanted.has(edge.from) && !wanted.has(edge.to),
+    ),
+  };
+}
+
 /** Human-readable names for the shape picker. */
 export const SHAPE_LABELS: Record<NodeShape, string> = {
   rect: "Process",

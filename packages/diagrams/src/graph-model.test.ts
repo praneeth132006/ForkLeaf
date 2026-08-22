@@ -8,6 +8,10 @@ import {
   updateNode,
   nextNodeId,
   splitMembers,
+  tidyLayout,
+  duplicateNodes,
+  moveNodes,
+  removeMany,
   type Graph,
 } from "./graph-model";
 import { detectKind, DIAGRAM_TEMPLATES } from "./templates";
@@ -585,5 +589,129 @@ describe("mindmaps", () => {
     const code = graphToMermaid(cyclic);
     expect(code).toContain("a[A]");
     expect(code).toContain("b[B]");
+  });
+});
+
+// ─── Canvas operations ──────────────────────────────────────────────────────
+
+describe("tidyLayout", () => {
+  const messy: Graph = {
+    kind: "flowchart",
+    direction: "TD",
+    nodes: [
+      { id: "a", label: "A", shape: "rect", x: 900, y: 12 },
+      { id: "b", label: "B", shape: "rect", x: 13, y: 700 },
+      { id: "c", label: "C", shape: "rect", x: 400, y: 40 },
+      { id: "d", label: "D", shape: "rect", x: 55, y: 90 },
+    ],
+    edges: [
+      { id: "e1", from: "a", to: "b", style: "arrow" },
+      { id: "e2", from: "a", to: "c", style: "arrow" },
+      { id: "e3", from: "b", to: "d", style: "arrow" },
+      { id: "e4", from: "c", to: "d", style: "arrow" },
+    ],
+  };
+
+  it("puts each node one layer below the deepest thing pointing at it", () => {
+    const tidy = tidyLayout(messy);
+    const y = (id: string) => tidy.nodes.find((node) => node.id === id)!.y;
+
+    expect(y("a")).toBeLessThan(y("b"));
+    expect(y("b")).toBe(y("c"));
+    // `d` is reached from both `b` and `c`, so it sits below both rather than
+    // beside one of them.
+    expect(y("d")).toBeGreaterThan(y("b"));
+  });
+
+  it("runs the layers sideways for a left-to-right graph", () => {
+    const tidy = tidyLayout({ ...messy, direction: "LR" });
+    const at = (id: string) => tidy.nodes.find((node) => node.id === id)!;
+
+    expect(at("a").x).toBeLessThan(at("b").x);
+    expect(at("b").y).not.toBe(at("c").y);
+  });
+
+  it("is stable — tidying twice changes nothing the second time", () => {
+    const once = tidyLayout(messy);
+    const twice = tidyLayout(once);
+    expect(twice.nodes).toEqual(once.nodes);
+  });
+
+  it("does not hang on a cycle", () => {
+    const cyclic: Graph = {
+      kind: "flowchart",
+      direction: "TD",
+      nodes: [
+        { id: "a", label: "A", shape: "rect", x: 0, y: 0 },
+        { id: "b", label: "B", shape: "rect", x: 0, y: 0 },
+      ],
+      edges: [
+        { id: "e1", from: "a", to: "b", style: "arrow" },
+        { id: "e2", from: "b", to: "a", style: "arrow" },
+      ],
+    };
+
+    expect(tidyLayout(cyclic).nodes).toHaveLength(2);
+  });
+
+  it("leaves an empty graph alone", () => {
+    expect(tidyLayout({ kind: "flowchart", direction: "TD", nodes: [], edges: [] }).nodes).toEqual(
+      [],
+    );
+  });
+});
+
+describe("duplicateNodes", () => {
+  it("copies the nodes and the edges between them", () => {
+    const copied = duplicateNodes(graph, ["a", "b"]);
+
+    expect(copied.nodes).toHaveLength(5);
+    // a→b was between two copied nodes, so it is copied; b→c was not.
+    expect(copied.edges).toHaveLength(3);
+  });
+
+  it("does not wire the copy back into the original", () => {
+    const copied = duplicateNodes(graph, ["b"]);
+    const fresh = copied.nodes.filter((node) => !["a", "b", "c"].includes(node.id));
+
+    expect(fresh).toHaveLength(1);
+    expect(
+      copied.edges.some((edge) => edge.from === fresh[0]!.id || edge.to === fresh[0]!.id),
+    ).toBe(false);
+  });
+
+  it("offsets the copy so it is not hidden under the original", () => {
+    const copied = duplicateNodes(graph, ["a"], 40);
+    const fresh = copied.nodes[copied.nodes.length - 1]!;
+    expect(fresh.x).toBe(140);
+    expect(fresh.y).toBe(90);
+  });
+
+  it("does nothing when given no ids", () => {
+    expect(duplicateNodes(graph, [])).toBe(graph);
+  });
+});
+
+describe("moveNodes and removeMany", () => {
+  it("moves only the nodes named", () => {
+    const moved = moveNodes(graph, ["a", "c"], 10, -5);
+    expect(moved.nodes.map((node) => [node.x, node.y])).toEqual([
+      [110, 45],
+      [100, 200],
+      [310, 195],
+    ]);
+  });
+
+  it("removes nodes, edges, and the edges attached to removed nodes", () => {
+    const gone = removeMany(graph, ["b"]);
+    expect(gone.nodes.map((node) => node.id)).toEqual(["a", "c"]);
+    // Both edges touched `b`, so neither survives.
+    expect(gone.edges).toEqual([]);
+  });
+
+  it("removes an edge named directly", () => {
+    const gone = removeMany(graph, ["e2"]);
+    expect(gone.nodes).toHaveLength(3);
+    expect(gone.edges.map((edge) => edge.id)).toEqual(["e1"]);
   });
 });
