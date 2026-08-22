@@ -10,6 +10,8 @@ import type { LocalDatabase } from "./ports";
  * IndexedDB behaves.
  */
 export class MemoryDatabase implements LocalDatabase {
+  readonly persistent = false;
+
   private notes = new Map<string, Note>();
   private workspaces = new Map<string, Workspace>();
   private queue = new Map<string, PendingChange>();

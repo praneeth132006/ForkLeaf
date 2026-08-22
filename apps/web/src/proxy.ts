@@ -109,8 +109,16 @@ function policy(nonce: string | null, isDev: boolean): string {
   const script = nonce
     ? // The hash covers the theme script inlined in the document head, which is
       // a build-time constant rather than a per-request tag.
+      //
+      // No host allowlist here on purpose: `strict-dynamic` makes host sources
+      // be ignored, and covers gtag anyway, since Firebase Analytics injects
+      // that tag from the nonced bundle.
       `'self' 'nonce-${nonce}' '${THEME_INIT_HASH}' 'strict-dynamic'`
-    : `'self' 'unsafe-inline'`;
+    : // The prerendered routes have no nonce and so no `strict-dynamic`, which
+      // means the tag Firebase Analytics injects has to be named explicitly.
+      // Without it the landing page loaded analytics and the browser blocked
+      // it on every visit — `connect-src` below already expects it to work.
+      `'self' 'unsafe-inline' https://www.googletagmanager.com`;
 
   return [
     "default-src 'self'",
@@ -143,7 +151,10 @@ function policy(nonce: string | null, isDev: boolean): string {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "frame-src 'none'",
+    // The GitHub Sponsors card is an iframe, and the only one in the app. With
+    // `'none'` here it was blocked everywhere it appears — the landing page and
+    // the profile both drew an empty bordered box where the card should be.
+    "frame-src https://github.com",
     "worker-src 'self' blob:",
     "manifest-src 'self'",
     ...(isDev ? [] : ["upgrade-insecure-requests"]),

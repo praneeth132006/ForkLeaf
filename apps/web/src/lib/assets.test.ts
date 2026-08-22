@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { Workspace } from "@forkleaf/types";
 import {
   isRepoRelative,
+  MISSING_IMAGE_SRC,
   relativeSrc,
   resolveAgainstNote,
   resolveImageSrc,
@@ -84,9 +85,26 @@ describe("resolveImageSrc", () => {
     );
   });
 
-  it("leaves a local workspace's paths alone — there is nothing to proxy to", () => {
-    expect(resolveImageSrc(local, "plan.md", "assets/a.png")).toBe("assets/a.png");
+  it("uses the copy on this device when there is one", () => {
+    const local_ = { "assets/a.png": "blob:forkleaf/abc" };
+    expect(resolveImageSrc(local, "plan.md", "assets/a.png", local_)).toBe("blob:forkleaf/abc");
+  });
+
+  /**
+   * A local workspace has nowhere to proxy to, so an asset that is not on this
+   * device is not going to appear. Returning the note-relative path made the
+   * browser fetch `/assets/a.png` from the app's own origin, 404, and draw the
+   * broken-image icon — which reads as a broken note rather than a missing
+   * file.
+   */
+  it("stands a placeholder in for a local image this device does not have", () => {
+    expect(resolveImageSrc(local, "plan.md", "assets/a.png")).toBe(MISSING_IMAGE_SRC);
+    expect(MISSING_IMAGE_SRC).toContain("Image%20not%20on%20this%20device");
+  });
+
+  it("leaves the src alone when there is no workspace or note to resolve against", () => {
     expect(resolveImageSrc(null, "plan.md", "assets/a.png")).toBe("assets/a.png");
+    expect(resolveImageSrc(local, null, "assets/a.png")).toBe("assets/a.png");
   });
 });
 

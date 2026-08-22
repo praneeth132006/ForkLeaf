@@ -10,6 +10,15 @@ import type { LocalAsset, Note, PendingChange, TreeNode, Workspace } from "@fork
 
 /** Local durable storage. Implemented by IndexedDB in the browser. */
 export interface LocalDatabase {
+  /**
+   * False when this store is thrown away with the tab.
+   *
+   * The in-memory implementation is a fallback for browsers that refuse
+   * IndexedDB; the UI reads this so it can warn instead of quietly losing
+   * whatever gets written.
+   */
+  readonly persistent: boolean;
+
   getNote(id: string): Promise<Note | undefined>;
   putNote(note: Note): Promise<void>;
   deleteNote(id: string): Promise<void>;
