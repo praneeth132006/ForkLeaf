@@ -50,4 +50,51 @@ export const ResolvedImage = Image.extend<ResolvedImageOptions & Record<string, 
       },
     };
   },
+
+  /**
+   * Markdown bridge.
+   *
+   * Without one, tiptap-markdown falls back to its inline-image serialiser —
+   * and this node is a *block* (`inline: false`), so nothing ever closed the
+   * block after it. The next block was written straight onto the end of the
+   * image, which turned a diagram that followed an image into
+   * `![shot](a.png)```mermaid` on one line: no longer a fence, no longer a
+   * diagram, and no longer valid markdown anywhere else either.
+   */
+  addStorage() {
+    return {
+      ...this.parent?.(),
+      markdown: {
+        serialize(state: MarkdownSerializerLike, node: { attrs: Record<string, unknown> }) {
+          const src = typeof node.attrs.src === "string" ? node.attrs.src : "";
+          const alt = typeof node.attrs.alt === "string" ? node.attrs.alt : "";
+          const title = typeof node.attrs.title === "string" ? node.attrs.title : "";
+
+          state.write(
+            `![${alt.replace(/[[\]]/g, "\\$&")}](${encodeSrc(src)}${
+              title ? ` "${title.replace(/"/g, '\\"')}"` : ""
+            })`,
+          );
+          // The line this fixes.
+          state.closeBlock(node);
+        },
+      },
+    };
+  },
 });
+
+/**
+ * A src safe to sit inside `(…)`.
+ *
+ * A path with a space or a bracket in it ends the link early; angle brackets
+ * are markdown's own way of saying "all of this is the URL".
+ */
+function encodeSrc(src: string): string {
+  return /[\s()<>]/.test(src) ? `<${src.replace(/[<>]/g, encodeURIComponent)}>` : src;
+}
+
+/** The subset of prosemirror-markdown's serializer state that we use. */
+interface MarkdownSerializerLike {
+  write(text: string): void;
+  closeBlock(node: unknown): void;
+}

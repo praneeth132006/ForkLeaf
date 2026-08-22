@@ -53,3 +53,23 @@ export {
 export { parseMermaidError, type DiagramError } from "./errors";
 
 export { completionsFor, cheatsheetFor, expandSnippet, type Completion } from "./completions";
+
+export {
+  sequenceToMermaid,
+  mermaidToSequence,
+  addParticipant,
+  updateParticipant,
+  removeParticipant,
+  moveParticipant,
+  addMessage,
+  updateMessage,
+  removeMessage,
+  moveMessage,
+  nextParticipantId,
+  EMPTY_SEQUENCE,
+  ARROW_LABELS,
+  type SequenceDiagram,
+  type SequenceParticipant,
+  type SequenceMessage,
+  type MessageArrow,
+} from "./sequence-model";

@@ -7,11 +7,14 @@ import {
   graphToMermaid,
   isDrawable,
   mermaidToGraph,
+  mermaidToSequence,
+  sequenceToMermaid,
   renderDiagram,
   LIGHT_THEME,
   DARK_THEME,
   type DiagramError,
   type Graph,
+  type SequenceDiagram,
 } from "@forkleaf/diagrams";
 import { SourceEditor } from "../SourceEditor";
 import { useDocumentTheme } from "../useDocumentTheme";
@@ -21,6 +24,7 @@ import { TemplateGallery } from "./TemplateGallery";
 import { DiagramTypePicker } from "./DiagramTypePicker";
 import { Cheatsheet } from "./Cheatsheet";
 import { VisualBuilder } from "./VisualBuilder";
+import { SequenceCanvas } from "./SequenceCanvas";
 
 /** What the right-hand pane is showing. */
 export type StudioView = "canvas" | "preview";
@@ -103,7 +107,21 @@ export function DiagramStudio({
   // blank until you had typed the word `flowchart` into the source yourself,
   // which is exactly the knowledge the canvas exists to not require.
   const graph = useMemo(() => mermaidToGraph(code.trim() === "" ? "flowchart TD" : code), [code]);
-  const canvasAvailable = graph !== null && isDrawable(kind ?? "flowchart");
+
+  /**
+   * The sequence diagram, when the source is one the canvas can hold.
+   *
+   * Null for anything using a `loop`, `alt` or `note` block, which this model
+   * has no representation for — the studio falls back to the source editor
+   * rather than opening a canvas that would drop them on the first edit.
+   */
+  const sequence = useMemo(
+    () => (kind === "sequence" ? mermaidToSequence(code) : null),
+    [kind, code],
+  );
+
+  const canvasAvailable =
+    kind === "sequence" ? sequence !== null : graph !== null && isDrawable(kind ?? "flowchart");
   const effectiveView: StudioView = canvasAvailable ? view : "preview";
 
   // ── Live preview ────────────────────────────────────────────────────────
@@ -157,6 +175,11 @@ export function DiagramStudio({
 
   const handleGraphChange = useCallback(
     (next: Graph) => onChange(graphToMermaid(next)),
+    [onChange],
+  );
+
+  const handleSequenceChange = useCallback(
+    (next: SequenceDiagram) => onChange(sequenceToMermaid(next)),
     [onChange],
   );
 
@@ -375,7 +398,9 @@ export function DiagramStudio({
               )}
             </div>
 
-            {effectiveView === "canvas" && graph ? (
+            {effectiveView === "canvas" && sequence ? (
+              <SequenceCanvas diagram={sequence} onChange={handleSequenceChange} />
+            ) : effectiveView === "canvas" && graph && kind !== "sequence" ? (
               <VisualBuilder graph={graph} onChange={handleGraphChange} />
             ) : (
               <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-5">

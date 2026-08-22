@@ -35,6 +35,7 @@ export { ResolvedImage, type ResolvedImageOptions } from "./extensions/ResolvedI
 
 export { DiagramStudio, type DiagramStudioProps, type StudioView } from "./mermaid/DiagramStudio";
 export { VisualBuilder, type VisualBuilderProps } from "./mermaid/VisualBuilder";
+export { SequenceCanvas, type SequenceCanvasProps } from "./mermaid/SequenceCanvas";
 export { TemplateGallery, type TemplateGalleryProps } from "./mermaid/TemplateGallery";
 export {
   DiagramTypePicker,
