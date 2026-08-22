@@ -139,8 +139,14 @@ export function useLibrary() {
         const queue = await db.listQueue();
         const connected = workspaces.filter((workspace) => !workspace.isLocal);
 
+        // ── Pass one: this device only, so there is no network to wait on.
+        //
+        // The load used to await `listTree` for every connected repository
+        // before the first paint, so opening the dashboard meant watching
+        // "Reading your library…" for as long as GitHub took to answer — every
+        // single visit, with last time's tree sitting unused in IndexedDB.
         const slices = await Promise.all(
-          workspaces.map((workspace) => readWorkspace(db, gateway, workspace, queue)),
+          workspaces.map((workspace) => readWorkspace(db, workspace, queue)),
         );
         if (cancelled) return;
 
@@ -151,7 +157,28 @@ export function useLibrary() {
           needsRepoChoice: session.mode === "github" && connected.length === 0,
         });
 
-        void hydrate(slices);
+        // ── Pass two: reconcile with GitHub, one repository at a time.
+        //
+        // Folded in as each answer arrives rather than awaited as a set, so a
+        // slow repository does not hold up the rest of the library.
+        const reconciled = await Promise.all(
+          slices.map(async (slice) => {
+            if (slice.workspace.isLocal) return slice;
+
+            const fresh = await refreshWorkspace(db, gateway, slice);
+            if (cancelled) return slice;
+
+            const merged = { ...slice, entries: fresh.entries, error: fresh.error };
+            patchWorkspace(slice.workspace.id, {
+              entries: fresh.entries,
+              error: fresh.error,
+            });
+            return merged;
+          }),
+        );
+        if (cancelled) return;
+
+        void hydrate(reconciled);
       } catch (error) {
         if (!cancelled) {
           patch({
@@ -212,32 +239,40 @@ export function useLibrary() {
     return () => {
       cancelled = true;
     };
-  }, [patch]);
+  }, [patch, patchWorkspace]);
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
   /** Adds a repository to the library and indexes it, without a page reload. */
-  const addWorkspace = useCallback(async (workspace: Workspace) => {
-    const db = dbRef.current;
-    const notes = repoRef.current;
-    const gateway = gatewayRef.current;
-    if (!db || !notes || !gateway) return;
+  const addWorkspace = useCallback(
+    async (workspace: Workspace) => {
+      const db = dbRef.current;
+      const notes = repoRef.current;
+      const gateway = gatewayRef.current;
+      if (!db || !notes || !gateway) return;
 
-    await notes.addWorkspace(workspace);
-    if (gateway instanceof GitHubGateway) gateway.register(workspace);
+      await notes.addWorkspace(workspace);
+      if (gateway instanceof GitHubGateway) gateway.register(workspace);
 
-    const queue = await db.listQueue();
-    const slice = await readWorkspace(db, gateway, workspace, queue);
+      const queue = await db.listQueue();
+      const slice = await readWorkspace(db, workspace, queue);
 
-    setState((current) => ({
-      ...current,
-      needsRepoChoice: false,
-      workspaces: sortWorkspaces([
-        ...current.workspaces.filter((entry) => entry.workspace.id !== workspace.id),
-        slice,
-      ]),
-    }));
-  }, []);
+      setState((current) => ({
+        ...current,
+        needsRepoChoice: false,
+        workspaces: sortWorkspaces([
+          ...current.workspaces.filter((entry) => entry.workspace.id !== workspace.id),
+          slice,
+        ]),
+      }));
+
+      // A repository just connected has nothing cached, so the network pass is
+      // the only one that will put anything in it.
+      const fresh = await refreshWorkspace(db, gateway, slice);
+      patchWorkspace(workspace.id, { entries: fresh.entries, error: fresh.error });
+    },
+    [patchWorkspace],
+  );
 
   const removeWorkspace = useCallback(async (id: string) => {
     const notes = repoRef.current;
@@ -322,7 +357,6 @@ export function useLibrary() {
  */
 async function readWorkspace(
   db: LocalDatabase,
-  gateway: GitHubGateway | LocalGateway,
   workspace: Workspace,
   queue: PendingChange[],
 ): Promise<LibraryWorkspace> {
@@ -330,30 +364,43 @@ async function readWorkspace(
   const pending = queue.filter((item) => item.workspaceId === workspace.id).length;
 
   if (workspace.isLocal) {
-    return {
-      workspace,
-      entries: buildIndex(workspace, [], notes),
-      pending,
-      error: null,
-    };
+    return { workspace, entries: buildIndex(workspace, [], notes), pending, error: null };
   }
 
   const cached = await db.getTreeCache(workspace.id);
 
+  return {
+    workspace,
+    entries: buildIndex(workspace, markdownOnly(flattenTree(cached ?? [])), notes),
+    pending,
+    error: null,
+  };
+}
+
+/**
+ * Reconciles one workspace against GitHub.
+ *
+ * The tree is authoritative about which notes exist, so this is what removes a
+ * note deleted from another device. A repository that cannot be reached keeps
+ * whatever was already on screen rather than emptying itself.
+ */
+async function refreshWorkspace(
+  db: LocalDatabase,
+  gateway: GitHubGateway | LocalGateway,
+  slice: LibraryWorkspace,
+): Promise<{ entries: IndexEntry[]; error: string | null }> {
   try {
-    const tree = await gateway.listTree(workspace.id);
-    await db.putTreeCache(workspace.id, tree);
+    const tree = await gateway.listTree(slice.workspace.id);
+    await db.putTreeCache(slice.workspace.id, tree);
+
+    const notes = await db.listNotes(slice.workspace.id);
     return {
-      workspace,
-      entries: buildIndex(workspace, markdownOnly(flattenTree(tree)), notes),
-      pending,
+      entries: buildIndex(slice.workspace, markdownOnly(flattenTree(tree)), notes),
       error: null,
     };
   } catch (error) {
     return {
-      workspace,
-      entries: buildIndex(workspace, markdownOnly(flattenTree(cached ?? [])), notes),
-      pending,
+      entries: slice.entries,
       error: error instanceof Error ? error.message : "Could not reach this repository.",
     };
   }

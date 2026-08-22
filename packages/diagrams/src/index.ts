@@ -46,6 +46,7 @@ export {
 export {
   initMermaid,
   renderDiagram,
+  clearDiagramCache,
   sanitizeSvg,
   toStandaloneSvg,
   LIGHT_THEME,

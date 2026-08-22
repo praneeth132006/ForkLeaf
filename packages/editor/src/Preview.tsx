@@ -54,6 +54,17 @@ export function Preview({
 
   const blocks = useMemo(() => extractMermaidBlocks(markdown), [markdown]);
 
+  /**
+   * The diagram sources, as one string.
+   *
+   * `blocks` is a fresh array on every keystroke, so using it as an effect
+   * dependency re-ran the render pass for every character typed anywhere in
+   * the note — including in prose three paragraphs from the nearest diagram.
+   * What the render pass actually depends on is the diagram *source*, and that
+   * only changes when a diagram does.
+   */
+  const blockKey = useMemo(() => blocks.map((block) => block.code).join("\u0000"), [blocks]);
+
   // Markdown with each diagram replaced by a token, rendered and sanitised.
   const html = useMemo(() => {
     const options = resolveImageSrc ? { resolveImageSrc } : undefined;
@@ -92,7 +103,10 @@ export function Preview({
     return () => {
       cancelled = true;
     };
-  }, [blocks, resolved]);
+    // `blocks` is deliberately absent: it is a new array every render, and
+    // `blockKey` is the part of it this pass depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockKey, resolved]);
 
   // Swap the tokens for rendered SVG once both halves are ready.
   const finalHtml = useMemo(() => {
