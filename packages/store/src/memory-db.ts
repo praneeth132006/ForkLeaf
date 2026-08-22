@@ -1,4 +1,4 @@
-import type { Note, PendingChange, TreeNode, Workspace } from "@forkleaf/types";
+import type { LocalAsset, Note, PendingChange, TreeNode, Workspace } from "@forkleaf/types";
 import type { LocalDatabase } from "./ports";
 
 /**
@@ -14,6 +14,7 @@ export class MemoryDatabase implements LocalDatabase {
   private workspaces = new Map<string, Workspace>();
   private queue = new Map<string, PendingChange>();
   private trees = new Map<string, TreeNode[]>();
+  private assets = new Map<string, LocalAsset>();
   private meta = new Map<string, unknown>();
 
   async getNote(id: string): Promise<Note | undefined> {
@@ -76,6 +77,22 @@ export class MemoryDatabase implements LocalDatabase {
 
   async putTreeCache(workspaceId: string, tree: TreeNode[]): Promise<void> {
     this.trees.set(workspaceId, clone(tree)!);
+  }
+
+  async getAsset(id: string): Promise<LocalAsset | undefined> {
+    return this.assets.get(id);
+  }
+
+  async putAsset(asset: LocalAsset): Promise<void> {
+    this.assets.set(asset.id, asset);
+  }
+
+  async deleteAsset(id: string): Promise<void> {
+    this.assets.delete(id);
+  }
+
+  async listAssets(workspaceId: string): Promise<LocalAsset[]> {
+    return [...this.assets.values()].filter((asset) => asset.workspaceId === workspaceId);
   }
 
   async getMeta<T>(key: string): Promise<T | undefined> {

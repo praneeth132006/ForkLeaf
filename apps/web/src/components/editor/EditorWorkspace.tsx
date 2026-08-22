@@ -30,7 +30,7 @@ import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { ForkLeafLogo } from "@/components/Brand";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { signOut } from "@/lib/gateway";
-import { readAsDataUrl, resolveImageSrc, uploadImage } from "@/lib/assets";
+import { assetPathFor, relativeSrc, resolveImageSrc, uploadImage } from "@/lib/assets";
 import { flattenTree } from "@/lib/library";
 import { track } from "@/lib/firebase/analytics";
 import { upsertUserProfile } from "@/lib/firebase/users";
@@ -115,30 +115,47 @@ export function EditorWorkspace() {
   /**
    * Where images in this note come from and go.
    *
-   * On a connected repository an image becomes a real file next to the notes
-   * and the note links to it by relative path — so the note still renders on
-   * github.com, in an IDE, or anywhere else the repository is opened. With no
-   * repository there is nowhere to put a file, so the image is embedded in the
-   * note itself: larger, but it works, and it survives being pushed later.
+   * The note always gets the same thing: a relative path to a file next to the
+   * notes, `../assets/chart.png`, exactly as a hand-written markdown file would
+   * — so it still renders on github.com, in an IDE, or anywhere else the
+   * repository is opened.
+   *
+   * Only where the bytes go differs. A connected repository gets a real commit;
+   * a workspace with no repository keeps them on this device under the path the
+   * note names. Inlining the image into the note as a `data:` URI, which is
+   * what used to happen without a repository, made a two-line note into a
+   * screenful of base64 — unreadable in the source view, and useless to every
+   * other tool that opens the file.
    */
   const images = useMemo<ImageBridge>(
     () => ({
-      canUpload: Boolean(workspace && !workspace.isLocal),
-      resolve: (src: string) => resolveImageSrc(workspace, notePath, src),
+      canUpload: true,
+      storesLocally: Boolean(workspace?.isLocal),
+      resolve: (src: string) => resolveImageSrc(workspace, notePath, src, notebook.assetUrls),
       upload: async (file: File) => {
-        if (!workspace || workspace.isLocal || !notePath) {
-          return readAsDataUrl(file);
+        if (!workspace || !notePath) {
+          throw new Error("Open a note before adding an image to it.");
         }
-        const { markdownSrc } = await uploadImage({
+
+        if (workspace.isLocal) {
+          const repoPath = assetPathFor(workspace, file, takenPaths);
+          await notebook.putAsset(repoPath, file, false);
+          return relativeSrc(notePath, repoPath);
+        }
+
+        const { markdownSrc, repoPath } = await uploadImage({
           workspace,
           notePath,
           file,
           taken: takenPaths,
         });
+        // Cached so it renders straight away, rather than after a round trip
+        // through the proxy for bytes this tab already has in hand.
+        await notebook.putAsset(repoPath, file, true);
         return markdownSrc;
       },
     }),
-    [workspace, notePath, takenPaths],
+    [workspace, notePath, takenPaths, notebook],
   );
 
   const conflicts = notebook.sync.conflicts;
@@ -713,7 +730,7 @@ export function EditorWorkspace() {
                 imageDestination={
                   workspace && !workspace.isLocal
                     ? `Committed to ${workspace.repo.owner}/${workspace.repo.repo}`
-                    : "Stored inside the note, on this device"
+                    : "Saved to assets/ on this device"
                 }
                 hideModeSwitcher
                 placeholder="Type / for headings, lists, tables and diagrams…"

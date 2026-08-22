@@ -1,7 +1,7 @@
 "use client";
 
 import { dirname, normalizePath, stripExtension, uniquePath } from "@forkleaf/markdown-engine";
-import type { Workspace } from "@forkleaf/types";
+import type { LocalAsset, Workspace } from "@forkleaf/types";
 import { ApiGatewayError } from "@/lib/gateway";
 import { extensionForFile, imageTypeFor, MAX_IMAGE_BYTES, safeAssetName } from "@/lib/media";
 
@@ -19,6 +19,13 @@ import { extensionForFile, imageTypeFor, MAX_IMAGE_BYTES, safeAssetName } from "
  * OAuth token never leaves the server. `resolveImageSrc` is the other half:
  * it turns the portable path back into a same-origin URL the page can render.
  * Nothing that gets written to disk knows this app exists.
+ *
+ * A workspace with no repository behind it has nowhere to commit to, and used
+ * to inline the image into the note as a `data:` URI — which turned a two-line
+ * note into a screenful of base64, unreadable in the source view and useless to
+ * every other tool that opens the file. The bytes go into local storage instead
+ * and the note gets the same relative path it would have had. The markdown is
+ * identical either way; only where the file lives differs.
  */
 
 /** Folder, relative to the workspace directory, that uploads are committed to. */
@@ -124,11 +131,22 @@ export function resolveImageSrc(
   workspace: Workspace | null,
   notePath: string | null,
   src: string,
+  /** Object URLs for assets held on this device, keyed by repository path. */
+  local?: Readonly<Record<string, string>>,
 ): string {
   if (!src || !isRepoRelative(src)) return src;
-  if (!workspace || workspace.isLocal || !notePath) return src;
+  if (!workspace || !notePath) return src;
 
   const path = resolveAgainstNote(notePath, src);
+
+  // A copy on this device is both the only source for a workspace with no
+  // repository and the faster one for a workspace that has been given a
+  // repository — it renders without a round trip through the proxy.
+  const stored = local?.[path];
+  if (stored) return stored;
+
+  if (workspace.isLocal) return src;
+
   const params = new URLSearchParams({
     owner: workspace.repo.owner,
     repo: workspace.repo.repo,
@@ -154,31 +172,11 @@ export async function uploadImage(options: {
 }): Promise<UploadedImage> {
   const { workspace, notePath, file, taken } = options;
 
-  const extension = extensionForFile(file);
-  if (!extension) {
-    throw new Error("That file is not an image ForkLeaf can store.");
-  }
   if (file.size > MAX_IMAGE_BYTES) {
     throw new Error("That image is larger than 10 MB.");
   }
 
-  const folder = workspace.repo.directory
-    ? `${workspace.repo.directory}/${ASSET_FOLDER}`
-    : ASSET_FOLDER;
-
-  // A pasted screenshot arrives called "image.png" every single time. The date
-  // keeps a week of them apart in the folder listing, and the random tail
-  // keeps two pasted in the same minute from overwriting each other — the
-  // repository tree we index only lists markdown, so there is no reliable
-  // "does this name already exist" to ask.
-  const stamp = new Date().toISOString().slice(0, 10);
-  const tail = Math.random().toString(36).slice(2, 6);
-  const named = safeAssetName(file.name || "image", extension);
-  const repoPath = uniquePath(
-    `${folder}/${stamp}-${stripExtension(named)}-${tail}.${extension}`,
-    taken,
-  );
-
+  const repoPath = assetPathFor(workspace, file, taken);
   const content = await readAsBase64(file);
 
   const response = await fetch("/api/gh/asset", {
@@ -208,6 +206,76 @@ export async function uploadImage(options: {
   }
 
   return { markdownSrc: relativeSrc(notePath, repoPath), repoPath };
+}
+
+// ─── Local storage ──────────────────────────────────────────────────────────
+
+/**
+ * Chooses the repository path a file should be committed to.
+ *
+ * A pasted screenshot arrives called "image.png" every single time. The date
+ * keeps a week of them apart in the folder listing, and the random tail keeps
+ * two pasted in the same minute from overwriting each other — the repository
+ * tree we index only lists markdown, so there is no reliable "does this name
+ * already exist" to ask.
+ */
+export function assetPathFor(workspace: Workspace, file: File, taken: Iterable<string>): string {
+  const extension = extensionForFile(file);
+  if (!extension) {
+    throw new Error("That file is not an image ForkLeaf can store.");
+  }
+
+  const folder = workspace.repo.directory
+    ? `${workspace.repo.directory}/${ASSET_FOLDER}`
+    : ASSET_FOLDER;
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const tail = Math.random().toString(36).slice(2, 6);
+  const named = safeAssetName(file.name || "image", extension);
+
+  return uniquePath(`${folder}/${stamp}-${stripExtension(named)}-${tail}.${extension}`, taken);
+}
+
+/** Reads a file into the shape the local asset store holds. */
+export async function assetFrom(options: {
+  workspace: Workspace;
+  repoPath: string;
+  file: File;
+  pushed: boolean;
+}): Promise<LocalAsset> {
+  const { workspace, repoPath, file, pushed } = options;
+
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new Error("That image is larger than 10 MB.");
+  }
+
+  return {
+    id: `${workspace.id}::${repoPath}`,
+    workspaceId: workspace.id,
+    path: repoPath,
+    mimeType: file.type || (imageTypeFor(repoPath) ?? "application/octet-stream"),
+    data: await readAsBase64(file),
+    createdAt: new Date().toISOString(),
+    pushed,
+  };
+}
+
+/**
+ * An object URL for a stored asset.
+ *
+ * Object URLs rather than `data:` ones: the browser holds the bytes once and
+ * hands the `<img>` a handle, where a data URL means a second full copy of
+ * every image sitting in a React state object. The caller owns the URL and
+ * must revoke it — `URL.revokeObjectURL` — when the note it belongs to closes.
+ */
+export function assetObjectUrl(asset: LocalAsset): string {
+  const binary = atob(asset.data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return URL.createObjectURL(new Blob([bytes], { type: asset.mimeType }));
 }
 
 /** True when a path is one of the image types we serve. */

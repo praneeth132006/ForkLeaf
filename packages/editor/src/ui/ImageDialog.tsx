@@ -150,9 +150,9 @@ export function ImageDialog({
 
         {canUpload && embedsInNote && (
           <p className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-2 text-[12.5px] leading-relaxed text-[var(--fl-muted)]">
-            This notebook is only on this device, so there is no repository to commit the file into.
-            The image is stored inside the note itself — that works, but it makes the note much
-            larger. Connect a repository to keep images beside your notes instead.
+            This notebook is only on this device, so the file is kept here rather than committed.
+            The note links to it by the same relative path it would use in a repository, so
+            connecting one later is all it takes for the images to travel with the notes.
           </p>
         )}
 

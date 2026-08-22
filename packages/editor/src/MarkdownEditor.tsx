@@ -444,7 +444,7 @@ export function MarkdownEditor({
       {imageOpen && (
         <ImageDialog
           canUpload={canUpload}
-          embedsInNote={images?.canUpload === false}
+          embedsInNote={images?.storesLocally === true}
           onUpload={uploadAndInsert}
           onUrl={insertImageSrc}
           onClose={() => setImageOpen(false)}

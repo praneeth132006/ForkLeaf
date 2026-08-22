@@ -24,6 +24,13 @@ export interface ImageBridge {
   resolve?: (src: string) => string;
   /** False when there is nowhere to store files, so the UI can say so. */
   canUpload?: boolean;
+  /**
+   * True when files are kept on this device rather than committed.
+   *
+   * The markdown is the same either way — a relative path to `assets/` — so
+   * this only exists for the dialog to explain where the bytes went.
+   */
+  storesLocally?: boolean;
 }
 
 /** MIME types the editor will accept from a paste or a drop. */
