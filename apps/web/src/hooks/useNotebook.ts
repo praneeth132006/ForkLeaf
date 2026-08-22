@@ -93,6 +93,10 @@ const syncPrefKey = (workspace: Workspace) =>
 /** Folders made locally that have no note in them yet. See `emptyFolders`. */
 const emptyFoldersKey = (workspace: string) => `emptyFolders:${workspace}`;
 
+/** Shown when the browser will not give ForkLeaf durable local storage. */
+const STORAGE_UNAVAILABLE =
+  "This browser is not letting ForkLeaf use local storage, so nothing written here will survive a reload. Another ForkLeaf tab may be holding it open — close the others and reload, or leave private browsing.";
+
 /** How many notes may be open at once, to bound memory and tab-strip width. */
 const MAX_OPEN_NOTES = 12;
 
@@ -166,6 +170,10 @@ export function useNotebook(request: NotebookRequest = {}) {
         if (cancelled) return;
 
         const db = await createLocalDatabase();
+        // A browser that refuses IndexedDB gets an in-memory store rather than
+        // a boot failure, so the editor still opens — but nothing typed into
+        // it survives the tab, and saying so is the whole point of the banner.
+        const ephemeral = !db.persistent;
         const gateway: RemoteGateway =
           session.mode === "github" ? new GitHubGateway() : new LocalGateway();
 
@@ -222,6 +230,7 @@ export function useNotebook(request: NotebookRequest = {}) {
           needsRepoChoice,
           ready: true,
           busy: null,
+          error: ephemeral ? STORAGE_UNAVAILABLE : null,
         });
       } catch (error) {
         if (!cancelled) {

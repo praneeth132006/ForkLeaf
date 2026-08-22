@@ -5,7 +5,6 @@ import {
   NoteRepository,
   SyncEngine,
   createLocalDatabase,
-  indexedDbAvailable,
   type LocalDatabase,
 } from "@forkleaf/store";
 import { workspaceId, type Note, type PendingChange, type Workspace } from "@forkleaf/types";
@@ -46,6 +45,10 @@ export interface LibraryState {
   indexing: boolean;
   error: string | null;
 }
+
+/** Shown when the browser will not give ForkLeaf durable local storage. */
+const STORAGE_UNAVAILABLE =
+  "This browser is not letting ForkLeaf use local storage, so nothing written here will survive a reload. Another ForkLeaf tab may be holding it open — close the others and reload, or leave private browsing.";
 
 /** How many notes to read at once while filling in the index. */
 const HYDRATE_BATCH = 6;
@@ -99,17 +102,12 @@ export function useLibrary() {
         }));
         if (cancelled) return;
 
-        if (!indexedDbAvailable()) {
-          patch({
-            ready: true,
-            session,
-            error:
-              "This browser is not letting ForkLeaf use local storage, so your notes cannot be listed here.",
-          });
-          return;
-        }
-
         const db = await createLocalDatabase();
+        // `createLocalDatabase` never throws — a browser that refuses
+        // IndexedDB gets an in-memory store instead. That store is empty and
+        // dies with the tab, so the one thing that must not happen is showing
+        // it as though it were the user's library.
+        const ephemeral = !db.persistent;
         const gateway = session.mode === "github" ? new GitHubGateway() : new LocalGateway();
         // The engine is created only so the repository can be, and is never
         // started: nothing on the dashboard pushes.
@@ -155,6 +153,7 @@ export function useLibrary() {
           session,
           workspaces: sortWorkspaces(slices),
           needsRepoChoice: session.mode === "github" && connected.length === 0,
+          error: ephemeral ? STORAGE_UNAVAILABLE : null,
         });
 
         // ── Pass two: reconcile with GitHub, one repository at a time.
