@@ -37,10 +37,7 @@ export { DiagramStudio, type DiagramStudioProps, type StudioView } from "./merma
 export { VisualBuilder, type VisualBuilderProps } from "./mermaid/VisualBuilder";
 export { SequenceCanvas, type SequenceCanvasProps } from "./mermaid/SequenceCanvas";
 export { TemplateGallery, type TemplateGalleryProps } from "./mermaid/TemplateGallery";
-export {
-  DiagramTypePicker,
-  type DiagramTypePickerProps,
-} from "./mermaid/DiagramTypePicker";
+export { DiagramTypePicker, type DiagramTypePickerProps } from "./mermaid/DiagramTypePicker";
 export { TemplateThumbnail } from "./mermaid/TemplateThumbnail";
 export { Cheatsheet, type CheatsheetProps } from "./mermaid/Cheatsheet";
 export { useDiagramSvg } from "./mermaid/useDiagramSvg";

@@ -111,9 +111,10 @@ export function Editor() {
         public.
       </P>
       <Note>
-        With no repository connected there is nowhere to commit a file, so the image is embedded in
-        the note itself. It works, and it makes the file much larger — connect a repository and
-        images live beside your notes instead.
+        With no repository connected there is nowhere to commit a file, so the bytes are kept on
+        this device instead. The note still links to the same relative path it would use in a
+        repository, so the markdown reads the same either way — connecting a repository later is all
+        it takes for the images to travel with the notes.
       </Note>
       <P>
         You can also link to an image already on the web. Those are stored as the URL you give,
@@ -188,13 +189,14 @@ export function Diagrams() {
           <strong>Diagram</strong> on the toolbar.
         </li>
         <li>
-          The diagram studio opens as an overlay: an empty canvas with a shape palette on the right,
-          and the Mermaid source on the left.
+          The studio asks what you are drawing. Choosing a type opens a blank canvas carrying that
+          type&rsquo;s own shapes, arrows and syntax — a flowchart and an ERD do not want the same
+          palette, and guessing meant starting by deleting the wrong thing.
         </li>
         <li>
           Double-click the canvas to add your first box, or pick a shape from the palette. Prefer to
-          start from something finished? <strong>Templates</strong> has a diagram of every type,
-          ready to edit.
+          start from something finished? <strong>Start from an example</strong> has a worked diagram
+          of every type, ready to edit.
         </li>
         <li>
           Press <strong>Done</strong> or <Code>Esc</Code>. The diagram appears in your note as a
@@ -212,11 +214,41 @@ export function Diagrams() {
         width.
       </P>
       <P>
-        For flowcharts and state diagrams the right pane offers <strong>Canvas</strong> and{" "}
-        <strong>Preview</strong>. Every other diagram type shows the preview, since the canvas has
-        no model for it yet — those are written as source, which is what the autocomplete, inline
-        errors and syntax reference are for.
+        Six types can be drawn rather than typed: <strong>flowcharts</strong>,{" "}
+        <strong>sequence diagrams</strong>, <strong>class diagrams</strong>,{" "}
+        <strong>state machines</strong>, <strong>entity-relationship diagrams</strong> and{" "}
+        <strong>mindmaps</strong>. For those the right pane offers <strong>Canvas</strong> and{" "}
+        <strong>Preview</strong>. The rest are charts of numbers and dates that are quicker to write
+        than to drag, so they show the preview and are edited as source — which is what the
+        autocomplete, inline errors and syntax reference are for.
       </P>
+      <P>
+        A sequence diagram gets a canvas of its own, because its two axes mean different things:
+        participants are columns you drag sideways, and messages are rows you drag up and down.
+        Reordering a row is what changes the order things happen in. One using a <Code>loop</Code>,{" "}
+        <Code>alt</Code> or <Code>note</Code> block opens as source instead, since the canvas has no
+        way to draw those and would drop them on the first edit.
+      </P>
+
+      <H2 id="canvas-shortcuts">Working on the canvas</H2>
+      <Table
+        head={["Do this", "To get this"]}
+        rows={[
+          ["Drag across empty canvas", "A selection band. Shift-click adds and removes."],
+          ["Drag a selected box", "Everything selected moves together"],
+          [<Code key="dup">⌘D</Code>, "Duplicate the selection"],
+          ["Arrow keys", "Nudge by the grid; hold Shift for ten of it"],
+          [<Code key="undo">⌘Z</Code>, "Undo, and ⌘⇧Z to redo"],
+          [
+            <strong key="tidy">Tidy up</strong>,
+            "Lay the diagram out in layers taken from its own arrows",
+          ],
+          ["Hold Space and drag", "Pan the canvas"],
+          [<Code key="fit">⌘0</Code>, "Fit the diagram to the pane"],
+          ["Drag a box's edge handle onto empty space", "Add the next box, already connected"],
+          [<Code key="tab">Tab</Code>, "Continue the chain from the selected box"],
+        ]}
+      />
 
       <H2 id="types">The diagram types</H2>
       <P>
