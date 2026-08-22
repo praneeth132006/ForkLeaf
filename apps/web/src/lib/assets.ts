@@ -121,6 +121,22 @@ export function isRepoRelative(src: string): boolean {
 }
 
 /**
+ * Stand-in for an image whose bytes are nowhere to be found.
+ *
+ * Inline SVG rather than a hosted file so it renders with no request at all,
+ * including offline, which is when it is most likely to be needed.
+ */
+export const MISSING_IMAGE_SRC =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="120" viewBox="0 0 320 120" role="img" aria-label="Image not on this device">` +
+      `<rect x="0.5" y="0.5" width="319" height="119" rx="7" fill="none" stroke="#8b8b8b" stroke-opacity="0.45" stroke-dasharray="5 4"/>` +
+      `<text x="160" y="56" text-anchor="middle" font-family="system-ui, sans-serif" font-size="13" fill="#8b8b8b">Image not on this device</text>` +
+      `<text x="160" y="76" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11.5" fill="#8b8b8b" fill-opacity="0.75">Connect the repository it was saved to</text>` +
+      `</svg>`,
+  );
+
+/**
  * The URL the browser should actually load for an image in a note.
  *
  * Absolute URLs and `data:` images are already loadable and pass through
@@ -145,7 +161,12 @@ export function resolveImageSrc(
   const stored = local?.[path];
   if (stored) return stored;
 
-  if (workspace.isLocal) return src;
+  // A workspace with no repository has exactly one place the bytes could be,
+  // and they are not there. Returning the note-relative path made the browser
+  // ask the app's own origin for `/assets/…`, get a 404, and draw the broken
+  // image icon with the filename next to it — which reads like a bug in the
+  // note rather than a file this device does not have.
+  if (workspace.isLocal) return MISSING_IMAGE_SRC;
 
   const params = new URLSearchParams({
     owner: workspace.repo.owner,

@@ -27,6 +27,7 @@ import { HelpDialog } from "@/components/HelpDialog";
 import { HistoryDialog } from "@/components/HistoryDialog";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
 import { CommandPalette, type Command } from "@/components/CommandPalette";
+import { StorageBlocked } from "@/components/StorageBlocked";
 import { ForkLeafLogo } from "@/components/Brand";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { signOut } from "@/lib/gateway";
@@ -542,6 +543,10 @@ export function EditorWorkspace() {
   }, [note, notebook, handleCreate, router]);
 
   // ── Render ──────────────────────────────────────────────────────────────
+
+  // Another tab is holding local storage. Nothing typed here could be saved,
+  // so the editor does not open at all.
+  if (notebook.storage === "blocked") return <StorageBlocked />;
 
   if (!notebook.ready) {
     return (

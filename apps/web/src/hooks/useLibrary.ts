@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   NoteRepository,
   SyncEngine,
-  createLocalDatabase,
+  openLocalDatabase,
   type LocalDatabase,
+  type LocalDatabaseStatus,
 } from "@forkleaf/store";
 import { workspaceId, type Note, type PendingChange, type Workspace } from "@forkleaf/types";
 import { GitHubGateway, LocalGateway, fetchSession, type SessionResponse } from "@/lib/gateway";
@@ -43,12 +44,19 @@ export interface LibraryState {
   needsRepoChoice: boolean;
   /** True while notes are being read to fill in titles, tags and counts. */
   indexing: boolean;
+  /** Whether local storage is real, held by another tab, or missing entirely. */
+  storage: LocalDatabaseStatus;
   error: string | null;
 }
 
-/** Shown when the browser will not give ForkLeaf durable local storage. */
+/**
+ * Shown when the browser will not give ForkLeaf durable local storage at all.
+ *
+ * The recoverable case — another tab holding the database — is `StorageBlocked`
+ * instead, so this text stays about the case that cannot be recovered from.
+ */
 const STORAGE_UNAVAILABLE =
-  "This browser is not letting ForkLeaf use local storage, so nothing written here will survive a reload. Another ForkLeaf tab may be holding it open — close the others and reload, or leave private browsing.";
+  "This browser will not let ForkLeaf use local storage, so your notes cannot be listed here. Leaving private browsing, or allowing site data for this page, fixes it.";
 
 /** How many notes to read at once while filling in the index. */
 const HYDRATE_BATCH = 6;
@@ -68,6 +76,7 @@ export function useLibrary() {
     workspaces: [],
     needsRepoChoice: false,
     indexing: false,
+    storage: "ready",
     error: null,
   });
 
@@ -102,12 +111,14 @@ export function useLibrary() {
         }));
         if (cancelled) return;
 
-        const db = await createLocalDatabase();
-        // `createLocalDatabase` never throws — a browser that refuses
-        // IndexedDB gets an in-memory store instead. That store is empty and
-        // dies with the tab, so the one thing that must not happen is showing
-        // it as though it were the user's library.
-        const ephemeral = !db.persistent;
+        // Never throws: a browser that refuses IndexedDB gets an in-memory
+        // store instead. That store is empty and dies with the tab, so the one
+        // thing that must not happen is showing it as the user's library.
+        const { db, status: storage } = await openLocalDatabase();
+        if (storage === "blocked") {
+          patch({ ready: true, storage });
+          return;
+        }
         const gateway = session.mode === "github" ? new GitHubGateway() : new LocalGateway();
         // The engine is created only so the repository can be, and is never
         // started: nothing on the dashboard pushes.
@@ -153,7 +164,8 @@ export function useLibrary() {
           session,
           workspaces: sortWorkspaces(slices),
           needsRepoChoice: session.mode === "github" && connected.length === 0,
-          error: ephemeral ? STORAGE_UNAVAILABLE : null,
+          storage,
+          error: storage === "unavailable" ? STORAGE_UNAVAILABLE : null,
         });
 
         // ── Pass two: reconcile with GitHub, one repository at a time.
