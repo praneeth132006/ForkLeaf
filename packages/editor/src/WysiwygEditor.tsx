@@ -25,6 +25,7 @@ function markdownOf(editor: Editor): string {
 }
 import { CodeBlock } from "./extensions/CodeBlock";
 import { ResolvedImage } from "./extensions/ResolvedImage";
+import { TextSelection } from "@tiptap/pm/state";
 import { imagesFrom, type ImageBridge } from "./images";
 import { MermaidBlock } from "./extensions/MermaidBlock";
 import { readSlashState } from "./extensions/SlashCommands";
@@ -241,6 +242,59 @@ export function WysiwygEditor({
     },
   });
 
+  /**
+   * Puts the caret in the note's body rather than in its title.
+   *
+   * A note opens with the selection at position zero, which is inside the
+   * leading `# Title` — so the formatting bar greeted every new note with
+   * "Heading 1", and the first thing typed became part of the title. The body
+   * is where writing actually starts, so that is where the caret goes.
+   *
+   * A brand-new note is *only* a title, with no body to put the caret in, so
+   * one empty paragraph is added. It is added behind `applyingExternal`, which
+   * is the same guard the external-value sync uses: an empty trailing
+   * paragraph serialises back to no markdown at all, so reporting it as an
+   * edit would mark a note dirty for a change that does not exist on disk.
+   *
+   * The selection is moved without taking focus. This runs on mount for every
+   * note opened, and stealing focus from, say, the search box because a note
+   * finished loading is its own kind of rude.
+   */
+  useEffect(() => {
+    if (!editor) return;
+
+    const first = editor.state.doc.firstChild;
+    if (first?.type.name !== "heading") return;
+
+    // Just past the title node. `+1` steps inside the block that follows it,
+    // which is where its text begins.
+    const body = first.nodeSize + 1;
+
+    const paragraph = editor.state.schema.nodes.paragraph;
+    const tr = editor.state.tr;
+
+    if (body >= tr.doc.content.size) {
+      if (!paragraph) return;
+      tr.insert(tr.doc.content.size, paragraph.create());
+    }
+
+    // One transaction, so the caret is placed against the document that has
+    // the paragraph in it. Moving it in a second dispatch put it at position
+    // 16 of a fifteen-position document, which ProseMirror clamps back to the
+    // end of the title — exactly the place this exists to avoid.
+    tr.setSelection(TextSelection.near(tr.doc.resolve(body)));
+    // Kept out of the undo stack: pressing undo on a note you have just opened
+    // should do nothing, not delete a paragraph you never typed.
+    tr.setMeta("addToHistory", false);
+
+    applyingExternal.current = true;
+    editor.view.dispatch(tr);
+    applyingExternal.current = false;
+    // Mount only. Re-running as the document changes would drag the caret back
+    // to the top every time the note synced.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor]);
+
   // Hand the instance to the parent once it exists, and take it back on
   // unmount so a toolbar never holds a destroyed editor.
   const onReadyRef = useRef(onReady);
@@ -257,11 +311,11 @@ export function WysiwygEditor({
     if (!editor) return;
 
     const current = markdownOf(editor);
-    if (current === value) return;
+    if (sameMarkdown(current, value)) return;
 
     // A value we produced ourselves, arriving late. The document is already
     // at least as new as this, so rebuilding it from the prop would undo work.
-    if (emitted.current.includes(value)) return;
+    if (emitted.current.some((seen) => sameMarkdown(seen, value))) return;
 
     applyingExternal.current = true;
     editor.commands.setContent(value, { emitUpdate: false });
@@ -311,6 +365,21 @@ export function WysiwygEditor({
       <EditorContent editor={editor} />
     </div>
   );
+}
+
+/**
+ * Whether two markdown strings are the same document.
+ *
+ * Trailing blank lines are not content. A note is stored as `# Title\n\n`,
+ * while serialising the editor's document back to markdown yields
+ * `# Title` — so a byte comparison said the prop and the editor disagreed,
+ * every note rebuilt itself from the prop the moment it opened, and that
+ * rebuild reset the caret to the end of the title and threw away the undo
+ * history. It also fought the caret placement above, which is how it was
+ * finally noticed.
+ */
+function sameMarkdown(a: string, b: string): boolean {
+  return a.replace(/\s+$/, "") === b.replace(/\s+$/, "");
 }
 
 // ─── Bubble menu button ─────────────────────────────────────────────────────

@@ -85,7 +85,18 @@ export function MarkdownEditor({
   const sourceHandle = useRef<SourceEditorHandle | null>(null);
   // Re-render when the rich editor's marks change, so the B/I/S buttons show
   // the state of the text under the caret rather than a stale one.
-  const [, forceRender] = useState(0);
+  /**
+   * Bumped whenever the rich editor's toolbar-visible state changes.
+   *
+   * The value is used, not just the setter: it is a dependency of the memo
+   * that builds the toolbar's surface below. Discarding it meant the memo had
+   * nothing that changed when the caret moved, so it kept handing back the
+   * surface built at mount — the block dropdown was stuck on whatever the
+   * caret started in (a new note starts on its `#` title, hence a permanent
+   * "Heading 1"), and choosing that same entry fired no change event, so the
+   * dropdown appeared to do nothing at all.
+   */
+  const [richTick, forceRender] = useState(0);
   // Where the caret is in the source surface. Held here as well as reported
   // upwards because the toolbar's paragraph-style dropdown reads the line the
   // caret is on, and has to be redrawn when it moves.
@@ -290,7 +301,7 @@ export function MarkdownEditor({
     }
     // Reading the handle needs a re-render trigger, which the cursor provides.
     return sourceSurface(sourceHandle, sourceCursor);
-  }, [isRich, tiptap, sourceCursor]);
+  }, [isRich, tiptap, sourceCursor, richTick]);
 
   // Rich text and raw Markdown can hold different things, so the toolbar shows
   // only what the surface underneath it can actually apply.
