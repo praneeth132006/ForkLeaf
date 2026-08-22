@@ -11,6 +11,7 @@ import {
 import {
   workspaceId,
   DEFAULT_SYNC_PREFERENCE,
+  type LocalAsset,
   type Note,
   type SyncMode,
   type SyncPreference,
@@ -22,6 +23,7 @@ import {
 import { dirname } from "@forkleaf/markdown-engine";
 import { GitHubGateway, LocalGateway, fetchSession, type SessionResponse } from "@/lib/gateway";
 import { LOCAL_WORKSPACE } from "@/lib/workspaces";
+import { assetFrom, assetObjectUrl } from "@/lib/assets";
 
 /**
  * The application's single source of truth.
@@ -861,6 +863,87 @@ export function useNotebook(request: NotebookRequest = {}) {
     return notes.listNotes(workspace.id);
   }, [state.activeWorkspace]);
 
+  // ── Images held on this device ──────────────────────────────────────────
+
+  /**
+   * Object URLs for stored images, keyed by `${workspaceId}::${path}`.
+   *
+   * Held in a ref that outlives any one effect run, and never revoked as part
+   * of an effect's cleanup. That is deliberate: React runs an effect, cleans it
+   * up and runs it again on mount in development, so revoking there handed the
+   * document a URL that had already been torn down — every image in the note
+   * rendered as a broken box, and only in development, which is the worst place
+   * for a bug to live.
+   *
+   * The bytes behind these are released when the tab goes away. The set is
+   * bounded by the images actually opened in one session, which for a notebook
+   * is tens, not thousands.
+   */
+  const assetUrlCache = useRef<Map<string, string>>(new Map());
+  const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
+
+  const activeWorkspaceId = state.activeWorkspace?.id ?? null;
+
+  /** The cached URL for an asset, creating it the first time it is asked for. */
+  const urlForAsset = useCallback((asset: LocalAsset): string => {
+    const existing = assetUrlCache.current.get(asset.id);
+    if (existing) return existing;
+
+    const url = assetObjectUrl(asset);
+    assetUrlCache.current.set(asset.id, url);
+    return url;
+  }, []);
+
+  useEffect(() => {
+    const db = dbRef.current;
+    if (!db || !activeWorkspaceId) return;
+
+    let cancelled = false;
+
+    void db.listAssets(activeWorkspaceId).then((assets) => {
+      if (cancelled) return;
+
+      const urls: Record<string, string> = {};
+      for (const asset of assets) urls[asset.path] = urlForAsset(asset);
+      setAssetUrls(urls);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspaceId, state.ready, urlForAsset]);
+
+  /**
+   * Stores an image on this device and makes it renderable straight away.
+   *
+   * Used for a workspace with no repository, where there is nowhere to commit
+   * to, and as a cache for one that has: an image that has just been committed
+   * renders from here immediately rather than after a round trip through the
+   * proxy for bytes this tab already holds.
+   */
+  const putAsset = useCallback(
+    async (repoPath: string, file: File, pushed: boolean) => {
+      const db = dbRef.current;
+      const workspace = state.activeWorkspace;
+      if (!db || !workspace) return;
+
+      const asset = await assetFrom({ workspace, repoPath, file, pushed });
+      await db.putAsset(asset);
+
+      // Replacing a path that already had a URL: the old one is dropped from
+      // the cache here, since nothing else will ever ask for it again.
+      const previous = assetUrlCache.current.get(asset.id);
+      if (previous) {
+        URL.revokeObjectURL(previous);
+        assetUrlCache.current.delete(asset.id);
+      }
+
+      const url = urlForAsset(asset);
+      setAssetUrls((current) => ({ ...current, [repoPath]: url }));
+    },
+    [state.activeWorkspace, urlForAsset],
+  );
+
   const displayTree = useMemo(
     () => withEmptyFolders(state.tree, state.emptyFolders),
     [state.tree, state.emptyFolders],
@@ -891,6 +974,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       setSyncMode,
       resolveConflict,
       allNotes,
+      assetUrls,
+      putAsset,
       dismissError: () => patch({ error: null }),
       /**
        * The tree as the sidebar should draw it: what is in the repository,
@@ -901,6 +986,8 @@ export function useNotebook(request: NotebookRequest = {}) {
     [
       state,
       activeNote,
+      assetUrls,
+      putAsset,
       openNote,
       closeNote,
       openNoteAndReturn,

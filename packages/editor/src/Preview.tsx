@@ -12,10 +12,25 @@ export interface PreviewProps {
   className?: string;
   /** Called when the user clicks a rendered diagram, to open it for editing. */
   onDiagramClick?: (code: string, index: number) => void;
+  /**
+   * Maps an image `src` in the note to a URL the browser can load.
+   *
+   * Memoise it: the whole document is re-rendered whenever this identity
+   * changes.
+   */
+  resolveImageSrc?: (src: string) => string;
 }
 
-/** Placeholder token swapped in for a diagram before sanitisation. */
-const TOKEN = (index: number) => `FORKLEAFDIAGRAM${index}TOKEN`;
+/**
+ * Placeholder token swapped in for a diagram before sanitisation.
+ *
+ * The random part matters: a note whose prose happens to contain the literal
+ * token — a note about how this component works, for instance — would otherwise
+ * have that text replaced by somebody else's diagram.
+ */
+const RUN = Math.random().toString(36).slice(2, 10).toUpperCase();
+const TOKEN = (index: number) => `FORKLEAFDIAGRAM${RUN}X${index}TOKEN`;
+const TOKEN_PATTERN = new RegExp(`FORKLEAFDIAGRAM${RUN}X(\\d+)TOKEN`, "g");
 
 /**
  * Rendered markdown preview with live Mermaid diagrams.
@@ -25,7 +40,13 @@ const TOKEN = (index: number) => `FORKLEAFDIAGRAM${index}TOKEN`;
  * to, because note content is untrusted), so the SVG has to arrive after
  * sanitisation — already sanitised by the diagram renderer itself.
  */
-export function Preview({ markdown, theme, className, onDiagramClick }: PreviewProps) {
+export function Preview({
+  markdown,
+  theme,
+  className,
+  onDiagramClick,
+  resolveImageSrc,
+}: PreviewProps) {
   const documentTheme = useDocumentTheme();
   const resolved = theme ?? documentTheme;
   const [diagrams, setDiagrams] = useState<Map<number, string>>(new Map());
@@ -33,9 +54,21 @@ export function Preview({ markdown, theme, className, onDiagramClick }: PreviewP
 
   const blocks = useMemo(() => extractMermaidBlocks(markdown), [markdown]);
 
+  /**
+   * The diagram sources, as one string.
+   *
+   * `blocks` is a fresh array on every keystroke, so using it as an effect
+   * dependency re-ran the render pass for every character typed anywhere in
+   * the note — including in prose three paragraphs from the nearest diagram.
+   * What the render pass actually depends on is the diagram *source*, and that
+   * only changes when a diagram does.
+   */
+  const blockKey = useMemo(() => blocks.map((block) => block.code).join("\u0000"), [blocks]);
+
   // Markdown with each diagram replaced by a token, rendered and sanitised.
   const html = useMemo(() => {
-    if (blocks.length === 0) return markdownToHtml(markdown);
+    const options = resolveImageSrc ? { resolveImageSrc } : undefined;
+    if (blocks.length === 0) return markdownToHtml(markdown, options);
 
     let source = "";
     let cursor = 0;
@@ -46,8 +79,8 @@ export function Preview({ markdown, theme, className, onDiagramClick }: PreviewP
     });
     source += markdown.slice(cursor);
 
-    return markdownToHtml(source);
-  }, [markdown, blocks]);
+    return markdownToHtml(source, options);
+  }, [markdown, blocks, resolveImageSrc]);
 
   // Render diagrams off the critical path so typing never blocks on mermaid.
   useEffect(() => {
@@ -70,13 +103,16 @@ export function Preview({ markdown, theme, className, onDiagramClick }: PreviewP
     return () => {
       cancelled = true;
     };
-  }, [blocks, resolved]);
+    // `blocks` is deliberately absent: it is a new array every render, and
+    // `blockKey` is the part of it this pass depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockKey, resolved]);
 
   // Swap the tokens for rendered SVG once both halves are ready.
   const finalHtml = useMemo(() => {
     if (blocks.length === 0) return html;
 
-    return html.replace(/FORKLEAFDIAGRAM(\d+)TOKEN/g, (_match, raw: string) => {
+    return html.replace(TOKEN_PATTERN, (_match, raw: string) => {
       const index = Number(raw);
       const svg = diagrams.get(index);
 

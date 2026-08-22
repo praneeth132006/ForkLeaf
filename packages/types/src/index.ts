@@ -106,8 +106,15 @@ export interface Note {
    * `null` for a note that has never been pushed. Used for conflict detection.
    */
   baseSha: string | null;
-  /** ISO timestamp of the last local edit. */
-  updatedAt: string;
+  /**
+   * ISO timestamp of the last edit made to this note in ForkLeaf.
+   *
+   * `null` for a note that has only ever been *read* — opened from GitHub,
+   * or pulled in by the dashboard's background index. Reading is not editing,
+   * and stamping a read with the current time is what used to make every note
+   * in a freshly connected repository claim it had been touched a moment ago.
+   */
+  updatedAt: string | null;
   /** True when the local copy has edits not yet pushed to GitHub. */
   dirty: boolean;
   /** Per-note editor mode preference. Falls back to the global default. */
@@ -190,6 +197,43 @@ export interface Conflict {
 }
 
 export type ConflictResolution = "keep-local" | "keep-remote" | "keep-both";
+
+// ─── Images ─────────────────────────────────────────────────────────────────
+
+/**
+ * An image belonging to a note, held on this device.
+ *
+ * Notes reference images by repository-relative path — `../assets/chart.png` —
+ * so the markdown renders on github.com and in any editor. That path needs a
+ * file behind it, and there are two moments when there is not one yet: a
+ * workspace with no repository, which has nowhere to commit to at all, and a
+ * connected workspace that happens to be offline when a screenshot is pasted.
+ *
+ * The bytes live here in both cases. The note itself never carries them, which
+ * is the whole point: the alternative — inlining the image as a `data:` URI —
+ * turned a two-line note into a hundred kilobytes of base64 that no other tool
+ * could read, and made the source view unusable.
+ */
+export interface LocalAsset {
+  /** `${workspaceId}::${path}` — unique across workspaces. */
+  id: string;
+  workspaceId: string;
+  /** Repository-relative path, e.g. `assets/2026-08-22-diagram-k3f9.png`. */
+  path: string;
+  /** MIME type, so the blob can be reconstructed for display. */
+  mimeType: string;
+  /** The file's bytes, base64-encoded without a `data:` prefix. */
+  data: string;
+  createdAt: string;
+  /**
+   * True once these bytes are known to be committed to GitHub.
+   *
+   * A workspace with no repository leaves this false forever, which is
+   * correct: there is nothing to push to. For a connected one it is what
+   * distinguishes a cached copy from an upload still waiting on a connection.
+   */
+  pushed: boolean;
+}
 
 // ─── Export ─────────────────────────────────────────────────────────────────
 

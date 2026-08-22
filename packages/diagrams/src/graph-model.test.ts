@@ -7,6 +7,11 @@ import {
   removeNode,
   updateNode,
   nextNodeId,
+  splitMembers,
+  tidyLayout,
+  duplicateNodes,
+  moveNodes,
+  removeMany,
   type Graph,
 } from "./graph-model";
 import { detectKind, DIAGRAM_TEMPLATES } from "./templates";
@@ -422,5 +427,291 @@ describe("preserving what the model has no concept of", () => {
     expect(code).toContain("note right of A");
     expect(code).toContain("Retries three times");
     expect(code).toContain("end note");
+  });
+});
+
+// ─── Class diagrams ─────────────────────────────────────────────────────────
+
+describe("class diagrams", () => {
+  const source = `classDiagram
+    direction TB
+    class Note {
+        +string id
+        +save() void
+    }
+    class Workspace
+    Workspace "1" --> "*" Note : contains
+    Note --|> Entity`;
+
+  it("parses classes, their members and their relationships", () => {
+    const parsed = mermaidToGraph(source);
+    expect(parsed?.kind).toBe("class");
+
+    const note = parsed?.nodes.find((node) => node.id === "Note");
+    expect(splitMembers(note!.label)).toEqual({
+      name: "Note",
+      members: ["+string id", "+save() void"],
+    });
+
+    const contains = parsed?.edges.find((edge) => edge.label === "contains");
+    expect(contains).toMatchObject({
+      from: "Workspace",
+      to: "Note",
+      style: "associate",
+      fromCardinality: "1",
+      toCardinality: "*",
+    });
+  });
+
+  it("reads a reversed inheritance arrow in the direction it means", () => {
+    // `Parent <|-- Child` says the child inherits, so the edge runs from the
+    // child — the same direction `Child --|> Parent` would give.
+    const parsed = mermaidToGraph("classDiagram\n    Animal <|-- Dog");
+    expect(parsed?.edges[0]).toMatchObject({ from: "Dog", to: "Animal", style: "inherit" });
+  });
+
+  it("round-trips without losing members or cardinality", () => {
+    const parsed = mermaidToGraph(source)!;
+    const again = mermaidToGraph(graphToMermaid(parsed))!;
+
+    expect(splitMembers(again.nodes.find((n) => n.id === "Note")!.label).members).toEqual([
+      "+string id",
+      "+save() void",
+    ]);
+    expect(again.edges.find((edge) => edge.label === "contains")).toMatchObject({
+      fromCardinality: "1",
+      toCardinality: "*",
+    });
+  });
+});
+
+// ─── Entity-relationship diagrams ───────────────────────────────────────────
+
+describe("ER diagrams", () => {
+  const source = `erDiagram
+    CUSTOMER {
+        string name
+        int age
+    }
+    ORDER {
+        int id
+    }
+    CUSTOMER ||--o{ ORDER : "places"`;
+
+  it("parses entities, attributes and crow's-foot cardinality", () => {
+    const parsed = mermaidToGraph(source);
+    expect(parsed?.kind).toBe("er");
+
+    expect(splitMembers(parsed!.nodes[0]!.label)).toEqual({
+      name: "CUSTOMER",
+      members: ["string name", "int age"],
+    });
+    expect(parsed?.edges[0]).toMatchObject({
+      from: "CUSTOMER",
+      to: "ORDER",
+      style: "one-many",
+      label: "places",
+    });
+  });
+
+  it("reads each cardinality pair as its own relationship style", () => {
+    const styles = ["||--||", "}o--||", "||--o{", "}o--o{"].map(
+      (pair) => mermaidToGraph(`erDiagram\n    A ${pair} B : ""`)?.edges[0]?.style,
+    );
+    expect(styles).toEqual(["one-one", "many-one", "one-many", "many-many"]);
+  });
+
+  it("keeps a non-identifying relationship dotted", () => {
+    const parsed = mermaidToGraph(`erDiagram\n    A ||..o{ B : ""`);
+    expect(parsed?.edges[0]?.dashed).toBe(true);
+    expect(graphToMermaid(parsed!)).toContain("||..o{");
+  });
+
+  it("keeps an entity that has neither attributes nor relationships", () => {
+    // Without its own block such an entity appears nowhere in the source, and
+    // reopening the canvas would silently drop it.
+    const graph = mermaidToGraph("erDiagram\n    LONELY {\n    }")!;
+    expect(graphToMermaid(graph)).toContain("LONELY {");
+  });
+});
+
+// ─── Mindmaps ───────────────────────────────────────────────────────────────
+
+describe("mindmaps", () => {
+  const source = `mindmap
+  root((Ideas))
+    a[Origins]
+      b[Long history]
+    c(Research)`;
+
+  it("turns indentation into parent-child edges", () => {
+    const parsed = mermaidToGraph(source);
+    expect(parsed?.kind).toBe("mindmap");
+    expect(parsed?.nodes.map((node) => node.label)).toEqual([
+      "Ideas",
+      "Origins",
+      "Long history",
+      "Research",
+    ]);
+    expect(parsed?.edges.map((edge) => `${edge.from}->${edge.to}`)).toEqual([
+      "root->a",
+      "a->b",
+      "root->c",
+    ]);
+  });
+
+  it("writes the tree back out at the right depth", () => {
+    const parsed = mermaidToGraph(source)!;
+    const lines = graphToMermaid(parsed).split("\n");
+
+    expect(lines[1]).toBe("  root((Ideas))");
+    expect(lines[2]).toBe("    a[Origins]");
+    expect(lines[3]).toBe("      b[Long history]");
+    expect(lines[4]).toBe("    c(Research)");
+  });
+
+  it("does not loop forever on a cycle", () => {
+    // Half-edited source can describe something that is not a tree; refusing to
+    // hang matters more than refusing to draw.
+    const cyclic: Graph = {
+      kind: "mindmap",
+      direction: "TD",
+      nodes: [
+        { id: "a", label: "A", shape: "mind-square", x: 0, y: 0 },
+        { id: "b", label: "B", shape: "mind-square", x: 0, y: 0 },
+      ],
+      edges: [
+        { id: "e1", from: "a", to: "b", style: "branch" },
+        { id: "e2", from: "b", to: "a", style: "branch" },
+      ],
+    };
+
+    const code = graphToMermaid(cyclic);
+    expect(code).toContain("a[A]");
+    expect(code).toContain("b[B]");
+  });
+});
+
+// ─── Canvas operations ──────────────────────────────────────────────────────
+
+describe("tidyLayout", () => {
+  const messy: Graph = {
+    kind: "flowchart",
+    direction: "TD",
+    nodes: [
+      { id: "a", label: "A", shape: "rect", x: 900, y: 12 },
+      { id: "b", label: "B", shape: "rect", x: 13, y: 700 },
+      { id: "c", label: "C", shape: "rect", x: 400, y: 40 },
+      { id: "d", label: "D", shape: "rect", x: 55, y: 90 },
+    ],
+    edges: [
+      { id: "e1", from: "a", to: "b", style: "arrow" },
+      { id: "e2", from: "a", to: "c", style: "arrow" },
+      { id: "e3", from: "b", to: "d", style: "arrow" },
+      { id: "e4", from: "c", to: "d", style: "arrow" },
+    ],
+  };
+
+  it("puts each node one layer below the deepest thing pointing at it", () => {
+    const tidy = tidyLayout(messy);
+    const y = (id: string) => tidy.nodes.find((node) => node.id === id)!.y;
+
+    expect(y("a")).toBeLessThan(y("b"));
+    expect(y("b")).toBe(y("c"));
+    // `d` is reached from both `b` and `c`, so it sits below both rather than
+    // beside one of them.
+    expect(y("d")).toBeGreaterThan(y("b"));
+  });
+
+  it("runs the layers sideways for a left-to-right graph", () => {
+    const tidy = tidyLayout({ ...messy, direction: "LR" });
+    const at = (id: string) => tidy.nodes.find((node) => node.id === id)!;
+
+    expect(at("a").x).toBeLessThan(at("b").x);
+    expect(at("b").y).not.toBe(at("c").y);
+  });
+
+  it("is stable — tidying twice changes nothing the second time", () => {
+    const once = tidyLayout(messy);
+    const twice = tidyLayout(once);
+    expect(twice.nodes).toEqual(once.nodes);
+  });
+
+  it("does not hang on a cycle", () => {
+    const cyclic: Graph = {
+      kind: "flowchart",
+      direction: "TD",
+      nodes: [
+        { id: "a", label: "A", shape: "rect", x: 0, y: 0 },
+        { id: "b", label: "B", shape: "rect", x: 0, y: 0 },
+      ],
+      edges: [
+        { id: "e1", from: "a", to: "b", style: "arrow" },
+        { id: "e2", from: "b", to: "a", style: "arrow" },
+      ],
+    };
+
+    expect(tidyLayout(cyclic).nodes).toHaveLength(2);
+  });
+
+  it("leaves an empty graph alone", () => {
+    expect(tidyLayout({ kind: "flowchart", direction: "TD", nodes: [], edges: [] }).nodes).toEqual(
+      [],
+    );
+  });
+});
+
+describe("duplicateNodes", () => {
+  it("copies the nodes and the edges between them", () => {
+    const copied = duplicateNodes(graph, ["a", "b"]);
+
+    expect(copied.nodes).toHaveLength(5);
+    // a→b was between two copied nodes, so it is copied; b→c was not.
+    expect(copied.edges).toHaveLength(3);
+  });
+
+  it("does not wire the copy back into the original", () => {
+    const copied = duplicateNodes(graph, ["b"]);
+    const fresh = copied.nodes.filter((node) => !["a", "b", "c"].includes(node.id));
+
+    expect(fresh).toHaveLength(1);
+    expect(
+      copied.edges.some((edge) => edge.from === fresh[0]!.id || edge.to === fresh[0]!.id),
+    ).toBe(false);
+  });
+
+  it("offsets the copy so it is not hidden under the original", () => {
+    const copied = duplicateNodes(graph, ["a"], 40);
+    const fresh = copied.nodes[copied.nodes.length - 1]!;
+    expect(fresh.x).toBe(140);
+    expect(fresh.y).toBe(90);
+  });
+
+  it("does nothing when given no ids", () => {
+    expect(duplicateNodes(graph, [])).toBe(graph);
+  });
+});
+
+describe("moveNodes and removeMany", () => {
+  it("moves only the nodes named", () => {
+    const moved = moveNodes(graph, ["a", "c"], 10, -5);
+    expect(moved.nodes.map((node) => [node.x, node.y])).toEqual([
+      [110, 45],
+      [100, 200],
+      [310, 195],
+    ]);
+  });
+
+  it("removes nodes, edges, and the edges attached to removed nodes", () => {
+    const gone = removeMany(graph, ["b"]);
+    expect(gone.nodes.map((node) => node.id)).toEqual(["a", "c"]);
+    // Both edges touched `b`, so neither survives.
+    expect(gone.edges).toEqual([]);
+  });
+
+  it("removes an edge named directly", () => {
+    const gone = removeMany(graph, ["e2"]);
+    expect(gone.nodes).toHaveLength(3);
+    expect(gone.edges.map((edge) => edge.id)).toEqual(["e1"]);
   });
 });

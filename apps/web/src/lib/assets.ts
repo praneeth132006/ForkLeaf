@@ -1,0 +1,284 @@
+"use client";
+
+import { dirname, normalizePath, stripExtension, uniquePath } from "@forkleaf/markdown-engine";
+import type { LocalAsset, Workspace } from "@forkleaf/types";
+import { ApiGatewayError } from "@/lib/gateway";
+import { extensionForFile, imageTypeFor, MAX_IMAGE_BYTES, safeAssetName } from "@/lib/media";
+
+/**
+ * Images in notes.
+ *
+ * The rule this file exists to keep is that a note stays a plain markdown file
+ * that renders correctly on github.com, in an IDE, or in anything else that
+ * reads the repository. So an image is committed as a real file next to the
+ * notes, and the note links to it by a *relative* path — `../assets/chart.png`
+ * — exactly as a hand-written markdown file would.
+ *
+ * That path is not something a browser sitting on `/editor` can resolve, and
+ * for a private repository it could not fetch the bytes anyway, since the
+ * OAuth token never leaves the server. `resolveImageSrc` is the other half:
+ * it turns the portable path back into a same-origin URL the page can render.
+ * Nothing that gets written to disk knows this app exists.
+ *
+ * A workspace with no repository behind it has nowhere to commit to, and used
+ * to inline the image into the note as a `data:` URI — which turned a two-line
+ * note into a screenful of base64, unreadable in the source view and useless to
+ * every other tool that opens the file. The bytes go into local storage instead
+ * and the note gets the same relative path it would have had. The markdown is
+ * identical either way; only where the file lives differs.
+ */
+
+/** Folder, relative to the workspace directory, that uploads are committed to. */
+const ASSET_FOLDER = "assets";
+
+export interface UploadedImage {
+  /** What to write into the markdown — relative to the note. */
+  markdownSrc: string;
+  /** Full repo path of the committed file. */
+  repoPath: string;
+}
+
+/** True for a clipboard or drop payload we can actually store. */
+export function isSupportedImage(file: File): boolean {
+  return extensionForFile(file) !== null;
+}
+
+/** Pulls every image out of a clipboard or drag payload. */
+export function imageFilesFrom(data: DataTransfer | null): File[] {
+  if (!data) return [];
+
+  const files: File[] = [];
+  for (const item of Array.from(data.files)) {
+    if (isSupportedImage(item)) files.push(item);
+  }
+  return files;
+}
+
+/**
+ * Reads a `File` as base64, without the `data:…;base64,` prefix.
+ *
+ * FileReader rather than `arrayBuffer()` + manual encoding: the manual loop
+ * blows the call-stack argument limit on anything above a megabyte or so,
+ * which is most screenshots.
+ */
+export function readAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("That image could not be read."));
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      const comma = result.indexOf(",");
+      resolve(comma === -1 ? result : result.slice(comma + 1));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Reads a `File` as a `data:` URL, for workspaces with nowhere to commit to. */
+export function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("That image could not be read."));
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * `notes/2026/plan.md` + `assets/chart.png` → `../../assets/chart.png`.
+ *
+ * Written relative rather than absolute because that is what works everywhere:
+ * a leading-slash path in markdown resolves against the *site* root on GitHub
+ * Pages and against nothing at all in an editor, while `../assets/chart.png`
+ * means the same thing in every one of them.
+ */
+export function relativeSrc(fromNotePath: string, toAssetPath: string): string {
+  const from = normalizePath(dirname(fromNotePath)).split("/").filter(Boolean);
+  const to = normalizePath(toAssetPath).split("/").filter(Boolean);
+
+  let shared = 0;
+  while (shared < from.length && shared < to.length - 1 && from[shared] === to[shared]) {
+    shared += 1;
+  }
+
+  const up = from.length - shared;
+  const down = to.slice(shared);
+  const steps = [...Array.from({ length: up }, () => ".."), ...down];
+
+  // A file in the same folder needs the `./`, or a name containing a colon
+  // would be read as a URL scheme.
+  return up === 0 && down.length === 1 ? `./${steps.join("/")}` : steps.join("/");
+}
+
+/** Resolves a src written in a note back to the repo path it points at. */
+export function resolveAgainstNote(notePath: string, src: string): string {
+  return normalizePath(`${dirname(notePath)}/${src}`);
+}
+
+/** True for a src that names a file in the repository rather than somewhere else. */
+export function isRepoRelative(src: string): boolean {
+  return !/^[a-z][a-z0-9+.-]*:/i.test(src) && !src.startsWith("//") && !src.startsWith("/");
+}
+
+/**
+ * The URL the browser should actually load for an image in a note.
+ *
+ * Absolute URLs and `data:` images are already loadable and pass through
+ * untouched; a repository-relative path becomes a call to our own proxy, which
+ * reads it with the session's token.
+ */
+export function resolveImageSrc(
+  workspace: Workspace | null,
+  notePath: string | null,
+  src: string,
+  /** Object URLs for assets held on this device, keyed by repository path. */
+  local?: Readonly<Record<string, string>>,
+): string {
+  if (!src || !isRepoRelative(src)) return src;
+  if (!workspace || !notePath) return src;
+
+  const path = resolveAgainstNote(notePath, src);
+
+  // A copy on this device is both the only source for a workspace with no
+  // repository and the faster one for a workspace that has been given a
+  // repository — it renders without a round trip through the proxy.
+  const stored = local?.[path];
+  if (stored) return stored;
+
+  if (workspace.isLocal) return src;
+
+  const params = new URLSearchParams({
+    owner: workspace.repo.owner,
+    repo: workspace.repo.repo,
+    branch: workspace.repo.branch,
+    path,
+  });
+  if (workspace.repo.directory) params.set("dir", workspace.repo.directory);
+
+  return `/api/gh/raw?${params.toString()}`;
+}
+
+/**
+ * Commits an image and returns the src to write into the note.
+ *
+ * `taken` is every path already in the workspace, so two screenshots pasted a
+ * second apart do not overwrite one another.
+ */
+export async function uploadImage(options: {
+  workspace: Workspace;
+  notePath: string;
+  file: File;
+  taken: Iterable<string>;
+}): Promise<UploadedImage> {
+  const { workspace, notePath, file, taken } = options;
+
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new Error("That image is larger than 10 MB.");
+  }
+
+  const repoPath = assetPathFor(workspace, file, taken);
+  const content = await readAsBase64(file);
+
+  const response = await fetch("/api/gh/asset", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      owner: workspace.repo.owner,
+      repo: workspace.repo.repo,
+      branch: workspace.repo.branch,
+      dir: workspace.repo.directory,
+      path: repoPath,
+      content,
+      message: `add ${repoPath}`,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      error?: { code?: string; message?: string };
+    } | null;
+
+    throw new ApiGatewayError(
+      body?.error?.code ?? "unknown",
+      body?.error?.message ?? "That image could not be uploaded.",
+      response.status,
+    );
+  }
+
+  return { markdownSrc: relativeSrc(notePath, repoPath), repoPath };
+}
+
+// ─── Local storage ──────────────────────────────────────────────────────────
+
+/**
+ * Chooses the repository path a file should be committed to.
+ *
+ * A pasted screenshot arrives called "image.png" every single time. The date
+ * keeps a week of them apart in the folder listing, and the random tail keeps
+ * two pasted in the same minute from overwriting each other — the repository
+ * tree we index only lists markdown, so there is no reliable "does this name
+ * already exist" to ask.
+ */
+export function assetPathFor(workspace: Workspace, file: File, taken: Iterable<string>): string {
+  const extension = extensionForFile(file);
+  if (!extension) {
+    throw new Error("That file is not an image ForkLeaf can store.");
+  }
+
+  const folder = workspace.repo.directory
+    ? `${workspace.repo.directory}/${ASSET_FOLDER}`
+    : ASSET_FOLDER;
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const tail = Math.random().toString(36).slice(2, 6);
+  const named = safeAssetName(file.name || "image", extension);
+
+  return uniquePath(`${folder}/${stamp}-${stripExtension(named)}-${tail}.${extension}`, taken);
+}
+
+/** Reads a file into the shape the local asset store holds. */
+export async function assetFrom(options: {
+  workspace: Workspace;
+  repoPath: string;
+  file: File;
+  pushed: boolean;
+}): Promise<LocalAsset> {
+  const { workspace, repoPath, file, pushed } = options;
+
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new Error("That image is larger than 10 MB.");
+  }
+
+  return {
+    id: `${workspace.id}::${repoPath}`,
+    workspaceId: workspace.id,
+    path: repoPath,
+    mimeType: file.type || (imageTypeFor(repoPath) ?? "application/octet-stream"),
+    data: await readAsBase64(file),
+    createdAt: new Date().toISOString(),
+    pushed,
+  };
+}
+
+/**
+ * An object URL for a stored asset.
+ *
+ * Object URLs rather than `data:` ones: the browser holds the bytes once and
+ * hands the `<img>` a handle, where a data URL means a second full copy of
+ * every image sitting in a React state object. The caller owns the URL and
+ * must revoke it — `URL.revokeObjectURL` — when the note it belongs to closes.
+ */
+export function assetObjectUrl(asset: LocalAsset): string {
+  const binary = atob(asset.data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return URL.createObjectURL(new Blob([bytes], { type: asset.mimeType }));
+}
+
+/** True when a path is one of the image types we serve. */
+export function isImagePath(path: string): boolean {
+  return imageTypeFor(path) !== null;
+}

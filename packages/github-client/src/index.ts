@@ -5,6 +5,7 @@ export {
   type FileContent,
   type NoteCommit,
   type FileChange,
+  type ContentEncoding,
   type CommitOptions,
   type CommitResult,
 } from "./client";

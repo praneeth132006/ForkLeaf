@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { Note, PendingChange, TreeNode, Workspace } from "@forkleaf/types";
+import type { LocalAsset, Note, PendingChange, TreeNode, Workspace } from "@forkleaf/types";
 import type { LocalDatabase } from "./ports";
 
 /**
@@ -28,6 +28,11 @@ interface ForkLeafSchema extends DBSchema {
     key: string;
     value: { workspaceId: string; tree: TreeNode[] };
   };
+  assets: {
+    key: string;
+    value: LocalAsset;
+    indexes: { "by-workspace": string };
+  };
   meta: {
     key: string;
     value: { key: string; value: unknown };
@@ -35,7 +40,14 @@ interface ForkLeafSchema extends DBSchema {
 }
 
 const DB_NAME = "forkleaf";
-const DB_VERSION = 1;
+/**
+ * Bumped to 2 for the `assets` store.
+ *
+ * Every store is created behind a `contains` check rather than in a
+ * version-numbered branch, so an existing database gains the new store and
+ * keeps everything already in it.
+ */
+const DB_VERSION = 2;
 
 export class IndexedDbDatabase implements LocalDatabase {
   private dbPromise: Promise<IDBPDatabase<ForkLeafSchema>> | null = null;
@@ -58,6 +70,10 @@ export class IndexedDbDatabase implements LocalDatabase {
         }
         if (!db.objectStoreNames.contains("trees")) {
           db.createObjectStore("trees", { keyPath: "workspaceId" });
+        }
+        if (!db.objectStoreNames.contains("assets")) {
+          const assets = db.createObjectStore("assets", { keyPath: "id" });
+          assets.createIndex("by-workspace", "workspaceId");
         }
         if (!db.objectStoreNames.contains("meta")) {
           db.createObjectStore("meta", { keyPath: "key" });
@@ -138,6 +154,22 @@ export class IndexedDbDatabase implements LocalDatabase {
 
   async putTreeCache(workspaceId: string, tree: TreeNode[]): Promise<void> {
     await (await this.db).put("trees", { workspaceId, tree });
+  }
+
+  async getAsset(id: string): Promise<LocalAsset | undefined> {
+    return (await this.db).get("assets", id);
+  }
+
+  async putAsset(asset: LocalAsset): Promise<void> {
+    await (await this.db).put("assets", asset);
+  }
+
+  async deleteAsset(id: string): Promise<void> {
+    await (await this.db).delete("assets", id);
+  }
+
+  async listAssets(workspaceId: string): Promise<LocalAsset[]> {
+    return (await this.db).getAllFromIndex("assets", "by-workspace", workspaceId);
   }
 
   async getMeta<T>(key: string): Promise<T | undefined> {

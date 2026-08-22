@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
-import { ApiError, handle, requireClient } from "@/lib/api-helpers";
+import { handle, readOwnerRepo, requireClient } from "@/lib/api-helpers";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * Forks a repository into the user's account.
@@ -10,15 +11,14 @@ import { ApiError, handle, requireClient } from "@/lib/api-helpers";
  */
 export async function POST(request: NextRequest) {
   return handle(async () => {
+    // Forking creates a repository on someone's account; a loop here is
+    // visible on their profile.
+    enforceRateLimit(request, { name: "fork", limit: 10, windowMs: 60_000 });
+
     const { client, login } = await requireClient();
 
     const body = (await request.json().catch(() => ({}))) as { owner?: string; repo?: string };
-    const owner = body.owner?.trim();
-    const repo = body.repo?.trim();
-
-    if (!owner || !repo) {
-      throw new ApiError(400, "validation", "owner and repo are required");
-    }
+    const { owner, repo } = readOwnerRepo(body);
 
     // Already forked in a previous session? Reuse it rather than making another.
     const existing = await client.getRepo(login, repo);

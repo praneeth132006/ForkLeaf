@@ -168,6 +168,47 @@ export interface RenderResult {
 let renderCounter = 0;
 
 /**
+ * Rendered diagrams, keyed by source and theme.
+ *
+ * Rendering is not cheap — mermaid parses, lays out, builds a DOM subtree and
+ * measures text, and then DOMPurify walks the whole SVG — and it was being
+ * redone for every diagram in a note on every keystroke, because the caller
+ * re-extracts the blocks whenever the markdown changes and cannot tell that a
+ * diagram three paragraphs away is the one it drew a moment ago. Typing a
+ * sentence under a note with five diagrams meant several hundred full renders.
+ *
+ * The source is the whole input, so the same string always gives the same
+ * picture and the cache can never be stale. Bounded by insertion order, oldest
+ * evicted first: SVG strings run to tens of kilobytes and an unbounded map
+ * would hold every draft of every diagram edited in the session.
+ */
+const CACHE_LIMIT = 64;
+const cache = new Map<string, RenderResult>();
+
+function cacheKey(code: string, theme: MermaidTheme): string {
+  // The theme is one of two module constants in practice, but keying on its
+  // contents means a caller passing its own palette is still correct.
+  return `${theme.background}|${theme.primary}|${theme.line}|${code}`;
+}
+
+function remember(key: string, result: RenderResult): RenderResult {
+  cache.set(key, result);
+  if (cache.size > CACHE_LIMIT) {
+    const oldest = cache.keys().next();
+    if (!oldest.done) cache.delete(oldest.value);
+  }
+  return result;
+}
+
+/**
+ * Drops the cache. Only needed if mermaid's global config is changed from
+ * outside this module, which would make every cached picture wrong.
+ */
+export function clearDiagramCache(): void {
+  cache.clear();
+}
+
+/**
  * Renders mermaid source to sanitised SVG.
  *
  * Never throws: a syntax error is a normal state while typing, so it comes back
@@ -178,6 +219,15 @@ export async function renderDiagram(
   theme: MermaidTheme = LIGHT_THEME,
 ): Promise<RenderResult> {
   if (!code.trim()) return { svg: null, error: null };
+
+  const key = cacheKey(code, theme);
+  const cached = cache.get(key);
+  if (cached) {
+    // Re-inserted so the most recently used entry is the last to be evicted.
+    cache.delete(key);
+    cache.set(key, cached);
+    return cached;
+  }
 
   if (initializedTheme !== theme) await initMermaid(theme);
 
@@ -192,9 +242,12 @@ export async function renderDiagram(
     // behind, which render() does on failure.
     await mermaid.parse(code);
     const { svg } = await mermaid.render(id, code);
-    return { svg: sanitizeSvg(svg), error: null };
+    return remember(key, { svg: sanitizeSvg(svg), error: null });
   } catch (err) {
-    return { svg: null, error: parseMermaidError(err, code) };
+    // Failures are cached too. Mid-keystroke source is invalid far more often
+    // than it is valid, and re-parsing the same broken string on every
+    // subsequent render is the most repeated work of the lot.
+    return remember(key, { svg: null, error: parseMermaidError(err, code) });
   } finally {
     // Mermaid appends a temporary measuring node that it does not always clean
     // up; left alone these accumulate on every keystroke.

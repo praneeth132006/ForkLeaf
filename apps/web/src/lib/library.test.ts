@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { Note, Workspace } from "@forkleaf/types";
 import {
+  allFolderPaths,
   buildIndex,
+  buildNoteTree,
+  directCount,
   excerptOf,
   flattenTree,
   folderCounts,
+  folderTrail,
   humanise,
   queryIndex,
+  subfolders,
   tagCounts,
 } from "./library";
 
@@ -204,5 +209,129 @@ describe("humanise", () => {
   it("turns a filename slug into something readable", () => {
     expect(humanise("q3-roadmap_draft")).toBe("Q3 roadmap draft");
     expect(humanise("")).toBe("Untitled");
+  });
+});
+
+/**
+ * Browsing one level at a time is what keeps the dashboard usable on a
+ * repository with a hundred folders in it, so these are the cases that decide
+ * whether a folder shows up in the right place.
+ */
+describe("subfolders", () => {
+  const entries = buildIndex(
+    workspace,
+    [
+      "readme.md",
+      "skills/index.md",
+      "skills/api/red/one.md",
+      "skills/api/blue/two.md",
+      "skills/ci-cd/three.md",
+      "docs/four.md",
+    ],
+    [],
+  );
+
+  it("lists only the top level at the root, with counts from everything beneath", () => {
+    expect(subfolders(entries, null)).toEqual([
+      { path: "docs", name: "docs", count: 1 },
+      { path: "skills", name: "skills", count: 4 },
+    ]);
+  });
+
+  it("lists the children of a folder, not its grandchildren", () => {
+    expect(subfolders(entries, "skills")).toEqual([
+      { path: "skills/api", name: "api", count: 2 },
+      { path: "skills/ci-cd", name: "ci-cd", count: 1 },
+    ]);
+  });
+
+  it("goes another level down", () => {
+    expect(subfolders(entries, "skills/api").map((item) => item.name)).toEqual(["blue", "red"]);
+  });
+
+  it("has nothing to offer at a leaf", () => {
+    expect(subfolders(entries, "docs")).toEqual([]);
+  });
+
+  it("counts the notes sitting directly in a folder", () => {
+    expect(directCount(entries, null)).toBe(1);
+    expect(directCount(entries, "skills")).toBe(1);
+    expect(directCount(entries, "skills/api")).toBe(0);
+  });
+});
+
+describe("folderTrail", () => {
+  it("builds a breadcrumb of ancestors", () => {
+    expect(folderTrail("skills/api/red")).toEqual([
+      { path: "skills", name: "skills" },
+      { path: "skills/api", name: "api" },
+      { path: "skills/api/red", name: "red" },
+    ]);
+  });
+
+  it("is empty at the root", () => {
+    expect(folderTrail(null)).toEqual([]);
+    expect(folderTrail("")).toEqual([]);
+  });
+});
+
+describe("buildNoteTree", () => {
+  const entries = buildIndex(
+    workspace,
+    [
+      "readme.md",
+      "projects/api/spec.md",
+      "projects/website/copy.md",
+      "projects/website/roadmap.md",
+      "meetings/2026-08-01.md",
+    ],
+    [],
+  );
+
+  it("nests folders and keeps notes in the folder they are actually in", () => {
+    const root = buildNoteTree(entries);
+
+    expect(root.notes.map((entry) => entry.path)).toEqual(["readme.md"]);
+    expect(root.folders.map((folder) => folder.name)).toEqual(["meetings", "projects"]);
+
+    const projects = root.folders.find((folder) => folder.name === "projects")!;
+    expect(projects.notes).toEqual([]);
+    expect(projects.folders.map((folder) => folder.path)).toEqual([
+      "projects/api",
+      "projects/website",
+    ]);
+  });
+
+  it("rolls counts up through every level", () => {
+    const root = buildNoteTree(entries);
+    const projects = root.folders.find((folder) => folder.name === "projects")!;
+
+    expect(root.count).toBe(5);
+    expect(projects.count).toBe(3);
+    expect(projects.folders.find((folder) => folder.name === "website")!.count).toBe(2);
+  });
+
+  it("lists every folder path, for expanding the whole tree at once", () => {
+    expect(allFolderPaths(buildNoteTree(entries))).toEqual([
+      "meetings",
+      "projects",
+      "projects/api",
+      "projects/website",
+    ]);
+  });
+
+  it("builds from whatever it is given, so a filtered tree holds only matches", () => {
+    const matches = queryIndex(entries, { query: "roadmap" });
+    const root = buildNoteTree(matches);
+
+    expect(root.count).toBe(1);
+    expect(root.folders.map((folder) => folder.name)).toEqual(["projects"]);
+  });
+
+  it("has nothing in it when there are no entries", () => {
+    const root = buildNoteTree([]);
+    expect(root.count).toBe(0);
+    expect(root.folders).toEqual([]);
+    expect(root.notes).toEqual([]);
   });
 });

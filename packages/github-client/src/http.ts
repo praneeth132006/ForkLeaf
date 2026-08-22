@@ -64,7 +64,7 @@ export class Transport {
   }
 
   async request<T>(path: string, options: HttpOptions = {}): Promise<HttpResponse<T>> {
-    const url = path.startsWith("http") ? path : `${this.baseUrl}${path}`;
+    const url = this.resolve(path);
     let lastError: GitHubError | null = null;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
@@ -82,6 +82,39 @@ export class Transport {
     }
 
     throw lastError ?? new GitHubError("unknown", "Request failed");
+  }
+
+  /**
+   * Turns a request path into an absolute URL, refusing anything that would
+   * leave the API host or address a different endpoint than it appears to.
+   *
+   * Repository owners and names are interpolated into these paths by the
+   * callers above. Those values originate with the user, and while the routes
+   * that accept them validate their shape, this is the single choke point where
+   * every path — including the `Link: rel="next"` URLs GitHub sends back — can
+   * be checked. A name smuggling `..` would otherwise call a different GitHub
+   * endpoint with the caller's token attached.
+   */
+  private resolve(path: string): string {
+    const base = new URL(this.baseUrl);
+    const url = path.startsWith("http") ? new URL(path) : new URL(path, base);
+
+    // Covers the pagination URLs from the Link header as much as our own paths.
+    if (url.origin !== base.origin) {
+      throw new GitHubError("validation", `Refusing to call ${url.origin}`);
+    }
+
+    // Checked before `new URL` silently collapses them, and on the decoded form
+    // so that a percent-encoded `%2e%2e` does not slip past.
+    const segments = path.split(/[?#]/)[0]!.split("/");
+    for (const segment of segments) {
+      const decoded = safeDecode(segment);
+      if (decoded === ".." || decoded === ".") {
+        throw new GitHubError("validation", "Refusing a request path that escapes its endpoint");
+      }
+    }
+
+    return url.toString();
   }
 
   private async attempt<T>(url: string, options: HttpOptions): Promise<HttpResponse<T>> {
@@ -203,6 +236,15 @@ function parseNextLink(header: string | null): string | null {
   if (!header) return null;
   const match = /<([^>]+)>;\s*rel="next"/.exec(header);
   return match?.[1] ?? null;
+}
+
+/** `decodeURIComponent` throws on malformed input; a bad escape is not a `..`. */
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {

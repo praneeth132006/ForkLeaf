@@ -33,11 +33,34 @@ export function Editor() {
         your diff.
       </Note>
 
+      <H2 id="toolbar">The formatting bar</H2>
+      <P>
+        Above every view is a bar carrying everything Markdown can express: undo and redo, a
+        paragraph-style dropdown for headings, quotes and code blocks, the five inline marks, the
+        three kinds of list with indent and outdent, links, images, tables, dividers and diagrams.
+        Anything that does not fit has a <strong>More</strong> menu.
+      </P>
+      <P>
+        The bar drives whichever view is open. In Rich it runs an editor command; in Split and
+        Source it edits the Markdown itself — select a word and press <strong>B</strong> and it is
+        wrapped in <Code>**</Code>, choose <strong>Heading 2</strong> and the line gains a{" "}
+        <Code>##</Code> rather than a second one being pasted over the first.
+      </P>
+      <Note>
+        There are no fonts, colours or alignment controls, because none of those survive being
+        written to a <Code>.md</Code> file. A button that quietly did nothing to the saved document
+        would be worse than no button.
+      </Note>
+      <P>
+        While the caret is inside a table, a second row of controls appears for adding and removing
+        rows and columns, toggling the header row and merging cells.
+      </P>
+
       <H2 id="insert">The insert menu</H2>
       <P>
-        Press <Code>/</Code> anywhere, or click <strong>Insert</strong> on the toolbar. Both give
-        the same list, and it works in every view — in Rich it runs an editor command, in Split and
-        Source it inserts the equivalent Markdown at your caret.
+        Press <Code>/</Code> anywhere, or use the toolbar. Both give the same list, and it works in
+        every view — in Rich it runs an editor command, in Split and Source it inserts the
+        equivalent Markdown at your caret.
       </P>
       <Table
         head={["Item", "Rich text", "Markdown inserted"]}
@@ -56,8 +79,8 @@ export function Editor() {
           ["Quote", "Blockquote", <Code key="g">&gt; </Code>],
           ["Table", "3×3 with a header row", "Pipe table"],
           ["Divider", "Horizontal rule", <Code key="h">---</Code>],
-          ["Link", "Prompts for a URL", <Code key="i">[](…)</Code>],
-          ["Image", "Prompts for a URL", <Code key="j">![](…)</Code>],
+          ["Link", "Asks for the text and the address", <Code key="i">[](…)</Code>],
+          ["Image", "Opens the image picker", <Code key="j">![](…)</Code>],
         ]}
       />
       <P>
@@ -66,16 +89,48 @@ export function Editor() {
         Escape dismisses.
       </P>
       <Note kind="warn">
-        Links and images accept <Code>http://</Code>, <Code>https://</Code> and <Code>mailto:</Code>{" "}
-        only. A <Code>javascript:</Code> or <Code>data:</Code> URL in a note would be a stored
+        Links accept <Code>http://</Code>, <Code>https://</Code>, <Code>mailto:</Code> and paths
+        within the repository only. A <Code>javascript:</Code> URL in a note would be a stored
         cross-site-scripting vector in every renderer that later displays it, so those are rejected.
       </Note>
+
+      <H2 id="images">Images</H2>
+      <P>
+        Paste a screenshot straight into a note, drag a file onto it, or use the{" "}
+        <strong>Image</strong> button — all three work in Rich, Split and Source. PNG, JPEG, GIF,
+        WebP, AVIF, BMP and ICO are accepted, up to 10 MB each. SVG is not: it is a document format
+        that can carry script, and serving one back would be a hole in every note that embeds it.
+      </P>
+      <P>
+        On a connected repository the file is committed to an <Code>assets/</Code> folder as its own
+        commit, and the note links to it by a relative path —{" "}
+        <Code>../assets/2026-08-22-chart.png</Code> — exactly as a hand-written Markdown file would.
+        That is what keeps the note rendering correctly on github.com, in an IDE, or anywhere else
+        the repository is opened. ForkLeaf resolves the path back through its own server when it
+        displays the note, so images in a private repository load without the file ever being
+        public.
+      </P>
+      <Note>
+        With no repository connected there is nowhere to commit a file, so the bytes are kept on
+        this device instead. The note still links to the same relative path it would use in a
+        repository, so the markdown reads the same either way — connecting a repository later is all
+        it takes for the images to travel with the notes.
+      </Note>
+      <P>
+        You can also link to an image already on the web. Those are stored as the URL you give,
+        untouched.
+      </P>
 
       <H2 id="formatting">Inline formatting</H2>
       <P>
         In Rich view, select text to get bold, italic, strikethrough, inline code and highlight — or
-        use the toolbar, or <Code>⌘B</Code> and <Code>⌘I</Code>. In Split and Source, type the
-        Markdown.
+        use the toolbar, or <Code>⌘B</Code> and <Code>⌘I</Code>. In Split and Source, the same
+        toolbar buttons wrap the selection in the equivalent Markdown, and you can of course type it
+        yourself.
+      </P>
+      <P>
+        Highlighting writes <Code>==like this==</Code>, the convention Markdown note-taking tools
+        have settled on. ForkLeaf renders it; github.com does not, and shows the equals signs.
       </P>
 
       <H2 id="files">Notes, folders and names</H2>
@@ -134,13 +189,14 @@ export function Diagrams() {
           <strong>Diagram</strong> on the toolbar.
         </li>
         <li>
-          The diagram studio opens as an overlay: an empty canvas with a shape palette on the right,
-          and the Mermaid source on the left.
+          The studio asks what you are drawing. Choosing a type opens a blank canvas carrying that
+          type&rsquo;s own shapes, arrows and syntax — a flowchart and an ERD do not want the same
+          palette, and guessing meant starting by deleting the wrong thing.
         </li>
         <li>
           Double-click the canvas to add your first box, or pick a shape from the palette. Prefer to
-          start from something finished? <strong>Templates</strong> has a diagram of every type,
-          ready to edit.
+          start from something finished? <strong>Start from an example</strong> has a worked diagram
+          of every type, ready to edit.
         </li>
         <li>
           Press <strong>Done</strong> or <Code>Esc</Code>. The diagram appears in your note as a
@@ -158,11 +214,41 @@ export function Diagrams() {
         width.
       </P>
       <P>
-        For flowcharts and state diagrams the right pane offers <strong>Canvas</strong> and{" "}
-        <strong>Preview</strong>. Every other diagram type shows the preview, since the canvas has
-        no model for it yet — those are written as source, which is what the autocomplete, inline
-        errors and syntax reference are for.
+        Six types can be drawn rather than typed: <strong>flowcharts</strong>,{" "}
+        <strong>sequence diagrams</strong>, <strong>class diagrams</strong>,{" "}
+        <strong>state machines</strong>, <strong>entity-relationship diagrams</strong> and{" "}
+        <strong>mindmaps</strong>. For those the right pane offers <strong>Canvas</strong> and{" "}
+        <strong>Preview</strong>. The rest are charts of numbers and dates that are quicker to write
+        than to drag, so they show the preview and are edited as source — which is what the
+        autocomplete, inline errors and syntax reference are for.
       </P>
+      <P>
+        A sequence diagram gets a canvas of its own, because its two axes mean different things:
+        participants are columns you drag sideways, and messages are rows you drag up and down.
+        Reordering a row is what changes the order things happen in. One using a <Code>loop</Code>,{" "}
+        <Code>alt</Code> or <Code>note</Code> block opens as source instead, since the canvas has no
+        way to draw those and would drop them on the first edit.
+      </P>
+
+      <H2 id="canvas-shortcuts">Working on the canvas</H2>
+      <Table
+        head={["Do this", "To get this"]}
+        rows={[
+          ["Drag across empty canvas", "A selection band. Shift-click adds and removes."],
+          ["Drag a selected box", "Everything selected moves together"],
+          [<Code key="dup">⌘D</Code>, "Duplicate the selection"],
+          ["Arrow keys", "Nudge by the grid; hold Shift for ten of it"],
+          [<Code key="undo">⌘Z</Code>, "Undo, and ⌘⇧Z to redo"],
+          [
+            <strong key="tidy">Tidy up</strong>,
+            "Lay the diagram out in layers taken from its own arrows",
+          ],
+          ["Hold Space and drag", "Pan the canvas"],
+          [<Code key="fit">⌘0</Code>, "Fit the diagram to the pane"],
+          ["Drag a box's edge handle onto empty space", "Add the next box, already connected"],
+          [<Code key="tab">Tab</Code>, "Continue the chain from the selected box"],
+        ]}
+      />
 
       <H2 id="types">The diagram types</H2>
       <P>

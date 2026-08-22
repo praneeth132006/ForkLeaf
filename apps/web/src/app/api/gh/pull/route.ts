@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
-import { ApiError, handle, requireClient } from "@/lib/api-helpers";
+import { ApiError, assertRef, handle, readOwnerRepo, requireClient } from "@/lib/api-helpers";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * Opens a pull request for a set of changes.
@@ -12,6 +13,10 @@ import { ApiError, handle, requireClient } from "@/lib/api-helpers";
  */
 export async function POST(request: NextRequest) {
   return handle(async () => {
+    // Pull requests are visible to other people; opening them in a loop is
+    // spam on someone else's project.
+    enforceRateLimit(request, { name: "pull", limit: 10, windowMs: 60_000 });
+
     const { client, login } = await requireClient();
 
     const body = (await request.json().catch(() => ({}))) as {
@@ -24,14 +29,13 @@ export async function POST(request: NextRequest) {
       draft?: boolean;
     };
 
-    const owner = body.owner?.trim();
-    const repo = body.repo?.trim();
-    const base = body.base?.trim();
-    const head = body.head?.trim();
+    const { owner, repo } = readOwnerRepo(body);
+    const base = assertRef(body.base?.trim() ?? "", "base branch");
+    const head = assertRef(body.head?.trim() ?? "", "head branch");
     const title = body.title?.trim();
 
-    if (!owner || !repo || !base || !head || !title) {
-      throw new ApiError(400, "validation", "owner, repo, base, head and title are all required");
+    if (!title) {
+      throw new ApiError(400, "validation", "A pull request title is required.");
     }
 
     // Pushing to your own branch and proposing it upstream are the same

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { GitHubClient } from "@forkleaf/github-client";
+import { appUrl } from "@/lib/app-url";
 import { consumeOAuthState, setSessionCookie, githubOAuthConfigured } from "@/lib/session";
 
 /**
@@ -15,7 +16,9 @@ export async function GET(request: NextRequest) {
   const state = url.searchParams.get("state");
   const oauthError = url.searchParams.get("error");
 
-  const home = new URL("/", process.env.NEXT_PUBLIC_APP_URL ?? url.origin);
+  // Always this deployment's own origin — never one derived from a request
+  // header, which is what makes this redirect safe to hand a user.
+  const home = appUrl(request, "/");
 
   // The user pressed "Cancel" on GitHub's consent screen.
   if (oauthError) {
@@ -36,7 +39,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const token = await exchangeCodeForToken(code, url.origin);
+    const token = await exchangeCodeForToken(
+      code,
+      appUrl(request, "/api/auth/callback").toString(),
+    );
 
     // Confirm the token works and capture the profile in one call.
     const client = new GitHubClient({ token });
@@ -55,16 +61,14 @@ export async function GET(request: NextRequest) {
     // The dashboard, not the editor: a fresh sign-in has no repository chosen
     // yet, and dropping someone into an empty editor is how the repo choice
     // used to get made silently on their behalf.
-    return NextResponse.redirect(
-      new URL("/dashboard", process.env.NEXT_PUBLIC_APP_URL ?? url.origin),
-    );
+    return NextResponse.redirect(appUrl(request, "/dashboard"));
   } catch (error) {
     console.error("[forkleaf] OAuth callback failed:", error);
     return NextResponse.redirect(withError(home, "exchange_failed"));
   }
 }
 
-async function exchangeCodeForToken(code: string, origin: string): Promise<string> {
+async function exchangeCodeForToken(code: string, redirectUri: string): Promise<string> {
   const response = await fetch("https://github.com/login/oauth/access_token", {
     method: "POST",
     headers: {
@@ -75,10 +79,7 @@ async function exchangeCodeForToken(code: string, origin: string): Promise<strin
       client_id: process.env.GITHUB_OAUTH_CLIENT_ID,
       client_secret: process.env.GITHUB_OAUTH_CLIENT_SECRET,
       code,
-      redirect_uri: new URL(
-        "/api/auth/callback",
-        process.env.NEXT_PUBLIC_APP_URL ?? origin,
-      ).toString(),
+      redirect_uri: redirectUri,
     }),
   });
 

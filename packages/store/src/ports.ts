@@ -1,4 +1,4 @@
-import type { Note, PendingChange, TreeNode, Workspace } from "@forkleaf/types";
+import type { LocalAsset, Note, PendingChange, TreeNode, Workspace } from "@forkleaf/types";
 
 /**
  * Ports the sync engine depends on.
@@ -26,6 +26,11 @@ export interface LocalDatabase {
 
   getTreeCache(workspaceId: string): Promise<TreeNode[] | undefined>;
   putTreeCache(workspaceId: string, tree: TreeNode[]): Promise<void>;
+
+  getAsset(id: string): Promise<LocalAsset | undefined>;
+  putAsset(asset: LocalAsset): Promise<void>;
+  deleteAsset(id: string): Promise<void>;
+  listAssets(workspaceId: string): Promise<LocalAsset[]>;
 
   getMeta<T>(key: string): Promise<T | undefined>;
   putMeta<T>(key: string, value: T): Promise<void>;

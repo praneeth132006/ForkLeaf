@@ -5,6 +5,9 @@ import type { Editor } from "@tiptap/core";
 import type { InsertAction } from "./EditorToolbar";
 import type { SourceEditorHandle } from "./SourceEditor";
 
+/** Matches any ATX heading marker, so switching levels replaces rather than stacks. */
+const HEADING_PATTERN = /^#{1,6} /;
+
 /**
  * The single definition of "what you can insert into a note".
  *
@@ -16,6 +19,16 @@ export interface InsertDefinition extends InsertAction {
   rich: (editor: Editor) => void;
   /** Markdown to splice in, and where to leave the caret inside it. */
   markdown: { text: string; cursor?: number };
+  /**
+   * How this applies to raw markdown *with a selection*.
+   *
+   * The `markdown` field above describes the text to type when there is
+   * nothing selected, which is the right answer for the `/` menu. It is the
+   * wrong answer for a toolbar button: pressing Bold with a word highlighted
+   * has to embolden that word, not paste `****` over it. Definitions that can
+   * act on a selection say so here.
+   */
+  source?: (handle: SourceEditorHandle) => void;
   /** Extra words that should match this action when searching. */
   keywords?: string[];
   /**
@@ -27,6 +40,20 @@ export interface InsertDefinition extends InsertAction {
    * menus filter by view instead of showing an item that half-works.
    */
   availableIn?: "both" | "rich" | "source";
+}
+
+/**
+ * What the surrounding app can do that a markdown command cannot.
+ *
+ * Picking an image is the clear case: the editor has no idea whether there is
+ * a repository to upload to, so it asks. When nothing is supplied the actions
+ * fall back to asking for a URL, which is what they always did.
+ */
+export interface ActionContext {
+  /** Opens the app's image picker. */
+  requestImage?: () => void;
+  /** Opens the app's link editor. */
+  requestLink?: () => void;
 }
 
 /** Prompts for an image URL, rejecting anything that is not http(s). */
@@ -74,6 +101,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <TextGlyph>H1</TextGlyph>,
     rich: (editor) => editor.chain().focus().toggleHeading({ level: 1 }).run(),
     markdown: { text: "# " },
+    source: (handle) => handle.toggleLinePrefix("# ", HEADING_PATTERN),
   },
   {
     id: "h2",
@@ -83,6 +111,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <TextGlyph>H2</TextGlyph>,
     rich: (editor) => editor.chain().focus().toggleHeading({ level: 2 }).run(),
     markdown: { text: "## " },
+    source: (handle) => handle.toggleLinePrefix("## ", HEADING_PATTERN),
   },
   {
     id: "h3",
@@ -92,6 +121,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <TextGlyph>H3</TextGlyph>,
     rich: (editor) => editor.chain().focus().toggleHeading({ level: 3 }).run(),
     markdown: { text: "### " },
+    source: (handle) => handle.toggleLinePrefix("### ", HEADING_PATTERN),
   },
   {
     id: "paragraph",
@@ -101,6 +131,8 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <TextGlyph>¶</TextGlyph>,
     rich: (editor) => editor.chain().focus().setParagraph().run(),
     markdown: { text: "\n" },
+    // "Text" in raw markdown means taking the block marker off again.
+    source: (handle) => handle.toggleLinePrefix("", /^(#{1,6} |> |- \[[ xX]\] |[-*+] |\d+\. )/),
   },
   {
     id: "bullet",
@@ -110,6 +142,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <Glyph d="M4 4h.01M4 8h.01M4 12h.01M7 4h6M7 8h6M7 12h6" />,
     rich: (editor) => editor.chain().focus().toggleBulletList().run(),
     markdown: { text: "- " },
+    source: (handle) => handle.toggleLinePrefix("- ", /^([-*+] |\d+\. )/),
   },
   {
     id: "ordered",
@@ -119,6 +152,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <TextGlyph>1.</TextGlyph>,
     rich: (editor) => editor.chain().focus().toggleOrderedList().run(),
     markdown: { text: "1. " },
+    source: (handle) => handle.toggleLinePrefix("1. ", /^([-*+] |\d+\. )/),
   },
   {
     id: "task",
@@ -128,6 +162,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <Glyph d="M2.5 4.5h4v4h-4zM3.5 6.5l1 1 2-2.5M9 6.5h5M2.5 11.5h4M9 11.5h5" />,
     rich: (editor) => editor.chain().focus().toggleTaskList().run(),
     markdown: { text: "- [ ] " },
+    source: (handle) => handle.toggleLinePrefix("- [ ] ", /^(- \[[ xX]\] |[-*+] |\d+\. )/),
   },
   {
     id: "code",
@@ -146,6 +181,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <TextGlyph>❝</TextGlyph>,
     rich: (editor) => editor.chain().focus().toggleBlockquote().run(),
     markdown: { text: "> " },
+    source: (handle) => handle.toggleLinePrefix("> "),
   },
   {
     id: "table",
@@ -206,6 +242,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <TextGlyph>H4</TextGlyph>,
     rich: (editor) => editor.chain().focus().toggleHeading({ level: 4 }).run(),
     markdown: { text: "#### " },
+    source: (handle) => handle.toggleLinePrefix("#### ", HEADING_PATTERN),
   },
   {
     id: "h5",
@@ -215,6 +252,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <TextGlyph>H5</TextGlyph>,
     rich: (editor) => editor.chain().focus().toggleHeading({ level: 5 }).run(),
     markdown: { text: "##### " },
+    source: (handle) => handle.toggleLinePrefix("##### ", HEADING_PATTERN),
   },
   {
     id: "h6",
@@ -224,6 +262,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <TextGlyph>H6</TextGlyph>,
     rich: (editor) => editor.chain().focus().toggleHeading({ level: 6 }).run(),
     markdown: { text: "###### " },
+    source: (handle) => handle.toggleLinePrefix("###### ", HEADING_PATTERN),
   },
   {
     id: "bold",
@@ -233,6 +272,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <TextGlyph>B</TextGlyph>,
     rich: (editor) => editor.chain().focus().toggleBold().run(),
     markdown: { text: "****", cursor: 2 },
+    source: (handle) => handle.wrapSelection("**"),
   },
   {
     id: "italic",
@@ -242,6 +282,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <TextGlyph>I</TextGlyph>,
     rich: (editor) => editor.chain().focus().toggleItalic().run(),
     markdown: { text: "__", cursor: 1 },
+    source: (handle) => handle.wrapSelection("_"),
   },
   {
     id: "strike",
@@ -251,6 +292,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <TextGlyph>S</TextGlyph>,
     rich: (editor) => editor.chain().focus().toggleStrike().run(),
     markdown: { text: "~~~~", cursor: 2 },
+    source: (handle) => handle.wrapSelection("~~"),
   },
   {
     id: "inline-code",
@@ -260,6 +302,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     icon: <TextGlyph>`</TextGlyph>,
     rich: (editor) => editor.chain().focus().toggleCode().run(),
     markdown: { text: "``", cursor: 1 },
+    source: (handle) => handle.wrapSelection("`"),
   },
   {
     id: "break",
@@ -320,12 +363,24 @@ export function insertActionsFor(surface: InsertSurface): InsertAction[] {
 }
 
 /** Applies an action to the rich-text editor. */
-export function runRichAction(editor: Editor, id: string): void {
+export function runRichAction(editor: Editor, id: string, context: ActionContext = {}): void {
+  // Picking an image or a link is a question for the app, which knows whether
+  // there is anywhere to upload to. Without one, the old prompt still works.
+  if (id === "image" && context.requestImage) return context.requestImage();
+  if (id === "link" && context.requestLink) return context.requestLink();
+
   INSERT_DEFINITIONS.find((definition) => definition.id === id)?.rich(editor);
 }
 
 /** Applies an action to a CodeMirror source editor, at the caret. */
-export function runSourceAction(handle: SourceEditorHandle | null, id: string): void {
+export function runSourceAction(
+  handle: SourceEditorHandle | null,
+  id: string,
+  context: ActionContext = {},
+): void {
+  if (id === "image" && context.requestImage) return context.requestImage();
+  if (id === "link" && context.requestLink) return context.requestLink();
+
   const definition = INSERT_DEFINITIONS.find((item) => item.id === id);
   if (!definition || !handle) return;
 
@@ -341,7 +396,17 @@ export function runSourceAction(handle: SourceEditorHandle | null, id: string): 
       window.alert("Please use an http://, https:// or mailto: link.");
       return;
     }
-    handle.insertAtCursor(`[](${url ?? "https://"})`, 1);
+    // With text selected the link takes it as its label, which is what
+    // selecting a word and pressing "Link" is asking for.
+    const label = handle.selection();
+    handle.insertAtCursor(`[${label}](${url ?? "https://"})`, label ? undefined : 1);
+    return;
+  }
+
+  // Definitions that understand a selection get to act on it; the rest type
+  // their snippet at the caret, as the `/` menu does.
+  if (definition.source) {
+    definition.source(handle);
     return;
   }
 

@@ -41,11 +41,16 @@ your notes at all:
 
 Mermaid is powerful and hard to remember, so there are three ways in:
 
+- **Pick what you are drawing** — a new diagram asks first, then hands over a
+  blank canvas carrying that type's own shapes, arrows and syntax.
+- **Visual builder** — drag shapes onto a canvas, pull arrows between them, and
+  the Mermaid source is generated for you. Six types can be drawn rather than
+  typed: flowchart, sequence, class, state machine, ERD and mindmap. Rubber-band
+  selection, multi-node drag, undo/redo, keyboard nudge and a "tidy up" that
+  lays the graph out in layers taken from its own arrows. It parses existing
+  diagrams too, so you can switch between visual and source freely.
 - **Template gallery** — 14 ready-made diagrams (flowchart, sequence, ERD, gantt,
   state machine, mind map, class, pie, journey, timeline, git graph, quadrant).
-- **Visual builder** — drag shapes onto a canvas, pull arrows between them, and
-  the Mermaid source is generated for you. It parses existing diagrams too, so
-  you can switch between visual and source freely.
 - **Smart source editor** — autocomplete that knows which diagram type you're
   writing, plus inline errors that point at the broken line and explain it in
   plain language instead of dumping parser output.

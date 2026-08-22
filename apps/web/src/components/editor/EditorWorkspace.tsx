@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import type { CursorPosition } from "@forkleaf/editor";
+import type { CursorPosition, ImageBridge } from "@forkleaf/editor";
 import type { EditorViewMode } from "@forkleaf/types";
 import {
   deriveTitle,
@@ -30,6 +30,8 @@ import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { ForkLeafLogo } from "@/components/Brand";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { signOut } from "@/lib/gateway";
+import { assetPathFor, relativeSrc, resolveImageSrc, uploadImage } from "@/lib/assets";
+import { flattenTree } from "@/lib/library";
 import { track } from "@/lib/firebase/analytics";
 import { upsertUserProfile } from "@/lib/firebase/users";
 
@@ -107,6 +109,55 @@ export function EditorWorkspace() {
 
   const words = useMemo(() => (note ? documentStats(note.content).words : 0), [note]);
 
+  const notePath = note?.path ?? null;
+  const takenPaths = useMemo(() => flattenTree(notebook.tree), [notebook.tree]);
+
+  /**
+   * Where images in this note come from and go.
+   *
+   * The note always gets the same thing: a relative path to a file next to the
+   * notes, `../assets/chart.png`, exactly as a hand-written markdown file would
+   * — so it still renders on github.com, in an IDE, or anywhere else the
+   * repository is opened.
+   *
+   * Only where the bytes go differs. A connected repository gets a real commit;
+   * a workspace with no repository keeps them on this device under the path the
+   * note names. Inlining the image into the note as a `data:` URI, which is
+   * what used to happen without a repository, made a two-line note into a
+   * screenful of base64 — unreadable in the source view, and useless to every
+   * other tool that opens the file.
+   */
+  const images = useMemo<ImageBridge>(
+    () => ({
+      canUpload: true,
+      storesLocally: Boolean(workspace?.isLocal),
+      resolve: (src: string) => resolveImageSrc(workspace, notePath, src, notebook.assetUrls),
+      upload: async (file: File) => {
+        if (!workspace || !notePath) {
+          throw new Error("Open a note before adding an image to it.");
+        }
+
+        if (workspace.isLocal) {
+          const repoPath = assetPathFor(workspace, file, takenPaths);
+          await notebook.putAsset(repoPath, file, false);
+          return relativeSrc(notePath, repoPath);
+        }
+
+        const { markdownSrc, repoPath } = await uploadImage({
+          workspace,
+          notePath,
+          file,
+          taken: takenPaths,
+        });
+        // Cached so it renders straight away, rather than after a round trip
+        // through the proxy for bytes this tab already has in hand.
+        await notebook.putAsset(repoPath, file, true);
+        return markdownSrc;
+      },
+    }),
+    [workspace, notePath, takenPaths, notebook],
+  );
+
   const conflicts = notebook.sync.conflicts;
   // Derived rather than pushed into state by an effect, which would cause a
   // second render pass on every sync update.
@@ -166,6 +217,32 @@ export function EditorWorkspace() {
           );
         },
       });
+    },
+    [notebook],
+  );
+
+  /**
+   * Moves a note into another folder.
+   *
+   * A move and a rename are the same operation in a repository — the folder is
+   * part of the path — so this is `renameNote` with the filename kept and the
+   * directory replaced. Dragging is the only way to reorganise notes without
+   * retyping their names, which on a tree of a few hundred is the difference
+   * between reorganising and not bothering.
+   */
+  const handleMoveNote = useCallback(
+    async (path: string, toFolder: string) => {
+      const name = path.split("/").pop();
+      if (!name) return;
+
+      const target = joinPath(toFolder, name);
+      if (target === path) return;
+
+      const note =
+        notebook.note?.path === path ? notebook.note : await notebook.openNoteAndReturn(path);
+      if (!note) return;
+
+      await notebook.renameNote(note, target);
     },
     [notebook],
   );
@@ -497,6 +574,7 @@ export function EditorWorkspace() {
             onCreateFolder={handleCreateFolder}
             onRenameFolder={handleRenameFolder}
             onDeleteFolder={handleDeleteFolder}
+            onMoveNote={handleMoveNote}
             user={user}
             onSignIn={signIn}
             onSignOut={handleSignOut}
@@ -648,6 +726,12 @@ export function EditorWorkspace() {
                 mode={mode}
                 theme={theme}
                 onCursorChange={setCursor}
+                images={images}
+                imageDestination={
+                  workspace && !workspace.isLocal
+                    ? `Committed to ${workspace.repo.owner}/${workspace.repo.repo}`
+                    : "Saved to assets/ on this device"
+                }
                 hideModeSwitcher
                 placeholder="Type / for headings, lists, tables and diagrams…"
                 className="min-h-0 flex-1"

@@ -16,7 +16,7 @@
  */
 
 /** Which mermaid dialect a graph serialises to. */
-export type GraphKind = "flowchart" | "state";
+export type GraphKind = "flowchart" | "state" | "class" | "er" | "mindmap";
 
 export type NodeShape =
   // Flowchart shapes.
@@ -33,9 +33,37 @@ export type NodeShape =
   | "start" // the initial [*] pseudo-state
   | "end" // a final [*] pseudo-state
   | "choice" // <<choice>>
-  | "fork"; // <<fork>> / <<join>>
+  | "fork" // <<fork>> / <<join>>
+  // Class and ER diagrams. One box each, whose label carries the members.
+  | "class"
+  | "entity"
+  // Mindmap branches. Mermaid draws these itself; the shape is the outline.
+  | "mind-square"
+  | "mind-round"
+  | "mind-circle"
+  | "mind-cloud"
+  | "mind-bang"
+  | "mind-hexagon";
 
-export type EdgeStyle = "arrow" | "open" | "dotted" | "thick";
+export type EdgeStyle =
+  // Flowchart and state diagrams.
+  | "arrow"
+  | "open"
+  | "dotted"
+  | "thick"
+  // Class diagrams.
+  | "inherit"
+  | "compose"
+  | "aggregate"
+  | "associate"
+  | "depend"
+  // Entity-relationship diagrams.
+  | "one-one"
+  | "one-many"
+  | "many-one"
+  | "many-many"
+  // Mindmaps, which have exactly one kind of connection: the branch.
+  | "branch";
 
 export type FlowDirection = "TD" | "TB" | "LR" | "RL" | "BT";
 
@@ -56,6 +84,17 @@ export interface GraphEdge {
   to: string;
   label?: string;
   style: EdgeStyle;
+  /**
+   * Multiplicity written at each end, as in `Workspace "1" --> "*" Note`.
+   *
+   * The whole reason anybody draws a class or ER diagram rather than listing
+   * the types is to say how many of each there are, so it is a field rather
+   * than something folded into the label.
+   */
+  fromCardinality?: string;
+  toCardinality?: string;
+  /** ER only: a non-identifying relationship, which mermaid draws dotted. */
+  dashed?: boolean;
 }
 
 export interface Graph {
@@ -86,6 +125,34 @@ export const SHAPES_FOR_KIND: Record<GraphKind, NodeShape[]> = {
     "hexagon",
   ],
   state: ["state", "start", "end", "choice", "fork"],
+  class: ["class"],
+  er: ["entity"],
+  mindmap: ["mind-square", "mind-round", "mind-circle", "mind-cloud", "mind-bang", "mind-hexagon"],
+};
+
+/**
+ * Which connections the palette should offer for each dialect.
+ *
+ * A flowchart arrow and a class-diagram inheritance triangle are not the same
+ * thing drawn differently — they mean different things and are written with
+ * different syntax — so each dialect gets its own vocabulary rather than one
+ * list with most of it greyed out.
+ */
+export const EDGE_STYLES_FOR_KIND: Record<GraphKind, EdgeStyle[]> = {
+  flowchart: ["arrow", "open", "dotted", "thick"],
+  state: ["arrow"],
+  class: ["inherit", "compose", "aggregate", "associate", "depend", "open"],
+  er: ["one-one", "one-many", "many-one", "many-many"],
+  mindmap: ["branch"],
+};
+
+/** The connection drawn when one is made without a style being chosen. */
+export const DEFAULT_EDGE_STYLE: Record<GraphKind, EdgeStyle> = {
+  flowchart: "arrow",
+  state: "arrow",
+  class: "associate",
+  er: "one-many",
+  mindmap: "branch",
 };
 
 /** The pseudo-states mermaid writes as `[*]` rather than as a named state. */
@@ -120,7 +187,14 @@ const SHAPES_BY_SPECIFICITY: NodeShape[] = [
   "round",
 ];
 
-const EDGE_SYNTAX: Record<EdgeStyle, { plain: string; labelled: [string, string] }> = {
+/**
+ * Flowchart arrow syntax. Only the four styles a flowchart can express — the
+ * class and ER vocabularies are written by their own dialects below.
+ */
+const EDGE_SYNTAX: Record<
+  "arrow" | "open" | "dotted" | "thick",
+  { plain: string; labelled: [string, string] }
+> = {
   arrow: { plain: "-->", labelled: ["-- ", " -->"] },
   open: { plain: "---", labelled: ["-- ", " ---"] },
   dotted: { plain: "-.->", labelled: ["-. ", " .->"] },
@@ -137,7 +211,7 @@ const EDGE_SYNTAX: Record<EdgeStyle, { plain: string; labelled: [string, string]
  * restores the exact layout the user arranged.
  */
 export function graphToMermaid(graph: Graph): string {
-  const body = graph.kind === "state" ? stateBody(graph) : flowchartBody(graph);
+  const body = bodyFor(graph);
 
   for (const extra of graph.extras ?? []) body.push(indent(extra));
 
@@ -145,6 +219,22 @@ export function graphToMermaid(graph: Graph): string {
   if (layout) body.push(`    %% forkleaf:layout ${layout}`);
 
   return body.join("\n");
+}
+
+function bodyFor(graph: Graph): string[] {
+  switch (graph.kind) {
+    case "state":
+      return stateBody(graph);
+    case "class":
+      return classBody(graph);
+    case "er":
+      return erBody(graph);
+    case "mindmap":
+      return mindmapBody(graph);
+    case "flowchart":
+    default:
+      return flowchartBody(graph);
+  }
 }
 
 /** Re-indents a preserved line to sit with the rest of the body. */
@@ -197,7 +287,9 @@ function renderNode(node: GraphNode): string {
 }
 
 function renderEdge(edge: GraphEdge): string {
-  const syntax = EDGE_SYNTAX[edge.style];
+  // A graph switched from another dialect can carry an edge style a flowchart
+  // has no syntax for; a plain arrow is the honest fallback.
+  const syntax = EDGE_SYNTAX[edge.style as keyof typeof EDGE_SYNTAX] ?? EDGE_SYNTAX.arrow;
   const from = escapeId(edge.from);
   const to = escapeId(edge.to);
 
@@ -312,6 +404,9 @@ export function mermaidToGraph(code: string): Graph | null {
   }
 
   if (/^stateDiagram(?:-v2)?\b/i.test(header)) return parseStateDiagram(code, lines);
+  if (/^classDiagram\b/i.test(header)) return parseClassDiagram(code, lines);
+  if (/^erDiagram\b/i.test(header)) return parseErDiagram(code, lines);
+  if (/^mindmap\b/i.test(header)) return parseMindmap(code, lines);
 
   return null;
 }
@@ -615,6 +710,464 @@ function parseStateTransition(line: string): { from: string; to: string; label?:
   return { from: match[1]!, to: match[2]!, ...(label ? { label } : {}) };
 }
 
+// ── Class diagram ───────────────────────────────────────────────────────────
+
+/**
+ * A node's label, split into the name and the members under it.
+ *
+ * Class and ER boxes are a name plus a list, and the graph model has one string
+ * per node — so the string holds both, the first line being the name. That
+ * keeps every existing operation (rename, drag, delete) working unchanged
+ * rather than needing a parallel "members" concept threaded through all of it.
+ */
+export function splitMembers(label: string): { name: string; members: string[] } {
+  const [first = "", ...rest] = label.split("\n");
+  return {
+    name: first.trim(),
+    members: rest.map((line) => line.trim()).filter((line) => line !== ""),
+  };
+}
+
+/** The inverse of `splitMembers`. */
+export function joinMembers(name: string, members: string[]): string {
+  return [name, ...members].join("\n");
+}
+
+/** Mermaid's arrow for each class relationship, read left to right. */
+const CLASS_RELATIONS: Partial<Record<EdgeStyle, string>> = {
+  inherit: "--|>",
+  compose: "*--",
+  aggregate: "o--",
+  associate: "-->",
+  depend: "..>",
+  open: "--",
+};
+
+function classBody(graph: Graph): string[] {
+  const lines: string[] = ["classDiagram"];
+  if (graph.direction === "LR" || graph.direction === "RL") lines.push("    direction LR");
+  else lines.push("    direction TB");
+
+  for (const node of graph.nodes) {
+    const { name, members } = splitMembers(node.label);
+    const id = escapeId(node.id);
+
+    // A class with no members is one line; mermaid accepts both forms and the
+    // short one is what somebody would have typed.
+    if (members.length === 0) {
+      lines.push(`    class ${id}${name && name !== node.id ? `["${name}"]` : ""}`);
+      continue;
+    }
+
+    lines.push(`    class ${id}${name && name !== node.id ? `["${name}"]` : ""} {`);
+    for (const member of members) lines.push(`        ${member}`);
+    lines.push("    }");
+  }
+
+  for (const edge of graph.edges) {
+    const relation = CLASS_RELATIONS[edge.style] ?? CLASS_RELATIONS.associate!;
+    const from = escapeId(edge.from);
+    const to = escapeId(edge.to);
+    const left = edge.fromCardinality ? ` "${edge.fromCardinality}"` : "";
+    const right = edge.toCardinality ? ` "${edge.toCardinality}"` : "";
+
+    lines.push(
+      `    ${from}${left} ${relation}${right} ${to}${edge.label ? ` : ${edge.label}` : ""}`,
+    );
+  }
+
+  return lines;
+}
+
+/** Longest first, so `--|>` is not read as `--`. */
+const CLASS_RELATION_PATTERNS: { syntax: string; style: EdgeStyle; flipped?: boolean }[] = [
+  { syntax: "<|--", style: "inherit", flipped: true },
+  { syntax: "--|>", style: "inherit" },
+  { syntax: "--*", style: "compose", flipped: true },
+  { syntax: "*--", style: "compose" },
+  { syntax: "--o", style: "aggregate", flipped: true },
+  { syntax: "o--", style: "aggregate" },
+  { syntax: "<..", style: "depend", flipped: true },
+  { syntax: "..>", style: "depend" },
+  { syntax: "<--", style: "associate", flipped: true },
+  { syntax: "-->", style: "associate" },
+  { syntax: "..", style: "depend" },
+  { syntax: "--", style: "open" },
+];
+
+function parseClassDiagram(code: string, lines: string[]): Graph {
+  const graph: Graph = { kind: "class", direction: "TD", nodes: [], edges: [], extras: [] };
+  const store = createNodeStore(graph, parseLayoutComment(code));
+
+  const body = lines.slice(1);
+  /** The class whose `{ … }` block we are inside, if any. */
+  let openClass: string | null = null;
+  const members = new Map<string, string[]>();
+
+  for (const raw of body) {
+    const line = raw.trim();
+    if (line === "" || line.startsWith("%%")) continue;
+
+    if (openClass) {
+      if (line === "}") {
+        openClass = null;
+        continue;
+      }
+      members.get(openClass)!.push(line);
+      continue;
+    }
+
+    const direction = /^direction\s+(TB|TD|LR|RL|BT)\b/i.exec(line);
+    if (direction) {
+      graph.direction = direction[1]!.toUpperCase() as FlowDirection;
+      continue;
+    }
+
+    // `class Name["Display"] {` or `class Name` on its own.
+    const declaration = /^class\s+([A-Za-z0-9_-]+)\s*(?:\[\s*"?([^\]"]*)"?\s*\])?\s*(\{)?$/.exec(
+      line,
+    );
+    if (declaration) {
+      const id = declaration[1]!;
+      store.upsert(id, declaration[2]?.trim() || id, "class", undefined, "class");
+      if (declaration[3]) {
+        openClass = id;
+        if (!members.has(id)) members.set(id, []);
+      }
+      continue;
+    }
+
+    const relation = parseClassRelation(line);
+    if (relation) {
+      store.upsert(relation.from, undefined, "class", undefined, "class");
+      store.upsert(relation.to, undefined, "class", undefined, "class");
+      graph.edges.push({
+        id: `${relation.from}->${relation.to}-${graph.edges.length}`,
+        from: relation.from,
+        to: relation.to,
+        style: relation.style,
+        ...(relation.label ? { label: relation.label } : {}),
+        ...(relation.fromCardinality ? { fromCardinality: relation.fromCardinality } : {}),
+        ...(relation.toCardinality ? { toCardinality: relation.toCardinality } : {}),
+      });
+      continue;
+    }
+
+    // `Name : +field` — the one-line way of adding a member.
+    const member = /^([A-Za-z0-9_-]+)\s*:\s*(.+)$/.exec(line);
+    if (member) {
+      const id = member[1]!;
+      store.upsert(id, undefined, "class", undefined, "class");
+      const list = members.get(id) ?? [];
+      list.push(member[2]!.trim());
+      members.set(id, list);
+      continue;
+    }
+
+    graph.extras!.push(line);
+  }
+
+  // Folded in at the end so a member block that appears before the class is
+  // mentioned in a relationship still lands on the right node.
+  for (const node of graph.nodes) {
+    const list = members.get(node.id);
+    if (list && list.length > 0) node.label = joinMembers(node.label, list);
+  }
+
+  return graph;
+}
+
+function parseClassRelation(line: string): {
+  from: string;
+  to: string;
+  style: EdgeStyle;
+  label?: string;
+  fromCardinality?: string;
+  toCardinality?: string;
+} | null {
+  const [head, ...labelParts] = line.split(" : ");
+  const label = labelParts.join(" : ").trim();
+
+  for (const { syntax, style, flipped } of CLASS_RELATION_PATTERNS) {
+    const index = head!.indexOf(syntax);
+    if (index <= 0) continue;
+
+    const left = head!.slice(0, index).trim();
+    const right = head!.slice(index + syntax.length).trim();
+
+    const leftRef = /^([A-Za-z0-9_-]+)(?:\s+"([^"]*)")?$/.exec(left);
+    const rightRef = /^(?:"([^"]*)"\s+)?([A-Za-z0-9_-]+)$/.exec(right);
+    if (!leftRef || !rightRef) continue;
+
+    const a = { id: leftRef[1]!, cardinality: leftRef[2] };
+    const b = { id: rightRef[2]!, cardinality: rightRef[1] };
+    // `<|--` reads right to left: `Parent <|-- Child` means the child inherits.
+    const [from, to] = flipped ? [b, a] : [a, b];
+
+    return {
+      from: from.id,
+      to: to.id,
+      style,
+      ...(label ? { label } : {}),
+      ...(from.cardinality ? { fromCardinality: from.cardinality } : {}),
+      ...(to.cardinality ? { toCardinality: to.cardinality } : {}),
+    };
+  }
+
+  return null;
+}
+
+// ── Entity-relationship diagram ─────────────────────────────────────────────
+
+/** The two halves of mermaid's crow's-foot notation, per relationship. */
+const ER_CARDINALITY: Record<string, [string, string]> = {
+  "one-one": ["||", "||"],
+  "one-many": ["||", "o{"],
+  "many-one": ["}o", "||"],
+  "many-many": ["}o", "o{"],
+};
+
+function erBody(graph: Graph): string[] {
+  const lines: string[] = ["erDiagram"];
+
+  for (const node of graph.nodes) {
+    const { name, members } = splitMembers(node.label);
+    const id = escapeId(name || node.id);
+    if (members.length === 0) continue;
+
+    lines.push(`    ${id} {`);
+    for (const member of members) lines.push(`        ${member}`);
+    lines.push("    }");
+  }
+
+  for (const edge of graph.edges) {
+    const [left, right] = ER_CARDINALITY[edge.style] ?? ER_CARDINALITY["one-many"]!;
+    const line = edge.dashed ? ".." : "--";
+    const from = escapeId(entityName(graph, edge.from));
+    const to = escapeId(entityName(graph, edge.to));
+
+    // Mermaid requires a label on every relationship, so an unlabelled one is
+    // written as an empty string rather than omitted, which would not parse.
+    lines.push(`    ${from} ${left}${line}${right} ${to} : "${edge.label ?? ""}"`);
+  }
+
+  // An entity with no attributes and no relationships would otherwise vanish
+  // from the source entirely, and reopening the canvas would not find it.
+  for (const node of graph.nodes) {
+    const { name, members } = splitMembers(node.label);
+    const attached = graph.edges.some((edge) => edge.from === node.id || edge.to === node.id);
+    if (members.length === 0 && !attached)
+      lines.push(`    ${escapeId(name || node.id)} {`, "    }");
+  }
+
+  return lines;
+}
+
+/** ER entities are referred to by name, not by an internal id. */
+function entityName(graph: Graph, id: string): string {
+  const node = graph.nodes.find((candidate) => candidate.id === id);
+  return node ? splitMembers(node.label).name || node.id : id;
+}
+
+const ER_RELATION =
+  /^([A-Za-z0-9_-]+)\s+([|}o][|o{]?)(--|\.\.)([|}o][|o{]?)\s+([A-Za-z0-9_-]+)\s*:\s*(.*)$/;
+
+function parseErDiagram(code: string, lines: string[]): Graph {
+  const graph: Graph = { kind: "er", direction: "TD", nodes: [], edges: [], extras: [] };
+  const store = createNodeStore(graph, parseLayoutComment(code));
+
+  const attributes = new Map<string, string[]>();
+  let openEntity: string | null = null;
+
+  for (const raw of lines.slice(1)) {
+    const line = raw.trim();
+    if (line === "" || line.startsWith("%%")) continue;
+
+    if (openEntity) {
+      if (line === "}") {
+        openEntity = null;
+        continue;
+      }
+      attributes.get(openEntity)!.push(line);
+      continue;
+    }
+
+    const block = /^([A-Za-z0-9_-]+)\s*\{$/.exec(line);
+    if (block) {
+      openEntity = block[1]!;
+      store.upsert(openEntity, openEntity, "entity", undefined, "entity");
+      if (!attributes.has(openEntity)) attributes.set(openEntity, []);
+      continue;
+    }
+
+    const relation = ER_RELATION.exec(line);
+    if (relation) {
+      const from = relation[1]!;
+      const to = relation[5]!;
+      store.upsert(from, from, "entity", undefined, "entity");
+      store.upsert(to, to, "entity", undefined, "entity");
+
+      const label = stripQuotes(relation[6]!.trim());
+      graph.edges.push({
+        id: `${from}->${to}-${graph.edges.length}`,
+        from,
+        to,
+        style: erStyleFor(relation[2]!, relation[4]!),
+        ...(label ? { label } : {}),
+        ...(relation[3] === ".." ? { dashed: true } : {}),
+      });
+      continue;
+    }
+
+    graph.extras!.push(line);
+  }
+
+  for (const node of graph.nodes) {
+    const list = attributes.get(node.id);
+    if (list && list.length > 0) node.label = joinMembers(node.label, list);
+  }
+
+  return graph;
+}
+
+/** Reads crow's-foot notation back into one of the four relationship styles. */
+function erStyleFor(left: string, right: string): EdgeStyle {
+  const leftMany = left.startsWith("}");
+  const rightMany = right.endsWith("{");
+
+  if (leftMany && rightMany) return "many-many";
+  if (leftMany) return "many-one";
+  if (rightMany) return "one-many";
+  return "one-one";
+}
+
+// ── Mindmap ─────────────────────────────────────────────────────────────────
+
+const MIND_DELIMITERS: Partial<Record<NodeShape, [string, string]>> = {
+  "mind-square": ["[", "]"],
+  "mind-round": ["(", ")"],
+  "mind-circle": ["((", "))"],
+  "mind-bang": ["))", "(("],
+  "mind-cloud": [")", "("],
+  "mind-hexagon": ["{{", "}}"],
+};
+
+/**
+ * Mindmaps are written as indentation, not as arrows.
+ *
+ * So the edges are the tree: a node's parent is whatever points at it. Walking
+ * from the roots and emitting two spaces per level is the whole serialiser —
+ * and a node that somehow ends up with two parents is emitted under the first,
+ * because a mindmap cannot express the second.
+ */
+function mindmapBody(graph: Graph): string[] {
+  const lines: string[] = ["mindmap"];
+
+  const parentOf = new Map<string, string>();
+  for (const edge of graph.edges) {
+    if (!parentOf.has(edge.to)) parentOf.set(edge.to, edge.from);
+  }
+
+  const childrenOf = new Map<string, GraphNode[]>();
+  for (const node of graph.nodes) {
+    const parent = parentOf.get(node.id);
+    if (parent === undefined) continue;
+    const bucket = childrenOf.get(parent);
+    if (bucket) bucket.push(node);
+    else childrenOf.set(parent, [node]);
+  }
+
+  const emitted = new Set<string>();
+
+  const walk = (node: GraphNode, depth: number) => {
+    // A cycle is not drawable as a tree, and refusing to loop forever matters
+    // more here than refusing to draw: this runs against half-edited source.
+    if (emitted.has(node.id)) return;
+    emitted.add(node.id);
+
+    const [open, close] = MIND_DELIMITERS[node.shape] ?? MIND_DELIMITERS["mind-square"]!;
+    lines.push(`${"  ".repeat(depth + 1)}${escapeId(node.id)}${open}${node.label}${close}`);
+
+    for (const child of childrenOf.get(node.id) ?? []) walk(child, depth + 1);
+  };
+
+  for (const node of graph.nodes) {
+    if (!parentOf.has(node.id)) walk(node, 0);
+  }
+  // Anything left is inside a cycle; drawn at the root so it is not lost.
+  for (const node of graph.nodes) walk(node, 0);
+
+  return lines;
+}
+
+function parseMindmap(code: string, lines: string[]): Graph {
+  const graph: Graph = { kind: "mindmap", direction: "TD", nodes: [], edges: [], extras: [] };
+  const store = createNodeStore(graph, parseLayoutComment(code));
+
+  /** Open ancestors, as `[indentation, nodeId]`. */
+  const stack: { indent: number; id: string }[] = [];
+  let anonymous = 0;
+
+  for (const raw of lines.slice(1)) {
+    if (raw.trim() === "" || raw.trim().startsWith("%%")) continue;
+
+    const indent = raw.length - raw.trimStart().length;
+    const parsed = parseMindNode(raw.trim());
+    if (!parsed) {
+      graph.extras!.push(raw.trim());
+      continue;
+    }
+
+    const id = parsed.id ?? `m${(anonymous += 1)}`;
+    store.upsert(id, parsed.label, parsed.shape, undefined, "mind-square");
+
+    while (stack.length > 0 && stack[stack.length - 1]!.indent >= indent) stack.pop();
+
+    const parent = stack[stack.length - 1];
+    if (parent) {
+      graph.edges.push({
+        id: `${parent.id}->${id}-${graph.edges.length}`,
+        from: parent.id,
+        to: id,
+        style: "branch",
+      });
+    }
+
+    stack.push({ indent, id });
+  }
+
+  return graph;
+}
+
+/** Longest delimiters first, so `((` is not read as `(`. */
+const MIND_BY_SPECIFICITY: NodeShape[] = [
+  "mind-bang",
+  "mind-circle",
+  "mind-hexagon",
+  "mind-square",
+  "mind-cloud",
+  "mind-round",
+];
+
+function parseMindNode(text: string): { id?: string; label: string; shape: NodeShape } | null {
+  if (text === "") return null;
+
+  for (const shape of MIND_BY_SPECIFICITY) {
+    const [open, close] = MIND_DELIMITERS[shape]!;
+    const index = text.indexOf(open);
+    if (index < 0 || !text.endsWith(close)) continue;
+
+    const id = text.slice(0, index).trim();
+    const label = text.slice(index + open.length, text.length - close.length).trim();
+    // An id is optional in mermaid's syntax — `((Root))` alone is valid.
+    if (id !== "" && !/^[A-Za-z0-9_-]+$/.test(id)) continue;
+
+    return { ...(id ? { id } : {}), label, shape };
+  }
+
+  return { label: text, shape: "mind-square" };
+}
+
 // ── Shared ──────────────────────────────────────────────────────────────────
 
 function stripQuotes(text: string): string {
@@ -694,6 +1247,141 @@ export function removeEdge(graph: Graph, id: string): Graph {
   return { ...graph, edges: graph.edges.filter((e) => e.id !== id) };
 }
 
+/**
+ * Lays the graph out in layers, so a diagram dragged into a mess can be
+ * straightened without being redrawn.
+ *
+ * Depth comes from the edges: a node sits one layer below the deepest thing
+ * pointing at it. That is what makes the result meaningful rather than merely
+ * tidy — the layers *are* the flow, so reading down the page reads the diagram
+ * in order. Nodes nothing points at start at the top, and a cycle stops adding
+ * depth rather than looping forever.
+ *
+ * `direction` decides which way the layers run, matching what mermaid will do
+ * with the same graph.
+ */
+export function tidyLayout(graph: Graph): Graph {
+  if (graph.nodes.length === 0) return graph;
+
+  const depth = new Map<string, number>();
+  const incoming = new Map<string, string[]>();
+
+  for (const node of graph.nodes) incoming.set(node.id, []);
+  for (const edge of graph.edges) incoming.get(edge.to)?.push(edge.from);
+
+  // Longest path from a root, computed with an explicit visited set so a cycle
+  // resolves to a depth instead of hanging.
+  const depthOf = (id: string, seen: Set<string>): number => {
+    const known = depth.get(id);
+    if (known !== undefined) return known;
+    if (seen.has(id)) return 0;
+
+    seen.add(id);
+    const parents = incoming.get(id) ?? [];
+    const value =
+      parents.length === 0 ? 0 : Math.max(...parents.map((parent) => depthOf(parent, seen) + 1));
+    seen.delete(id);
+
+    depth.set(id, value);
+    return value;
+  };
+
+  for (const node of graph.nodes) depthOf(node.id, new Set());
+
+  // Group into layers, keeping each layer in the graph's own node order so the
+  // result is stable: tidying twice in a row must not shuffle anything.
+  const layers = new Map<number, GraphNode[]>();
+  for (const node of graph.nodes) {
+    const level = depth.get(node.id) ?? 0;
+    const bucket = layers.get(level);
+    if (bucket) bucket.push(node);
+    else layers.set(level, [node]);
+  }
+
+  const horizontal = graph.direction === "LR" || graph.direction === "RL";
+  const ALONG = horizontal ? 260 : 150;
+  const ACROSS = horizontal ? 110 : 210;
+  const ORIGIN = 80;
+
+  const placed = new Map<string, { x: number; y: number }>();
+  for (const [level, nodes] of layers) {
+    nodes.forEach((node, index) => {
+      // Each layer is centred on the widest one, so the result is a column
+      // rather than everything hanging off the left edge.
+      const offset = (index - (nodes.length - 1) / 2) * ACROSS;
+      placed.set(
+        node.id,
+        horizontal
+          ? { x: ORIGIN + level * ALONG, y: ORIGIN + 300 + offset }
+          : { x: ORIGIN + 300 + offset, y: ORIGIN + level * ALONG },
+      );
+    });
+  }
+
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) => ({ ...node, ...(placed.get(node.id) ?? {}) })),
+  };
+}
+
+/**
+ * Copies nodes, and any edge that runs between two of them.
+ *
+ * Edges to nodes *outside* the copied set are deliberately dropped: a duplicate
+ * that stays wired into the original is not a duplicate, it is a second arrow
+ * into the same box, which is never what a copy was meant to produce.
+ */
+export function duplicateNodes(graph: Graph, ids: string[], offset = 40): Graph {
+  const wanted = new Set(ids);
+  const nodes = graph.nodes.filter((node) => wanted.has(node.id));
+  if (nodes.length === 0) return graph;
+
+  const renamed = new Map<string, string>();
+  let next = graph;
+
+  for (const node of nodes) {
+    const id = nextNodeId(next, "n");
+    renamed.set(node.id, id);
+    next = addNode(next, { ...node, id, x: node.x + offset, y: node.y + offset });
+  }
+
+  for (const edge of graph.edges) {
+    const from = renamed.get(edge.from);
+    const to = renamed.get(edge.to);
+    if (!from || !to) continue;
+
+    next = {
+      ...next,
+      edges: [...next.edges, { ...edge, id: `${from}->${to}-${next.edges.length}`, from, to }],
+    };
+  }
+
+  return next;
+}
+
+/** Moves several nodes at once, for a multi-node drag or a keyboard nudge. */
+export function moveNodes(graph: Graph, ids: string[], dx: number, dy: number): Graph {
+  const wanted = new Set(ids);
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) =>
+      wanted.has(node.id) ? { ...node, x: node.x + dx, y: node.y + dy } : node,
+    ),
+  };
+}
+
+/** Removes several nodes and edges in one step, by id. */
+export function removeMany(graph: Graph, ids: string[]): Graph {
+  const wanted = new Set(ids);
+  return {
+    ...graph,
+    nodes: graph.nodes.filter((node) => !wanted.has(node.id)),
+    edges: graph.edges.filter(
+      (edge) => !wanted.has(edge.id) && !wanted.has(edge.from) && !wanted.has(edge.to),
+    ),
+  };
+}
+
 /** Human-readable names for the shape picker. */
 export const SHAPE_LABELS: Record<NodeShape, string> = {
   rect: "Process",
@@ -709,6 +1397,14 @@ export const SHAPE_LABELS: Record<NodeShape, string> = {
   end: "End",
   choice: "Choice",
   fork: "Fork / Join",
+  class: "Class",
+  entity: "Entity",
+  "mind-square": "Square",
+  "mind-round": "Rounded",
+  "mind-circle": "Circle",
+  "mind-cloud": "Cloud",
+  "mind-bang": "Burst",
+  "mind-hexagon": "Hexagon",
 };
 
 export const EDGE_LABELS: Record<EdgeStyle, string> = {
@@ -716,4 +1412,14 @@ export const EDGE_LABELS: Record<EdgeStyle, string> = {
   open: "Line",
   dotted: "Dotted",
   thick: "Thick",
+  inherit: "Inherits",
+  compose: "Composed of",
+  aggregate: "Has",
+  associate: "Association",
+  depend: "Depends on",
+  "one-one": "One to one",
+  "one-many": "One to many",
+  "many-one": "Many to one",
+  "many-many": "Many to many",
+  branch: "Branch",
 };

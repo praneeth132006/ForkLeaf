@@ -7,10 +7,21 @@ import {
   nextNodeId,
   removeEdge,
   removeNode,
+  removeMany,
+  moveNodes,
+  duplicateNodes,
+  tidyLayout,
   updateNode,
+  updateEdge,
+  graphToMermaid,
+  mermaidToGraph,
+  joinMembers,
   SHAPE_LABELS,
   SHAPES_FOR_KIND,
   EDGE_LABELS,
+  EDGE_STYLES_FOR_KIND,
+  DEFAULT_EDGE_STYLE,
+  splitMembers,
   type EdgeStyle,
   type Graph,
   type GraphNode,
@@ -32,8 +43,24 @@ const FIT_PADDING = 80;
 
 /** The shape a plain new node takes in each dialect. */
 function defaultShapeFor(kind: Graph["kind"]): NodeShape {
-  return kind === "state" ? "state" : "rect";
+  switch (kind) {
+    case "state":
+      return "state";
+    case "class":
+      return "class";
+    case "er":
+      return "entity";
+    case "mindmap":
+      return "mind-round";
+    default:
+      return "rect";
+  }
 }
+
+/** Height of one member line inside a class or entity box. */
+const MEMBER_HEIGHT = 17;
+/** Height of the name bar above the members. */
+const MEMBER_HEADER = 30;
 
 /**
  * Node footprints.
@@ -42,7 +69,7 @@ function defaultShapeFor(kind: Graph["kind"]): NodeShape {
  * boxes with words in them; drawing them at the size of a process step makes a
  * state chart read like a flowchart with four blank boxes in it.
  */
-function sizeOf(node: { shape: NodeShape }): { width: number; height: number } {
+function sizeOf(node: { shape: NodeShape; label?: string }): { width: number; height: number } {
   switch (node.shape) {
     case "start":
     case "end":
@@ -51,9 +78,35 @@ function sizeOf(node: { shape: NodeShape }): { width: number; height: number } {
       return { width: 64, height: 64 };
     case "fork":
       return { width: 130, height: 14 };
+    case "mind-circle":
+    case "mind-bang":
+      return { width: 96, height: 96 };
+    case "mind-round":
+    case "mind-square":
+    case "mind-cloud":
+    case "mind-hexagon":
+      return { width: 132, height: 48 };
+    case "class":
+    case "entity": {
+      // A class or entity box is as tall as what is in it. Drawing every one at
+      // a fixed height meant a class with six fields either overflowed its box
+      // or had its fields hidden, and hiding them removes the only reason the
+      // diagram was drawn.
+      const { name, members } = splitMembers(node.label ?? "");
+      const widest = Math.max(name.length, ...members.map((line) => line.length), 10);
+      return {
+        width: Math.min(300, Math.max(NODE_WIDTH, widest * 7.4 + 28)),
+        height: MEMBER_HEADER + Math.max(members.length, 0) * MEMBER_HEIGHT + 8,
+      };
+    }
     default:
       return { width: NODE_WIDTH, height: NODE_HEIGHT };
   }
+}
+
+/** True for the box shapes whose label is a name followed by a list. */
+function hasMembers(shape: NodeShape): boolean {
+  return shape === "class" || shape === "entity";
 }
 
 /**
@@ -115,7 +168,87 @@ type Drag =
   /** Moving a node. `preview` is committed to the graph only on release. */
   | { kind: "move"; nodeId: string; grabX: number; grabY: number; preview: Point; moved: boolean }
   | { kind: "connect"; fromId: string; cursor: Point }
-  | { kind: "pan"; originX: number; originY: number; panX: number; panY: number };
+  | { kind: "pan"; originX: number; originY: number; panX: number; panY: number }
+  /** Rubber-band selection. `from` is where the press landed, in world space. */
+  | { kind: "marquee"; from: Point; to: Point; additive: boolean };
+
+/**
+ * Undo and redo for the canvas.
+ *
+ * The graph is owned by the parent, which holds mermaid source and reparses it
+ * on every change — so the object identity is new every render and cannot be
+ * compared. History is therefore kept as serialised snapshots, which is also
+ * exactly what has to be handed back to `onChange` to undo.
+ *
+ * Edits made in the *source* pane reset the history rather than joining it. A
+ * stack of canvas states interleaved with half-typed source would let undo
+ * restore a document that was never on screen, and losing the ability to undo
+ * is a much smaller harm than undoing into something the user never had.
+ */
+function useGraphHistory(graph: Graph, onChange: (next: Graph) => void) {
+  const past = useRef<string[]>([]);
+  const future = useRef<string[]>([]);
+  /** The source we last saw, whether we produced it or the other pane did. */
+  const current = useRef<string>(graphToMermaid(graph));
+  /** Set while applying our own change, so the sync below ignores the echo. */
+  const applying = useRef(false);
+  const [, tick] = useState(0);
+
+  const code = graphToMermaid(graph);
+
+  useEffect(() => {
+    if (code === current.current) return;
+
+    if (applying.current) {
+      applying.current = false;
+    } else {
+      past.current = [];
+      future.current = [];
+      tick((n) => n + 1);
+    }
+    current.current = code;
+  }, [code]);
+
+  /** Records the state being left behind, then applies the new one. */
+  const commit = useCallback(
+    (next: Graph) => {
+      past.current = [...past.current.slice(-99), current.current];
+      future.current = [];
+      current.current = graphToMermaid(next);
+      applying.current = true;
+      onChange(next);
+      tick((n) => n + 1);
+    },
+    [onChange],
+  );
+
+  const step = useCallback(
+    (from: React.RefObject<string[]>, to: React.RefObject<string[]>) => {
+      const target = from.current[from.current.length - 1];
+      if (target === undefined) return;
+
+      from.current = from.current.slice(0, -1);
+      to.current = [...to.current, current.current];
+
+      const restored = mermaidToGraph(target);
+      if (!restored) return;
+
+      current.current = target;
+      applying.current = true;
+      onChange(restored);
+      tick((n) => n + 1);
+    },
+    [onChange],
+  );
+
+  return {
+    commit,
+    undo: useCallback(() => step(past, future), [step]),
+    redo: useCallback(() => step(future, past), [step]),
+    canUndo: past.current.length > 0,
+    canRedo: future.current.length > 0,
+  };
+}
 
 /**
  * Drag-and-drop diagram builder.
@@ -135,8 +268,72 @@ type Drag =
 export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<Drag>({ kind: "none" });
-  const [selected, setSelected] = useState<string | null>(null);
+  /**
+   * Everything currently selected, by id — nodes and edges together.
+   *
+   * A set rather than one id because a diagram is edited in groups: three boxes
+   * moved together, a branch deleted, half a flowchart nudged left to make
+   * room. With a single selection each of those is one careful drag per box,
+   * which is why the canvas felt like a form and not like a drawing tool.
+   */
+  const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set());
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
+
+  const history = useGraphHistory(graph, onChange);
+  const { commit } = history;
+
+  /**
+   * Whether the space bar is down, which turns a drag into a pan.
+   *
+   * A ref rather than state: it is read inside a pointer handler and changing
+   * it must not re-render the canvas, which would be a full repaint every time
+   * somebody rests a thumb on the space bar.
+   */
+  const spaceHeld = useRef(false);
+
+  useEffect(() => {
+    const down = (event: KeyboardEvent) => {
+      if (event.code !== "Space") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === "INPUT" || target?.isContentEditable) return;
+      spaceHeld.current = true;
+    };
+    const up = (event: KeyboardEvent) => {
+      if (event.code === "Space") spaceHeld.current = false;
+    };
+    const blur = () => {
+      spaceHeld.current = false;
+    };
+
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    // Tabbing away mid-hold would otherwise leave the canvas stuck in pan mode.
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", blur);
+    };
+  }, []);
+
+  /** The single selected thing, when there is exactly one. */
+  const only = selection.size === 1 ? [...selection][0]! : null;
+
+  const selectOne = useCallback((id: string | null) => {
+    setSelection(id === null ? new Set() : new Set([id]));
+  }, []);
+
+  /** Shift-click adds to or removes from the selection, as everywhere else. */
+  const toggleSelected = useCallback((id: string, additive: boolean) => {
+    setSelection((current) => {
+      if (!additive) return current.has(id) && current.size === 1 ? current : new Set([id]);
+
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
@@ -216,6 +413,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
           x: drag.panX - (event.clientX - drag.originX) / zoom,
           y: drag.panY - (event.clientY - drag.originY) / zoom,
         });
+      } else if (drag.kind === "marquee") {
+        setDrag({ ...drag, to: toWorld(event) });
       }
     };
 
@@ -234,13 +433,22 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
       // Commit happens here, once, rather than on every frame.
       if (drag.kind === "move" && drag.moved) {
-        onChange(updateNode(graph, drag.nodeId, { x: drag.preview.x, y: drag.preview.y }));
+        // The whole selection moves with the node being dragged.
+        const moved = [...selection].filter((id) => graph.nodes.some((node) => node.id === id));
+        const dx = drag.preview.x - (graph.nodes.find((n) => n.id === drag.nodeId)?.x ?? 0);
+        const dy = drag.preview.y - (graph.nodes.find((n) => n.id === drag.nodeId)?.y ?? 0);
+
+        commit(
+          moved.length > 1 && moved.includes(drag.nodeId)
+            ? moveNodes(graph, moved, dx, dy)
+            : updateNode(graph, drag.nodeId, { x: drag.preview.x, y: drag.preview.y }),
+        );
       } else if (drag.kind === "connect") {
         const world = toWorld(event);
         const target = nodeAt(graph, world);
 
         if (target && target.id !== drag.fromId) {
-          onChange(addEdge(graph, drag.fromId, target.id));
+          commit(addEdge(graph, drag.fromId, target.id, DEFAULT_EDGE_STYLE[graph.kind]));
         } else if (!target) {
           // Dropping an arrow on empty space creates the node it was reaching
           // for. Otherwise every new step is add-then-drag-then-connect, and
@@ -256,10 +464,46 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             y: snap(world.y - size.height / 2),
           });
 
-          onChange(addEdge(placed, drag.fromId, id));
-          setSelected(id);
+          commit(addEdge(placed, drag.fromId, id, DEFAULT_EDGE_STYLE[graph.kind]));
+          selectOne(id);
           setEditingLabel(id);
         }
+      }
+
+      if (drag.kind === "marquee") {
+        // The release point, not the last move we happened to see. A drag fast
+        // enough to outrun the pointermove stream — or one delivered without
+        // intermediate moves at all — would otherwise select against a band
+        // that stopped updating somewhere in the middle.
+        const to = toWorld(event);
+
+        // Everything the band touches, rather than only what it wholly
+        // encloses: on a canvas of 150px-wide boxes, "fully contained" means
+        // dragging a band larger than the thing you are trying to select.
+        const box = {
+          left: Math.min(drag.from.x, to.x),
+          right: Math.max(drag.from.x, to.x),
+          top: Math.min(drag.from.y, to.y),
+          bottom: Math.max(drag.from.y, to.y),
+        };
+
+        const caught = graph.nodes
+          .filter((node) => {
+            const size = sizeOf(node);
+            return (
+              node.x < box.right &&
+              node.x + size.width > box.left &&
+              node.y < box.bottom &&
+              node.y + size.height > box.top
+            );
+          })
+          .map((node) => node.id);
+
+        setSelection((previous) => {
+          const next = drag.additive ? new Set(previous) : new Set<string>();
+          for (const id of caught) next.add(id);
+          return next;
+        });
       }
 
       setDrag({ kind: "none" });
@@ -384,7 +628,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
       const x = spot.x - size.width / 2;
       const y = spot.y - size.height / 2;
 
-      onChange(
+      commit(
         addNode(graph, {
           id,
           // Markers have no text; a named default would just have to be
@@ -396,7 +640,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         }),
       );
 
-      setSelected(id);
+      selectOne(id);
       if (!isMarker(shape)) setEditingLabel(id);
       return id;
     },
@@ -405,7 +649,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
   /** Adds a node already wired to the current selection, for keyboard flow. */
   const createConnectedNode = useCallback(() => {
-    const source = graph.nodes.find((n) => n.id === selected);
+    const source = graph.nodes.find((n) => n.id === only);
     if (!source) return;
 
     const shape: NodeShape = defaultShapeFor(graph.kind);
@@ -421,10 +665,48 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
       y: snap(source.y + (horizontal ? 0 : size.height + 80)),
     });
 
-    onChange(addEdge(placed, source.id, id));
-    setSelected(id);
+    commit(addEdge(placed, source.id, id, DEFAULT_EDGE_STYLE[graph.kind]));
+    selectOne(id);
     setEditingLabel(id);
-  }, [graph, onChange, selected]);
+  }, [graph, commit, only, selectOne]);
+
+  /**
+   * Straightens the diagram into layers that follow its own arrows.
+   *
+   * The re-frame is deferred to the effect below rather than done here: the
+   * layout has not been applied yet at this point, so fitting now frames where
+   * the diagram *was* — which is how tidying left everything neatly arranged
+   * just off the bottom of the canvas.
+   */
+  const refitWanted = useRef(false);
+
+  const tidy = useCallback(() => {
+    refitWanted.current = true;
+    commit(tidyLayout(graph));
+  }, [graph, commit]);
+
+  useEffect(() => {
+    if (!refitWanted.current) return;
+    refitWanted.current = false;
+    fit();
+  }, [graph.nodes, fit]);
+
+  const duplicateSelection = useCallback(() => {
+    const nodes = [...selection].filter((id) => graph.nodes.some((node) => node.id === id));
+    if (nodes.length === 0) return;
+
+    const next = duplicateNodes(graph, nodes);
+    commit(next);
+    // Select the copies, so the next drag moves what was just made rather than
+    // the originals sitting underneath them.
+    setSelection(new Set(next.nodes.slice(graph.nodes.length).map((node) => node.id)));
+  }, [graph, commit, selection]);
+
+  const deleteSelection = useCallback(() => {
+    if (selection.size === 0) return;
+    commit(removeMany(graph, [...selection]));
+    setSelection(new Set());
+  }, [graph, commit, selection]);
 
   // ── Keyboard ────────────────────────────────────────────────────────────
   // Declared after the actions it calls, so the dependency array is not
@@ -436,30 +718,67 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         return;
       }
 
-      if ((event.key === "Delete" || event.key === "Backspace") && selected && !editingLabel) {
+      const accel = event.metaKey || event.ctrlKey;
+
+      if (accel && event.key.toLowerCase() === "z") {
         event.preventDefault();
-        onChange(
-          graph.nodes.some((n) => n.id === selected)
-            ? removeNode(graph, selected)
-            : removeEdge(graph, selected),
-        );
-        setSelected(null);
+        if (event.shiftKey) history.redo();
+        else history.undo();
+        return;
+      }
+
+      if (accel && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        history.redo();
+        return;
+      }
+
+      if (accel && event.key.toLowerCase() === "d") {
+        event.preventDefault();
+        duplicateSelection();
+        return;
+      }
+
+      if (accel && event.key.toLowerCase() === "a") {
+        event.preventDefault();
+        setSelection(new Set(graph.nodes.map((node) => node.id)));
+        return;
+      }
+
+      if ((event.key === "Delete" || event.key === "Backspace") && !editingLabel) {
+        if (selection.size === 0) return;
+        event.preventDefault();
+        deleteSelection();
+        return;
+      }
+
+      // Nudging is what makes a diagram line up. A bare arrow moves by the
+      // grid; shift moves by ten of them, for crossing real distance.
+      if (event.key.startsWith("Arrow") && selection.size > 0 && !editingLabel) {
+        const nodes = [...selection].filter((id) => graph.nodes.some((node) => node.id === id));
+        if (nodes.length === 0) return;
+
+        event.preventDefault();
+        const step = event.shiftKey ? GRID * 10 : GRID;
+        const dx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
+        const dy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
+        commit(moveNodes(graph, nodes, dx, dy));
         return;
       }
 
       // Enter renames, Tab continues the chain: the two things you do over and
       // over while sketching, neither of which should need the mouse.
-      if (event.key === "Enter" && selected && !editingLabel) {
-        const node = graph.nodes.find((n) => n.id === selected);
+      if (event.key === "Enter" && only && !editingLabel) {
+        const node = graph.nodes.find((n) => n.id === only);
         if (node && !isMarker(node.shape)) {
           event.preventDefault();
-          setEditingLabel(selected);
+          setEditingLabel(only);
         }
         return;
       }
 
-      if (event.key === "Tab" && selected && !editingLabel) {
-        if (graph.nodes.some((n) => n.id === selected)) {
+      if (event.key === "Tab" && only && !editingLabel) {
+        if (graph.nodes.some((n) => n.id === only)) {
           event.preventDefault();
           createConnectedNode();
         }
@@ -467,11 +786,11 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
       }
 
       if (event.key === "Escape") {
-        setSelected(null);
+        setSelection(new Set());
         return;
       }
 
-      if (event.key === "0" && (event.metaKey || event.ctrlKey)) {
+      if (event.key === "0" && accel) {
         event.preventDefault();
         fit();
       }
@@ -479,10 +798,21 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected, editingLabel, graph, onChange, fit, createConnectedNode]);
+  }, [
+    only,
+    selection,
+    editingLabel,
+    graph,
+    commit,
+    history,
+    fit,
+    createConnectedNode,
+    duplicateSelection,
+    deleteSelection,
+  ]);
 
-  const selectedNode = graph.nodes.find((n) => n.id === selected) ?? null;
-  const selectedEdge = graph.edges.find((e) => e.id === selected) ?? null;
+  const selectedNode = graph.nodes.find((n) => n.id === only) ?? null;
+  const selectedEdge = graph.edges.find((e) => e.id === only) ?? null;
 
   /** A node's position, using the in-flight drag preview when it has one. */
   const positionOf = (node: GraphNode): Point =>
@@ -512,23 +842,52 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         ))}
 
         <div className="ml-auto flex items-center gap-2">
-          <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--fl-muted)]">
-            Layout
-            <select
-              value={graph.direction}
-              onChange={(event) =>
-                onChange({ ...graph, direction: event.target.value as Graph["direction"] })
-              }
-              className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-[12.5px] text-[var(--fl-text)]"
+          <div className="flex items-center rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)]">
+            <ZoomButton label="Undo (⌘Z)" onClick={history.undo} disabled={!history.canUndo}>
+              <UndoGlyph />
+            </ZoomButton>
+            <ZoomButton
+              label="Redo (⌘⇧Z)"
+              onClick={history.redo}
+              disabled={!history.canRedo}
+              className="border-l border-[var(--fl-border)]"
             >
-              <option value="TD">Top to bottom</option>
-              <option value="LR">Left to right</option>
-              {/* Mermaid's state renderer only lays out downwards or
+              <UndoGlyph flipped />
+            </ZoomButton>
+          </div>
+
+          <button
+            type="button"
+            onClick={tidy}
+            disabled={graph.nodes.length === 0}
+            title="Lay the diagram out in layers that follow its own arrows"
+            className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2.5 py-1 text-[12.5px] text-[var(--fl-text)] transition-colors hover:border-[var(--fl-accent)] hover:text-[var(--fl-accent)] disabled:opacity-40 disabled:hover:border-[var(--fl-border)] disabled:hover:text-[var(--fl-text)]"
+          >
+            Tidy up
+          </button>
+
+          {/* Mermaid lays out ER diagrams and mindmaps itself and ignores a
+              direction, so offering one here would be a control that does
+              nothing. */}
+          {(graph.kind === "flowchart" || graph.kind === "state" || graph.kind === "class") && (
+            <label className="flex items-center gap-1.5 text-[12.5px] text-[var(--fl-muted)]">
+              Layout
+              <select
+                value={graph.direction}
+                onChange={(event) =>
+                  onChange({ ...graph, direction: event.target.value as Graph["direction"] })
+                }
+                className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-[12.5px] text-[var(--fl-text)]"
+              >
+                <option value="TD">Top to bottom</option>
+                <option value="LR">Left to right</option>
+                {/* Mermaid's state renderer only lays out downwards or
                   rightwards; offering the other two would silently do nothing. */}
-              {graph.kind === "flowchart" && <option value="BT">Bottom to top</option>}
-              {graph.kind === "flowchart" && <option value="RL">Right to left</option>}
-            </select>
-          </label>
+                {graph.kind === "flowchart" && <option value="BT">Bottom to top</option>}
+                {graph.kind === "flowchart" && <option value="RL">Right to left</option>}
+              </select>
+            </label>
+          )}
 
           <div className="flex items-center rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)]">
             <ZoomButton
@@ -571,44 +930,43 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             createNode(defaultShapeFor(graph.kind), toWorld(event));
           }}
           onPointerDown={(event) => {
-            // Empty canvas: clear the selection and start panning. Middle-click
-            // pans from anywhere.
+            // Middle-click pans from anywhere; otherwise this only fires on
+            // the empty canvas, because nodes and edges stop the event.
             if (event.target !== event.currentTarget && event.button !== 1) return;
 
-            setSelected(null);
             setEditingLabel(null);
-            setDrag({
-              kind: "pan",
-              originX: event.clientX,
-              originY: event.clientY,
-              panX: pan.x,
-              panY: pan.y,
-            });
+
+            // Space held, middle button, or the space bar down: pan. Anything
+            // else on empty canvas draws a selection band, which is what every
+            // other canvas tool does and what makes selecting six boxes one
+            // gesture instead of six.
+            if (event.button === 1 || spaceHeld.current) {
+              setDrag({
+                kind: "pan",
+                originX: event.clientX,
+                originY: event.clientY,
+                panX: pan.x,
+                panY: pan.y,
+              });
+              return;
+            }
+
+            const from = toWorld(event);
+            if (!event.shiftKey) setSelection(new Set());
+            setDrag({ kind: "marquee", from, to: from, additive: event.shiftKey });
           }}
         >
           <defs>
-            <marker
-              id="fl-arrow"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--fl-border-strong)" />
-            </marker>
-            <marker
-              id="fl-arrow-active"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--fl-accent)" />
-            </marker>
+            {/* One set in the resting colour and one in the selection colour.
+                SVG markers cannot inherit the stroke of the line they sit on in
+                any browser we can rely on, so the alternative is a marker whose
+                arrowhead stays grey on a selected edge. */}
+            {EDGE_MARKERS.map((marker) => (
+              <React.Fragment key={marker.id}>
+                {renderMarker(marker, false)}
+                {renderMarker(marker, true)}
+              </React.Fragment>
+            ))}
             {/* Anchored in world space so the grid scrolls with the diagram
                 rather than sliding under it. */}
             <pattern id="fl-grid" width={GRID * 3} height={GRID * 3} patternUnits="userSpaceOnUse">
@@ -633,14 +991,15 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
             const start = anchorPoint(from, to);
             const end = anchorPoint(to, from);
-            const isSelected = selected === edge.id;
+            const isSelected = selection.has(edge.id);
+            const decor = edgeDecor(edge.style, edge.dashed);
 
             return (
               <g
                 key={edge.id}
                 onPointerDown={(event) => {
                   event.stopPropagation();
-                  setSelected(edge.id);
+                  toggleSelected(edge.id, event.shiftKey);
                 }}
                 className="cursor-pointer"
               >
@@ -659,15 +1018,10 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                   x2={end.x}
                   y2={end.y}
                   stroke={isSelected ? "var(--fl-accent)" : "var(--fl-border-strong)"}
-                  strokeWidth={edge.style === "thick" ? 3 : 1.8}
-                  strokeDasharray={edge.style === "dotted" ? "5 4" : undefined}
-                  markerEnd={
-                    edge.style === "open"
-                      ? undefined
-                      : isSelected
-                        ? "url(#fl-arrow-active)"
-                        : "url(#fl-arrow)"
-                  }
+                  strokeWidth={decor.width}
+                  strokeDasharray={decor.dash}
+                  markerStart={markerUrl(decor.start, isSelected)}
+                  markerEnd={markerUrl(decor.end, isSelected)}
                 />
                 {edge.label && (
                   <text
@@ -678,6 +1032,32 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                     style={{ paintOrder: "stroke", stroke: "var(--fl-bg)", strokeWidth: 5 }}
                   >
                     {edge.label}
+                  </text>
+                )}
+
+                {/* Multiplicity sits at the end it describes, which is the only
+                    place it means anything: "1" in the middle of the line
+                    could belong to either side. */}
+                {edge.fromCardinality && (
+                  <text
+                    x={start.x + (end.x - start.x) * 0.16}
+                    y={start.y + (end.y - start.y) * 0.16 - 5}
+                    textAnchor="middle"
+                    className="fill-[var(--fl-muted)] text-[10.5px]"
+                    style={{ paintOrder: "stroke", stroke: "var(--fl-bg)", strokeWidth: 4 }}
+                  >
+                    {edge.fromCardinality}
+                  </text>
+                )}
+                {edge.toCardinality && (
+                  <text
+                    x={start.x + (end.x - start.x) * 0.84}
+                    y={start.y + (end.y - start.y) * 0.84 - 5}
+                    textAnchor="middle"
+                    className="fill-[var(--fl-muted)] text-[10.5px]"
+                    style={{ paintOrder: "stroke", stroke: "var(--fl-bg)", strokeWidth: 4 }}
+                  >
+                    {edge.toCardinality}
                   </text>
                 )}
               </g>
@@ -726,12 +1106,12 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             <NodeShapeView
               key={node.id}
               node={node}
-              selected={selected === node.id}
+              selected={selection.has(node.id)}
               dragging={drag.kind === "move" && drag.nodeId === node.id}
               onPointerDown={(event) => {
                 event.stopPropagation();
                 const world = toWorld(event);
-                setSelected(node.id);
+                toggleSelected(node.id, event.shiftKey);
                 setDrag({
                   kind: "move",
                   nodeId: node.id,
@@ -750,6 +1130,20 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
               }}
             />
           ))}
+
+          {drag.kind === "marquee" && (
+            <rect
+              x={Math.min(drag.from.x, drag.to.x)}
+              y={Math.min(drag.from.y, drag.to.y)}
+              width={Math.abs(drag.to.x - drag.from.x)}
+              height={Math.abs(drag.to.y - drag.from.y)}
+              fill="var(--fl-accent)"
+              fillOpacity={0.08}
+              stroke="var(--fl-accent)"
+              strokeWidth={1 / zoom}
+              pointerEvents="none"
+            />
+          )}
         </svg>
 
         {/* Label editing uses a real input overlaid on the node, so typing
@@ -811,8 +1205,11 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         >
           <span>Double-click empty space to add</span>
           <span>Drag a handle onto empty space to add and connect</span>
+          <span>Drag empty space to select many</span>
+          <span>Space to pan</span>
           <span>Tab to continue</span>
-          <span>⌘ + scroll to zoom</span>
+          <span>⌘D duplicate</span>
+          <span>Arrows nudge</span>
           <span>{freeform ? "Snapping off" : "Alt to disable snapping"}</span>
         </div>
       </div>
@@ -823,13 +1220,49 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
           {selectedNode && (
             <>
               <input
-                value={selectedNode.label}
-                onChange={(event) =>
-                  onChange(updateNode(graph, selectedNode.id, { label: event.target.value }))
+                value={
+                  hasMembers(selectedNode.shape)
+                    ? splitMembers(selectedNode.label).name
+                    : selectedNode.label
                 }
-                aria-label="Node label"
-                className="w-48 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
+                onChange={(event) =>
+                  onChange(
+                    updateNode(graph, selectedNode.id, {
+                      label: hasMembers(selectedNode.shape)
+                        ? joinMembers(event.target.value, splitMembers(selectedNode.label).members)
+                        : event.target.value,
+                    }),
+                  )
+                }
+                aria-label={hasMembers(selectedNode.shape) ? "Name" : "Node label"}
+                className="w-40 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
               />
+
+              {/* Fields and methods, one per line — the same shape as the
+                  mermaid block, so what is typed here is what is written. */}
+              {hasMembers(selectedNode.shape) && (
+                <input
+                  value={splitMembers(selectedNode.label).members.join("; ")}
+                  placeholder={
+                    graph.kind === "er" ? "string name; int age" : "+string id; +save() void"
+                  }
+                  onChange={(event) =>
+                    onChange(
+                      updateNode(graph, selectedNode.id, {
+                        label: joinMembers(
+                          splitMembers(selectedNode.label).name,
+                          event.target.value
+                            .split(";")
+                            .map((member) => member.trim())
+                            .filter((member) => member !== ""),
+                        ),
+                      }),
+                    )
+                  }
+                  aria-label={graph.kind === "er" ? "Attributes" : "Members"}
+                  className="w-64 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 font-mono text-[11.5px] text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
+                />
+              )}
               <select
                 value={selectedNode.shape}
                 onChange={(event) =>
@@ -849,8 +1282,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
               <button
                 type="button"
                 onClick={() => {
-                  onChange(removeNode(graph, selectedNode.id));
-                  setSelected(null);
+                  commit(removeNode(graph, selectedNode.id));
+                  setSelection(new Set());
                 }}
                 className="ml-auto rounded-lg px-2 py-1 text-[var(--fl-danger)] transition-colors hover:bg-[var(--fl-elevated)]"
               >
@@ -890,17 +1323,49 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                 aria-label="Arrow style"
                 className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-[var(--fl-text)]"
               >
-                {(Object.keys(EDGE_LABELS) as EdgeStyle[]).map((style) => (
+                {EDGE_STYLES_FOR_KIND[graph.kind].map((style) => (
                   <option key={style} value={style}>
                     {EDGE_LABELS[style]}
                   </option>
                 ))}
               </select>
+              {/* The whole reason to draw a class or ER diagram rather than
+                  list the types is to say how many of each there are. */}
+              {(graph.kind === "class" || graph.kind === "er") && (
+                <>
+                  <input
+                    value={selectedEdge.fromCardinality ?? ""}
+                    placeholder="1"
+                    onChange={(event) =>
+                      onChange(
+                        updateEdge(graph, selectedEdge.id, {
+                          fromCardinality: event.target.value,
+                        }),
+                      )
+                    }
+                    aria-label="Multiplicity at the source"
+                    className="w-14 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-center text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
+                  />
+                  <span className="text-[var(--fl-muted)]">→</span>
+                  <input
+                    value={selectedEdge.toCardinality ?? ""}
+                    placeholder="*"
+                    onChange={(event) =>
+                      onChange(
+                        updateEdge(graph, selectedEdge.id, { toCardinality: event.target.value }),
+                      )
+                    }
+                    aria-label="Multiplicity at the target"
+                    className="w-14 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-center text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
+                  />
+                </>
+              )}
+
               <button
                 type="button"
                 onClick={() => {
-                  onChange(removeEdge(graph, selectedEdge.id));
-                  setSelected(null);
+                  commit(removeEdge(graph, selectedEdge.id));
+                  setSelection(new Set());
                 }}
                 className="ml-auto rounded-lg px-2 py-1 text-[var(--fl-danger)] transition-colors hover:bg-[var(--fl-elevated)]"
               >
@@ -912,6 +1377,120 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
       )}
     </div>
   );
+}
+
+// ─── Edge decoration ────────────────────────────────────────────────────────
+
+/**
+ * The ends and dashes each relationship is drawn with.
+ *
+ * A flowchart arrow, an inheritance triangle and a crow's foot are not one
+ * shape in three colours — they are what the diagram *says*, and drawing an ER
+ * "many" as a plain arrowhead loses the only information the relationship
+ * carries. Each dialect's vocabulary gets its own ends.
+ */
+interface EdgeDecor {
+  /** Marker at the source end, or null. */
+  start: string | null;
+  /** Marker at the target end, or null. */
+  end: string | null;
+  dash: string | undefined;
+  width: number;
+}
+
+function edgeDecor(style: EdgeStyle, dashed?: boolean): EdgeDecor {
+  const base = { start: null, end: null, dash: undefined, width: 1.8 } as EdgeDecor;
+
+  switch (style) {
+    case "open":
+      return base;
+    case "dotted":
+      return { ...base, end: "arrow", dash: "5 4" };
+    case "thick":
+      return { ...base, end: "arrow", width: 3 };
+
+    // Class relationships. Composition and aggregation put their diamond at
+    // the owning end, which is the source.
+    case "inherit":
+      return { ...base, end: "triangle" };
+    case "compose":
+      return { ...base, start: "diamond-filled" };
+    case "aggregate":
+      return { ...base, start: "diamond-open" };
+    case "depend":
+      return { ...base, end: "arrow", dash: "4 4" };
+    case "associate":
+      return { ...base, end: "arrow" };
+
+    // Entity relationships, drawn as crow's-foot notation: a bar is "one", a
+    // foot is "many", at whichever end it applies to.
+    case "one-one":
+      return { ...base, start: "bar", end: "bar", ...(dashed ? { dash: "5 4" } : {}) };
+    case "one-many":
+      return { ...base, start: "bar", end: "crow", ...(dashed ? { dash: "5 4" } : {}) };
+    case "many-one":
+      return { ...base, start: "crow", end: "bar", ...(dashed ? { dash: "5 4" } : {}) };
+    case "many-many":
+      return { ...base, start: "crow", end: "crow", ...(dashed ? { dash: "5 4" } : {}) };
+
+    // A mindmap branch is a line. Mermaid draws no arrowheads on one, and an
+    // arrow would suggest a direction the diagram does not mean.
+    case "branch":
+      return base;
+
+    case "arrow":
+    default:
+      return { ...base, end: "arrow" };
+  }
+}
+
+interface MarkerSpec {
+  id: string;
+  /** SVG path, drawn in a 0 0 12 12 viewBox pointing right. */
+  path: string;
+  /** Where the line should stop, along the marker's x axis. */
+  refX: number;
+  filled: boolean;
+  size: number;
+}
+
+const EDGE_MARKERS: MarkerSpec[] = [
+  { id: "arrow", path: "M 0 1 L 11 6 L 0 11 z", refX: 10, filled: true, size: 7 },
+  { id: "triangle", path: "M 0 0 L 12 6 L 0 12 z", refX: 11, filled: false, size: 9 },
+  { id: "diamond-filled", path: "M 0 6 L 6 1 L 12 6 L 6 11 z", refX: 1, filled: true, size: 9 },
+  { id: "diamond-open", path: "M 0 6 L 6 1 L 12 6 L 6 11 z", refX: 1, filled: false, size: 9 },
+  // Two bars: mermaid's "exactly one".
+  { id: "bar", path: "M 4 1 L 4 11 M 8 1 L 8 11", refX: 9, filled: false, size: 9 },
+  // The crow's foot: three lines fanning back from the entity.
+  { id: "crow", path: "M 12 6 L 2 1 M 12 6 L 2 6 M 12 6 L 2 11", refX: 11, filled: false, size: 9 },
+];
+
+function renderMarker(spec: MarkerSpec, active: boolean) {
+  const colour = active ? "var(--fl-accent)" : "var(--fl-border-strong)";
+
+  return (
+    <marker
+      id={active ? `fl-${spec.id}-active` : `fl-${spec.id}`}
+      viewBox="0 0 12 12"
+      refX={spec.refX}
+      refY="6"
+      markerWidth={spec.size}
+      markerHeight={spec.size}
+      orient="auto-start-reverse"
+    >
+      <path
+        d={spec.path}
+        fill={spec.filled ? colour : "var(--fl-bg)"}
+        stroke={colour}
+        strokeWidth={1.4}
+      />
+    </marker>
+  );
+}
+
+function markerUrl(id: string | null, active: boolean): string | undefined {
+  if (!id) return undefined;
+  return active ? `url(#fl-${id}-active)` : `url(#fl-${id})`;
 }
 
 // ─── Node rendering ─────────────────────────────────────────────────────────
@@ -937,6 +1516,8 @@ function NodeShapeView({
   const strokeWidth = selected ? 2.5 : 1.5;
   const { width, height } = sizeOf(node);
   const marker = isMarker(node.shape);
+  const boxed = hasMembers(node.shape);
+  const { name, members } = splitMembers(node.label);
 
   return (
     <g
@@ -946,11 +1527,38 @@ function NodeShapeView({
       className={dragging ? "cursor-grabbing" : "cursor-move"}
       opacity={dragging ? 0.85 : 1}
     >
-      {renderShape(node.shape, stroke, strokeWidth, "var(--fl-surface)")}
+      {renderShape(node.shape, stroke, strokeWidth, "var(--fl-surface)", node.label)}
+
+      {/* A class or entity is a name and a list, so it is laid out as one
+          rather than having its whole label crushed onto a single line. */}
+      {boxed && (
+        <g className="pointer-events-none select-none">
+          <text
+            x={width / 2}
+            y={16}
+            textAnchor="middle"
+            dominantBaseline="central"
+            className="fill-[var(--fl-text)] text-[13px] font-semibold"
+          >
+            {truncate(name, 26)}
+          </text>
+          {members.map((member, index) => (
+            <text
+              key={`${member}-${index}`}
+              x={10}
+              y={MEMBER_HEADER + index * MEMBER_HEIGHT + 4}
+              dominantBaseline="central"
+              className="fill-[var(--fl-muted)] font-mono text-[11px]"
+            >
+              {truncate(member, 34)}
+            </text>
+          ))}
+        </g>
+      )}
 
       {/* Markers are drawn, not labelled. A choice diamond is small, so its
           label sits underneath rather than being squeezed inside. */}
-      {!marker && (
+      {!marker && !boxed && (
         <text
           x={width / 2}
           y={node.shape === "choice" ? height + 14 : height / 2}
@@ -997,8 +1605,14 @@ function NodeShapeView({
 }
 
 /** Draws each mermaid shape as its SVG equivalent, so the canvas matches the output. */
-function renderShape(shape: NodeShape, stroke: string, strokeWidth: number, fill: string) {
-  const { width: w, height: h } = sizeOf({ shape });
+function renderShape(
+  shape: NodeShape,
+  stroke: string,
+  strokeWidth: number,
+  fill: string,
+  label = "",
+) {
+  const { width: w, height: h } = sizeOf({ shape, label });
   const common = { stroke, strokeWidth, fill };
 
   switch (shape) {
@@ -1074,10 +1688,78 @@ function renderShape(shape: NodeShape, stroke: string, strokeWidth: number, fill
           strokeWidth={strokeWidth}
         />
       );
+    // A class or entity is a titled box: the rule under the name is what makes
+    // it read as a type with fields rather than as a paragraph in a rectangle.
+    case "class":
+    case "entity": {
+      const { members } = splitMembers(label);
+      return (
+        <g>
+          <rect width={w} height={h} rx={4} {...common} />
+          {members.length > 0 && (
+            <line
+              x1={0}
+              y1={MEMBER_HEADER - 8}
+              x2={w}
+              y2={MEMBER_HEADER - 8}
+              stroke={stroke}
+              strokeWidth={1}
+            />
+          )}
+        </g>
+      );
+    }
+
+    // Mindmap branches. Mermaid draws its own shapes from the delimiters, so
+    // these are the canvas showing which delimiter a node will be written with.
+    case "mind-round":
+      return <rect width={w} height={h} rx={h / 2} {...common} />;
+    case "mind-square":
+      return <rect width={w} height={h} rx={3} {...common} />;
+    case "mind-hexagon":
+      return (
+        <polygon
+          points={`18,0 ${w - 18},0 ${w},${h / 2} ${w - 18},${h} 18,${h} 0,${h / 2}`}
+          {...common}
+        />
+      );
+    case "mind-circle":
+      return <circle cx={w / 2} cy={h / 2} r={w / 2 - 2} {...common} />;
+    case "mind-bang":
+      return <polygon points={burstPoints(w, h, 12)} {...common} />;
+    case "mind-cloud":
+      return <path d={cloudPath(w, h)} {...common} />;
+
     case "rect":
     default:
       return <rect width={w} height={h} rx={3} {...common} />;
   }
+}
+
+/** A star-ish outline for mermaid's `))burst((` shape. */
+function burstPoints(w: number, h: number, spikes: number): string {
+  const cx = w / 2;
+  const cy = h / 2;
+  const outer = Math.min(w, h) / 2 - 1;
+  const inner = outer * 0.78;
+
+  return Array.from({ length: spikes * 2 }, (_, index) => {
+    const radius = index % 2 === 0 ? outer : inner;
+    const angle = (Math.PI * index) / spikes - Math.PI / 2;
+    return `${(cx + radius * Math.cos(angle)).toFixed(1)},${(cy + radius * Math.sin(angle)).toFixed(1)}`;
+  }).join(" ");
+}
+
+/** Four overlapping arcs, for mermaid's `)cloud(` shape. */
+function cloudPath(w: number, h: number): string {
+  const r = h / 2;
+  return [
+    `M ${r},${h}`,
+    `A ${r},${r} 0 0 1 ${r},0`,
+    `L ${w - r},0`,
+    `A ${r},${r} 0 0 1 ${w - r},${h}`,
+    "Z",
+  ].join(" ");
 }
 
 /** A tiny silhouette of each shape, for the Add buttons. */
@@ -1120,6 +1802,24 @@ function ShapeIcon({ shape }: { shape: NodeShape }) {
           <path d="M1 3.5A9 2.5 0 0 1 19 3.5V10.5A9 2.5 0 0 1 1 10.5Z" />
           <path d="M1 3.5A9 2.5 0 0 0 19 3.5" />
         </g>
+      ) : shape === "class" || shape === "entity" ? (
+        <g {...common}>
+          <rect x="1" y="1" width="18" height="12" rx="1.5" />
+          <path d="M1 5.5h18" />
+        </g>
+      ) : shape === "mind-circle" ? (
+        <circle cx="10" cy="7" r="6" {...common} />
+      ) : shape === "mind-round" ? (
+        <rect x="1" y="2" width="18" height="10" rx="5" {...common} />
+      ) : shape === "mind-hexagon" ? (
+        <polygon points="5,1 15,1 19,7 15,13 5,13 1,7" {...common} />
+      ) : shape === "mind-bang" ? (
+        <polygon
+          points="10,1 12,5 16,3.5 15,8 19,9 15,10.5 16,13 12,11.5 10,13.5 8,11.5 4,13 5,10.5 1,9 5,8 4,3.5 8,5"
+          {...common}
+        />
+      ) : shape === "mind-cloud" ? (
+        <path d="M6 12a5 5 0 0 1 0-10h8a5 5 0 0 1 0 10z" {...common} />
       ) : (
         <rect x="1" y="1" width="18" height="12" rx="1.5" {...common} />
       )}
@@ -1130,22 +1830,46 @@ function ShapeIcon({ shape }: { shape: NodeShape }) {
 function ZoomButton({
   label,
   onClick,
+  disabled = false,
+  className = "",
   children,
 }: {
   label: string;
   onClick: () => void;
+  disabled?: boolean;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       title={label}
       aria-label={label}
-      className="w-7 py-1 text-center text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]"
+      className={`flex h-[26px] w-8 items-center justify-center text-[13px] text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)] disabled:opacity-35 disabled:hover:text-[var(--fl-muted)] ${className}`}
     >
       {children}
     </button>
+  );
+}
+
+function UndoGlyph({ flipped = false }: { flipped?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={flipped ? { transform: "scaleX(-1)" } : undefined}
+    >
+      <path d="M3 7h7a3.5 3.5 0 0 1 0 7H6.5" />
+      <path d="M5.75 4.25 3 7l2.75 2.75" />
+    </svg>
   );
 }
 
