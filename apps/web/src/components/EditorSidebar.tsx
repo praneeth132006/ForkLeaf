@@ -23,6 +23,8 @@ export interface EditorSidebarProps {
   onCreateFolder: (parent: string) => void;
   onRenameFolder: (path: string) => void;
   onDeleteFolder: (path: string) => void;
+  /** Moves a note into another folder, from a drag within the tree. */
+  onMoveNote: (path: string, toFolder: string) => void;
   user: SessionUser | null;
   onSignIn: () => void;
   onSignOut: () => void;
@@ -371,6 +373,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
           onRename={props.onRenameNote}
           onCreateIn={props.onCreateNote}
           onCreateFolder={props.onCreateFolder}
+          onMoveNote={props.onMoveNote}
           onRenameFolder={props.onRenameFolder}
           onDeleteFolder={props.onDeleteFolder}
           filter={filter}

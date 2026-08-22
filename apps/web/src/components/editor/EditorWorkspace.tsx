@@ -204,6 +204,32 @@ export function EditorWorkspace() {
     [notebook],
   );
 
+  /**
+   * Moves a note into another folder.
+   *
+   * A move and a rename are the same operation in a repository — the folder is
+   * part of the path — so this is `renameNote` with the filename kept and the
+   * directory replaced. Dragging is the only way to reorganise notes without
+   * retyping their names, which on a tree of a few hundred is the difference
+   * between reorganising and not bothering.
+   */
+  const handleMoveNote = useCallback(
+    async (path: string, toFolder: string) => {
+      const name = path.split("/").pop();
+      if (!name) return;
+
+      const target = joinPath(toFolder, name);
+      if (target === path) return;
+
+      const note =
+        notebook.note?.path === path ? notebook.note : await notebook.openNoteAndReturn(path);
+      if (!note) return;
+
+      await notebook.renameNote(note, target);
+    },
+    [notebook],
+  );
+
   const handleCreateFolder = useCallback(
     (parent: string) => {
       setPrompt({
@@ -531,6 +557,7 @@ export function EditorWorkspace() {
             onCreateFolder={handleCreateFolder}
             onRenameFolder={handleRenameFolder}
             onDeleteFolder={handleDeleteFolder}
+            onMoveNote={handleMoveNote}
             user={user}
             onSignIn={signIn}
             onSignOut={handleSignOut}

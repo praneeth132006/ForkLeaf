@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { memo, useCallback, useMemo, useState } from "react";
 import type { TreeNode } from "@forkleaf/types";
+import { ContextMenu, useContextMenu, type MenuItem } from "./ContextMenu";
 
 export interface FileTreeProps {
   nodes: TreeNode[];
@@ -14,6 +15,8 @@ export interface FileTreeProps {
   onCreateFolder: (parent: string) => void;
   onRenameFolder: (path: string) => void;
   onDeleteFolder: (path: string) => void;
+  /** Moves a note to another folder. Called by drag-and-drop within the tree. */
+  onMoveNote?: (path: string, toFolder: string) => void;
   filter: string;
 }
 
@@ -23,6 +26,13 @@ export interface FileTreeProps {
  * Folders come from the repository's own directory structure, so what the user
  * sees here is exactly what they would see cloning the repo — no hidden
  * database mapping between the two.
+ *
+ * Every row is the same shape: a disclosure triangle, an icon, a name. That
+ * regularity is the point. The previous version drew four hover buttons on
+ * every folder row and two on every file row, which meant the moment a pointer
+ * crossed the sidebar the names were pushed aside by a grid of glyphs, and a
+ * deep tree — the case folders exist for — was unreadable. The actions all
+ * moved to the right-click menu, where they take no space at rest.
  */
 export function FileTree({
   nodes,
@@ -34,12 +44,81 @@ export function FileTree({
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
+  onMoveNote,
   filter,
 }: FileTreeProps) {
+  // Which folders are open, by full path — so opening `a/b` says nothing about
+  // `a/c`, and the state survives the tree being rebuilt under it by a refresh
+  // from GitHub. Holding it here rather than in each row is also what lets a
+  // folder stay open across a re-render that replaces every node object.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(rootFolders(nodes)));
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const { menu, open: openMenu, close: closeMenu } = useContextMenu<TreeNode>();
+
   const visible = useMemo(
     () => (filter ? filterTree(nodes, filter.toLowerCase()) : nodes),
     [nodes, filter],
   );
+
+  const toggle = useCallback((path: string) => {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }, []);
+
+  /** Opening a folder before creating something in it, so the result is visible. */
+  const reveal = useCallback((path: string) => {
+    setExpanded((current) => new Set(current).add(path));
+  }, []);
+
+  const menuItems = useMemo((): MenuItem[] => {
+    if (!menu) return [];
+    const node = menu.target;
+
+    if (node.kind === "folder") {
+      return [
+        {
+          label: "New note here",
+          onSelect: () => {
+            reveal(node.path);
+            onCreateIn(node.path);
+          },
+        },
+        {
+          label: "New subfolder",
+          onSelect: () => {
+            reveal(node.path);
+            onCreateFolder(node.path);
+          },
+        },
+        { label: "Rename folder…", onSelect: () => onRenameFolder(node.path) },
+        {
+          label: "Delete folder",
+          destructive: true,
+          onSelect: () => onDeleteFolder(node.path),
+        },
+      ];
+    }
+
+    return [
+      { label: "Open", onSelect: () => onOpen(node.path) },
+      { label: "Rename…", onSelect: () => onRename(node.path) },
+      { label: "Delete note", destructive: true, onSelect: () => onDelete(node.path) },
+    ];
+  }, [
+    menu,
+    reveal,
+    onCreateIn,
+    onCreateFolder,
+    onRenameFolder,
+    onDeleteFolder,
+    onOpen,
+    onRename,
+    onDelete,
+  ]);
 
   if (visible.length === 0) {
     return (
@@ -50,241 +129,276 @@ export function FileTree({
   }
 
   return (
-    <ul role="tree" aria-label="Notes" className="py-1">
-      {visible.map((node) => (
-        <TreeItem
-          key={node.path}
-          node={node}
-          depth={0}
-          activePath={activePath}
-          onOpen={onOpen}
-          onDelete={onDelete}
-          onRename={onRename}
-          onCreateIn={onCreateIn}
-          onCreateFolder={onCreateFolder}
-          onRenameFolder={onRenameFolder}
-          onDeleteFolder={onDeleteFolder}
-          // A search should reveal matches inside collapsed folders.
-          forceOpen={filter.length > 0}
-        />
-      ))}
-    </ul>
+    <>
+      <ul
+        role="tree"
+        aria-label="Notes"
+        className="py-1"
+        // Dropping on the empty space below the tree moves a note to the root,
+        // which is otherwise only reachable by dragging onto a folder that
+        // happens to be at the top level.
+        onDragOver={onMoveNote ? (event) => event.preventDefault() : undefined}
+        onDrop={
+          onMoveNote
+            ? (event) => {
+                const path = event.dataTransfer.getData("text/plain");
+                setDropTarget(null);
+                if (path) onMoveNote(path, "");
+              }
+            : undefined
+        }
+      >
+        {visible.map((node) => (
+          <TreeItem
+            key={node.path}
+            node={node}
+            depth={0}
+            activePath={activePath}
+            expanded={expanded}
+            onToggle={toggle}
+            onOpen={onOpen}
+            onContextMenu={openMenu}
+            onMoveNote={onMoveNote}
+            dropTarget={dropTarget}
+            onDropTarget={setDropTarget}
+            // A search should reveal matches inside collapsed folders.
+            forceOpen={filter.length > 0}
+          />
+        ))}
+      </ul>
+
+      {menu && <ContextMenu position={menu.position} items={menuItems} onClose={closeMenu} />}
+    </>
   );
 }
 
-interface TreeItemProps extends Omit<FileTreeProps, "nodes" | "filter"> {
+// ─── One row ────────────────────────────────────────────────────────────────
+
+interface TreeItemProps {
   node: TreeNode;
   depth: number;
+  activePath: string | null;
+  expanded: Set<string>;
+  onToggle: (path: string) => void;
+  onOpen: (path: string) => void;
+  onContextMenu: (
+    event: { clientX: number; clientY: number; preventDefault: () => void },
+    node: TreeNode,
+  ) => void;
+  onMoveNote?: (path: string, toFolder: string) => void;
+  dropTarget: string | null;
+  onDropTarget: (path: string | null) => void;
   forceOpen: boolean;
 }
 
-function TreeItem({
+/**
+ * Memoised on the node.
+ *
+ * A tree of a few hundred files re-rendered every row whenever anything in the
+ * editor changed — the sync status ticking over was enough. Only the rows whose
+ * node, selection or open state actually changed redraw now.
+ */
+const TreeItem = memo(function TreeItem({
   node,
   depth,
   activePath,
+  expanded,
+  onToggle,
   onOpen,
-  onDelete,
-  onRename,
-  onCreateIn,
-  onCreateFolder,
-  onRenameFolder,
-  onDeleteFolder,
+  onContextMenu,
+  onMoveNote,
+  dropTarget,
+  onDropTarget,
   forceOpen,
 }: TreeItemProps) {
-  const [expanded, setExpanded] = useState(depth === 0);
-  const open = forceOpen || expanded;
-  const indent = { paddingLeft: `${0.5 + depth * 0.75}rem` };
+  const open = forceOpen || expanded.has(node.path);
+  const isFolder = node.kind === "folder";
+  const active = !isFolder && node.path === activePath;
+  const dropping = dropTarget === node.path;
 
-  if (node.kind === "folder") {
-    return (
-      // A folder is never the "selected" note, but the ARIA treeitem role
-      // requires the attribute to be present on every item in the tree.
-      <li role="treeitem" aria-expanded={open} aria-selected={false}>
-        <div className="group flex items-center">
-          <button
-            type="button"
-            onClick={() => setExpanded((value) => !value)}
-            style={indent}
-            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm text-[var(--fl-text)] hover:bg-[var(--fl-elevated)]"
-          >
-            <span
-              aria-hidden="true"
-              className={`shrink-0 text-[0.6rem] text-[var(--fl-muted)] transition-transform ${open ? "rotate-90" : ""}`}
-            >
-              ▶
-            </span>
-            <span className="truncate font-medium">{node.name}</span>
-          </button>
-
-          {/* Every folder operation, on the folder itself. Reaching them only
-              through a menu at the top of the sidebar is what made nested
-              folders feel impossible rather than merely undiscovered. */}
-          <div className="mr-1 flex shrink-0 opacity-0 transition focus-within:opacity-100 group-hover:opacity-100">
-            <RowButton
-              onClick={() => {
-                setExpanded(true);
-                onCreateIn(node.path);
-              }}
-              title={`New note in ${node.name}`}
-            >
-              <NoteGlyph />
-            </RowButton>
-            <RowButton
-              onClick={() => {
-                setExpanded(true);
-                onCreateFolder(node.path);
-              }}
-              title={`New folder in ${node.name}`}
-            >
-              <FolderPlusGlyph />
-            </RowButton>
-            <RowButton onClick={() => onRenameFolder(node.path)} title={`Rename ${node.name}`}>
-              ✎
-            </RowButton>
-            <RowButton
-              onClick={() => onDeleteFolder(node.path)}
-              title={`Delete ${node.name} and everything in it`}
-              danger
-            >
-              ✕
-            </RowButton>
-          </div>
-        </div>
-
-        {open && (node.children?.length ?? 0) === 0 && (
-          <p
-            style={{ paddingLeft: `${1.6 + depth * 0.75}rem` }}
-            className="py-1 pr-2 text-[11.5px] italic text-[var(--fl-muted)]"
-          >
-            Empty
-          </p>
-        )}
-
-        {open && node.children && (
-          <ul role="group">
-            {node.children.map((child) => (
-              <TreeItem
-                key={child.path}
-                node={child}
-                depth={depth + 1}
-                activePath={activePath}
-                onOpen={onOpen}
-                onDelete={onDelete}
-                onRename={onRename}
-                onCreateIn={onCreateIn}
-                onCreateFolder={onCreateFolder}
-                onRenameFolder={onRenameFolder}
-                onDeleteFolder={onDeleteFolder}
-                forceOpen={forceOpen}
-              />
-            ))}
-          </ul>
-        )}
-      </li>
-    );
-  }
-
-  const active = node.path === activePath;
+  // The whole row is one indent step deeper than its parent. Every row reserves
+  // the triangle's width whether or not it has one, so names line up in a
+  // column instead of stepping raggedly in and out.
+  const indent = 0.375 + depth * 0.75;
 
   return (
-    <li role="treeitem" aria-selected={active}>
-      <div className="group flex items-center">
+    <li role="treeitem" aria-expanded={isFolder ? open : undefined} aria-selected={active}>
+      <div
+        className={`relative flex items-center rounded-md pr-1.5 transition-colors ${
+          active
+            ? "bg-[var(--fl-elevated)]"
+            : dropping
+              ? "bg-[var(--fl-elevated)] ring-1 ring-inset ring-[var(--fl-accent)]"
+              : "hover:bg-[var(--fl-elevated)]"
+        }`}
+        style={{ paddingLeft: `${indent}rem` }}
+        draggable={!isFolder && Boolean(onMoveNote)}
+        onDragStart={
+          !isFolder && onMoveNote
+            ? (event) => {
+                event.dataTransfer.setData("text/plain", node.path);
+                event.dataTransfer.effectAllowed = "move";
+              }
+            : undefined
+        }
+        onDragOver={
+          isFolder && onMoveNote
+            ? (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                event.dataTransfer.dropEffect = "move";
+                onDropTarget(node.path);
+              }
+            : undefined
+        }
+        onDragLeave={isFolder && onMoveNote ? () => onDropTarget(null) : undefined}
+        onDrop={
+          isFolder && onMoveNote
+            ? (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDropTarget(null);
+                const path = event.dataTransfer.getData("text/plain");
+                if (path) onMoveNote(path, node.path);
+              }
+            : undefined
+        }
+      >
+        {/* The selected note gets a bar rather than a fill alone: at sidebar
+            width, a slightly lighter row is easy to lose track of. */}
+        {active && (
+          <span
+            aria-hidden="true"
+            className="absolute inset-y-[3px] left-0 w-[2.5px] rounded-full bg-[var(--fl-accent)]"
+          />
+        )}
+
         <button
           type="button"
-          onClick={() => onOpen(node.path)}
-          style={indent}
-          className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm transition ${
-            active
-              ? "bg-[var(--fl-accent)]/12 font-medium text-[var(--fl-accent)]"
-              : "text-[var(--fl-text)] hover:bg-[var(--fl-elevated)]"
+          tabIndex={-1}
+          aria-hidden={!isFolder}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (isFolder) onToggle(node.path);
+          }}
+          className={`flex h-[26px] w-4 shrink-0 items-center justify-center text-[var(--fl-muted)] ${
+            isFolder ? "hover:text-[var(--fl-text)]" : "pointer-events-none opacity-0"
           }`}
         >
-          <span aria-hidden="true" className="shrink-0 text-[0.7rem] text-[var(--fl-muted)]">
-            ◦
-          </span>
-          <span className="truncate">{node.name.replace(/\.mdx?$/i, "")}</span>
+          <svg
+            viewBox="0 0 12 12"
+            className={`h-[9px] w-[9px] transition-transform duration-100 ${open ? "rotate-90" : ""}`}
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M4 2.5 8.5 6 4 9.5z" />
+          </svg>
         </button>
 
-        <div className="mr-1 flex shrink-0 opacity-0 transition focus-within:opacity-100 group-hover:opacity-100">
-          <RowButton onClick={() => onRename(node.path)} title={`Rename ${node.name}`}>
-            ✎
-          </RowButton>
-          <RowButton onClick={() => onDelete(node.path)} title={`Delete ${node.name}`} danger>
-            ✕
-          </RowButton>
-        </div>
+        <button
+          type="button"
+          onClick={() => (isFolder ? onToggle(node.path) : onOpen(node.path))}
+          onContextMenu={(event) => onContextMenu(event, node)}
+          title={node.path}
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-[3px] pl-0.5 text-left"
+        >
+          <span
+            className={`shrink-0 ${active ? "text-[var(--fl-accent)]" : "text-[var(--fl-muted)]"}`}
+          >
+            {isFolder ? <FolderGlyph open={open} /> : <FileGlyph />}
+          </span>
+          <span
+            className={`truncate text-[13px] ${
+              active
+                ? "font-medium text-[var(--fl-text)]"
+                : isFolder
+                  ? "text-[var(--fl-text)]"
+                  : "text-[var(--fl-muted)]"
+            }`}
+          >
+            {isFolder ? node.name : node.name.replace(/\.mdx?$/i, "")}
+          </span>
+        </button>
       </div>
+
+      {isFolder && open && (node.children?.length ?? 0) === 0 && (
+        <p
+          style={{ paddingLeft: `${indent + 1.4}rem` }}
+          className="py-[3px] text-[11.5px] italic text-[var(--fl-muted)]"
+        >
+          Empty
+        </p>
+      )}
+
+      {isFolder && open && node.children && node.children.length > 0 && (
+        <ul role="group">
+          {node.children.map((child) => (
+            <TreeItem
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              activePath={activePath}
+              expanded={expanded}
+              onToggle={onToggle}
+              onOpen={onOpen}
+              onContextMenu={onContextMenu}
+              onMoveNote={onMoveNote}
+              dropTarget={dropTarget}
+              onDropTarget={onDropTarget}
+              forceOpen={forceOpen}
+            />
+          ))}
+        </ul>
+      )}
     </li>
   );
-}
+});
 
-/**
- * One of the small actions on a tree row.
- *
- * Hidden until the row is hovered or focused, so a full sidebar is a list of
- * names rather than a grid of icons — but always in the tab order, because a
- * control that only exists under a pointer does not exist for everyone.
- */
-function RowButton({
-  onClick,
-  title,
-  danger = false,
-  children,
-}: {
-  onClick: () => void;
-  title: string;
-  danger?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-label={title}
-      className={`flex h-6 w-6 items-center justify-center rounded text-xs text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] ${
-        danger ? "hover:text-[var(--fl-danger)]" : "hover:text-[var(--fl-text)]"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
+// ─── Glyphs ─────────────────────────────────────────────────────────────────
 
-function NoteGlyph() {
+function FolderGlyph({ open }: { open: boolean }) {
   return (
     <svg
       viewBox="0 0 16 16"
       aria-hidden="true"
-      className="h-3.5 w-3.5"
+      className="h-[15px] w-[15px]"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.5"
+      strokeWidth="1.3"
       strokeLinejoin="round"
-      strokeLinecap="round"
     >
-      <path d="M9 1.75H4.5A1.75 1.75 0 0 0 2.75 3.5v9c0 .97.78 1.75 1.75 1.75h7a1.75 1.75 0 0 0 1.75-1.75V6z" />
-      <path d="M9 1.75V6h4.25M6 9.5h4M6 11.5h2.5" />
+      {open ? (
+        <path d="M1.9 12.4V4.3a.8.8 0 0 1 .8-.8h2.9l1.35 1.55h5.35a.8.8 0 0 1 .8.8v.85M1.9 12.4l1.5-4.85a.8.8 0 0 1 .77-.55h9.96a.5.5 0 0 1 .48.65l-1.4 4.75a.8.8 0 0 1-.77.55H2.7a.8.8 0 0 1-.8-.55Z" />
+      ) : (
+        <path d="M1.9 12.2V4.3a.8.8 0 0 1 .8-.8h2.9l1.35 1.55h6.35a.8.8 0 0 1 .8.8v6.35a.8.8 0 0 1-.8.8H2.7a.8.8 0 0 1-.8-.8Z" />
+      )}
     </svg>
   );
 }
 
-function FolderPlusGlyph() {
+function FileGlyph() {
   return (
     <svg
       viewBox="0 0 16 16"
       aria-hidden="true"
-      className="h-3.5 w-3.5"
+      className="h-[15px] w-[15px]"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.5"
+      strokeWidth="1.3"
       strokeLinejoin="round"
       strokeLinecap="round"
     >
-      <path d="M1.75 4.25c0-.83.67-1.5 1.5-1.5h2.4c.5 0 .96.24 1.25.65l.6.85h5.25c.83 0 1.5.67 1.5 1.5v6.5c0 .83-.67 1.5-1.5 1.5H3.25c-.83 0-1.5-.67-1.5-1.5z" />
-      <path d="M8 7.75v4M6 9.75h4" />
+      <path d="M9.2 2.2H4.6a1.4 1.4 0 0 0-1.4 1.4v8.8a1.4 1.4 0 0 0 1.4 1.4h6.8a1.4 1.4 0 0 0 1.4-1.4V5.8z" />
+      <path d="M9.2 2.2v3.6h3.6" />
     </svg>
   );
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+/** Top-level folders, which start open so the tree is never a single closed row. */
+function rootFolders(nodes: TreeNode[]): string[] {
+  return nodes.filter((node) => node.kind === "folder").map((node) => node.path);
 }
 
 /** Keeps folders that contain a match, and files whose name matches. */
