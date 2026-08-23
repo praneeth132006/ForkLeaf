@@ -25,8 +25,24 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** A message is delivered asynchronously; this is one turn of that. */
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+/**
+ * Waits until `check` holds, or gives up.
+ *
+ * Polled rather than a fixed `setTimeout(0)`: `BroadcastChannel` delivers on a
+ * macrotask, and how many turns of the loop that takes is not fixed — on a
+ * loaded machine a single tick is not enough, which is a flaky test rather than
+ * a real failure. Polling costs nothing when the message has already arrived.
+ */
+async function until(check: () => boolean, timeoutMs = 2_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    if (Date.now() > deadline) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+/** Gives a message that must NOT arrive enough turns to have arrived. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 
 describe("TabChannel", () => {
   it("delivers to other tabs and not to itself", async () => {
@@ -39,7 +55,7 @@ describe("TabChannel", () => {
     b.on(heardByB);
 
     a.post({ type: "workspaces-changed" });
-    await settle();
+    await until(() => heardByB.mock.calls.length > 0);
 
     expect(heardByB).toHaveBeenCalledWith({ type: "workspaces-changed" });
     expect(heardByA).not.toHaveBeenCalled();
@@ -62,11 +78,13 @@ describe("TabChannel", () => {
     const a = open("test-3");
     const b = open("test-3");
 
-    const waiting = b.waitFor("released-db", 500);
+    // Generous: this asserts the message arrives at all, not how quickly.
+    const waiting = b.waitFor("released-db", 5_000);
     a.post({ type: "released-db" });
     await expect(waiting).resolves.toBe(true);
 
-    await expect(b.waitFor("released-db", 10)).resolves.toBe(false);
+    // Nothing is sent, so this can only end in the timeout.
+    await expect(b.waitFor("released-db", 20)).resolves.toBe(false);
   });
 
   it("is inert rather than broken with no BroadcastChannel", async () => {
@@ -111,7 +129,7 @@ describe("IndexedDbDatabase, across tabs", () => {
     });
 
     const other = open("release-test");
-    const asked = other.waitFor("release-db", 1_000);
+    const asked = other.waitFor("release-db", 5_000);
 
     const db = new IndexedDbDatabase(50, open("release-test"));
     // The open fails — the stale connection never lets go — but it must have
@@ -144,7 +162,7 @@ describe("IndexedDbDatabase, across tabs", () => {
     });
 
     const other = open("polite-test");
-    const released = other.waitFor("released-db", 1_000);
+    const released = other.waitFor("released-db", 5_000);
     other.post({ type: "release-db", wanted: 3 });
 
     await expect(released).resolves.toBe(true);
