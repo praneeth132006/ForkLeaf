@@ -40,6 +40,10 @@ export const metadata: Metadata = {
   description:
     "A local-first Markdown editor with first-class Mermaid diagrams. Your notes live in your own GitHub repository.",
   applicationName: "ForkLeaf",
+  // Installable, and — once installed — registered with the operating system
+  // as a handler for markdown files. See `app/manifest.ts`.
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "ForkLeaf", statusBarStyle: "default" },
 };
 
 export const viewport = {

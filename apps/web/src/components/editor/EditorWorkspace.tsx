@@ -11,10 +11,14 @@ import {
   dirname,
   documentStats,
   joinPath,
+  serializeDocument,
   slugifyFilename,
+  stripExtension,
 } from "@forkleaf/markdown-engine";
 import { useNotebook } from "@/hooks/useNotebook";
 import { useLinks } from "@/hooks/useLinks";
+import { useLocalFiles } from "@/hooks/useLocalFiles";
+import type { LocalFile } from "@/lib/local-files";
 import { useTheme } from "@/hooks/useTheme";
 import { EditorSidebar } from "@/components/EditorSidebar";
 import { EditorRightPanel } from "@/components/EditorRightPanel";
@@ -215,6 +219,57 @@ export function EditorWorkspace() {
     }),
     [links, notebook, createLinked],
   );
+
+  /**
+   * Takes a file from this machine into the notebook.
+   *
+   * A file opened from the operating system becomes a real note — saved to
+   * IndexedDB, synced to the repository like any other — that also happens to
+   * have a file behind it. Anything less would mean a second kind of document
+   * with its own tabs, its own storage and its own bugs, for no gain.
+   *
+   * Opening a file that is already open re-reads it into the tab it is already
+   * in, rather than making a second copy. That is what every desktop editor
+   * does, and the file on disk is the authority for a note that came from one.
+   */
+  const adoptFile = useCallback(
+    async (file: LocalFile, existingNotePath: string | null): Promise<string | null> => {
+      if (existingNotePath) {
+        await notebook.replaceNoteContent(existingNotePath, file.text);
+        notebook.openNote(existingNotePath);
+        return existingNotePath;
+      }
+
+      const title = stripExtension(file.name) || "Untitled";
+      const created = await notebook.createNote(title, "", file.text);
+      return created?.path ?? null;
+    },
+    [notebook],
+  );
+
+  const localFiles = useLocalFiles(adoptFile);
+
+  /**
+   * Saves the note, and the file behind it when there is one.
+   *
+   * Local storage already has every keystroke; this is the deliberate save.
+   * For an ordinary note that means pushing to GitHub now rather than waiting
+   * out the debounce, and for a note opened from this machine it also means
+   * writing the file — which is not done on every keystroke, because
+   * continuously rewriting a file in someone's home directory is not something
+   * an editor should do without being asked.
+   */
+  const saveEverything = useCallback(async () => {
+    if (note) {
+      const written = await localFiles.saveToFile(
+        note.path,
+        serializeDocument(note.content, note.frontmatter),
+      );
+      if (written) return;
+    }
+
+    await notebook.syncNow();
+  }, [note, localFiles, notebook]);
 
   const conflicts = notebook.sync.conflicts;
   // Derived rather than pushed into state by an effect, which would cause a
@@ -499,6 +554,22 @@ export function EditorWorkspace() {
         },
       );
 
+      if (localFiles.supported) {
+        list.push({
+          id: "save-file-as",
+          label: "Save this note to a file…",
+          group: "Notes",
+          hint: "⇧⌘S",
+          keywords: "export disk download local filesystem save as",
+          run: () =>
+            void localFiles.saveFileAs(
+              note.path,
+              `${slugifyFilename(title || "note")}.md`,
+              serializeDocument(note.content, note.frontmatter),
+            ),
+        });
+      }
+
       if (workspace && !workspace.isLocal) {
         list.push({
           id: "history",
@@ -511,9 +582,21 @@ export function EditorWorkspace() {
       }
     }
 
+    if (localFiles.supported) {
+      list.push({
+        id: "open-file",
+        label: "Open a file from this computer…",
+        group: "Notes",
+        hint: "Edits the file itself",
+        keywords: "import disk local filesystem md markdown open with",
+        run: () => void localFiles.openFile(),
+      });
+    }
+
     return list;
   }, [
     note,
+    title,
     workspace,
     theme,
     sidebarCollapsed,
@@ -524,6 +607,7 @@ export function EditorWorkspace() {
     handleCreate,
     handleRename,
     handleDelete,
+    localFiles,
   ]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
@@ -548,10 +632,20 @@ export function EditorWorkspace() {
           break;
 
         case "s":
-          // Everything is already saved locally; this just pushes now instead
-          // of waiting out the debounce.
           event.preventDefault();
-          void notebook.syncNow();
+          if (event.shiftKey) {
+            // ⇧⌘S is Save as, everywhere. Only offered where the browser can
+            // actually write files.
+            if (note && localFiles.supported) {
+              void localFiles.saveFileAs(
+                note.path,
+                `${slugifyFilename(title || "note")}.md`,
+                serializeDocument(note.content, note.frontmatter),
+              );
+            }
+            break;
+          }
+          void saveEverything();
           break;
 
         case "e":
@@ -597,7 +691,7 @@ export function EditorWorkspace() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [note, notebook, handleCreate, router]);
+  }, [note, notebook, handleCreate, router, localFiles, saveEverything, title]);
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -744,22 +838,28 @@ export function EditorWorkspace() {
           </header>
 
           {/* ── Banners ──────────────────────────────────────────────── */}
-          {notebook.error && (
-            <div
-              role="alert"
-              className="flex items-center gap-2 border-b border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/8 px-4 py-2 text-sm text-[var(--fl-danger)]"
-            >
-              <span className="flex-1">{notebook.error}</span>
-              <button
-                type="button"
-                onClick={notebook.dismissError}
-                aria-label="Dismiss"
-                className="shrink-0 px-2"
+          {[
+            { text: notebook.error, dismiss: notebook.dismissError },
+            { text: localFiles.error, dismiss: localFiles.clearError },
+          ]
+            .filter((banner) => banner.text)
+            .map((banner) => (
+              <div
+                key={banner.text}
+                role="alert"
+                className="flex items-center gap-2 border-b border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/8 px-4 py-2 text-sm text-[var(--fl-danger)]"
               >
-                ✕
-              </button>
-            </div>
-          )}
+                <span className="flex-1">{banner.text}</span>
+                <button
+                  type="button"
+                  onClick={banner.dismiss}
+                  aria-label="Dismiss"
+                  className="shrink-0 px-2"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
 
           {!user && (
             <LocalOnlyBanner
@@ -811,7 +911,7 @@ export function EditorWorkspace() {
               onExport={() => setDialog("export")}
               onShowHistory={() => setDialog("history")}
               syncMode={notebook.syncPreference.mode}
-              onSyncNow={notebook.syncNow}
+              onSyncNow={() => void saveEverything()}
               links={{
                 ready: links.ready,
                 backlinks: note ? links.backlinksFor(note.path) : [],
@@ -831,11 +931,12 @@ export function EditorWorkspace() {
         sync={notebook.sync}
         workspace={workspace}
         notePath={note?.path ?? null}
+        localFile={note ? localFiles.fileFor(note.path) : null}
         cursor={cursor}
         words={words}
         syncPreference={notebook.syncPreference}
         onSyncModeChange={notebook.setSyncMode}
-        onSyncNow={notebook.syncNow}
+        onSyncNow={() => void saveEverything()}
         onShowConflicts={() => setConflictsDismissed(false)}
       />
 

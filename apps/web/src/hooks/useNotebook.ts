@@ -485,6 +485,26 @@ export function useNotebook(request: NotebookRequest = {}) {
     [activeNote, patchOpenNote],
   );
 
+  /**
+   * Replaces the content of a note by path, active or not.
+   *
+   * `saveNote` only ever writes the note the editor is showing, which is right
+   * for typing and wrong for the one case where content arrives from outside:
+   * a file re-read from this machine belongs to whichever tab holds it, not to
+   * whichever tab happens to be in front.
+   */
+  const replaceNoteContent = useCallback(
+    async (path: string, content: string) => {
+      const notes = repoRef.current;
+      const target = state.openNotes.find((note) => note.path === path);
+      if (!notes || !target || target.content === content) return;
+
+      patchOpenNote(path, { content, dirty: true });
+      await notes.saveNote(target, content);
+    },
+    [state.openNotes, patchOpenNote],
+  );
+
   const updateFrontmatter = useCallback(
     async (frontmatter: Note["frontmatter"]) => {
       const notes = repoRef.current;
@@ -497,7 +517,7 @@ export function useNotebook(request: NotebookRequest = {}) {
   );
 
   const createNote = useCallback(
-    async (title: string, folder = "") => {
+    async (title: string, folder = "", content?: string) => {
       const workspace = state.activeWorkspace;
       const notes = repoRef.current;
       if (!workspace || !notes) return;
@@ -508,6 +528,9 @@ export function useNotebook(request: NotebookRequest = {}) {
         folder,
         title,
         existingPaths: existing,
+        // Given for a note that comes from somewhere else — a file opened from
+        // this machine — rather than one being started from nothing.
+        ...(content !== undefined ? { content } : {}),
       });
 
       const open = [...state.openNotes, note].slice(-MAX_OPEN_NOTES);
@@ -982,6 +1005,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       closeNote,
       openNoteAndReturn,
       saveNote,
+      replaceNoteContent,
       updateFrontmatter,
       createNote,
       deleteNote,
@@ -1016,6 +1040,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       closeNote,
       openNoteAndReturn,
       saveNote,
+      replaceNoteContent,
       updateFrontmatter,
       createNote,
       deleteNote,
