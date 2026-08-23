@@ -70,6 +70,7 @@ import { Wikilink } from "./extensions/Wikilink";
 import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 import type { LinkBridge } from "./links";
 import { readSlashState } from "./extensions/SlashCommands";
+import { isolateCurrentLine } from "./isolate-line";
 import { filterInsertActions, type ActionContext, type InsertDefinition } from "./insert-actions";
 
 export interface WysiwygEditorProps {
@@ -547,6 +548,12 @@ function SlashMenu({ editor, actions }: { editor: Editor; actions: ActionContext
         .focus()
         .deleteRange({ from: state.from, to: state.from + state.query.length + 1 })
         .run();
+
+      // Enter inserts a hard break here, so the paragraph the cursor is in is
+      // usually several visible lines. A command that replaces the block has to
+      // be handed the one line the writer typed the slash on, or it takes every
+      // line above it with it.
+      if (!command.inline) isolateCurrentLine(editor);
 
       // Images and links defer to the app, which is the only thing that knows
       // where a file would be stored.

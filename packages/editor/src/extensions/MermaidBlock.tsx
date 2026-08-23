@@ -23,16 +23,33 @@ declare module "@tiptap/core" {
   }
 }
 
-function MermaidNodeView({ node, updateAttributes, editor, selected }: NodeViewProps) {
+function MermaidNodeView({ node, updateAttributes, editor, selected, deleteNode }: NodeViewProps) {
   const code = (node.attrs.code as string) ?? "";
-  // Open straight into the editor for a brand-new, empty diagram.
+
+  // Open straight into the studio for a brand-new, empty diagram.
   const [editing, setEditing] = useState(code.trim() === "");
+
   const { svg, error } = useDiagramSvg(code);
 
+  /**
+   * Closing without drawing anything means no diagram.
+   *
+   * Leaving the empty block behind was the other half of the loop: the note
+   * kept an "Empty diagram — click to edit" placeholder nobody asked for, and
+   * the next rebuild reopened the picker over it. Cancel now means what cancel
+   * means everywhere else — as if the block had never been inserted.
+   */
   const close = useCallback(() => {
     setEditing(false);
+
+    if (code.trim() === "") {
+      deleteNode();
+      editor.commands.focus();
+      return;
+    }
+
     editor.commands.focus();
-  }, [editor]);
+  }, [editor, code, deleteNode]);
 
   return (
     <NodeViewWrapper className="my-6" data-drag-handle>

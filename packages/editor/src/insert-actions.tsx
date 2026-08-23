@@ -32,6 +32,17 @@ export interface InsertDefinition extends InsertAction {
   /** Extra words that should match this action when searching. */
   keywords?: string[];
   /**
+   * True when this changes the text at the cursor rather than the block it is
+   * in — bold, a link, an image.
+   *
+   * It matters because Enter here inserts a hard break, so one paragraph is
+   * usually several visible lines. A block command has to be given just the
+   * line the writer pointed at, or `/h1` on the last line turns the four above
+   * it into the same heading. An inline command must be given no such
+   * treatment, or asking for bold would split the paragraph in three.
+   */
+  inline?: boolean;
+  /**
    * Which surfaces can offer this.
    *
    * A few Markdown constructs are supported by the renderer (remark-gfm) but
@@ -206,6 +217,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
   },
   {
     id: "link",
+    inline: true,
     keywords: ["url", "href", "anchor"],
     label: "Link",
     hint: "Link out to a URL",
@@ -224,6 +236,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
   },
   {
     id: "image",
+    inline: true,
     keywords: ["picture", "photo", "img"],
     label: "Image",
     hint: "Embed an image by URL",
@@ -266,6 +279,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
   },
   {
     id: "bold",
+    inline: true,
     keywords: ["strong", "b"],
     label: "Bold",
     hint: "Bold the selection, or start bold text",
@@ -276,6 +290,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
   },
   {
     id: "italic",
+    inline: true,
     keywords: ["emphasis", "em", "i"],
     label: "Italic",
     hint: "Italicise the selection, or start italic text",
@@ -286,6 +301,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
   },
   {
     id: "strike",
+    inline: true,
     keywords: ["strikethrough", "cross out", "del"],
     label: "Strikethrough",
     hint: "Cross out the selection",
@@ -296,6 +312,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
   },
   {
     id: "inline-code",
+    inline: true,
     keywords: ["monospace", "tick", "backtick"],
     label: "Inline code",
     hint: "Code inside a sentence",
@@ -306,6 +323,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
   },
   {
     id: "break",
+    inline: true,
     keywords: ["newline", "br", "hard break"],
     label: "Line break",
     hint: "Break the line without starting a paragraph",
@@ -317,6 +335,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
   },
   {
     id: "footnote",
+    inline: true,
     keywords: ["reference", "citation", "note"],
     label: "Footnote",
     hint: "A numbered note collected at the end",
@@ -329,6 +348,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
   },
   {
     id: "frontmatter",
+    inline: true,
     keywords: ["yaml", "metadata", "tags", "title"],
     label: "Front matter",
     hint: "YAML metadata block at the top of the note",
