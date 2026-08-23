@@ -57,7 +57,7 @@ export function EditorStatusBar({
   const status = describe(sync);
 
   return (
-    <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-[var(--fl-border)] bg-[var(--fl-bg)] px-3 text-[0.7rem] text-[var(--fl-muted)]">
+    <footer className="flex h-8 shrink-0 items-center gap-3 px-4 text-[0.7rem] text-[var(--fl-muted)]">
       <button
         type="button"
         onClick={sync.conflicts.length > 0 ? onShowConflicts : onSyncNow}

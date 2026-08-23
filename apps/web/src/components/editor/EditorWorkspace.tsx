@@ -713,8 +713,10 @@ export function EditorWorkspace() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
-      <div className="flex min-h-0 flex-1">
-        <div className="hidden md:flex">
+      {/* The gap and the padding are what make the three panels read as
+          separate surfaces rather than as one slab divided by hairlines. */}
+      <div className="flex min-h-0 flex-1 gap-2 p-2 pb-0">
+        <div className="fl-panel hidden md:flex">
           <EditorSidebar
             collapsed={sidebarCollapsed}
             onToggle={() => setSidebarCollapsed((value) => !value)}
@@ -741,7 +743,7 @@ export function EditorWorkspace() {
           />
         </div>
 
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="fl-panel flex min-w-0 flex-1 flex-col">
           {/* ── Header ────────────────────────────────────────────────── */}
           {/* One row: which notes are open, how this one is being viewed, and
               the handful of controls that act on the window rather than on the
@@ -911,7 +913,7 @@ export function EditorWorkspace() {
         </main>
 
         {!panelCollapsed && (
-          <div className="hidden lg:flex">
+          <div className="fl-panel hidden lg:flex">
             <EditorRightPanel
               collapsed={false}
               onToggle={() => setPanelCollapsed(true)}

@@ -12,4 +12,4 @@
  * editing the script without updating this value fails the test suite rather
  * than silently breaking the theme in production.
  */
-export const THEME_INIT_HASH = "sha256-GLgv/odRVRRsvc2Rlpa5/mZ8uLn80H5HFud4+CUaQkQ=";
+export const THEME_INIT_HASH = "sha256-hqzF3kMpRwatGDmR6ChEU2vj3fRyx8MGaQ4pkvXRpuA=";

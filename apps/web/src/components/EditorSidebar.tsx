@@ -54,7 +54,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
 
   if (props.collapsed) {
     return (
-      <nav className="flex w-12 shrink-0 flex-col items-center gap-1 border-r border-[var(--fl-border)] bg-[var(--fl-bg)] py-2.5">
+      <nav className="flex w-12 shrink-0 flex-col items-center gap-1 py-2.5">
         <Link
           href="/"
           title="ForkLeaf home"
@@ -125,7 +125,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
   }
 
   return (
-    <nav className="flex w-64 shrink-0 flex-col border-r border-[var(--fl-border)] bg-[var(--fl-bg)]">
+    <nav className="flex w-64 shrink-0 flex-col">
       {/* ── Workspace switcher ────────────────────────────────────────── */}
       <div className="relative border-b border-[var(--fl-border)] p-2">
         <div className="flex items-center gap-1">

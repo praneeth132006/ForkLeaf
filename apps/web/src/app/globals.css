@@ -140,6 +140,34 @@ h3 {
   color: var(--fl-text);
 }
 
+/* ── Floating panels ───────────────────────────────────────────────────────
+   The editor's three columns — file tree, document, properties — used to run
+   edge to edge, separated by hairlines, so the window read as one dense slab
+   and the eye had nothing to tell it where one region ended and the next
+   began.
+
+   They are cards now: inset from the window, rounded, raised off the
+   background by a shadow, with a gap between them. It is the shape macOS
+   Notes, Things and Linear all use, and it works for the same reason a
+   paragraph break works — the separation is doing the explaining, so the
+   hairlines do not have to.
+
+   The rounding is on this wrapper rather than on each panel because the
+   corners have to clip whatever is inside them: a note list that scrolls under
+   a rounded corner and back out square is worse than no rounding at all. */
+.fl-panel {
+  background: var(--fl-surface);
+  border: 1px solid var(--fl-border);
+  border-radius: 16px;
+  box-shadow: var(--fl-shadow);
+  /* Clips scrolling children to the rounded corner. */
+  overflow: hidden;
+  /* A flex child will not shrink below its content without this, which is
+     what made long note titles push the document pane off-screen. */
+  min-width: 0;
+  min-height: 0;
+}
+
 /* ── Reusable surfaces ─────────────────────────────────────────────────────
    A small set of classes so the same card/button/input treatment is not
    re-derived from utilities in a dozen components and then drifting apart. */
