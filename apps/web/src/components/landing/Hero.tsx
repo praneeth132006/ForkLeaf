@@ -11,6 +11,11 @@ import { GitHubGlyph } from "./Nav";
  * storage — split the visitor's attention three ways before they had decided
  * whether they cared.
  *
+ * The one addition since: a row of plain-text chips naming what this actually
+ * is. The sentence above them says where notes are stored, which is the
+ * argument; the chips say what the thing does, which is the question somebody
+ * reading a headline about ownership has not had answered yet.
+ *
  * The display line is set in Instrument Serif at a size that only works because
  * it is short. Resist lengthening it.
  */
@@ -36,10 +41,33 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
             Notes you own
           </h1>
 
-          <p className="mx-auto mt-7 max-w-lg text-[17px] leading-[1.65] text-[var(--fl-muted)]">
-            ForkLeaf is a Markdown editor that writes straight into a GitHub repository you already
-            have. Every note is a real file. Every save is a real commit.
+          <p className="mx-auto mt-7 max-w-xl text-[17px] leading-[1.65] text-[var(--fl-muted)]">
+            A Markdown editor that writes straight into a GitHub repository you already have.
+            Wikilinks, backlinks and full-text search over plain{" "}
+            <code className="font-mono text-[15px]">.md</code> files. Every note is a real file.
+            Every save is a real commit.
           </p>
+
+          {/* A short, concrete list under the promise. Someone deciding whether
+              to read on wants to know what this *is*, and four words do that
+              faster than a paragraph — the grid below has the detail. */}
+          <ul className="mx-auto mt-6 flex max-w-2xl flex-wrap items-center justify-center gap-x-2.5 gap-y-2 text-[13px] text-[var(--fl-muted)]">
+            {[
+              "[[Wikilinks]] & backlinks",
+              "Full-text search",
+              "Mermaid diagrams",
+              "Opens .md files from your desktop",
+              "Offline-first",
+              "Publish to a public link",
+            ].map((item) => (
+              <li
+                key={item}
+                className="rounded-full border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-1"
+              >
+                {item}
+              </li>
+            ))}
+          </ul>
 
           <div className="mt-9 flex justify-center">
             {githubAvailable ? (

@@ -10,16 +10,34 @@ import { SectionHeading } from "./SectionHeading";
  */
 const FEATURES = [
   {
+    title: "Links that make it a knowledge base",
+    body: "[[Wikilinks]] in the Obsidian dialect, with a backlinks panel that quotes the line each link was written on. Link to a note you have not written yet and clicking it writes it.",
+    span: "md:col-span-2",
+    art: <LinksArt />,
+  },
+  {
+    title: "Search that reads the notes",
+    body: "Every word of every note, ranked with BM25 and answered in the browser. Results quote the line that matched.",
+    span: "",
+    art: <SearchArt />,
+  },
+  {
     title: "Three editors, one file",
     body: "Rich-text blocks, a split view, or raw source. Switch per note; the Markdown on disk is identical either way.",
-    span: "md:col-span-2",
+    span: "",
     art: <ModesArt />,
   },
   {
     title: "Diagrams without the syntax",
-    body: "A visual Mermaid builder with templates, a cheatsheet and live rendering. Node positions round-trip through the file.",
-    span: "",
+    body: "A visual Mermaid builder for six diagram types, with templates, a cheatsheet and live rendering. Node positions round-trip through the file.",
+    span: "md:col-span-2",
     art: <DiagramArt />,
+  },
+  {
+    title: "Opens the .md files on your computer",
+    body: "Install it and ForkLeaf registers as a Markdown editor: double-click a file, or run xdg-open, and ⌘S writes that file — not a copy in Downloads.",
+    span: "md:col-span-2",
+    art: <DesktopArt />,
   },
   {
     title: "Offline by default",
@@ -32,6 +50,12 @@ const FEATURES = [
     body: "Edit the same note on your phone and your laptop and ForkLeaf shows you both versions instead of silently picking one.",
     span: "",
     art: <ConflictArt />,
+  },
+  {
+    title: "Publish to a public link",
+    body: "One self-contained page, committed to your own repo and served by GitHub Pages. Nothing on our servers, and unpublishing is a deleted file.",
+    span: "",
+    art: <PublishArt />,
   },
   {
     title: "Export that keeps the diagrams",
@@ -47,7 +71,7 @@ export function Features() {
       <SectionHeading
         eyebrow="Features"
         title="Built like a text editor, not like a database with a text box"
-        body="Plain files, plain git, plain exports. Everything below is in the repository today."
+        body="Plain files, plain git, plain exports — and the linking, search and diagramming a real notebook needs. Everything below is in the repository today."
       />
 
       <div className="mt-12 grid gap-4 md:grid-cols-3">
@@ -73,6 +97,101 @@ export function Features() {
 /* ── Inline art ────────────────────────────────────────────────────────────
    Small CSS/SVG vignettes rather than screenshots: they re-theme with the rest
    of the page and add nothing to the page weight. */
+
+function LinksArt() {
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--fl-muted)]">
+          Meeting notes
+        </p>
+        <p className="text-[12.5px] leading-relaxed text-[var(--fl-muted)]">
+          Blocked until{" "}
+          <span className="rounded bg-[var(--fl-accent-soft)] px-1 text-[var(--fl-accent)]">
+            [[Q3 roadmap]]
+          </span>{" "}
+          lands, then start{" "}
+          <span className="rounded border-b border-dashed border-[var(--fl-muted)] px-0.5">
+            [[Hiring plan]]
+          </span>
+          .
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--fl-muted)]">
+          2 notes link here
+        </p>
+        {["Meeting notes", "Planning"].map((note) => (
+          <div key={note} className="mb-2 last:mb-0">
+            <p className="text-[12.5px] text-[var(--fl-text)]">{note}</p>
+            <p className="truncate text-[11.5px] text-[var(--fl-muted)]">
+              Blocked until [[Q3 roadmap]] lands…
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SearchArt() {
+  return (
+    <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3">
+      <p className="mb-2.5 font-mono text-[12px] text-[var(--fl-muted)]">
+        <span className="text-[var(--fl-accent)]">⌕</span> migration
+      </p>
+      {[
+        { title: "Hiring plan", line: "…to keep the migration off my desk." },
+        { title: "Platform notes", line: "…the migration runs in two phases…" },
+      ].map((hit) => (
+        <div key={hit.title} className="mb-2 last:mb-0">
+          <p className="text-[12.5px] text-[var(--fl-text)]">{hit.title}</p>
+          <p className="truncate text-[11.5px] text-[var(--fl-muted)]">
+            {hit.line.split("migration")[0]}
+            <mark className="rounded bg-[var(--fl-accent-soft)] px-0.5 text-[var(--fl-text)]">
+              migration
+            </mark>
+            {hit.line.split("migration")[1]}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DesktopArt() {
+  return (
+    <div className="space-y-2">
+      <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-3 py-2 font-mono text-[12px]">
+        <span className="text-[var(--fl-muted)]">$ </span>
+        <span className="text-[var(--fl-text)]">xdg-open notes/q3-roadmap.md</span>
+      </div>
+      <div className="flex items-center gap-2 rounded-lg border border-[var(--fl-accent)] bg-[var(--fl-accent-soft)] px-3 py-2 text-[12.5px]">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fl-accent)]" />
+        <span className="min-w-0 flex-1 truncate text-[var(--fl-text)]">
+          Open in ForkLeaf — ⌘S writes q3-roadmap.md
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function PublishArt() {
+  return (
+    <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--fl-muted)]">
+        Published
+      </p>
+      <p className="break-all font-mono text-[11.5px] text-[var(--fl-accent)]">
+        you.github.io/notes/q3-roadmap.html
+      </p>
+      <p className="mt-2 text-[11.5px] text-[var(--fl-muted)]">
+        A file in your repo, served by GitHub.
+      </p>
+    </div>
+  );
+}
 
 function ModesArt() {
   return (

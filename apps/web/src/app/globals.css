@@ -5,22 +5,47 @@
 @source "../../../../packages/editor/src/**/*.{ts,tsx}";
 
 /* ── Type scale ────────────────────────────────────────────────────────────
-   Instrument Sans carries the interface, Instrument Serif the display
-   headings, JetBrains Mono the code. The serif is deliberately only used
-   large: it has a single weight, so it reads as a voice rather than a system. */
+   Four faces, each with one job. Instrument Sans carries the interface;
+   Instrument Serif the display headings, deliberately only used large because
+   it has a single weight and reads as a voice rather than a system; JetBrains
+   Mono the code; and Newsreader the documents themselves — see `--font-reading`
+   below. */
 @theme {
   --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-instrument-serif), ui-serif, Georgia, serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+
+  /* The face notes are written and read in, distinct from the chrome around
+     them. A text serif with real optical sizing, so a paragraph and a heading
+     are drawn with different contrast rather than one being a scaled copy of
+     the other. */
+  --font-reading: var(--font-newsreader), ui-serif, Georgia, "Times New Roman", serif;
+
+  /* ── Corner radius ──────────────────────────────────────────────────────
+     Tailwind's own scale, softened by roughly half a step throughout.
+
+     Set here rather than by rewriting fifty `rounded-lg` class names: the
+     radius of a control is a design decision the whole app should share, and
+     the only way to keep it shared is to change it in one place. Every button,
+     input, tab, card, menu and dialog in the editor moves together. */
+  --radius-xs: 0.1875rem; /*  3px */
+  --radius-sm: 0.375rem; /*   6px */
+  --radius-md: 0.5rem; /*     8px */
+  --radius-lg: 0.75rem; /*   12px */
+  --radius-xl: 1rem; /*      16px */
+  --radius-2xl: 1.25rem; /*  20px */
+  --radius-3xl: 1.75rem; /*  28px */
 }
 
 /* ── Palette ───────────────────────────────────────────────────────────────
    Every component references these semantic tokens rather than raw hex, so
    the two blocks below re-theme the entire app.
 
-   The dark theme is the reference design: a true ink black (#0A0C0A, not a
-   blued-off charcoal) with a single leaf-green accent. Light mode is the same
-   relationships inverted, with the green darkened to stay legible on white. */
+   The dark theme is the reference design: true black, with a muted slate-blue
+   accent that carries emphasis without shouting — a notes app is somewhere
+   people sit for an hour, and a saturated accent is exhausting at that length.
+   Light mode is the same relationships inverted, with the slate darkened to
+   stay legible on white. */
 :root {
   --fl-bg: #fcfcfa;
   --fl-surface: #ffffff;
@@ -30,17 +55,14 @@
   --fl-text: #12150f;
   --fl-muted: #6c7268;
 
-  --fl-accent: #16794c;
-  --fl-accent-hover: #12633e;
-  /* Text/icon colour to place on top of a filled accent surface. */
+  --fl-accent: #3d5a78;
+  --fl-accent-hover: #324a63;
   --fl-accent-contrast: #ffffff;
-  --fl-accent-soft: rgba(22, 121, 76, 0.1);
+  --fl-accent-soft: rgba(61, 90, 120, 0.1);
 
   --fl-warn: #a76a0a;
   --fl-danger: #c2372d;
 
-  /* An always-dark surface — footer, code blocks, the hero terminal. Stays
-     dark in both themes so those elements never invert. */
   --fl-inverse-bg: #0a0c0a;
   --fl-inverse-text: #e9ece7;
 
@@ -52,26 +74,26 @@
 
 [data-theme="dark"] {
   --fl-bg: #000000;
-  --fl-surface: #050505;
-  --fl-elevated: #000000;
-  --fl-border: #232823;
-  --fl-border-strong: #000000;
-  --fl-text: #e9ece7;
-  --fl-muted: #8b938a;
+  --fl-surface: #0a0a0a;
+  --fl-elevated: #131313;
+  --fl-border: #1f1f1f;
+  --fl-border-strong: #333333;
+  --fl-text: #f0f0f0;
+  --fl-muted: #8a8a8a;
 
-  --fl-accent: #4ce60f;
-  --fl-accent-hover: #52dd9d;
-  --fl-accent-contrast: #04180d;
-  --fl-accent-soft: rgba(62, 207, 142, 0.13);
+  --fl-accent: #8a9bb8;
+  --fl-accent-hover: #9db0cc;
+  --fl-accent-contrast: #0c1018;
+  --fl-accent-soft: rgba(138, 155, 184, 0.14);
 
-  --fl-warn: #e3a93c;
-  --fl-danger: #f2555a;
+  --fl-warn: #d4b94f;
+  --fl-danger: #d4544f;
 
-  --fl-inverse-bg: #050705;
-  --fl-inverse-text: #e9ece7;
+  --fl-inverse-bg: #050505;
+  --fl-inverse-text: #f0f0f0;
 
-  --fl-shadow: 0 1px 2px rgba(0, 0, 0, 0.6), 0 8px 24px -12px rgba(0, 0, 0, 0.8);
-  --fl-shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.6), 0 24px 48px -20px rgba(0, 0, 0, 0.9);
+  --fl-shadow: 0 1px 2px rgba(0, 0, 0, 0.7), 0 8px 24px -12px rgba(0, 0, 0, 0.9);
+  --fl-shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.7), 0 24px 48px -20px rgba(0, 0, 0, 1);
 
   color-scheme: dark;
 }
@@ -124,7 +146,7 @@ h3 {
 .fl-card {
   background: var(--fl-surface);
   border: 1px solid var(--fl-border);
-  border-radius: 14px;
+  border-radius: 18px;
 }
 
 .fl-btn {
@@ -132,7 +154,7 @@ h3 {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: 10px;
+  border-radius: 12px;
   font-weight: 550;
   font-size: 0.9375rem;
   line-height: 1;
@@ -171,7 +193,7 @@ h3 {
 
 .fl-input {
   width: 100%;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid var(--fl-border);
   background: var(--fl-surface);
   padding: 0.4375rem 0.625rem;
@@ -202,9 +224,27 @@ h3 {
    Shared by the preview pane, the WYSIWYG surface and the HTML export, so a
    note looks the same however it is being viewed. */
 .fl-prose {
+  /* The one place the reading face is used. `.fl-prose` is shared by the
+     rich-text surface, the preview pane and the HTML export, so a note is set
+     in the same type however it is being looked at — including after it leaves
+     the app. */
+  font-family: var(--font-reading);
+  font-optical-sizing: auto;
   color: var(--fl-text);
-  line-height: 1.75;
-  font-size: 1.0625rem;
+  line-height: 1.7;
+  /* Slightly larger than the sans it replaced: a serif at the same nominal
+     size reads smaller, because its lowercase is shorter relative to the em. */
+  font-size: 1.125rem;
+}
+
+/* Interface type inside a document stays interface type. Code is code, and a
+   task-list checkbox is a control — neither belongs in a reading serif. */
+.fl-prose code,
+.fl-prose pre,
+.fl-prose kbd,
+.fl-prose samp {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
 }
 
 .fl-prose > * + * {
