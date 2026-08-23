@@ -29,15 +29,23 @@ const COLUMNS = [
     ],
   },
   {
-    heading: "Docs",
+    heading: "Documentation",
     links: [
-      { label: "Documentation", href: "/docs" },
+      { label: "All documentation", href: "/docs" },
       { label: "Getting started", href: "/docs/getting-started" },
       { label: "The editor", href: "/docs/editor" },
       { label: "Diagrams", href: "/docs/diagrams" },
-      { label: "Exporting", href: "/docs/export" },
       { label: "Keyboard shortcuts", href: "/docs/shortcuts" },
-      { label: "GitHub & sync", href: "/docs/sync" },
+      { label: "Exporting", href: "/docs/export" },
+    ],
+  },
+  {
+    heading: "GitHub & sync",
+    links: [
+      { label: "Signing in", href: "/docs/signing-in" },
+      { label: "Repositories", href: "/docs/repositories" },
+      { label: "Syncing & commits", href: "/docs/sync" },
+      { label: "Conflicts", href: "/docs/conflicts" },
       { label: "Self-hosting", href: "/docs/self-hosting" },
       { label: "FAQ", href: "/docs/faq" },
     ],
@@ -53,12 +61,13 @@ const COLUMNS = [
     ],
   },
   {
-    heading: "Legal",
+    heading: "Legal & data",
     links: [
       { label: "Privacy Policy", href: "/privacy" },
       { label: "Terms & Conditions", href: "/terms" },
       { label: "Security model", href: "/docs/security" },
       { label: "Your data", href: "/docs/privacy-and-data" },
+      { label: "What it costs", href: "/docs/plans" },
     ],
   },
 ] as const;
@@ -67,7 +76,7 @@ export function Footer() {
   return (
     <footer className="border-t border-[var(--fl-border)] bg-[var(--fl-bg)]">
       <div className="mx-auto w-full max-w-6xl px-6 py-16">
-        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr_1fr_1fr]">
+        <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_repeat(5,minmax(0,1fr))]">
           <div>
             <ForkLeafLogo textClassName="text-[1.0625rem]" />
             <p className="mt-4 max-w-xs text-[14px] leading-relaxed text-[var(--fl-muted)]">
@@ -81,7 +90,7 @@ export function Footer() {
               <h2 className="mb-3.5 text-[13px] font-semibold text-[var(--fl-text)]">
                 {column.heading}
               </h2>
-              <ul className="space-y-2.5">
+              <ul className="-my-1">
                 {column.links.map((link) => (
                   <li key={link.label}>
                     <FooterLink href={link.href}>{link.label}</FooterLink>
@@ -106,8 +115,13 @@ export function Footer() {
 }
 
 function FooterLink({ href, children }: { href: string; children: React.ReactNode }) {
+  // Block, with vertical padding: a 14px line of text is a 19px target, and a
+  // column of them 10px apart is a column of near-misses. This makes each row
+  // ~30px tall and touchable, and gives the hover state something to happen to
+  // — the old one changed the text colour by a shade and nothing else, which on
+  // a muted palette is close to no feedback at all.
   const className =
-    "text-[14px] text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]";
+    "-mx-2 block rounded-md px-2 py-1.5 text-[14px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]";
 
   // A section of the home page, which may not be the page we are on.
   if (href.startsWith("#")) {

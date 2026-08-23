@@ -131,7 +131,7 @@ const GROUPS: Group[] = [
 
 export function Toolkit() {
   return (
-    <section id="toolkit" className="mx-auto w-full max-w-6xl px-6 py-24">
+    <section id="toolkit" className="fl-anchor mx-auto w-full max-w-6xl px-6 py-24">
       <SectionHeading
         eyebrow="The toolkit"
         title="Everything it does, in one list"

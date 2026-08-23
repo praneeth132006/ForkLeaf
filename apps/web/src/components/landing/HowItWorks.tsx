@@ -59,14 +59,14 @@ const HISTORY = [
 
 export function HowItWorks() {
   return (
-    <section id="how" className="mx-auto w-full max-w-6xl px-6 py-24">
+    <section id="how" className="fl-anchor mx-auto w-full max-w-6xl px-6 py-24">
       <SectionHeading
         eyebrow="How it works"
         title="From a keystroke to a commit you own"
         body="Four steps, none of which you have to think about. The middle two are the ones other notes apps replace with a database."
       />
 
-      <div className="mt-12 grid items-start gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-14">
+      <div className="mt-12 grid gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-14">
         {/* ── The steps ─────────────────────────────────────────────────── */}
         {/* A hairline runs behind the numbers to make the four read as one
             sequence rather than four unrelated claims. */}
@@ -114,7 +114,7 @@ function Window() {
     <div
       role="img"
       aria-label="A note open in ForkLeaf: a file tree, the Markdown source, and the commits it has been through"
-      className="overflow-hidden rounded-2xl border border-[var(--fl-border)] bg-[var(--fl-surface)] shadow-[var(--fl-shadow-lg)]"
+      className="flex h-full min-h-[26rem] flex-col overflow-hidden rounded-2xl border border-[var(--fl-border)] bg-[var(--fl-surface)] shadow-[var(--fl-shadow-lg)]"
     >
       {/* Window chrome */}
       <div className="flex items-center gap-3 border-b border-[var(--fl-border)] bg-[var(--fl-elevated)] px-4 py-2.5">
@@ -134,11 +134,11 @@ function Window() {
         </span>
       </div>
 
-      <div className="flex">
+      <div className="flex min-h-0 flex-1">
         {/* File tree */}
         <aside
           aria-hidden="true"
-          className="hidden w-44 shrink-0 flex-col gap-0.5 border-r border-[var(--fl-border)] py-3 sm:flex"
+          className="hidden w-48 shrink-0 flex-col gap-0.5 border-r border-[var(--fl-border)] py-3 sm:flex"
         >
           <div className="mx-3 mb-2 truncate rounded-md border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-2.5 py-1.5 text-[11px] text-[var(--fl-muted)]">
             Search notes…
@@ -160,7 +160,7 @@ function Window() {
           </div>
 
           {/* The note */}
-          <div className="min-h-0 flex-1 p-5 font-mono text-[12.5px] leading-relaxed">
+          <div className="min-h-0 flex-1 overflow-hidden p-5 font-mono text-[13px] leading-[1.75]">
             {LINES.map((line, index) => (
               <p
                 key={index}
@@ -171,6 +171,13 @@ function Window() {
                 {line.text || " "}
               </p>
             ))}
+
+            {/* A caret at the end, because a still of a text editor with no
+                insertion point in it reads as a screenshot of a closed file. */}
+            <span
+              aria-hidden="true"
+              className="mt-1 inline-block h-[1.05em] w-[2px] align-text-bottom bg-[var(--fl-accent)]"
+            />
           </div>
 
           {/* The commits it has been through */}

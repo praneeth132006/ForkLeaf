@@ -67,7 +67,7 @@ const FEATURES = [
 
 export function Features() {
   return (
-    <section id="features" className="mx-auto w-full max-w-6xl px-6 py-24">
+    <section id="features" className="fl-anchor mx-auto w-full max-w-6xl px-6 py-24">
       <SectionHeading
         eyebrow="Features"
         title="Built like a text editor, not like a database with a text box"

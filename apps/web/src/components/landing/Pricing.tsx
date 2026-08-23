@@ -17,7 +17,7 @@ import { SectionHeading } from "./SectionHeading";
  */
 export function Pricing() {
   return (
-    <section id="pricing" className="mx-auto w-full max-w-6xl px-6 py-24">
+    <section id="pricing" className="fl-anchor mx-auto w-full max-w-6xl px-6 py-24">
       <SectionHeading
         eyebrow="Pricing"
         title="Free. All of it. No tiers."

@@ -90,7 +90,7 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
 
 export function Faq() {
   return (
-    <section id="faq" className="mx-auto w-full max-w-6xl px-6 py-24">
+    <section id="faq" className="fl-anchor mx-auto w-full max-w-6xl px-6 py-24">
       <SectionHeading
         eyebrow="Before you sign in"
         title="The questions worth answering first"

@@ -59,7 +59,7 @@ const AUDIENCES = [
 
 export function Positioning() {
   return (
-    <section id="why" className="mx-auto w-full max-w-6xl px-6 py-24">
+    <section id="why" className="fl-anchor mx-auto w-full max-w-6xl px-6 py-24">
       <SectionHeading
         eyebrow="Where this fits"
         title="You already have somewhere to put notes. Here is the honest case for moving."
