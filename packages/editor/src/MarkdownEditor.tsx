@@ -17,6 +17,7 @@ import { insertActionsFor, runRichAction, runSourceAction } from "./insert-actio
 import { ImageDialog } from "./ui/ImageDialog";
 import { LinkDialog } from "./ui/LinkDialog";
 import type { ImageBridge } from "./images";
+import type { LinkBridge } from "./links";
 
 export interface MarkdownEditorProps {
   value: string;
@@ -43,6 +44,8 @@ export interface MarkdownEditorProps {
   images?: ImageBridge;
   /** Shown under "Add an image" — usually where the file will be committed. */
   imageDestination?: string;
+  /** How `[[wikilinks]]` resolve, and what clicking one does. */
+  links?: LinkBridge;
 }
 
 const MODES: { value: EditorViewMode; label: string; hint: string }[] = [
@@ -75,6 +78,7 @@ export function MarkdownEditor({
   onCursorChange,
   images,
   imageDestination,
+  links,
 }: MarkdownEditorProps) {
   // Split view: the divider position, as a percentage of the container width.
   const [splitRatio, setSplitRatio] = useState(50);
@@ -359,6 +363,7 @@ export function MarkdownEditor({
             onImageStatus={setImageStatus}
             slashActions={actionContext}
             {...(images ? { images } : {})}
+            {...(links ? { links } : {})}
             {...(placeholder ? { placeholder } : {})}
             // A wide bottom pad so the last paragraph can be scrolled to the
             // middle of the screen instead of being pinned to the bottom edge.
@@ -434,6 +439,7 @@ export function MarkdownEditor({
                 markdown={value}
                 {...(theme ? { theme } : {})}
                 {...(resolveImageSrc ? { resolveImageSrc } : {})}
+                {...(links ? { links } : {})}
                 className="mx-auto max-w-2xl"
               />
             </div>

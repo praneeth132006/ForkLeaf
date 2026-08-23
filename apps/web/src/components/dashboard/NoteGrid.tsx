@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import type { IndexEntry } from "@/lib/library";
-import { formatWhen } from "./NoteList";
+import { Snippet, formatWhen } from "./NoteList";
+import type { SearchSnippet } from "@forkleaf/store";
 
 /**
  * The note index as cards.
@@ -15,10 +16,13 @@ export function NoteGrid({
   entries,
   editorHref,
   emptyMessage,
+  snippets,
 }: {
   entries: IndexEntry[];
   editorHref: (entry: IndexEntry) => string;
   emptyMessage: string;
+  /** The matching line per note id, when a full-text search produced one. */
+  snippets?: Map<string, SearchSnippet>;
 }) {
   if (entries.length === 0) {
     return (
@@ -47,9 +51,16 @@ export function NoteGrid({
             )}
           </span>
 
-          <span className="mt-1 line-clamp-3 min-h-[3.4em] text-[12.5px] leading-relaxed text-[var(--fl-muted)]">
-            {entry.excerpt || (entry.indexed ? "No text yet." : "Not read yet.")}
-          </span>
+          {snippets?.get(entry.id) ? (
+            <Snippet
+              snippet={snippets.get(entry.id)!}
+              className="mt-1 line-clamp-3 min-h-[3.4em] !text-[12.5px]"
+            />
+          ) : (
+            <span className="mt-1 line-clamp-3 min-h-[3.4em] text-[12.5px] leading-relaxed text-[var(--fl-muted)]">
+              {entry.excerpt || (entry.indexed ? "No text yet." : "Not read yet.")}
+            </span>
+          )}
 
           <span className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-[var(--fl-muted)]">
             {entry.folder && <span className="font-mono">{entry.folder}/</span>}

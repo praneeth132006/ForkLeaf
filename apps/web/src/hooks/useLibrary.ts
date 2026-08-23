@@ -3,14 +3,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   NoteRepository,
+  SearchIndex,
   SyncEngine,
   openLocalDatabase,
   type LocalDatabase,
   type LocalDatabaseStatus,
+  type SearchDoc,
+  type SearchHit,
 } from "@forkleaf/store";
 import { workspaceId, type Note, type PendingChange, type Workspace } from "@forkleaf/types";
 import { GitHubGateway, LocalGateway, fetchSession, type SessionResponse } from "@/lib/gateway";
-import { buildIndex, flattenTree, type IndexEntry } from "@/lib/library";
+import { buildIndex, flattenTree, isMarkdown, type IndexEntry } from "@/lib/library";
+import { deriveTitle, extractTags } from "@forkleaf/markdown-engine";
 import { LOCAL_WORKSPACE } from "@/lib/workspaces";
 
 /**
@@ -47,6 +51,17 @@ export interface LibraryState {
   /** Whether local storage is real, held by another tab, or missing entirely. */
   storage: LocalDatabaseStatus;
   error: string | null;
+  /**
+   * Bumped whenever notes are added to the full-text index.
+   *
+   * The index is a mutable object in a ref — searching it is not a render, and
+   * React has no way to know it changed. This is what lets a memoised search
+   * recompute as background indexing fills the library in, without making the
+   * index itself part of state and copying it on every batch.
+   */
+  searchVersion: number;
+  /** How many notes the full-text index actually holds. */
+  searchable: number;
 }
 
 /**
@@ -69,6 +84,15 @@ const HYDRATE_BATCH = 6;
  */
 const HYDRATE_LIMIT = 150;
 
+/**
+ * How many full-text hits to take.
+ *
+ * Generous rather than a page: these are merged with the title and tag matches
+ * and then paged by the dashboard, so cutting them here would silently drop
+ * results the reader could otherwise have scrolled to.
+ */
+const SEARCH_LIMIT = 200;
+
 export function useLibrary() {
   const [state, setState] = useState<LibraryState>({
     ready: false,
@@ -78,7 +102,18 @@ export function useLibrary() {
     indexing: false,
     storage: "ready",
     error: null,
+    searchVersion: 0,
+    searchable: 0,
   });
+
+  /**
+   * The full-text index over note bodies.
+   *
+   * A ref, not state: it is a few megabytes of postings that every keystroke
+   * reads and nothing renders, and putting it in state would copy it on every
+   * batch of the background read for no gain.
+   */
+  const searchRef = useRef<SearchIndex>(new SearchIndex());
 
   const dbRef = useRef<LocalDatabase | null>(null);
   const repoRef = useRef<NoteRepository | null>(null);
@@ -86,6 +121,18 @@ export function useLibrary() {
 
   const patch = useCallback((updates: Partial<LibraryState>) => {
     setState((current) => ({ ...current, ...updates }));
+  }, []);
+
+  /** Adds notes to the full-text index and tells React the index moved. */
+  const indexNotes = useCallback((notes: Note[]) => {
+    if (notes.length === 0) return;
+    for (const note of notes) searchRef.current.add(searchDoc(note));
+
+    setState((current) => ({
+      ...current,
+      searchVersion: current.searchVersion + 1,
+      searchable: searchRef.current.size,
+    }));
   }, []);
 
   /** Replaces one workspace's slice of the state, leaving the others alone. */
@@ -159,6 +206,10 @@ export function useLibrary() {
         );
         if (cancelled) return;
 
+        // Everything already on this device is searchable before the first
+        // paint: it costs one pass over notes that have just been read anyway.
+        indexNotes(slices.flatMap((slice) => slice.notes));
+
         patch({
           ready: true,
           session,
@@ -231,6 +282,8 @@ export function useLibrary() {
         );
         if (cancelled) return;
 
+        indexNotes(read.filter((note): note is Note => note !== null));
+
         setState((current) => ({
           ...current,
           workspaces: current.workspaces.map((slice) => {
@@ -250,7 +303,7 @@ export function useLibrary() {
     return () => {
       cancelled = true;
     };
-  }, [patch, patchWorkspace]);
+  }, [patch, patchWorkspace, indexNotes]);
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
@@ -350,9 +403,25 @@ export function useLibrary() {
     };
   }, [state.workspaces]);
 
+  /**
+   * Ranks notes by what is written in them.
+   *
+   * Deliberately not memoised on the query: the caller holds the query and
+   * knows when it changed, and memoising here would keep the last result set
+   * alive for a search box that has since been cleared.
+   */
+  const searchText = useCallback(
+    (query: string, workspaceId?: string): SearchHit[] =>
+      searchRef.current.search(query, {
+        limit: SEARCH_LIMIT,
+        ...(workspaceId ? { workspaceId } : {}),
+      }),
+    [],
+  );
+
   return useMemo(
-    () => ({ ...state, totals, addWorkspace, removeWorkspace, createNote }),
-    [state, totals, addWorkspace, removeWorkspace, createNote],
+    () => ({ ...state, totals, addWorkspace, removeWorkspace, createNote, searchText }),
+    [state, totals, addWorkspace, removeWorkspace, createNote, searchText],
   );
 }
 
@@ -370,12 +439,12 @@ async function readWorkspace(
   db: LocalDatabase,
   workspace: Workspace,
   queue: PendingChange[],
-): Promise<LibraryWorkspace> {
+): Promise<LibraryWorkspace & { notes: Note[] }> {
   const notes = await db.listNotes(workspace.id);
   const pending = queue.filter((item) => item.workspaceId === workspace.id).length;
 
   if (workspace.isLocal) {
-    return { workspace, entries: buildIndex(workspace, [], notes), pending, error: null };
+    return { workspace, entries: buildIndex(workspace, [], notes), pending, error: null, notes };
   }
 
   const cached = await db.getTreeCache(workspace.id);
@@ -385,6 +454,7 @@ async function readWorkspace(
     entries: buildIndex(workspace, markdownOnly(flattenTree(cached ?? [])), notes),
     pending,
     error: null,
+    notes,
   };
 }
 
@@ -417,9 +487,21 @@ async function refreshWorkspace(
   }
 }
 
+/** A stored note, as the full-text index wants it. */
+function searchDoc(note: Note): SearchDoc {
+  return {
+    id: note.id,
+    workspaceId: note.workspaceId,
+    path: note.path,
+    title: deriveTitle(note.content, note.frontmatter.title, note.path),
+    tags: extractTags(note.content, note.frontmatter.tags),
+    content: note.content,
+  };
+}
+
 /** The tree carries every file in the repo; only markdown is a note. */
 function markdownOnly(paths: string[]): string[] {
-  return paths.filter((path) => /\.mdx?$/i.test(path));
+  return paths.filter(isMarkdown);
 }
 
 /** Folds freshly read notes into a workspace's entries, replacing by path. */

@@ -16,18 +16,37 @@ import { Markdown, type MarkdownStorage } from "tiptap-markdown";
 import type { Editor } from "@tiptap/core";
 
 /**
+ * A `[[wikilink]]` the markdown serialiser has escaped into `\[\[…\]\]`.
+ *
+ * prosemirror-markdown escapes every `[` it writes, which is correct for text
+ * that might otherwise be read as a link and catastrophic for this one: a
+ * wikilink typed in the rich editor was written to the file as `\[\[Roadmap\]\]`,
+ * which is not a wikilink in Obsidian, on github.com, or on the next load of
+ * ForkLeaf itself. The note looked right on screen and was wrong on disk.
+ */
+const ESCAPED_WIKILINK = /\\\[\\\[([^\n]*?)\\\]\\\]/g;
+
+/**
  * tiptap-markdown 0.9 targets Tiptap 2 and does not augment Tiptap 3's
  * `Storage` interface, so `editor.storage.markdown` is untyped. This reads it
  * through the package's own exported shape rather than sprinkling `any` around.
+ *
+ * The one repair on the way out is the wikilink escaping above. Narrowly
+ * targeted at the full `[[…]]` shape rather than unescaping brackets in
+ * general, so a lone `\[` somebody escaped on purpose survives.
  */
 function markdownOf(editor: Editor): string {
-  return (editor.storage as unknown as { markdown: MarkdownStorage }).markdown.getMarkdown();
+  return (editor.storage as unknown as { markdown: MarkdownStorage }).markdown
+    .getMarkdown()
+    .replace(ESCAPED_WIKILINK, "[[$1]]");
 }
 import { CodeBlock } from "./extensions/CodeBlock";
 import { ResolvedImage } from "./extensions/ResolvedImage";
 import { TextSelection } from "@tiptap/pm/state";
 import { imagesFrom, type ImageBridge } from "./images";
 import { MermaidBlock } from "./extensions/MermaidBlock";
+import { Wikilink } from "./extensions/Wikilink";
+import type { LinkBridge } from "./links";
 import { readSlashState } from "./extensions/SlashCommands";
 import { filterInsertActions, type ActionContext, type InsertDefinition } from "./insert-actions";
 
@@ -51,6 +70,8 @@ export interface WysiwygEditorProps {
    * the two routes to the same feature behave differently.
    */
   slashActions?: ActionContext;
+  /** How `[[wikilinks]]` resolve, and what ⌘-clicking one does. */
+  links?: LinkBridge;
 }
 
 /**
@@ -70,6 +91,7 @@ export function WysiwygEditor({
   images,
   onImageStatus,
   slashActions,
+  links,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -81,6 +103,8 @@ export function WysiwygEditor({
   imagesRef.current = images;
   const onImageStatusRef = useRef(onImageStatus);
   onImageStatusRef.current = onImageStatus;
+  const linksRef = useRef<LinkBridge | undefined>(links);
+  linksRef.current = links;
 
   // Guards the value-sync effect: without it, our own serialised output feeds
   // straight back in and resets the cursor to the top on every keystroke.
@@ -143,6 +167,9 @@ export function WysiwygEditor({
       TableCell,
       CodeBlock,
       MermaidBlock,
+      // Read through the ref, not captured: the extension list is built once,
+      // and the bridge arrives a render later once the workspace resolves.
+      Wikilink.configure({ bridge: () => linksRef.current }),
       Markdown.configure({
         html: false,
         transformPastedText: true,

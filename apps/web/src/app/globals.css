@@ -245,6 +245,43 @@ h3 {
   text-underline-offset: 3px;
 }
 
+/*
+ * `[[wikilinks]]`, in the preview and in the rich-text editor alike.
+ *
+ * Drawn without the underline the other links carry, and on a tinted ground
+ * instead. A wikilink goes somewhere else in your own notes rather than out to
+ * the web, and a note whose every other word is an underlined blue link is
+ * unreadable — which is precisely the shape a heavily linked knowledge base
+ * takes.
+ */
+.fl-wikilink {
+  border-radius: 4px;
+  padding: 0 3px;
+  color: var(--fl-accent);
+  text-decoration: none;
+  background: var(--fl-accent-soft);
+  cursor: pointer;
+}
+
+.fl-wikilink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/*
+ * A link to a note nobody has written yet.
+ *
+ * Muted and dashed rather than red: linking ahead of yourself is how an
+ * outline gets built, so this is a note that does not exist *yet*, not an
+ * error to be fixed.
+ */
+.fl-wikilink-missing {
+  color: var(--fl-muted);
+  background: transparent;
+  border-bottom: 1px dashed currentColor;
+  border-radius: 0;
+}
+
 .fl-prose strong {
   font-weight: 640;
 }

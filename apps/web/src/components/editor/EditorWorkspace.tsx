@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import type { CursorPosition, ImageBridge } from "@forkleaf/editor";
+import type { CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
 import type { EditorViewMode } from "@forkleaf/types";
 import {
   deriveTitle,
@@ -14,6 +14,7 @@ import {
   slugifyFilename,
 } from "@forkleaf/markdown-engine";
 import { useNotebook } from "@/hooks/useNotebook";
+import { useLinks } from "@/hooks/useLinks";
 import { useTheme } from "@/hooks/useTheme";
 import { EditorSidebar } from "@/components/EditorSidebar";
 import { EditorRightPanel } from "@/components/EditorRightPanel";
@@ -33,7 +34,7 @@ import { ForkLeafLogo } from "@/components/Brand";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { signOut } from "@/lib/gateway";
 import { assetPathFor, relativeSrc, resolveImageSrc, uploadImage } from "@/lib/assets";
-import { flattenTree } from "@/lib/library";
+import { flattenTree, isMarkdown } from "@/lib/library";
 import { track } from "@/lib/firebase/analytics";
 import { upsertUserProfile } from "@/lib/firebase/users";
 
@@ -158,6 +159,61 @@ export function EditorWorkspace() {
       },
     }),
     [workspace, notePath, takenPaths, notebook],
+  );
+
+  /**
+   * The `[[wikilink]]` graph for this workspace.
+   *
+   * Fed the tree's paths rather than only the open notes, so a link to a note
+   * that has never been opened on this device still resolves — otherwise the
+   * graph would depend on browsing history rather than on the repository.
+   */
+  const markdownPaths = useMemo(() => takenPaths.filter(isMarkdown), [takenPaths]);
+  const workspaceIdForLinks = workspace?.id ?? null;
+
+  const hrefForPath = useCallback(
+    (path: string) =>
+      workspaceIdForLinks
+        ? `/editor?ws=${encodeURIComponent(workspaceIdForLinks)}&note=${encodeURIComponent(path)}`
+        : `/editor?note=${encodeURIComponent(path)}`,
+    [workspaceIdForLinks],
+  );
+
+  const links = useLinks({
+    workspaceId: workspaceIdForLinks,
+    paths: markdownPaths,
+    openNotes: notebook.openNotes,
+    loadNotes: notebook.allNotes,
+    hrefFor: hrefForPath,
+  });
+
+  /**
+   * Creates the note a link points at but that nobody has written yet.
+   *
+   * The title is the target as typed, which is what makes the link resolve the
+   * moment the note exists: the filename is slugified, but the frontmatter
+   * title is not, and either is enough for the resolver to match on.
+   */
+  const createLinked = useCallback(
+    (target: string) => {
+      const folder = dirname(links.createPathFor(target, notePath ?? ""));
+      void notebook.createNote(target, folder);
+    },
+    [links, notePath, notebook],
+  );
+
+  const linkBridge = useMemo<LinkBridge>(
+    () => ({
+      resolve: links.resolve,
+      open: (target) => {
+        const path = links.pathFor(target);
+        // Clicking a link to a note that has not been written yet writes it.
+        // Refusing to navigate would be technically correct and useless.
+        if (path) notebook.openNote(path);
+        else createLinked(target);
+      },
+    }),
+    [links, notebook, createLinked],
   );
 
   const conflicts = notebook.sync.conflicts;
@@ -724,6 +780,7 @@ export function EditorWorkspace() {
                 theme={theme}
                 onCursorChange={setCursor}
                 images={images}
+                links={linkBridge}
                 imageDestination={
                   workspace && !workspace.isLocal
                     ? `Committed to ${workspace.repo.owner}/${workspace.repo.repo}`
@@ -755,6 +812,14 @@ export function EditorWorkspace() {
               onShowHistory={() => setDialog("history")}
               syncMode={notebook.syncPreference.mode}
               onSyncNow={notebook.syncNow}
+              links={{
+                ready: links.ready,
+                backlinks: note ? links.backlinksFor(note.path) : [],
+                outgoing: note ? links.outgoingFor(note.path) : [],
+                titleFor: links.titleFor,
+                onOpen: notebook.openNote,
+                onCreate: createLinked,
+              }}
             />
           </div>
         )}

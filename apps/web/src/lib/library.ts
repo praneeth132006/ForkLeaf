@@ -44,6 +44,18 @@ export interface IndexEntry {
 
 export type SortKey = "recent" | "title" | "path" | "words";
 
+/**
+ * True for a path that is a note.
+ *
+ * The repository tree carries every file — images, configuration, code — and
+ * only markdown is a note. Defined here rather than inline at each call site
+ * so the index, the link graph and the search index can never disagree about
+ * what counts.
+ */
+export function isMarkdown(path: string): boolean {
+  return /\.mdx?$/i.test(path);
+}
+
 /** Every file path in a tree, depth first. Folders are not entries. */
 export function flattenTree(tree: TreeNode[]): string[] {
   const paths: string[] = [];
@@ -190,8 +202,15 @@ export function buildIndex(workspace: Workspace, paths: string[], notes: Note[])
  * Deliberately ranked rather than filtered: typing "road" should put the note
  * called "Roadmap" above the one that merely mentions the word halfway down,
  * which a plain `includes` filter cannot express.
+ *
+ * `textScore` is the full-text index's BM25 score for this note, when the body
+ * was searched too. It slots in above a path match and below a tag: a note
+ * whose *text* is about kubernetes is a better answer than one whose folder
+ * happens to be called that, and a worse one than a note actually tagged with
+ * it. The score itself only orders body matches among themselves, capped so a
+ * long note repeating a word cannot climb past a title match.
  */
-export function scoreEntry(entry: IndexEntry, needle: string): number {
+export function scoreEntry(entry: IndexEntry, needle: string, textScore?: number): number {
   if (!needle) return 1;
 
   const title = entry.title.toLowerCase();
@@ -201,6 +220,7 @@ export function scoreEntry(entry: IndexEntry, needle: string): number {
   if (title.startsWith(needle)) return 80;
   if (title.includes(needle)) return 60;
   if (entry.tags.some((tag) => tag.toLowerCase().includes(needle))) return 50;
+  if (textScore !== undefined) return 45 + Math.min(textScore, 9) / 10;
   if (path.includes(needle)) return 40;
   if (entry.excerpt.toLowerCase().includes(needle)) return 20;
 
@@ -213,11 +233,19 @@ export interface QueryOptions {
   folder?: string | null;
   tag?: string | null;
   sort?: SortKey;
+  /**
+   * Full-text scores by entry id, from the search index.
+   *
+   * Passed in rather than computed here because the index lives in the store
+   * package and holds note *content*, which this module has never seen — it
+   * indexes what the dashboard knows about a note, not what is in it.
+   */
+  textScores?: Map<string, number>;
 }
 
 export function queryIndex(entries: IndexEntry[], options: QueryOptions = {}): IndexEntry[] {
   const needle = (options.query ?? "").trim().toLowerCase();
-  const { folder, tag, sort = "recent" } = options;
+  const { folder, tag, sort = "recent", textScores } = options;
 
   const scored = entries
     .filter((entry) => {
@@ -227,7 +255,7 @@ export function queryIndex(entries: IndexEntry[], options: QueryOptions = {}): I
       if (tag && !entry.tags.includes(tag)) return false;
       return true;
     })
-    .map((entry) => ({ entry, score: scoreEntry(entry, needle) }))
+    .map((entry) => ({ entry, score: scoreEntry(entry, needle, textScores?.get(entry.id)) }))
     .filter((candidate) => candidate.score > 0);
 
   // While searching, relevance leads and the chosen sort breaks ties; with no
