@@ -12,3 +12,14 @@ export {
   type OpenedLocalDatabase,
 } from "./idb-db";
 export { NoteRepository, type NoteRepositoryOptions } from "./note-repository";
+export {
+  SearchIndex,
+  tokenize,
+  parseQuery,
+  bestSnippet,
+  highlightRanges,
+  type SearchDoc,
+  type SearchHit,
+  type SearchOptions,
+  type SearchSnippet,
+} from "./search-index";

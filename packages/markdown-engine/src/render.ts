@@ -10,6 +10,7 @@ import remarkStringify from "remark-stringify";
 import { visit } from "unist-util-visit";
 import type { Root as MdastRoot, Text as MdastText, PhrasingContent, Parent } from "mdast";
 import type { Root as HastRoot, Element } from "hast";
+import { remarkWikilink, type WikilinkResolver } from "./wikilinks";
 
 /**
  * Markdown → HTML rendering.
@@ -24,6 +25,22 @@ import type { Root as HastRoot, Element } from "hast";
  * task-list checkboxes, heading anchors, syntax-highlight class names, and the
  * `data-mermaid` marker we attach to diagram placeholders.
  */
+/**
+ * Adds class names to an element's allowlist, folding them into whatever
+ * `className` entry is already there.
+ */
+type AttributeRule = NonNullable<NonNullable<SanitizeSchema["attributes"]>[string]>[number];
+
+function withClasses(rules: readonly AttributeRule[], classes: string[]): AttributeRule[] {
+  const existing = rules.find(
+    (rule): rule is [string, ...(string | number | boolean | RegExp)[]] =>
+      Array.isArray(rule) && rule[0] === "className",
+  );
+
+  const merged: AttributeRule = ["className", ...(existing?.slice(1) ?? []), ...classes];
+  return [...rules.filter((rule) => rule !== existing), merged];
+}
+
 const schema: SanitizeSchema = {
   ...defaultSchema,
   attributes: {
@@ -40,6 +57,21 @@ const schema: SanitizeSchema = {
       ["type", "checkbox"],
     ],
     div: [...(defaultSchema.attributes?.div ?? []), "className", "dataMermaid"],
+    // Wikilinks render as ordinary anchors carrying the target they were
+    // written with, so a click can open the note in a tab rather than
+    // navigating. The class list is constrained to our own three names —
+    // allowing `className` outright on `a` would let note content borrow any
+    // style in the app, including the ones that hide things.
+    //
+    // The default schema already allows one class on `a` (footnote backrefs),
+    // and the sanitiser honours only the first entry it finds for a property.
+    // So our names are merged into that entry rather than appended as a second
+    // one, which is silently ignored.
+    a: withClasses(defaultSchema.attributes?.a ?? [], [
+      "fl-wikilink",
+      "fl-wikilink-found",
+      "fl-wikilink-missing",
+    ]).concat(["dataWikilink", "dataWikilinkAnchor"]),
     // `loading` keeps a note full of screenshots from fetching every one of
     // them at once; the rest are what the default schema already allows.
     img: [...(defaultSchema.attributes?.img ?? []), ["loading", "lazy"]],
@@ -121,6 +153,15 @@ export interface RenderOptions {
    * such a path on its own. Rendering is where the two meet.
    */
   resolveImageSrc?: (src: string) => string;
+
+  /**
+   * Turns a `[[wikilink]]` into an href, and says whether the note exists.
+   *
+   * With no resolver, wikilinks still render as links — to `#target` — rather
+   * than as literal brackets, so a preview with no workspace behind it reads
+   * as prose instead of as syntax.
+   */
+  resolveWikilink?: WikilinkResolver;
 }
 
 /**
@@ -154,6 +195,8 @@ const buildHtmlPipeline = (options: RenderOptions) =>
     .use(remarkParse)
     .use(remarkGfm)
     .use(remarkHighlight)
+    // Before remark-rehype, because it produces mdast link nodes.
+    .use(remarkWikilink, { resolve: options.resolveWikilink })
     // allowDangerousHtml is deliberately off — inline HTML in notes is escaped.
     .use(remarkRehype)
     // Highlighting runs *before* sanitising, so the `hljs-` spans it emits are
@@ -181,7 +224,10 @@ const defaultHtmlPipeline = buildHtmlPipeline({});
 
 /** Renders markdown to sanitised HTML. Safe to inject with innerHTML. */
 export function markdownToHtml(markdown: string, options?: RenderOptions): string {
-  const pipeline = options?.resolveImageSrc ? buildHtmlPipeline(options) : defaultHtmlPipeline;
+  const pipeline =
+    options?.resolveImageSrc || options?.resolveWikilink
+      ? buildHtmlPipeline(options)
+      : defaultHtmlPipeline;
   return String(pipeline.processSync(markdown));
 }
 

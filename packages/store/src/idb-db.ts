@@ -1,6 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { LocalAsset, Note, PendingChange, TreeNode, Workspace } from "@forkleaf/types";
 import type { LocalDatabase } from "./ports";
+import { tabChannel, type TabChannel } from "./tab-channel";
 
 /**
  * IndexedDB-backed storage — the reason ForkLeaf works on a plane.
@@ -59,8 +60,16 @@ const DB_VERSION = 2;
  *
  * An `open` that is blocked by another tab never rejects on its own, so
  * without a ceiling the loading screen is permanent.
+ *
+ * This is now a backstop rather than the mechanism. A blocked open asks the
+ * other tabs to let go over `BroadcastChannel`, and they do — so the common
+ * case resolves in milliseconds and this ceiling is only reached in a browser
+ * without the API, or when the tab in the way is too wedged to answer.
  */
 const OPEN_TIMEOUT_MS = 8_000;
+
+/** How long to give the other tabs to answer a release request. */
+const RELEASE_TIMEOUT_MS = 1_500;
 
 /** Every store the code below reads from. Checked when no upgrade can run. */
 const REQUIRED_STORES = ["notes", "workspaces", "queue", "trees", "assets", "meta"] as const;
@@ -69,7 +78,22 @@ export class IndexedDbDatabase implements LocalDatabase {
   readonly persistent = true;
 
   /** Overridable only so tests do not have to wait out the real ceiling. */
-  constructor(private readonly openTimeoutMs = OPEN_TIMEOUT_MS) {}
+  constructor(
+    private readonly openTimeoutMs = OPEN_TIMEOUT_MS,
+    private readonly channel: TabChannel = tabChannel(),
+  ) {
+    // Answering another tab's request is not conditional on this tab having
+    // the database open: a tab that has not opened it yet is not in the way,
+    // and one that has must let go immediately or the asking tab waits out
+    // the full ceiling for nothing.
+    this.stopListening = this.channel.on((message) => {
+      if (message.type !== "release-db") return;
+      this.release();
+      this.channel.post({ type: "released-db" });
+    });
+  }
+
+  private readonly stopListening: () => void;
 
   private dbPromise: Promise<IDBPDatabase<ForkLeafSchema>> | null = null;
   private handle: IDBPDatabase<ForkLeafSchema> | null = null;
@@ -92,32 +116,59 @@ export class IndexedDbDatabase implements LocalDatabase {
    */
   private async open(): Promise<IDBPDatabase<ForkLeafSchema>> {
     try {
-      let db: IDBPDatabase<ForkLeafSchema>;
-      try {
-        db = await this.openAt(DB_VERSION);
-      } catch (error) {
-        // A database written by a newer build of ForkLeaf than this one.
-        // IndexedDB refuses a downgrade outright, and there is no way to talk
-        // it round — so take the database as it stands instead.
-        //
-        // This is survivable only because the schema is additive: every store
-        // this version knows about still exists in a later one. It matters
-        // because the alternative is a browser that can never open its own
-        // notes again — one tab left on a newer deploy, or a rolled-back
-        // release, and the data is stranded behind an error.
-        if (!isVersionError(error)) throw error;
-        console.warn("[forkleaf] local storage is newer than this build; opening it as it is.");
-        db = await this.openExisting();
-      }
-
-      this.handle = db;
-      return db;
+      return await this.attempt();
     } catch (error) {
       // Not cached as a rejection: closing the other tab should be enough to
       // make the next attempt work.
       this.dbPromise = null;
+
+      // One retry, but only for the failure a retry can fix.
+      //
+      // The request is re-sent here rather than relying on the one the
+      // `blocked` callback made: that one went out at the start of a wait this
+      // code only reaches at the end of, so any reply to it arrived — and was
+      // discarded — seconds ago. Asking and listening together is what makes
+      // the answer meaningful. A browser without `BroadcastChannel` gets
+      // `false` immediately and the original error.
+      if (this.blockedByAnotherTab) {
+        const released = this.channel.waitFor("released-db", RELEASE_TIMEOUT_MS);
+        this.channel.post({ type: "release-db", wanted: DB_VERSION });
+
+        if (await released) {
+          try {
+            return await this.attempt();
+          } catch {
+            this.dbPromise = null;
+          }
+        }
+      }
+
       throw error;
     }
+  }
+
+  /** One open, upgrading if it can and taking what is there if it cannot. */
+  private async attempt(): Promise<IDBPDatabase<ForkLeafSchema>> {
+    let db: IDBPDatabase<ForkLeafSchema>;
+    try {
+      db = await this.openAt(DB_VERSION);
+    } catch (error) {
+      // A database written by a newer build of ForkLeaf than this one.
+      // IndexedDB refuses a downgrade outright, and there is no way to talk
+      // it round — so take the database as it stands instead.
+      //
+      // This is survivable only because the schema is additive: every store
+      // this version knows about still exists in a later one. It matters
+      // because the alternative is a browser that can never open its own
+      // notes again — one tab left on a newer deploy, or a rolled-back
+      // release, and the data is stranded behind an error.
+      if (!isVersionError(error)) throw error;
+      console.warn("[forkleaf] local storage is newer than this build; opening it as it is.");
+      db = await this.openExisting();
+    }
+
+    this.handle = db;
+    return db;
   }
 
   /** Opens — and if need be upgrades — the database at a known version. */
@@ -166,6 +217,11 @@ export class IndexedDbDatabase implements LocalDatabase {
           console.warn(
             `[forkleaf] waiting on another ForkLeaf tab holding the database at v${currentVersion} (wanted v${blockedVersion}).`,
           );
+          // Ask rather than wait. Every other ForkLeaf tab closes its handle
+          // on this, which is what the browser needs before the upgrade can
+          // run — so what used to be an eight-second stall ending in "close
+          // your other tabs" now clears by itself.
+          this.channel.post({ type: "release-db", wanted: blockedVersion ?? DB_VERSION });
         },
         /**
          * We are the older connection standing in the way of another tab's
@@ -176,7 +232,10 @@ export class IndexedDbDatabase implements LocalDatabase {
          * or a "clear site data" — hangs every other tab on the loading
          * screen indefinitely.
          */
-        blocking: () => this.release(),
+        blocking: () => {
+          this.release();
+          this.channel.post({ type: "released-db" });
+        },
         /** The browser dropped the connection; reopen on the next read. */
         terminated: () => this.release(),
       }),
@@ -208,6 +267,18 @@ export class IndexedDbDatabase implements LocalDatabase {
     }
 
     return db;
+  }
+
+  /**
+   * Stops answering release requests.
+   *
+   * Only worth calling when a database instance is genuinely finished with —
+   * a test, or a second instance created by mistake. The app's own instance
+   * lives as long as the tab does.
+   */
+  dispose(): void {
+    this.stopListening();
+    this.release();
   }
 
   /** Drops this tab's connection so another one can upgrade or delete. */
