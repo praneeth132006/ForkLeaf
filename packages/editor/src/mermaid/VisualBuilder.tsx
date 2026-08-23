@@ -67,6 +67,29 @@ function defaultShapeFor(kind: Graph["kind"]): NodeShape {
   }
 }
 
+/**
+ * Node footprint, the way mermaid computes it: the text plus a fixed padding.
+ *
+ * The canvas used to draw every box at a flat 150×56 whatever was written in
+ * it. Mermaid does not — it sizes a flowchart node to its label — so a
+ * two-letter "Start / End" was a wide pill on the canvas and a near-circle in
+ * the note, and the shape you picked and the shape you got looked like two
+ * different shapes. Matching mermaid's own metric is what makes the canvas a
+ * preview of the diagram rather than a promise about it.
+ */
+const LABEL_CHAR_WIDTH = 9;
+const LABEL_PADDING = 30;
+const MIN_NODE_WIDTH = 64;
+const MAX_NODE_WIDTH = 300;
+
+function textWidth(label: string | undefined): number {
+  return (label ?? "").length * LABEL_CHAR_WIDTH;
+}
+
+function labelWidth(label: string | undefined): number {
+  return textWidth(label) + LABEL_PADDING;
+}
+
 /** Height of one member line inside a class or entity box. */
 const MEMBER_HEIGHT = 17;
 /** Height of the name bar above the members. */
@@ -88,6 +111,28 @@ function sizeOf(node: { shape: NodeShape; label?: string }): { width: number; he
       return { width: 64, height: 64 };
     case "fork":
       return { width: 130, height: 14 };
+    case "circle": {
+      // A connector is round in the note, so it is round here too.
+      const size = clamp(labelWidth(node.label), NODE_HEIGHT, 160);
+      return { width: size, height: size };
+    }
+    case "diamond": {
+      // A rhombus only offers its full width along the centre line, and the
+      // canvas was drawing decisions at the same 150×56 as everything else:
+      // a flat sliver with its question cut off halfway through. Both
+      // dimensions grow with the text, so the words stay inside the shape.
+      const text = textWidth(node.label);
+      return {
+        width: clamp(text * 1.4 + 36, 112, 320),
+        height: clamp(72 + text * 0.22, 72, 160),
+      };
+    }
+    case "hexagon":
+    case "parallelogram": {
+      // Slanted sides eat into the usable width the same way, if less of it.
+      const text = textWidth(node.label);
+      return { width: clamp(text + LABEL_PADDING + 28, 96, MAX_NODE_WIDTH), height: NODE_HEIGHT };
+    }
     case "mind-circle":
     case "mind-bang":
       return { width: 96, height: 96 };
@@ -110,7 +155,10 @@ function sizeOf(node: { shape: NodeShape; label?: string }): { width: number; he
       };
     }
     default:
-      return { width: NODE_WIDTH, height: NODE_HEIGHT };
+      return {
+        width: clamp(labelWidth(node.label), MIN_NODE_WIDTH, MAX_NODE_WIDTH),
+        height: NODE_HEIGHT,
+      };
   }
 }
 
@@ -487,7 +535,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
           // for. Otherwise every new step is add-then-drag-then-connect, and
           // the arrow you already drew is thrown away.
           const shape = defaultShapeFor(graph.kind);
-          const size = sizeOf({ shape });
+          const size = sizeOf({ shape, label: SHAPE_LABELS[shape] });
           const id = nextNodeId(graph);
           const placed = addNode(graph, {
             id,
@@ -679,7 +727,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
   const createNode = useCallback(
     (shape: NodeShape, centre?: Point): string => {
       const id = nextNodeId(graph);
-      const size = sizeOf({ shape });
+      const size = sizeOf({ shape, label: isMarker(shape) ? "" : SHAPE_LABELS[shape] });
       const spot =
         centre ??
         // Added from the palette rather than by double-clicking a spot, so the
@@ -1674,7 +1722,7 @@ function NodeShapeView({
           dominantBaseline="central"
           className="pointer-events-none select-none fill-[var(--fl-text)] text-[13px]"
         >
-          {truncate(node.label, node.shape === "choice" ? 14 : 18)}
+          {truncate(node.label, fittingChars(node.shape, width))}
         </text>
       )}
 
@@ -2028,6 +2076,23 @@ function snap(value: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * How many characters fit inside a box of this width.
+ *
+ * This was a flat 18 for every shape, from when every box was the same 150px
+ * wide. Now that a box is as wide as its label, a fixed limit truncates text
+ * that has room to spare — and still overflows the shapes that have less
+ * usable width than their bounding box.
+ */
+function fittingChars(shape: NodeShape, width: number): number {
+  // A choice diamond is labelled underneath, so its own width is not the limit.
+  if (shape === "choice") return 14;
+
+  // A rhombus only offers its full width along the centre line.
+  const usable = shape === "diamond" ? width * 0.72 : width - LABEL_PADDING;
+  return Math.max(3, Math.floor(usable / LABEL_CHAR_WIDTH));
 }
 
 function truncate(text: string, max: number): string {
