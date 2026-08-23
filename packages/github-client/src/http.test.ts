@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { Transport } from "./http";
+import { Transport, describeErrors } from "./http";
 import { GitHubError } from "./errors";
 
 /**
@@ -65,5 +65,44 @@ describe("Transport request paths", () => {
   it("never sends the token anywhere but the API host", async () => {
     const { transport: t } = transport();
     await expect(t.request("https://api.github.com.evil.test/x")).rejects.toThrow(/Refusing/);
+  });
+});
+
+describe("describeErrors", () => {
+  /**
+   * This runs on every 4xx the app can produce. It used to be
+   * `JSON.stringify`, which put `[{"resource":"PullRequest","code":"custom",
+   * "message":"No commits between main and my-branch"}]` in front of the user
+   * — with the actual explanation buried in it.
+   */
+
+  it("pulls out the sentence GitHub wrote", () => {
+    expect(
+      describeErrors([
+        { resource: "PullRequest", code: "custom", message: "No commits between main and x" },
+      ]),
+    ).toBe("No commits between main and x");
+  });
+
+  it("joins several, without repeating one", () => {
+    expect(
+      describeErrors([{ message: "first" }, { message: "second" }, { message: "first" }]),
+    ).toBe("first; second");
+  });
+
+  it("makes something readable of an entry with no prose", () => {
+    expect(describeErrors([{ resource: "Issue", field: "title", code: "missing_field" }])).toBe(
+      "Issue.title missing_field",
+    );
+    expect(describeErrors([{ code: "already_exists" }])).toBe("already_exists");
+  });
+
+  it("falls back to the raw shape rather than dropping it", () => {
+    expect(describeErrors([{ unexpected: true }])).toBe('{"unexpected":true}');
+  });
+
+  it("is empty for nothing", () => {
+    expect(describeErrors(undefined)).toBe("");
+    expect(describeErrors([])).toBe("");
   });
 });

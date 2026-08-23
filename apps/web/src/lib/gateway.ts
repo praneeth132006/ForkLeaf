@@ -216,6 +216,35 @@ export interface NoteCommitDto {
  * server-side and the reader never has to leave the app to see it.
  */
 /**
+ * Commits a set of changes straight to a named branch.
+ *
+ * The sync engine's own commit path goes through a workspace id, which carries
+ * a branch — so it can only ever write to the branch the workspace is on. The
+ * propose-changes flow needs the other thing: write *these* changes to *that*
+ * branch, without moving the workspace onto it first.
+ */
+export async function commitToBranch(options: {
+  owner: string;
+  repo: string;
+  branch: string;
+  directory: string;
+  message: string;
+  changes: {
+    op: "upsert" | "delete" | "rename";
+    path: string;
+    toPath?: string;
+    content?: string;
+  }[];
+}): Promise<{ sha: string }> {
+  const { owner, repo, branch, directory, message, changes } = options;
+
+  return call("/api/gh/commit", {
+    method: "POST",
+    body: JSON.stringify({ owner, repo, branch, dir: directory, message, changes }),
+  });
+}
+
+/**
  * Publishes a rendered note as a page in the repository's `docs/` folder, and
  * makes sure GitHub Pages is serving it.
  *

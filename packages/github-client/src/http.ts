@@ -181,8 +181,20 @@ export class Transport {
     try {
       const body = (await response.json()) as { message?: string; errors?: unknown[] };
       if (body.message) message = body.message;
-      // 422s carry a nested errors array that explains what was actually wrong.
-      if (body.errors?.length) message += `: ${JSON.stringify(body.errors)}`;
+
+      // 422s carry a nested errors array that explains what was actually
+      // wrong. Its useful part is the `message` on each entry — GitHub writes
+      // those as sentences ("No commits between main and my-branch"). The rest
+      // is machine detail.
+      //
+      // This used to be `JSON.stringify(body.errors)`, which put a wall of raw
+      // JSON in front of the user: the dialog showed them
+      // `[{"resource":"PullRequest","code":"custom","message":"..."}]` when
+      // GitHub had, in fact, told us exactly what was wrong in English.
+      // Stringifying is kept only for the entries that carry no message, since
+      // an unreadable detail still beats no detail at all.
+      const detail = describeErrors(body.errors);
+      if (detail) message += `: ${detail}`;
     } catch {
       // Non-JSON error body; the status line is all we have.
     }
@@ -263,4 +275,38 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
       { once: true },
     );
   });
+}
+
+/**
+ * The readable part of a GitHub `errors` array.
+ *
+ * Entries carrying a `message` contribute it — GitHub writes those as English
+ * sentences, and they are almost always the actual explanation. Entries that
+ * carry none are stringified rather than dropped, so a shape this does not
+ * recognise still reaches the logs.
+ *
+ * Exported for its tests: this runs on every 4xx the app can produce, and the
+ * cost of getting it wrong is an error message nobody can act on.
+ */
+export function describeErrors(errors: unknown[] | undefined): string {
+  if (!errors?.length) return "";
+
+  const parts = errors.map((entry) => {
+    if (entry && typeof entry === "object" && "message" in entry) {
+      const message = (entry as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim()) return message.trim();
+    }
+
+    // GitHub's other common shape: `{resource, field, code}` with no prose.
+    // Rendered as something a person can at least read aloud.
+    if (entry && typeof entry === "object" && "code" in entry) {
+      const { resource, field, code } = entry as Record<string, unknown>;
+      const where = [resource, field].filter((part) => typeof part === "string").join(".");
+      return where ? `${where} ${String(code)}` : String(code);
+    }
+
+    return JSON.stringify(entry);
+  });
+
+  return [...new Set(parts.filter(Boolean))].join("; ");
 }

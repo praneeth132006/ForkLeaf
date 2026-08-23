@@ -144,6 +144,45 @@ export class SyncEngine {
     };
   }
 
+  /**
+   * The unpushed changes for one workspace, or for all of them.
+   *
+   * A copy, not the live array: a caller that mutated what it was handed would
+   * change what the engine is about to push, which is the last place a
+   * surprise belongs.
+   */
+  pendingFor(workspaceId?: string): PendingChange[] {
+    const changes = workspaceId
+      ? this.queue.filter((change) => change.workspaceId === workspaceId)
+      : this.queue;
+    return changes.map((change) => ({ ...change }));
+  }
+
+  /**
+   * Drops a workspace's queued changes because they have already been written
+   * somewhere else.
+   *
+   * The propose-changes flow commits the queue straight onto a new branch —
+   * it has to, since the branch is created from the base and would otherwise
+   * hold nothing to open a pull request against. Leaving those changes queued
+   * afterwards would push the same work a second time, to whichever branch the
+   * workspace lands on next.
+   *
+   * Notes keep their `dirty` flag and their base SHA, so nothing about the
+   * local copy is claimed to be in sync that is not. This drops the *intent to
+   * push*, not the work.
+   */
+  async discardPending(workspaceId: string): Promise<void> {
+    const dropped = this.queue.filter((change) => change.workspaceId === workspaceId);
+    if (dropped.length === 0) return;
+
+    this.queue = this.queue.filter((change) => change.workspaceId !== workspaceId);
+    for (const change of dropped) await this.db.deleteQueueItem(change.id);
+
+    this.setStatus(this.restingStatus());
+    this.emit();
+  }
+
   // ─── Recording changes ────────────────────────────────────────────────────
 
   /**

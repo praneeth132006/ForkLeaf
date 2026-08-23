@@ -1010,6 +1010,8 @@ export function EditorWorkspace() {
           workspace={workspace}
           login={user.login}
           subject={title || note?.path || "update documentation"}
+          pendingChanges={notebook.pendingChanges}
+          onProposed={notebook.discardPending}
           onClose={() => setDialog(null)}
           onSwitchBranch={notebook.switchBranch}
         />

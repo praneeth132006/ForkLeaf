@@ -14,6 +14,7 @@ import {
   DEFAULT_SYNC_PREFERENCE,
   type LocalAsset,
   type Note,
+  type PendingChange,
   type SyncMode,
   type SyncPreference,
   type SyncState,
@@ -862,6 +863,26 @@ export function useNotebook(request: NotebookRequest = {}) {
   const syncNow = useCallback(() => syncRef.current?.flushNow(), []);
 
   /**
+   * The unpushed changes for the workspace currently open.
+   *
+   * Read by the propose-changes flow, which has to write them onto a new
+   * branch itself: a branch created from the base holds nothing, and a pull
+   * request against a branch with no commits on it is what GitHub rejects.
+   */
+  const pendingChanges = useCallback((): PendingChange[] => {
+    const workspace = state.activeWorkspace;
+    if (!workspace) return [];
+    return syncRef.current?.pendingFor(workspace.id) ?? [];
+  }, [state.activeWorkspace]);
+
+  /** Forgets the queued changes, once something else has committed them. */
+  const discardPending = useCallback(async () => {
+    const workspace = state.activeWorkspace;
+    if (!workspace) return;
+    await syncRef.current?.discardPending(workspace.id);
+  }, [state.activeWorkspace]);
+
+  /**
    * Changes how eagerly this workspace pushes.
    *
    * Auto is the default and stays the default; this only exists for the people
@@ -1019,6 +1040,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       addWorkspace,
       removeWorkspace,
       syncNow,
+      pendingChanges,
+      discardPending,
       setSyncMode,
       resolveConflict,
       allNotes,
@@ -1055,6 +1078,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       addWorkspace,
       removeWorkspace,
       syncNow,
+      pendingChanges,
+      discardPending,
       setSyncMode,
       resolveConflict,
       allNotes,
