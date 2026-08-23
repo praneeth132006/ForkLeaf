@@ -125,6 +125,32 @@ describe("filterInsertActions", () => {
   it("returns nothing rather than everything for a query that matches nothing", () => {
     expect(filterInsertActions("zzzznothing", "rich")).toEqual([]);
   });
+
+  // The ids are the names people type. None of them appear in the matching
+  // label, so before they were searched "/h1" matched nothing at all and the
+  // menu simply vanished — which reads as the slash key being broken.
+  it("matches on the id, which is what somebody actually types", () => {
+    for (const id of ["h1", "h2", "h3", "code", "table", "quote", "divider"]) {
+      expect(filterInsertActions(id, "rich").map((action) => action.id)).toContain(id);
+    }
+  });
+
+  it("puts an exact id match first", () => {
+    expect(filterInsertActions("h2", "rich")[0]?.id).toBe("h2");
+    expect(filterInsertActions("table", "rich")[0]?.id).toBe("table");
+  });
+
+  it("ranks a prefix above a match buried mid-word", () => {
+    const ids = filterInsertActions("h", "rich").map((action) => action.id);
+    // "Strikethrough" contains an h; the headings start with one.
+    expect(ids.indexOf("h1")).toBeLessThan(ids.indexOf("strike"));
+  });
+
+  it("finds a block by a word inside its label", () => {
+    const ids = filterInsertActions("list", "rich").map((action) => action.id);
+    expect(ids).toContain("bullet");
+    expect(ids).toContain("ordered");
+  });
 });
 
 describe("runSourceAction", () => {

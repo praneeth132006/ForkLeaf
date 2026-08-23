@@ -440,7 +440,50 @@ function TextGlyph({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Filters a surface's action list by a query typed after a slash. */
+/**
+ * How well one action answers a slash query.
+ *
+ * Higher is better; `null` means no match at all.
+ *
+ * The `id` is searched alongside the label, which is the whole point of this
+ * function existing rather than a bare `includes`. Every id here is the name
+ * somebody would actually type — `h1`, `h2`, `code`, `table`, `hr` — and none
+ * of them appear in the corresponding label, so `/h1` used to match nothing,
+ * close the menu, and leave the literal text `/h1` sitting in the note. That
+ * reads as the feature being broken, because from the outside it is.
+ *
+ * Ranking matters as much as matching: `/h` should offer Heading 1 before it
+ * offers "Strikethrough", which contains an `h` in the middle of a word.
+ */
+function scoreInsertAction(action: InsertDefinition, needle: string): number | null {
+  const id = action.id.toLowerCase();
+  const label = action.label.toLowerCase();
+
+  if (id === needle) return 100;
+  if (label === needle) return 95;
+  if (id.startsWith(needle)) return 80;
+  if (label.startsWith(needle)) return 70;
+
+  // A word inside the label — "list" finding "Bulleted list".
+  if (label.split(/\s+/).some((word) => word.startsWith(needle))) return 60;
+
+  const keywords = action.keywords ?? [];
+  if (keywords.some((keyword) => keyword === needle)) return 55;
+  if (keywords.some((keyword) => keyword.startsWith(needle))) return 45;
+
+  if (label.includes(needle)) return 30;
+  if (keywords.some((keyword) => keyword.includes(needle))) return 20;
+  if (id.includes(needle)) return 15;
+
+  return null;
+}
+
+/**
+ * Filters a surface's action list by a query typed after a slash.
+ *
+ * Best match first, and ties broken by the order the definitions are declared
+ * in, so the list does not reshuffle unpredictably between keystrokes.
+ */
 export function filterInsertActions(
   query: string,
   surface: InsertSurface = "rich",
@@ -449,9 +492,12 @@ export function filterInsertActions(
   const needle = query.trim().toLowerCase();
   if (!needle) return available;
 
-  return available.filter(
-    (action) =>
-      action.label.toLowerCase().includes(needle) ||
-      (action.keywords ?? []).some((keyword) => keyword.includes(needle)),
-  );
+  return available
+    .map((action, index) => ({ action, index, score: scoreInsertAction(action, needle) }))
+    .filter(
+      (entry): entry is { action: InsertDefinition; index: number; score: number } =>
+        entry.score !== null,
+    )
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((entry) => entry.action);
 }

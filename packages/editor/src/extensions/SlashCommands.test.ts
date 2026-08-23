@@ -12,7 +12,12 @@ import type { Editor } from "@tiptap/core";
  * before the caret, and nothing else in the editor participates.
  */
 
-/** The slice of Tiptap's editor that `readSlashState` actually reads. */
+/**
+ * The slice of Tiptap's editor that `readSlashState` actually reads.
+ *
+ * `textBefore` is what `textBetween` returns, so a test writes the leaf
+ * placeholder the production call asks for. Hard breaks arrive as "\n".
+ */
 function fakeEditor(textBefore: string, options: { empty?: boolean; blockStart?: number } = {}) {
   const { empty = true, blockStart = 1 } = options;
 
@@ -57,6 +62,34 @@ describe("readSlashState", () => {
 
   it("stays shut when there is no slash at all", () => {
     expect(readSlashState(fakeEditor("just writing")).active).toBe(false);
+  });
+
+  // Enter in this editor makes a line inside the paragraph rather than a new
+  // paragraph, so almost every slash a writer types has a hard break directly
+  // before it. Reading that break as a non-space character kept the menu shut
+  // everywhere except the first line of a block.
+  it("opens on a slash directly after a hard break", () => {
+    expect(readSlashState(fakeEditor("first line\n/"))).toMatchObject({
+      active: true,
+      query: "",
+    });
+  });
+
+  it("captures the query typed after a slash on a broken line", () => {
+    expect(readSlashState(fakeEditor("first line\n/tab"))).toMatchObject({
+      active: true,
+      query: "tab",
+    });
+  });
+
+  it("puts `from` on the slash, not on the break before it", () => {
+    // "first\n/" — the slash is the seventh character of the block, so at
+    // block start 1 it sits at position 7.
+    expect(readSlashState(fakeEditor("first\n/", { blockStart: 1 })).from).toBe(7);
+  });
+
+  it("still stays shut mid-word on a line that follows a break", () => {
+    expect(readSlashState(fakeEditor("first line\nand/or")).active).toBe(false);
   });
 
   it("stays shut while text is selected, where there is no single caret", () => {

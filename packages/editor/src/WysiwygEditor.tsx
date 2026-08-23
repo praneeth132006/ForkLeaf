@@ -561,23 +561,45 @@ function SlashMenu({ editor, actions }: { editor: Editor; actions: ActionContext
 
   // Keyboard navigation is bound at the document level and captured, so it wins
   // over ProseMirror's own arrow-key handling while the menu is open.
+  //
+  // The handler is registered once per open/close and reads the highlighted row
+  // and the run function through refs. Listing them as effect dependencies
+  // instead meant the listener was torn down and rebuilt on every arrow key and
+  // — because `run` closes over a `state` that changes on every editor
+  // transaction — left a window where Enter fired the command that *had* been
+  // highlighted rather than the one that is.
+  const liveRef = useRef({ commands, selectedIndex, run });
+  liveRef.current = { commands, selectedIndex, run };
+
   useEffect(() => {
-    if (!state.active || commands.length === 0) return;
+    if (!state.active) return;
 
     const handler = (event: KeyboardEvent) => {
+      const { commands: list, selectedIndex: index, run: exec } = liveRef.current;
+      if (list.length === 0) {
+        // Nothing matches. Escape still has to close the menu, or the only way
+        // out of an empty result set is to delete the query by hand.
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setState({ active: false, query: "", from: 0 });
+        }
+        return;
+      }
+
       switch (event.key) {
         case "ArrowDown":
           event.preventDefault();
-          setSelectedIndex((index) => (index + 1) % commands.length);
+          setSelectedIndex((current) => (current + 1) % list.length);
           break;
         case "ArrowUp":
           event.preventDefault();
-          setSelectedIndex((index) => (index - 1 + commands.length) % commands.length);
+          setSelectedIndex((current) => (current - 1 + list.length) % list.length);
           break;
-        case "Enter": {
+        case "Enter":
+        case "Tab": {
           event.preventDefault();
-          const command = commands[selectedIndex];
-          if (command) run(command);
+          const command = list[index];
+          if (command) exec(command);
           break;
         }
         case "Escape":
@@ -589,9 +611,28 @@ function SlashMenu({ editor, actions }: { editor: Editor; actions: ActionContext
 
     document.addEventListener("keydown", handler, true);
     return () => document.removeEventListener("keydown", handler, true);
-  }, [state.active, commands, selectedIndex, run]);
+  }, [state.active]);
 
-  if (!state.active || commands.length === 0) return null;
+  if (!state.active) return null;
+
+  // An empty result set gets a row saying so rather than the menu disappearing.
+  // Vanishing is indistinguishable from the feature not existing, and it is the
+  // state a mistyped query lands in most often.
+  if (commands.length === 0) {
+    return (
+      <div
+        className="absolute z-50 w-72 rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-2.5 shadow-[var(--fl-shadow-lg)]"
+        style={{ top: position.top, left: position.left }}
+      >
+        <p className="text-[13px] text-[var(--fl-text)]">
+          No blocks match &ldquo;{state.query}&rdquo;
+        </p>
+        <p className="mt-0.5 text-[11.5px] text-[var(--fl-muted)]">
+          Try heading, list, table, code, diagram — or press Escape.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div
