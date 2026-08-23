@@ -27,18 +27,39 @@ import type { Editor } from "@tiptap/core";
 const ESCAPED_WIKILINK = /\\\[\\\[([^\n]*?)\\\]\\\]/g;
 
 /**
+ * A line break, as tiptap-markdown writes it: a backslash, then a newline.
+ *
+ * Valid CommonMark, and the wrong thing to put in somebody's notes. Because
+ * the parser below runs with `breaks` on — a newline is a line break, the way
+ * Obsidian and every other notes app treats it — a bare newline already round-
+ * trips as a hard break and the escape buys nothing. Left in, every line of a
+ * file grew a trailing backslash the moment the rich editor touched it: open a
+ * note, type nothing, and the file on GitHub has changed because you looked
+ * at it.
+ *
+ * Anchored to end-of-line so a backslash in the middle of a line — an escaped
+ * character somebody meant — is untouched.
+ */
+const ESCAPED_LINE_BREAK = /\\\n/g;
+
+/**
  * tiptap-markdown 0.9 targets Tiptap 2 and does not augment Tiptap 3's
  * `Storage` interface, so `editor.storage.markdown` is untyped. This reads it
  * through the package's own exported shape rather than sprinkling `any` around.
  *
- * The one repair on the way out is the wikilink escaping above. Narrowly
- * targeted at the full `[[…]]` shape rather than unescaping brackets in
- * general, so a lone `\[` somebody escaped on purpose survives.
+ * Two repairs on the way out, both narrow: the wikilink escaping above, and
+ * the line-break escaping below. Neither unescapes anything in general, so a
+ * `\[` or a `\` somebody escaped on purpose survives.
+ *
+ * Exported for its tests. This is the only code in ForkLeaf that can silently
+ * rewrite a user's file — it runs on every keystroke — so what it produces is
+ * asserted byte for byte rather than inferred from what the screen looks like.
  */
-function markdownOf(editor: Editor): string {
+export function markdownOf(editor: Editor): string {
   return (editor.storage as unknown as { markdown: MarkdownStorage }).markdown
     .getMarkdown()
-    .replace(ESCAPED_WIKILINK, "[[$1]]");
+    .replace(ESCAPED_WIKILINK, "[[$1]]")
+    .replace(ESCAPED_LINE_BREAK, "\n");
 }
 import { CodeBlock } from "./extensions/CodeBlock";
 import { ResolvedImage } from "./extensions/ResolvedImage";
@@ -174,7 +195,20 @@ export function WysiwygEditor({
         html: false,
         transformPastedText: true,
         transformCopiedText: true,
-        breaks: false,
+        /**
+         * A newline is a line break.
+         *
+         * CommonMark says a single newline inside a paragraph is a space,
+         * which is right for prose meant to be typeset and wrong for a
+         * notebook — and it made the two editing surfaces disagree about the
+         * same file: four lines in the source view, one run-on paragraph in
+         * rich text, with nothing to say which one the file really was.
+         *
+         * Matched by `remark-breaks` in the preview and the export, and by the
+         * escape repair above on the way back out, so the round trip is exact
+         * in both directions.
+         */
+        breaks: true,
         linkify: true,
       }),
     ],

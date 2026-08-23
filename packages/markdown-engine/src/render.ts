@@ -1,6 +1,7 @@
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 import remarkRehype from "remark-rehype";
 import rehypeHighlight from "rehype-highlight";
 import { all as allLanguages } from "lowlight";
@@ -194,6 +195,24 @@ const buildHtmlPipeline = (options: RenderOptions) =>
   unified()
     .use(remarkParse)
     .use(remarkGfm)
+    /**
+     * A newline in a note is a newline.
+     *
+     * CommonMark says a single line break inside a paragraph is a space, which
+     * is right for prose meant to be typeset and wrong for a notebook: someone
+     * writing a list of names one per line, without bullets, means one per
+     * line. Worse, it made the two editing surfaces disagree — the same file
+     * showed as four lines in the source view and as one paragraph in rich
+     * text, and nothing told the reader which one the file "really" was.
+     *
+     * The same choice Obsidian ships as its default, and applied to both sides
+     * of the round trip: this parser, and the hard-break serialiser in the rich
+     * editor. The cost is that lines separated by a single newline render as
+     * one paragraph on github.com, which reads markdown the strict way — but a
+     * blank line is a paragraph break in both, so anything written to be
+     * portable already is.
+     */
+    .use(remarkBreaks)
     .use(remarkHighlight)
     // Before remark-rehype, because it produces mdast link nodes.
     .use(remarkWikilink, { resolve: options.resolveWikilink })

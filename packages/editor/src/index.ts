@@ -1,5 +1,5 @@
 export { MarkdownEditor, type MarkdownEditorProps } from "./MarkdownEditor";
-export { WysiwygEditor, type WysiwygEditorProps } from "./WysiwygEditor";
+export { WysiwygEditor, markdownOf, type WysiwygEditorProps } from "./WysiwygEditor";
 export {
   SourceEditor,
   type SourceEditorProps,
