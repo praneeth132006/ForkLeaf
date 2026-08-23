@@ -33,6 +33,7 @@ export { LinkDialog, type LinkDialogProps } from "./ui/LinkDialog";
 export { type ImageBridge, imagesFrom, isEditableImage, IMAGE_ACCEPT } from "./images";
 export { type LinkBridge, wikilinkResolver, handleWikilinkClick } from "./links";
 export { Wikilink, type WikilinkOptions } from "./extensions/Wikilink";
+export { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 export { ResolvedImage, type ResolvedImageOptions } from "./extensions/ResolvedImage";
 
 export { DiagramStudio, type DiagramStudioProps, type StudioView } from "./mermaid/DiagramStudio";

@@ -15,7 +15,26 @@ export interface NoteRepositoryOptions {
   gateway: RemoteGateway;
   sync: SyncEngine;
   now?: () => Date;
+  /**
+   * Who is editing, for the note's provenance stamp.
+   *
+   * A function rather than a value because a session can begin, end or change
+   * while this repository is alive, and a login captured at construction would
+   * keep crediting whoever happened to be signed in when the tab opened.
+   * Returns null in local mode, where there is no account to name.
+   */
+  author?: () => string | null;
 }
+
+/**
+ * What wrote the file, recorded in the file.
+ *
+ * These notes are meant to be read on github.com and in other editors, and a
+ * reader who finds one has no way of knowing what made it. GitHub renders
+ * frontmatter as a table above the document, so this is both a credit and the
+ * most direct route from someone else's repository back to the project.
+ */
+const GENERATOR = "ForkLeaf — https://github.com/praneeth132006/ForkLeaf";
 
 /**
  * The API the UI actually talks to.
@@ -39,12 +58,37 @@ export class NoteRepository {
   private readonly gateway: RemoteGateway;
   private readonly sync: SyncEngine;
   private readonly now: () => Date;
+  private readonly author: () => string | null;
 
   constructor(options: NoteRepositoryOptions) {
     this.db = options.db;
     this.gateway = options.gateway;
     this.sync = options.sync;
     this.now = options.now ?? (() => new Date());
+    this.author = options.author ?? (() => null);
+  }
+
+  /**
+   * Refreshes the provenance a note carries into its repository.
+   *
+   * `updated` and `editedBy` answer the two questions anyone browsing a notes
+   * repository on GitHub actually has — when was this last touched, and by
+   * whom — without needing `git log`. They are deliberately the only fields
+   * maintained automatically: a word count or a reading time would change on
+   * every save and turn every commit diff into noise about nothing.
+   *
+   * Whatever else the note carries is preserved and ordered first, so a field
+   * somebody added by hand is not shuffled to the bottom on the next keystroke.
+   */
+  private stamp(frontmatter: NoteFrontmatter): NoteFrontmatter {
+    const editedBy = this.author();
+
+    return {
+      ...frontmatter,
+      updated: this.now().toISOString(),
+      ...(editedBy ? { editedBy } : {}),
+      generator: GENERATOR,
+    };
   }
 
   // ─── Workspaces ───────────────────────────────────────────────────────────
@@ -148,7 +192,7 @@ export class NoteRepository {
 
   /** Saves an edit locally and queues it for GitHub. Returns immediately. */
   async saveNote(note: Note, content: string, frontmatter?: NoteFrontmatter): Promise<Note> {
-    const nextFrontmatter = frontmatter ?? note.frontmatter;
+    const nextFrontmatter = this.stamp(frontmatter ?? note.frontmatter);
     const updated: Note = {
       ...note,
       content,
@@ -176,10 +220,12 @@ export class NoteRepository {
     const path = uniquePath(joinPath(options.folder, filename), options.existingPaths);
     const timestamp = this.now().toISOString();
 
-    const frontmatter: NoteFrontmatter = {
+    // Title and creation date first, then the maintained fields, so the table
+    // GitHub renders reads in the order somebody would ask the questions.
+    const frontmatter: NoteFrontmatter = this.stamp({
       title: options.title,
       created: timestamp,
-    };
+    });
     const content = options.content ?? `# ${options.title}\n\n`;
 
     const note: Note = {

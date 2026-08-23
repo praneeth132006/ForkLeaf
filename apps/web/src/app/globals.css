@@ -113,26 +113,48 @@ h3 {
   letter-spacing: -0.018em;
 }
 
-/* Visible focus for keyboard users, suppressed for mouse clicks. */
+/* Visible focus for keyboard users, suppressed for mouse clicks.
+   A hairline plus a soft halo rather than a 2px slab. The old ring was as
+   heavy as the accent itself, so tabbing through a form read as a series of
+   hard boxes being stamped onto the page; this says the same thing quietly. */
 :focus-visible {
-  outline: 2px solid var(--fl-accent);
+  outline: 1px solid var(--fl-accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 4px var(--fl-accent-soft);
 }
 
 /* …but never around a writing surface. ProseMirror and CodeMirror are focused
    the entire time you are using them, so the generic ring above drew a
-   permanent green box around the document. They show focus with a caret. */
+   permanent box around the document.
+
+   Both properties, not just the outline. When the focus ring gained its soft
+   halo, this rule still only cancelled `outline` — so the halo stayed, and the
+   editor grew a faint rounded rectangle around the page you were writing on
+   that no amount of clicking would dismiss. A writing surface shows focus with
+   a caret and nothing else. */
 .ProseMirror,
 .ProseMirror:focus,
 .ProseMirror:focus-visible,
 .cm-editor,
+.cm-editor:focus,
 .cm-editor:focus-visible,
 .cm-content,
 .cm-content:focus,
 .cm-content:focus-visible,
+.cm-scroller,
 .cm-scroller:focus-visible {
   outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Any editable region, including ones no component here owns — a table cell
+   in the rich editor, a diagram label. Same reasoning as above: focus that
+   persists for as long as you are typing is not information. */
+[contenteditable]:focus,
+[contenteditable]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 ::selection {
@@ -237,8 +259,26 @@ h3 {
   color: var(--fl-muted);
 }
 
-.fl-input:focus {
-  border-color: var(--fl-accent);
+/* A focused field lifts rather than outlines itself: the border goes to the
+   strong neutral, not to the accent, and the accent appears only as a soft
+   halo around it. Painting the border with the accent put a hard, saturated
+   rectangle around whatever you were typing in, which is the one thing on
+   screen that should stay calm. */
+.fl-input:focus,
+.fl-input:focus-visible {
+  border-color: var(--fl-border-strong);
+  box-shadow: 0 0 0 3px var(--fl-accent-soft);
+  /* The generic ring above would sit outside this one and double it up. */
+  outline: none;
+}
+
+/* Native controls inherit the same treatment, so a raw <input> in a dialog
+   does not look like it belongs to a different application. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 1px solid var(--fl-border-strong);
+  outline-offset: 0;
   box-shadow: 0 0 0 3px var(--fl-accent-soft);
 }
 

@@ -40,8 +40,15 @@ export interface NoteLinks {
   onCreate: (target: string) => void;
 }
 
-/** Frontmatter keys that get a dedicated editor rather than the generic list. */
-const RESERVED = new Set(["title", "tags", "created", "updated"]);
+/**
+ * Frontmatter keys the panel does not offer as free-text fields.
+ *
+ * Either they have a dedicated editor above (title, tags) or they are
+ * maintained by the app on every save (created, updated, editedBy, generator).
+ * Showing a machine-written field as an editable box invites someone to change
+ * it and then watch it revert on the next keystroke.
+ */
+const RESERVED = new Set(["title", "tags", "created", "updated", "editedBy", "generator"]);
 
 /**
  * Right panel: everything true about the document that is not the document.

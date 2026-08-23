@@ -121,6 +121,14 @@ export function useNotebook(request: NotebookRequest = {}) {
   // on every render would fight the user's own navigation between notes.
   const [requested] = useState(request);
 
+  /**
+   * The current session, for anything that needs it outside React's flow.
+   *
+   * The note repository is built once and lives for the session; it asks this
+   * for the login to stamp on each save.
+   */
+  const sessionRef = useRef<SessionResponse | null>(null);
+
   const [state, setState] = useState<NotebookState>({
     ready: false,
     session: null,
@@ -179,6 +187,7 @@ export function useNotebook(request: NotebookRequest = {}) {
           githubAvailable: false,
         }));
         if (cancelled) return;
+        sessionRef.current = session;
 
         // Never throws: a browser that refuses IndexedDB gets an in-memory
         // store rather than a boot failure. Nothing typed into that store
@@ -193,7 +202,15 @@ export function useNotebook(request: NotebookRequest = {}) {
           session.mode === "github" ? new GitHubGateway() : new LocalGateway();
 
         const sync = new SyncEngine({ db, gateway });
-        const notes = new NoteRepository({ db, gateway, sync });
+        // Read through a ref rather than captured: signing in or out mid-
+        // session must change who the next save is credited to, and a login
+        // captured here would keep naming whoever opened the tab.
+        const notes = new NoteRepository({
+          db,
+          gateway,
+          sync,
+          author: () => sessionRef.current?.user?.login ?? null,
+        });
 
         dbRef.current = db;
         gatewayRef.current = gateway as GitHubGateway | LocalGateway;

@@ -67,6 +67,7 @@ import { TextSelection } from "@tiptap/pm/state";
 import { imagesFrom, type ImageBridge } from "./images";
 import { MermaidBlock } from "./extensions/MermaidBlock";
 import { Wikilink } from "./extensions/Wikilink";
+import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 import type { LinkBridge } from "./links";
 import { readSlashState } from "./extensions/SlashCommands";
 import { filterInsertActions, type ActionContext, type InsertDefinition } from "./insert-actions";
@@ -191,6 +192,9 @@ export function WysiwygEditor({
       // Read through the ref, not captured: the extension list is built once,
       // and the bridge arrives a render later once the workspace resolves.
       Wikilink.configure({ bridge: () => linksRef.current }),
+      // After the nodes it defers to, so their own Enter handling is already
+      // registered when this decides whether to step aside.
+      EnterIsALineBreak,
       Markdown.configure({
         html: false,
         transformPastedText: true,

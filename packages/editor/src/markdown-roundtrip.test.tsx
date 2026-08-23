@@ -104,6 +104,23 @@ describe("markdown round trip", () => {
     );
   });
 
+  it("collapses a run of blank lines to one, and stays there", async () => {
+    // Enter now writes a line break rather than splitting the paragraph, so
+    // extra blank lines only arrive from a file written elsewhere. Markdown
+    // reads any run of them as a single paragraph break; the serialiser has to
+    // agree, and — more importantly — has to stop moving after one pass.
+    const once = await roundTrip("alpha\n\n\n\nbravo");
+    expect(once).toBe("alpha\n\nbravo");
+    await expect(roundTrip(once)).resolves.toBe(once);
+  });
+
+  it("keeps a trailing newline from turning into a growing gap", async () => {
+    // The failure worth guarding: a file that gains a line every time it is
+    // opened. Whatever the first pass settles on, the second must match.
+    const once = await roundTrip("alpha\nbravo\n");
+    await expect(roundTrip(once)).resolves.toBe(once);
+  });
+
   it("survives a document with every construct at once", async () => {
     const source = [
       "# Title",
