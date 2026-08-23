@@ -9,6 +9,15 @@ export interface EditorStatusBarProps {
   sync: SyncState;
   workspace: Workspace | null;
   notePath: string | null;
+  /**
+   * The file on this machine this note came from, if it came from one.
+   *
+   * Worth its own place in the status bar rather than being folded into the
+   * path: a note that writes back to `~/notes/meeting.md` when you press ⌘S
+   * behaves differently from every other note, and the only honest place to
+   * say so is where the reader already looks to see where they are.
+   */
+  localFile?: string | null;
   /** Caret position, when a source surface is on screen to report one. */
   cursor: CursorPosition | null;
   /** Word count of the open note. */
@@ -35,6 +44,7 @@ export function EditorStatusBar({
   sync,
   workspace,
   notePath,
+  localFile,
   cursor,
   words,
   syncPreference,
@@ -47,7 +57,7 @@ export function EditorStatusBar({
   const status = describe(sync);
 
   return (
-    <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-[var(--fl-border)] bg-[var(--fl-bg)] px-3 text-[0.7rem] text-[var(--fl-muted)]">
+    <footer className="flex h-8 shrink-0 items-center gap-3 px-4 text-[0.7rem] text-[var(--fl-muted)]">
       <button
         type="button"
         onClick={sync.conflicts.length > 0 ? onShowConflicts : onSyncNow}
@@ -100,6 +110,15 @@ export function EditorStatusBar({
           <span className="hidden truncate font-mono lg:inline" title={notePath}>
             {notePath}
           </span>
+
+          {localFile && (
+            <span
+              title={`Saving with ⌘S writes ${localFile} on this computer`}
+              className="hidden shrink-0 items-center gap-1 rounded-full bg-[var(--fl-accent-soft)] px-2 py-0.5 text-[var(--fl-accent)] md:inline-flex"
+            >
+              {localFile}
+            </span>
+          )}
 
           {/* Only shown when a source surface is live: rich text has no lines
               to count, and a stale reading is worse than none. */}

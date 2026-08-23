@@ -4,16 +4,21 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import type { CursorPosition, ImageBridge } from "@forkleaf/editor";
+import type { CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
 import type { EditorViewMode } from "@forkleaf/types";
 import {
   deriveTitle,
   dirname,
   documentStats,
   joinPath,
+  serializeDocument,
   slugifyFilename,
+  stripExtension,
 } from "@forkleaf/markdown-engine";
 import { useNotebook } from "@/hooks/useNotebook";
+import { useLinks } from "@/hooks/useLinks";
+import { useLocalFiles } from "@/hooks/useLocalFiles";
+import type { LocalFile } from "@/lib/local-files";
 import { useTheme } from "@/hooks/useTheme";
 import { EditorSidebar } from "@/components/EditorSidebar";
 import { EditorRightPanel } from "@/components/EditorRightPanel";
@@ -23,6 +28,7 @@ import { ConflictDialog } from "@/components/ConflictDialog";
 import { ExportDialog } from "@/components/ExportDialog";
 import { ConnectRepoDialog } from "@/components/ConnectRepoDialog";
 import { ProposeChangesDialog } from "@/components/ProposeChangesDialog";
+import { PublishDialog } from "@/components/PublishDialog";
 import { HelpDialog } from "@/components/HelpDialog";
 import { HistoryDialog } from "@/components/HistoryDialog";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
@@ -33,7 +39,7 @@ import { ForkLeafLogo } from "@/components/Brand";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { signOut } from "@/lib/gateway";
 import { assetPathFor, relativeSrc, resolveImageSrc, uploadImage } from "@/lib/assets";
-import { flattenTree } from "@/lib/library";
+import { flattenTree, isMarkdown } from "@/lib/library";
 import { track } from "@/lib/firebase/analytics";
 import { upsertUserProfile } from "@/lib/firebase/users";
 
@@ -79,7 +85,7 @@ export function EditorWorkspace() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [dialog, setDialog] = useState<
-    "export" | "connect" | "help" | "history" | "propose" | null
+    "export" | "connect" | "help" | "history" | "propose" | "publish" | null
   >(null);
   // Dismissing the repo chooser has to be remembered, because the condition
   // that raises it stays true until a repository is actually connected.
@@ -159,6 +165,112 @@ export function EditorWorkspace() {
     }),
     [workspace, notePath, takenPaths, notebook],
   );
+
+  /**
+   * The `[[wikilink]]` graph for this workspace.
+   *
+   * Fed the tree's paths rather than only the open notes, so a link to a note
+   * that has never been opened on this device still resolves — otherwise the
+   * graph would depend on browsing history rather than on the repository.
+   */
+  const markdownPaths = useMemo(() => takenPaths.filter(isMarkdown), [takenPaths]);
+  const workspaceIdForLinks = workspace?.id ?? null;
+
+  const hrefForPath = useCallback(
+    (path: string) =>
+      workspaceIdForLinks
+        ? `/editor?ws=${encodeURIComponent(workspaceIdForLinks)}&note=${encodeURIComponent(path)}`
+        : `/editor?note=${encodeURIComponent(path)}`,
+    [workspaceIdForLinks],
+  );
+
+  const links = useLinks({
+    workspaceId: workspaceIdForLinks,
+    paths: markdownPaths,
+    openNotes: notebook.openNotes,
+    loadNotes: notebook.allNotes,
+    hrefFor: hrefForPath,
+  });
+
+  /**
+   * Creates the note a link points at but that nobody has written yet.
+   *
+   * The title is the target as typed, which is what makes the link resolve the
+   * moment the note exists: the filename is slugified, but the frontmatter
+   * title is not, and either is enough for the resolver to match on.
+   */
+  const createLinked = useCallback(
+    (target: string) => {
+      const folder = dirname(links.createPathFor(target, notePath ?? ""));
+      void notebook.createNote(target, folder);
+    },
+    [links, notePath, notebook],
+  );
+
+  const linkBridge = useMemo<LinkBridge>(
+    () => ({
+      resolve: links.resolve,
+      open: (target) => {
+        const path = links.pathFor(target);
+        // Clicking a link to a note that has not been written yet writes it.
+        // Refusing to navigate would be technically correct and useless.
+        if (path) notebook.openNote(path);
+        else createLinked(target);
+      },
+    }),
+    [links, notebook, createLinked],
+  );
+
+  /**
+   * Takes a file from this machine into the notebook.
+   *
+   * A file opened from the operating system becomes a real note — saved to
+   * IndexedDB, synced to the repository like any other — that also happens to
+   * have a file behind it. Anything less would mean a second kind of document
+   * with its own tabs, its own storage and its own bugs, for no gain.
+   *
+   * Opening a file that is already open re-reads it into the tab it is already
+   * in, rather than making a second copy. That is what every desktop editor
+   * does, and the file on disk is the authority for a note that came from one.
+   */
+  const adoptFile = useCallback(
+    async (file: LocalFile, existingNotePath: string | null): Promise<string | null> => {
+      if (existingNotePath) {
+        await notebook.replaceNoteContent(existingNotePath, file.text);
+        notebook.openNote(existingNotePath);
+        return existingNotePath;
+      }
+
+      const title = stripExtension(file.name) || "Untitled";
+      const created = await notebook.createNote(title, "", file.text);
+      return created?.path ?? null;
+    },
+    [notebook],
+  );
+
+  const localFiles = useLocalFiles(adoptFile);
+
+  /**
+   * Saves the note, and the file behind it when there is one.
+   *
+   * Local storage already has every keystroke; this is the deliberate save.
+   * For an ordinary note that means pushing to GitHub now rather than waiting
+   * out the debounce, and for a note opened from this machine it also means
+   * writing the file — which is not done on every keystroke, because
+   * continuously rewriting a file in someone's home directory is not something
+   * an editor should do without being asked.
+   */
+  const saveEverything = useCallback(async () => {
+    if (note) {
+      const written = await localFiles.saveToFile(
+        note.path,
+        serializeDocument(note.content, note.frontmatter),
+      );
+      if (written) return;
+    }
+
+    await notebook.syncNow();
+  }, [note, localFiles, notebook]);
 
   const conflicts = notebook.sync.conflicts;
   // Derived rather than pushed into state by an effect, which would cause a
@@ -443,7 +555,32 @@ export function EditorWorkspace() {
         },
       );
 
+      if (localFiles.supported) {
+        list.push({
+          id: "save-file-as",
+          label: "Save this note to a file…",
+          group: "Notes",
+          hint: "⇧⌘S",
+          keywords: "export disk download local filesystem save as",
+          run: () =>
+            void localFiles.saveFileAs(
+              note.path,
+              `${slugifyFilename(title || "note")}.md`,
+              serializeDocument(note.content, note.frontmatter),
+            ),
+        });
+      }
+
       if (workspace && !workspace.isLocal) {
+        list.push({
+          id: "publish",
+          label: "Publish this note as a page…",
+          group: "Notes",
+          hint: "A public link, served from your repo",
+          keywords: "share public url link github pages website publish",
+          run: () => setDialog("publish"),
+        });
+
         list.push({
           id: "history",
           label: "Show this note's history",
@@ -455,9 +592,21 @@ export function EditorWorkspace() {
       }
     }
 
+    if (localFiles.supported) {
+      list.push({
+        id: "open-file",
+        label: "Open a file from this computer…",
+        group: "Notes",
+        hint: "Edits the file itself",
+        keywords: "import disk local filesystem md markdown open with",
+        run: () => void localFiles.openFile(),
+      });
+    }
+
     return list;
   }, [
     note,
+    title,
     workspace,
     theme,
     sidebarCollapsed,
@@ -468,6 +617,7 @@ export function EditorWorkspace() {
     handleCreate,
     handleRename,
     handleDelete,
+    localFiles,
   ]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
@@ -492,10 +642,20 @@ export function EditorWorkspace() {
           break;
 
         case "s":
-          // Everything is already saved locally; this just pushes now instead
-          // of waiting out the debounce.
           event.preventDefault();
-          void notebook.syncNow();
+          if (event.shiftKey) {
+            // ⇧⌘S is Save as, everywhere. Only offered where the browser can
+            // actually write files.
+            if (note && localFiles.supported) {
+              void localFiles.saveFileAs(
+                note.path,
+                `${slugifyFilename(title || "note")}.md`,
+                serializeDocument(note.content, note.frontmatter),
+              );
+            }
+            break;
+          }
+          void saveEverything();
           break;
 
         case "e":
@@ -541,7 +701,7 @@ export function EditorWorkspace() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [note, notebook, handleCreate, router]);
+  }, [note, notebook, handleCreate, router, localFiles, saveEverything, title]);
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -553,8 +713,10 @@ export function EditorWorkspace() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
-      <div className="flex min-h-0 flex-1">
-        <div className="hidden md:flex">
+      {/* The gap and the padding are what make the three panels read as
+          separate surfaces rather than as one slab divided by hairlines. */}
+      <div className="flex min-h-0 flex-1 gap-2 p-2 pb-0">
+        <div className="fl-panel hidden md:flex">
           <EditorSidebar
             collapsed={sidebarCollapsed}
             onToggle={() => setSidebarCollapsed((value) => !value)}
@@ -581,7 +743,7 @@ export function EditorWorkspace() {
           />
         </div>
 
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="fl-panel flex min-w-0 flex-1 flex-col">
           {/* ── Header ────────────────────────────────────────────────── */}
           {/* One row: which notes are open, how this one is being viewed, and
               the handful of controls that act on the window rather than on the
@@ -688,22 +850,28 @@ export function EditorWorkspace() {
           </header>
 
           {/* ── Banners ──────────────────────────────────────────────── */}
-          {notebook.error && (
-            <div
-              role="alert"
-              className="flex items-center gap-2 border-b border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/8 px-4 py-2 text-sm text-[var(--fl-danger)]"
-            >
-              <span className="flex-1">{notebook.error}</span>
-              <button
-                type="button"
-                onClick={notebook.dismissError}
-                aria-label="Dismiss"
-                className="shrink-0 px-2"
+          {[
+            { text: notebook.error, dismiss: notebook.dismissError },
+            { text: localFiles.error, dismiss: localFiles.clearError },
+          ]
+            .filter((banner) => banner.text)
+            .map((banner) => (
+              <div
+                key={banner.text}
+                role="alert"
+                className="flex items-center gap-2 border-b border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/8 px-4 py-2 text-sm text-[var(--fl-danger)]"
               >
-                ✕
-              </button>
-            </div>
-          )}
+                <span className="flex-1">{banner.text}</span>
+                <button
+                  type="button"
+                  onClick={banner.dismiss}
+                  aria-label="Dismiss"
+                  className="shrink-0 px-2"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
 
           {!user && (
             <LocalOnlyBanner
@@ -724,6 +892,7 @@ export function EditorWorkspace() {
                 theme={theme}
                 onCursorChange={setCursor}
                 images={images}
+                links={linkBridge}
                 imageDestination={
                   workspace && !workspace.isLocal
                     ? `Committed to ${workspace.repo.owner}/${workspace.repo.repo}`
@@ -744,7 +913,7 @@ export function EditorWorkspace() {
         </main>
 
         {!panelCollapsed && (
-          <div className="hidden lg:flex">
+          <div className="fl-panel hidden lg:flex">
             <EditorRightPanel
               collapsed={false}
               onToggle={() => setPanelCollapsed(true)}
@@ -753,8 +922,17 @@ export function EditorWorkspace() {
               onFrontmatterChange={notebook.updateFrontmatter}
               onExport={() => setDialog("export")}
               onShowHistory={() => setDialog("history")}
+              onPublish={workspace && !workspace.isLocal ? () => setDialog("publish") : undefined}
               syncMode={notebook.syncPreference.mode}
-              onSyncNow={notebook.syncNow}
+              onSyncNow={() => void saveEverything()}
+              links={{
+                ready: links.ready,
+                backlinks: note ? links.backlinksFor(note.path) : [],
+                outgoing: note ? links.outgoingFor(note.path) : [],
+                titleFor: links.titleFor,
+                onOpen: notebook.openNote,
+                onCreate: createLinked,
+              }}
             />
           </div>
         )}
@@ -766,11 +944,12 @@ export function EditorWorkspace() {
         sync={notebook.sync}
         workspace={workspace}
         notePath={note?.path ?? null}
+        localFile={note ? localFiles.fileFor(note.path) : null}
         cursor={cursor}
         words={words}
         syncPreference={notebook.syncPreference}
         onSyncModeChange={notebook.setSyncMode}
-        onSyncNow={notebook.syncNow}
+        onSyncNow={() => void saveEverything()}
         onShowConflicts={() => setConflictsDismissed(false)}
       />
 
@@ -824,11 +1003,17 @@ export function EditorWorkspace() {
         />
       )}
 
+      {openDialog === "publish" && workspace && !workspace.isLocal && note && (
+        <PublishDialog workspace={workspace} note={note} onClose={() => setDialog(null)} />
+      )}
+
       {openDialog === "propose" && workspace && !workspace.isLocal && user && (
         <ProposeChangesDialog
           workspace={workspace}
           login={user.login}
           subject={title || note?.path || "update documentation"}
+          pendingChanges={notebook.pendingChanges}
+          onProposed={notebook.discardPending}
           onClose={() => setDialog(null)}
           onSwitchBranch={notebook.switchBranch}
         />

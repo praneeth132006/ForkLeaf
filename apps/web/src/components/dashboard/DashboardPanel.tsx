@@ -81,9 +81,41 @@ export function DashboardPanel({
   // `active?.entries ?? []` is a fresh array each time.
   const entries = useMemo(() => active?.entries ?? [], [active]);
 
+  /**
+   * Full-text hits for the current query.
+   *
+   * `library.searchVersion` is the dependency that matters: the index is a
+   * mutable object filled in by a background read, so nothing else here
+   * changes when it gains a thousand notes. Without it the first search of a
+   * freshly connected repository would be answered from an empty index and
+   * never revisited.
+   */
+  const textHits = useMemo(() => {
+    const needle = query.trim();
+    if (!needle || !active) return [];
+    return library.searchText(needle, active.workspace.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, active?.workspace.id, library.searchVersion, library.searchText]);
+
+  const textScores = useMemo(
+    () => new Map(textHits.map((hit) => [hit.id, hit.score] as const)),
+    [textHits],
+  );
+
+  /** The matching line from each note, shown in place of its opening prose. */
+  const snippets = useMemo(
+    () =>
+      new Map(
+        textHits
+          .filter((hit) => hit.snippet !== null)
+          .map((hit) => [hit.id, hit.snippet!] as const),
+      ),
+    [textHits],
+  );
+
   const results = useMemo(
-    () => queryIndex(entries, { query, folder, tag, sort }),
-    [entries, query, folder, tag, sort],
+    () => queryIndex(entries, { query, folder, tag, sort, textScores }),
+    [entries, query, folder, tag, sort, textScores],
   );
 
   const tags = useMemo(() => tagCounts(entries), [entries]);
@@ -403,7 +435,7 @@ export function DashboardPanel({
                   setQuery(event.target.value);
                   setVisible(PAGE_SIZE);
                 }}
-                placeholder="Search titles, tags, paths…"
+                placeholder="Search your notes…"
                 aria-label="Search notes"
                 className="fl-input w-56"
               />
@@ -443,11 +475,21 @@ export function DashboardPanel({
           />
 
           {view === "list" && (
-            <NoteList entries={page} editorHref={editorHref} emptyMessage={emptyMessage} />
+            <NoteList
+              entries={page}
+              editorHref={editorHref}
+              emptyMessage={emptyMessage}
+              snippets={snippets}
+            />
           )}
 
           {view === "grid" && (
-            <NoteGrid entries={page} editorHref={editorHref} emptyMessage={emptyMessage} />
+            <NoteGrid
+              entries={page}
+              editorHref={editorHref}
+              emptyMessage={emptyMessage}
+              snippets={snippets}
+            />
           )}
 
           {/* The tree draws every match rather than a page of them: a folder

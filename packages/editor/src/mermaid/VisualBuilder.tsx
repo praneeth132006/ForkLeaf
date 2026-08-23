@@ -526,7 +526,9 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         }
       } else if (drag.kind === "connect") {
         const world = toWorld(event);
-        const target = nodeAt(graph, world);
+        // Matches the ports' grab radius, so releasing on the port you were
+        // aiming at counts as releasing on its node.
+        const target = nodeAt(graph, world, PORT_HIT_RADIUS);
 
         if (target && target.id !== drag.fromId) {
           commit(addEdge(graph, drag.fromId, target.id, DEFAULT_EDGE_STYLE[graph.kind]));
@@ -1742,7 +1744,7 @@ function NodeShapeView({
           onPointerDown={onStartConnect}
           className="cursor-crosshair"
         >
-          <circle cx={handle.x} cy={handle.y} r={13} fill="transparent" />
+          <circle cx={handle.x} cy={handle.y} r={PORT_HIT_RADIUS} fill="transparent" />
           <circle
             cx={handle.x}
             cy={handle.y}
@@ -2053,22 +2055,44 @@ function anchorPoint(node: GraphNode, toward: GraphNode): Point {
   return { x: cx + dx * scale, y: cy + dy * scale };
 }
 
-function nodeAt(graph: Graph, point: Point): GraphNode | null {
+/**
+ * The node under a point, optionally with a margin around it.
+ *
+ * The margin exists for dropping a connection. Every node's connection ports
+ * are drawn *on* its outline, with a 13px grab circle — so half of each port,
+ * and most of its hit area, lies outside the node's box. Released there, a
+ * strict box test reported empty canvas, and "dropped on empty canvas" is what
+ * creates a node: aiming a connection at a port produced a stray empty block
+ * sitting on top of the node you were trying to reach.
+ *
+ * Zero by default, because everything else that asks — clicking to select,
+ * double-clicking to rename — means the visible shape and nothing else.
+ */
+function nodeAt(graph: Graph, point: Point, margin = 0): GraphNode | null {
   // Reverse order so the topmost node wins when two overlap.
   for (let i = graph.nodes.length - 1; i >= 0; i -= 1) {
     const node = graph.nodes[i]!;
     const size = sizeOf(node);
     if (
-      point.x >= node.x &&
-      point.x <= node.x + size.width &&
-      point.y >= node.y &&
-      point.y <= node.y + size.height
+      point.x >= node.x - margin &&
+      point.x <= node.x + size.width + margin &&
+      point.y >= node.y - margin &&
+      point.y <= node.y + size.height + margin
     ) {
       return node;
     }
   }
   return null;
 }
+
+/**
+ * The radius of a connection port's grab area, in canvas units.
+ *
+ * Shared by the port markup and the drop hit-test, which have to agree: if the
+ * test is tighter than the target, a connection aimed at a port lands on empty
+ * canvas and makes a node nobody asked for.
+ */
+export const PORT_HIT_RADIUS = 13;
 
 function snap(value: number): number {
   return Math.round(value / GRID) * GRID;

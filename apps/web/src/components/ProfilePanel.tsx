@@ -8,7 +8,8 @@ import { DEFAULT_SYNC_PREFERENCE } from "@forkleaf/types";
 import { openLocalDatabase, type LocalDatabase } from "@forkleaf/store";
 import { documentStats } from "@forkleaf/markdown-engine";
 import { signOut } from "@/lib/gateway";
-import { useTheme, type Theme } from "@/hooks/useTheme";
+import { usePalette, useTheme, type Theme } from "@/hooks/useTheme";
+import { PALETTES, normalizeHex } from "@/lib/palette";
 import { EVERYTHING } from "@/lib/plans";
 
 export interface ProfilePanelProps {
@@ -61,6 +62,7 @@ const SYNC_LABELS: Record<SyncPreference["mode"], string> = {
 export function ProfilePanel({ user, githubAvailable }: ProfilePanelProps) {
   const router = useRouter();
   const [theme, setTheme] = useTheme();
+  const accents = usePalette();
   const [library, setLibrary] = useState<Library | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const [blocked, setBlocked] = useState(false);
@@ -335,6 +337,8 @@ export function ProfilePanel({ user, githubAvailable }: ProfilePanelProps) {
             />
           </Setting>
 
+          <AccentPicker mode={theme} accents={accents} />
+
           <Setting
             title="New notes open in"
             description="Each note remembers the view you last used for it; this is where new ones start."
@@ -450,6 +454,127 @@ function Pair({ label, value }: { label: string; value: string }) {
       <dt className="text-[var(--fl-muted)]">{label}</dt>
       <dd className="font-medium text-[var(--fl-text)]">{value}</dd>
     </span>
+  );
+}
+
+/**
+ * The accent colour, as swatches rather than a dropdown.
+ *
+ * A colour is the one setting nobody can choose from its name — "Sage Slate"
+ * means nothing until you have seen it — so every option shows the actual
+ * colour, in the mode currently on screen. Each palette is a different colour
+ * in light and dark, and showing the dark one to somebody sitting in light
+ * mode would be picking blind.
+ *
+ * Its own block rather than a `Setting`, which puts its control on the right:
+ * six swatches and a colour field do not belong in a column sized for a
+ * two-button toggle.
+ */
+function AccentPicker({ mode, accents }: { mode: Theme; accents: ReturnType<typeof usePalette> }) {
+  const [draft, setDraft] = useState("");
+
+  // What the custom swatch shows: whatever is being typed if it is already a
+  // colour, else the saved one, else something to aim at.
+  const customPreview = normalizeHex(draft) ?? accents.customHex ?? "#8a9bb8";
+
+  return (
+    <div className="p-5">
+      <p className="text-[14.5px] font-medium text-[var(--fl-text)]">Accent colour</p>
+      <p className="mt-0.5 text-[13px] leading-relaxed text-[var(--fl-muted)]">
+        Only the accent changes. Backgrounds, borders and text stay as they are, in both light and
+        dark.
+      </p>
+
+      <div
+        role="radiogroup"
+        aria-label="Accent colour"
+        className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
+      >
+        {PALETTES.map((palette) => {
+          const selected = accents.palette === palette.id;
+          const vars = palette[mode];
+
+          return (
+            <button
+              key={palette.id}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => accents.choose(palette.id)}
+              className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+                selected
+                  ? "border-[var(--fl-accent)] bg-[var(--fl-accent-soft)]"
+                  : "border-[var(--fl-border)] hover:border-[var(--fl-border-strong)] hover:bg-[var(--fl-elevated)]"
+              }`}
+            >
+              <Swatch color={vars.accent} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13.5px] font-medium text-[var(--fl-text)]">
+                  {palette.name}
+                </span>
+                <span className="block truncate text-[12px] text-[var(--fl-muted)]">
+                  {palette.note}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+
+        {/* Custom sits in the same grid as the presets: it is one of the
+            options, not an advanced escape hatch below them. */}
+        <div
+          className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
+            accents.palette === "custom"
+              ? "border-[var(--fl-accent)] bg-[var(--fl-accent-soft)]"
+              : "border-[var(--fl-border)]"
+          }`}
+        >
+          <label className="relative shrink-0 cursor-pointer">
+            <Swatch color={customPreview} />
+            {/* A real colour input, sized to the swatch and made invisible, so
+                the OS picker opens on the thing it is going to change. */}
+            <input
+              type="color"
+              value={customPreview}
+              aria-label="Pick a custom accent colour"
+              onChange={(event) => {
+                setDraft(event.target.value);
+                accents.setCustom(event.target.value);
+              }}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            />
+          </label>
+
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13.5px] font-medium text-[var(--fl-text)]">Custom</span>
+            <input
+              value={draft || (accents.customHex ?? "")}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                // Applied as soon as it parses, so the page previews it while
+                // you type rather than after a Save nobody would find.
+                accents.setCustom(event.target.value);
+              }}
+              placeholder="#8a9bb8"
+              spellCheck={false}
+              aria-label="Custom accent colour, as hex"
+              className="mt-0.5 w-full bg-transparent font-mono text-[12px] text-[var(--fl-muted)] outline-none placeholder:text-[var(--fl-muted)]"
+            />
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A colour chip. Bordered, so a swatch near the background is still a shape. */
+function Swatch({ color }: { color: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{ background: color }}
+      className="block h-8 w-8 shrink-0 rounded-lg border border-[var(--fl-border-strong)]"
+    />
   );
 }
 

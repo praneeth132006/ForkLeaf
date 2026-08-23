@@ -5,22 +5,47 @@
 @source "../../../../packages/editor/src/**/*.{ts,tsx}";
 
 /* ── Type scale ────────────────────────────────────────────────────────────
-   Instrument Sans carries the interface, Instrument Serif the display
-   headings, JetBrains Mono the code. The serif is deliberately only used
-   large: it has a single weight, so it reads as a voice rather than a system. */
+   Four faces, each with one job. Instrument Sans carries the interface;
+   Instrument Serif the display headings, deliberately only used large because
+   it has a single weight and reads as a voice rather than a system; JetBrains
+   Mono the code; and Newsreader the documents themselves — see `--font-reading`
+   below. */
 @theme {
   --font-sans: var(--font-instrument-sans), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-instrument-serif), ui-serif, Georgia, serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+
+  /* The face notes are written and read in, distinct from the chrome around
+     them. A text serif with real optical sizing, so a paragraph and a heading
+     are drawn with different contrast rather than one being a scaled copy of
+     the other. */
+  --font-reading: var(--font-newsreader), ui-serif, Georgia, "Times New Roman", serif;
+
+  /* ── Corner radius ──────────────────────────────────────────────────────
+     Tailwind's own scale, softened by roughly half a step throughout.
+
+     Set here rather than by rewriting fifty `rounded-lg` class names: the
+     radius of a control is a design decision the whole app should share, and
+     the only way to keep it shared is to change it in one place. Every button,
+     input, tab, card, menu and dialog in the editor moves together. */
+  --radius-xs: 0.1875rem; /*  3px */
+  --radius-sm: 0.375rem; /*   6px */
+  --radius-md: 0.5rem; /*     8px */
+  --radius-lg: 0.75rem; /*   12px */
+  --radius-xl: 1rem; /*      16px */
+  --radius-2xl: 1.25rem; /*  20px */
+  --radius-3xl: 1.75rem; /*  28px */
 }
 
 /* ── Palette ───────────────────────────────────────────────────────────────
    Every component references these semantic tokens rather than raw hex, so
    the two blocks below re-theme the entire app.
 
-   The dark theme is the reference design: a true ink black (#0A0C0A, not a
-   blued-off charcoal) with a single leaf-green accent. Light mode is the same
-   relationships inverted, with the green darkened to stay legible on white. */
+   The dark theme is the reference design: true black, with a muted slate-blue
+   accent that carries emphasis without shouting — a notes app is somewhere
+   people sit for an hour, and a saturated accent is exhausting at that length.
+   Light mode is the same relationships inverted, with the slate darkened to
+   stay legible on white. */
 :root {
   --fl-bg: #fcfcfa;
   --fl-surface: #ffffff;
@@ -30,17 +55,14 @@
   --fl-text: #12150f;
   --fl-muted: #6c7268;
 
-  --fl-accent: #16794c;
-  --fl-accent-hover: #12633e;
-  /* Text/icon colour to place on top of a filled accent surface. */
+  --fl-accent: #3d5a78;
+  --fl-accent-hover: #324a63;
   --fl-accent-contrast: #ffffff;
-  --fl-accent-soft: rgba(22, 121, 76, 0.1);
+  --fl-accent-soft: rgba(61, 90, 120, 0.1);
 
   --fl-warn: #a76a0a;
   --fl-danger: #c2372d;
 
-  /* An always-dark surface — footer, code blocks, the hero terminal. Stays
-     dark in both themes so those elements never invert. */
   --fl-inverse-bg: #0a0c0a;
   --fl-inverse-text: #e9ece7;
 
@@ -51,27 +73,27 @@
 }
 
 [data-theme="dark"] {
-  --fl-bg: #0a0c0a;
-  --fl-surface: #101310;
-  --fl-elevated: #181c18;
-  --fl-border: #232823;
-  --fl-border-strong: #343b34;
-  --fl-text: #e9ece7;
-  --fl-muted: #8b938a;
+  --fl-bg: #000000;
+  --fl-surface: #0a0a0a;
+  --fl-elevated: #131313;
+  --fl-border: #1f1f1f;
+  --fl-border-strong: #333333;
+  --fl-text: #f0f0f0;
+  --fl-muted: #8a8a8a;
 
-  --fl-accent: #3ecf8e;
-  --fl-accent-hover: #52dd9d;
-  --fl-accent-contrast: #04180d;
-  --fl-accent-soft: rgba(62, 207, 142, 0.13);
+  --fl-accent: #8a9bb8;
+  --fl-accent-hover: #9db0cc;
+  --fl-accent-contrast: #0c1018;
+  --fl-accent-soft: rgba(138, 155, 184, 0.14);
 
-  --fl-warn: #e3a93c;
-  --fl-danger: #f2555a;
+  --fl-warn: #d4b94f;
+  --fl-danger: #d4544f;
 
-  --fl-inverse-bg: #050705;
-  --fl-inverse-text: #e9ece7;
+  --fl-inverse-bg: #050505;
+  --fl-inverse-text: #f0f0f0;
 
-  --fl-shadow: 0 1px 2px rgba(0, 0, 0, 0.6), 0 8px 24px -12px rgba(0, 0, 0, 0.8);
-  --fl-shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.6), 0 24px 48px -20px rgba(0, 0, 0, 0.9);
+  --fl-shadow: 0 1px 2px rgba(0, 0, 0, 0.7), 0 8px 24px -12px rgba(0, 0, 0, 0.9);
+  --fl-shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.7), 0 24px 48px -20px rgba(0, 0, 0, 1);
 
   color-scheme: dark;
 }
@@ -91,31 +113,81 @@ h3 {
   letter-spacing: -0.018em;
 }
 
-/* Visible focus for keyboard users, suppressed for mouse clicks. */
+/* Visible focus for keyboard users, suppressed for mouse clicks.
+   A hairline plus a soft halo rather than a 2px slab. The old ring was as
+   heavy as the accent itself, so tabbing through a form read as a series of
+   hard boxes being stamped onto the page; this says the same thing quietly. */
 :focus-visible {
-  outline: 2px solid var(--fl-accent);
+  outline: 1px solid var(--fl-accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 4px var(--fl-accent-soft);
 }
 
 /* …but never around a writing surface. ProseMirror and CodeMirror are focused
    the entire time you are using them, so the generic ring above drew a
-   permanent green box around the document. They show focus with a caret. */
+   permanent box around the document.
+
+   Both properties, not just the outline. When the focus ring gained its soft
+   halo, this rule still only cancelled `outline` — so the halo stayed, and the
+   editor grew a faint rounded rectangle around the page you were writing on
+   that no amount of clicking would dismiss. A writing surface shows focus with
+   a caret and nothing else. */
 .ProseMirror,
 .ProseMirror:focus,
 .ProseMirror:focus-visible,
 .cm-editor,
+.cm-editor:focus,
 .cm-editor:focus-visible,
 .cm-content,
 .cm-content:focus,
 .cm-content:focus-visible,
+.cm-scroller,
 .cm-scroller:focus-visible {
   outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Any editable region, including ones no component here owns — a table cell
+   in the rich editor, a diagram label. Same reasoning as above: focus that
+   persists for as long as you are typing is not information. */
+[contenteditable]:focus,
+[contenteditable]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 ::selection {
   background: var(--fl-accent-soft);
   color: var(--fl-text);
+}
+
+/* ── Floating panels ───────────────────────────────────────────────────────
+   The editor's three columns — file tree, document, properties — used to run
+   edge to edge, separated by hairlines, so the window read as one dense slab
+   and the eye had nothing to tell it where one region ended and the next
+   began.
+
+   They are cards now: inset from the window, rounded, raised off the
+   background by a shadow, with a gap between them. It is the shape macOS
+   Notes, Things and Linear all use, and it works for the same reason a
+   paragraph break works — the separation is doing the explaining, so the
+   hairlines do not have to.
+
+   The rounding is on this wrapper rather than on each panel because the
+   corners have to clip whatever is inside them: a note list that scrolls under
+   a rounded corner and back out square is worse than no rounding at all. */
+.fl-panel {
+  background: var(--fl-surface);
+  border: 1px solid var(--fl-border);
+  border-radius: 16px;
+  box-shadow: var(--fl-shadow);
+  /* Clips scrolling children to the rounded corner. */
+  overflow: hidden;
+  /* A flex child will not shrink below its content without this, which is
+     what made long note titles push the document pane off-screen. */
+  min-width: 0;
+  min-height: 0;
 }
 
 /* ── Reusable surfaces ─────────────────────────────────────────────────────
@@ -124,7 +196,7 @@ h3 {
 .fl-card {
   background: var(--fl-surface);
   border: 1px solid var(--fl-border);
-  border-radius: 14px;
+  border-radius: 18px;
 }
 
 .fl-btn {
@@ -132,7 +204,7 @@ h3 {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  border-radius: 10px;
+  border-radius: 12px;
   font-weight: 550;
   font-size: 0.9375rem;
   line-height: 1;
@@ -144,6 +216,7 @@ h3 {
     color 140ms ease,
     transform 140ms ease;
 }
+
 .fl-btn:active {
   transform: translateY(1px);
 }
@@ -152,6 +225,7 @@ h3 {
   background: var(--fl-accent);
   color: var(--fl-accent-contrast);
 }
+
 .fl-btn-primary:hover {
   background: var(--fl-accent-hover);
 }
@@ -161,6 +235,7 @@ h3 {
   color: var(--fl-text);
   background: transparent;
 }
+
 .fl-btn-ghost:hover {
   background: var(--fl-elevated);
   border-color: var(--fl-border-strong);
@@ -168,7 +243,7 @@ h3 {
 
 .fl-input {
   width: 100%;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid var(--fl-border);
   background: var(--fl-surface);
   padding: 0.4375rem 0.625rem;
@@ -179,11 +254,31 @@ h3 {
     border-color 120ms ease,
     box-shadow 120ms ease;
 }
+
 .fl-input::placeholder {
   color: var(--fl-muted);
 }
-.fl-input:focus {
-  border-color: var(--fl-accent);
+
+/* A focused field lifts rather than outlines itself: the border goes to the
+   strong neutral, not to the accent, and the accent appears only as a soft
+   halo around it. Painting the border with the accent put a hard, saturated
+   rectangle around whatever you were typing in, which is the one thing on
+   screen that should stay calm. */
+.fl-input:focus,
+.fl-input:focus-visible {
+  border-color: var(--fl-border-strong);
+  box-shadow: 0 0 0 3px var(--fl-accent-soft);
+  /* The generic ring above would sit outside this one and double it up. */
+  outline: none;
+}
+
+/* Native controls inherit the same treatment, so a raw <input> in a dialog
+   does not look like it belongs to a different application. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 1px solid var(--fl-border-strong);
+  outline-offset: 0;
   box-shadow: 0 0 0 3px var(--fl-accent-soft);
 }
 
@@ -197,9 +292,27 @@ h3 {
    Shared by the preview pane, the WYSIWYG surface and the HTML export, so a
    note looks the same however it is being viewed. */
 .fl-prose {
+  /* The one place the reading face is used. `.fl-prose` is shared by the
+     rich-text surface, the preview pane and the HTML export, so a note is set
+     in the same type however it is being looked at — including after it leaves
+     the app. */
+  font-family: var(--font-reading);
+  font-optical-sizing: auto;
   color: var(--fl-text);
-  line-height: 1.75;
-  font-size: 1.0625rem;
+  line-height: 1.7;
+  /* Slightly larger than the sans it replaced: a serif at the same nominal
+     size reads smaller, because its lowercase is shorter relative to the em. */
+  font-size: 1.125rem;
+}
+
+/* Interface type inside a document stays interface type. Code is code, and a
+   task-list checkbox is a control — neither belongs in a reading serif. */
+.fl-prose code,
+.fl-prose pre,
+.fl-prose kbd,
+.fl-prose samp {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
 }
 
 .fl-prose > * + * {
@@ -223,12 +336,15 @@ h3 {
 .fl-prose h1 {
   font-size: 2rem;
 }
+
 .fl-prose h2 {
   font-size: 1.5rem;
 }
+
 .fl-prose h3 {
   font-size: 1.25rem;
 }
+
 .fl-prose h4 {
   font-size: 1.0625rem;
 }
@@ -245,6 +361,43 @@ h3 {
   text-underline-offset: 3px;
 }
 
+/*
+ * `[[wikilinks]]`, in the preview and in the rich-text editor alike.
+ *
+ * Drawn without the underline the other links carry, and on a tinted ground
+ * instead. A wikilink goes somewhere else in your own notes rather than out to
+ * the web, and a note whose every other word is an underlined blue link is
+ * unreadable — which is precisely the shape a heavily linked knowledge base
+ * takes.
+ */
+.fl-wikilink {
+  border-radius: 4px;
+  padding: 0 3px;
+  color: var(--fl-accent);
+  text-decoration: none;
+  background: var(--fl-accent-soft);
+  cursor: pointer;
+}
+
+.fl-wikilink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/*
+ * A link to a note nobody has written yet.
+ *
+ * Muted and dashed rather than red: linking ahead of yourself is how an
+ * outline gets built, so this is a note that does not exist *yet*, not an
+ * error to be fixed.
+ */
+.fl-wikilink-missing {
+  color: var(--fl-muted);
+  background: transparent;
+  border-bottom: 1px dashed currentColor;
+  border-radius: 0;
+}
+
 .fl-prose strong {
   font-weight: 640;
 }
@@ -253,15 +406,19 @@ h3 {
 .fl-prose ol {
   padding-left: 1.5rem;
 }
+
 .fl-prose ul {
   list-style: disc;
 }
+
 .fl-prose ol {
   list-style: decimal;
 }
+
 .fl-prose li {
   margin: 0.25rem 0;
 }
+
 .fl-prose li::marker {
   color: var(--fl-muted);
 }
@@ -271,14 +428,17 @@ h3 {
   list-style: none;
   padding-left: 0.25rem;
 }
+
 .fl-prose ul[data-type="taskList"] li {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
 }
+
 .fl-prose ul[data-type="taskList"] li > label {
   margin-top: 0.3rem;
 }
+
 .fl-prose input[type="checkbox"] {
   accent-color: var(--fl-accent);
   width: 1rem;
@@ -310,6 +470,7 @@ h3 {
   font-size: 0.875rem;
   line-height: 1.6;
 }
+
 .fl-prose pre code {
   background: none;
   border: none;
@@ -390,6 +551,7 @@ h3 {
 .fl-prose .hljs-emphasis {
   font-style: italic;
 }
+
 .fl-prose .hljs-strong {
   font-weight: 600;
 }
@@ -407,12 +569,14 @@ h3 {
   display: block;
   overflow-x: auto;
 }
+
 .fl-prose th,
 .fl-prose td {
   border: 1px solid var(--fl-border);
   padding: 0.5rem 0.75rem;
   text-align: left;
 }
+
 .fl-prose th {
   background: var(--fl-elevated);
   font-weight: 600;
@@ -431,11 +595,13 @@ h3 {
   justify-content: center;
   overflow-x: auto;
 }
+
 .fl-diagram svg,
 .fl-diagram-preview svg {
   max-width: 100%;
   height: auto;
 }
+
 .fl-diagram {
   cursor: pointer;
   border-radius: 10px;
@@ -445,6 +611,7 @@ h3 {
     background-color 120ms ease,
     outline-color 120ms ease;
 }
+
 .fl-diagram:hover {
   background: var(--fl-elevated);
   outline-color: var(--fl-border);
@@ -472,19 +639,23 @@ h3 {
   scrollbar-width: thin;
   scrollbar-color: var(--fl-border-strong) transparent;
 }
+
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
+
 *::-webkit-scrollbar-track {
   background: transparent;
 }
+
 *::-webkit-scrollbar-thumb {
   background: var(--fl-border-strong);
   border-radius: 6px;
   border: 3px solid transparent;
   background-clip: content-box;
 }
+
 *::-webkit-scrollbar-thumb:hover {
   background: var(--fl-muted);
   background-clip: content-box;
@@ -495,11 +666,13 @@ h3 {
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: none;
   }
 }
+
 .fl-rise {
   animation: fl-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }

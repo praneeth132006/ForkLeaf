@@ -81,7 +81,7 @@ export function Dialog({ title, subtitle, onClose, children, wide = false }: Dia
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`flex max-h-[85vh] w-full flex-col overflow-hidden rounded-2xl border border-[var(--fl-border)] bg-[var(--fl-bg)] shadow-[var(--fl-shadow-lg)] ${
+        className={`flex max-h-[85vh] w-full flex-col overflow-hidden rounded-2xl border border-[var(--fl-border)] bg-[var(--fl-surface)] shadow-[var(--fl-shadow-lg)] ${
           wide ? "max-w-3xl" : "max-w-md"
         }`}
       >

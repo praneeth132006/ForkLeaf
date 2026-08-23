@@ -1,0 +1,35 @@
+[Desktop Entry]
+Type=Application
+Version=1.1
+Name=ForkLeaf
+GenericName=Markdown Editor
+Comment=Edit Markdown notes with first-class Mermaid diagrams
+Categories=Office;WordProcessor;TextEditor;Utility;
+Keywords=markdown;md;notes;mermaid;diagram;editor;
+
+# %U passes the file the user opened, as a file:// URL. Chromium turns it into
+# a FileSystemFileHandle and hands it to the app through window.launchQueue,
+# which is what lets ForkLeaf write back to that exact file rather than to a
+# copy of it in ~/Downloads. Without %U the file is silently dropped and
+# ForkLeaf opens on an empty editor.
+Exec=forkleaf %U
+Icon=forkleaf
+Terminal=false
+StartupNotify=true
+StartupWMClass=forkleaf
+
+# What ForkLeaf offers to open. Mirrors `file_handlers` in the web app
+# manifest; the two are the same promise made to two different systems, and a
+# type in one and not the other is a menu entry that opens an editor which
+# then refuses the file.
+MimeType=text/markdown;text/x-markdown;text/plain;text/mdx;
+
+Actions=NewNote;Dashboard;
+
+[Desktop Action NewNote]
+Name=New Note
+Exec=forkleaf --new
+
+[Desktop Action Dashboard]
+Name=Dashboard
+Exec=forkleaf --dashboard

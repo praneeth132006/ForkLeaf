@@ -16,18 +16,59 @@ import { Markdown, type MarkdownStorage } from "tiptap-markdown";
 import type { Editor } from "@tiptap/core";
 
 /**
+ * A `[[wikilink]]` the markdown serialiser has escaped into `\[\[…\]\]`.
+ *
+ * prosemirror-markdown escapes every `[` it writes, which is correct for text
+ * that might otherwise be read as a link and catastrophic for this one: a
+ * wikilink typed in the rich editor was written to the file as `\[\[Roadmap\]\]`,
+ * which is not a wikilink in Obsidian, on github.com, or on the next load of
+ * ForkLeaf itself. The note looked right on screen and was wrong on disk.
+ */
+const ESCAPED_WIKILINK = /\\\[\\\[([^\n]*?)\\\]\\\]/g;
+
+/**
+ * A line break, as tiptap-markdown writes it: a backslash, then a newline.
+ *
+ * Valid CommonMark, and the wrong thing to put in somebody's notes. Because
+ * the parser below runs with `breaks` on — a newline is a line break, the way
+ * Obsidian and every other notes app treats it — a bare newline already round-
+ * trips as a hard break and the escape buys nothing. Left in, every line of a
+ * file grew a trailing backslash the moment the rich editor touched it: open a
+ * note, type nothing, and the file on GitHub has changed because you looked
+ * at it.
+ *
+ * Anchored to end-of-line so a backslash in the middle of a line — an escaped
+ * character somebody meant — is untouched.
+ */
+const ESCAPED_LINE_BREAK = /\\\n/g;
+
+/**
  * tiptap-markdown 0.9 targets Tiptap 2 and does not augment Tiptap 3's
  * `Storage` interface, so `editor.storage.markdown` is untyped. This reads it
  * through the package's own exported shape rather than sprinkling `any` around.
+ *
+ * Two repairs on the way out, both narrow: the wikilink escaping above, and
+ * the line-break escaping below. Neither unescapes anything in general, so a
+ * `\[` or a `\` somebody escaped on purpose survives.
+ *
+ * Exported for its tests. This is the only code in ForkLeaf that can silently
+ * rewrite a user's file — it runs on every keystroke — so what it produces is
+ * asserted byte for byte rather than inferred from what the screen looks like.
  */
-function markdownOf(editor: Editor): string {
-  return (editor.storage as unknown as { markdown: MarkdownStorage }).markdown.getMarkdown();
+export function markdownOf(editor: Editor): string {
+  return (editor.storage as unknown as { markdown: MarkdownStorage }).markdown
+    .getMarkdown()
+    .replace(ESCAPED_WIKILINK, "[[$1]]")
+    .replace(ESCAPED_LINE_BREAK, "\n");
 }
 import { CodeBlock } from "./extensions/CodeBlock";
 import { ResolvedImage } from "./extensions/ResolvedImage";
 import { TextSelection } from "@tiptap/pm/state";
 import { imagesFrom, type ImageBridge } from "./images";
 import { MermaidBlock } from "./extensions/MermaidBlock";
+import { Wikilink } from "./extensions/Wikilink";
+import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
+import type { LinkBridge } from "./links";
 import { readSlashState } from "./extensions/SlashCommands";
 import { filterInsertActions, type ActionContext, type InsertDefinition } from "./insert-actions";
 
@@ -51,6 +92,8 @@ export interface WysiwygEditorProps {
    * the two routes to the same feature behave differently.
    */
   slashActions?: ActionContext;
+  /** How `[[wikilinks]]` resolve, and what ⌘-clicking one does. */
+  links?: LinkBridge;
 }
 
 /**
@@ -70,6 +113,7 @@ export function WysiwygEditor({
   images,
   onImageStatus,
   slashActions,
+  links,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -81,6 +125,8 @@ export function WysiwygEditor({
   imagesRef.current = images;
   const onImageStatusRef = useRef(onImageStatus);
   onImageStatusRef.current = onImageStatus;
+  const linksRef = useRef<LinkBridge | undefined>(links);
+  linksRef.current = links;
 
   // Guards the value-sync effect: without it, our own serialised output feeds
   // straight back in and resets the cursor to the top on every keystroke.
@@ -143,11 +189,30 @@ export function WysiwygEditor({
       TableCell,
       CodeBlock,
       MermaidBlock,
+      // Read through the ref, not captured: the extension list is built once,
+      // and the bridge arrives a render later once the workspace resolves.
+      Wikilink.configure({ bridge: () => linksRef.current }),
+      // After the nodes it defers to, so their own Enter handling is already
+      // registered when this decides whether to step aside.
+      EnterIsALineBreak,
       Markdown.configure({
         html: false,
         transformPastedText: true,
         transformCopiedText: true,
-        breaks: false,
+        /**
+         * A newline is a line break.
+         *
+         * CommonMark says a single newline inside a paragraph is a space,
+         * which is right for prose meant to be typeset and wrong for a
+         * notebook — and it made the two editing surfaces disagree about the
+         * same file: four lines in the source view, one run-on paragraph in
+         * rich text, with nothing to say which one the file really was.
+         *
+         * Matched by `remark-breaks` in the preview and the export, and by the
+         * escape repair above on the way back out, so the round trip is exact
+         * in both directions.
+         */
+        breaks: true,
         linkify: true,
       }),
     ],

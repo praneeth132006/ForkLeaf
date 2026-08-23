@@ -14,6 +14,7 @@ import {
   DEFAULT_SYNC_PREFERENCE,
   type LocalAsset,
   type Note,
+  type PendingChange,
   type SyncMode,
   type SyncPreference,
   type SyncState,
@@ -120,6 +121,14 @@ export function useNotebook(request: NotebookRequest = {}) {
   // on every render would fight the user's own navigation between notes.
   const [requested] = useState(request);
 
+  /**
+   * The current session, for anything that needs it outside React's flow.
+   *
+   * The note repository is built once and lives for the session; it asks this
+   * for the login to stamp on each save.
+   */
+  const sessionRef = useRef<SessionResponse | null>(null);
+
   const [state, setState] = useState<NotebookState>({
     ready: false,
     session: null,
@@ -178,6 +187,7 @@ export function useNotebook(request: NotebookRequest = {}) {
           githubAvailable: false,
         }));
         if (cancelled) return;
+        sessionRef.current = session;
 
         // Never throws: a browser that refuses IndexedDB gets an in-memory
         // store rather than a boot failure. Nothing typed into that store
@@ -192,7 +202,15 @@ export function useNotebook(request: NotebookRequest = {}) {
           session.mode === "github" ? new GitHubGateway() : new LocalGateway();
 
         const sync = new SyncEngine({ db, gateway });
-        const notes = new NoteRepository({ db, gateway, sync });
+        // Read through a ref rather than captured: signing in or out mid-
+        // session must change who the next save is credited to, and a login
+        // captured here would keep naming whoever opened the tab.
+        const notes = new NoteRepository({
+          db,
+          gateway,
+          sync,
+          author: () => sessionRef.current?.user?.login ?? null,
+        });
 
         dbRef.current = db;
         gatewayRef.current = gateway as GitHubGateway | LocalGateway;
@@ -485,6 +503,26 @@ export function useNotebook(request: NotebookRequest = {}) {
     [activeNote, patchOpenNote],
   );
 
+  /**
+   * Replaces the content of a note by path, active or not.
+   *
+   * `saveNote` only ever writes the note the editor is showing, which is right
+   * for typing and wrong for the one case where content arrives from outside:
+   * a file re-read from this machine belongs to whichever tab holds it, not to
+   * whichever tab happens to be in front.
+   */
+  const replaceNoteContent = useCallback(
+    async (path: string, content: string) => {
+      const notes = repoRef.current;
+      const target = state.openNotes.find((note) => note.path === path);
+      if (!notes || !target || target.content === content) return;
+
+      patchOpenNote(path, { content, dirty: true });
+      await notes.saveNote(target, content);
+    },
+    [state.openNotes, patchOpenNote],
+  );
+
   const updateFrontmatter = useCallback(
     async (frontmatter: Note["frontmatter"]) => {
       const notes = repoRef.current;
@@ -497,7 +535,7 @@ export function useNotebook(request: NotebookRequest = {}) {
   );
 
   const createNote = useCallback(
-    async (title: string, folder = "") => {
+    async (title: string, folder = "", content?: string) => {
       const workspace = state.activeWorkspace;
       const notes = repoRef.current;
       if (!workspace || !notes) return;
@@ -508,6 +546,9 @@ export function useNotebook(request: NotebookRequest = {}) {
         folder,
         title,
         existingPaths: existing,
+        // Given for a note that comes from somewhere else — a file opened from
+        // this machine — rather than one being started from nothing.
+        ...(content !== undefined ? { content } : {}),
       });
 
       const open = [...state.openNotes, note].slice(-MAX_OPEN_NOTES);
@@ -839,6 +880,26 @@ export function useNotebook(request: NotebookRequest = {}) {
   const syncNow = useCallback(() => syncRef.current?.flushNow(), []);
 
   /**
+   * The unpushed changes for the workspace currently open.
+   *
+   * Read by the propose-changes flow, which has to write them onto a new
+   * branch itself: a branch created from the base holds nothing, and a pull
+   * request against a branch with no commits on it is what GitHub rejects.
+   */
+  const pendingChanges = useCallback((): PendingChange[] => {
+    const workspace = state.activeWorkspace;
+    if (!workspace) return [];
+    return syncRef.current?.pendingFor(workspace.id) ?? [];
+  }, [state.activeWorkspace]);
+
+  /** Forgets the queued changes, once something else has committed them. */
+  const discardPending = useCallback(async () => {
+    const workspace = state.activeWorkspace;
+    if (!workspace) return;
+    await syncRef.current?.discardPending(workspace.id);
+  }, [state.activeWorkspace]);
+
+  /**
    * Changes how eagerly this workspace pushes.
    *
    * Auto is the default and stays the default; this only exists for the people
@@ -982,6 +1043,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       closeNote,
       openNoteAndReturn,
       saveNote,
+      replaceNoteContent,
       updateFrontmatter,
       createNote,
       deleteNote,
@@ -995,6 +1057,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       addWorkspace,
       removeWorkspace,
       syncNow,
+      pendingChanges,
+      discardPending,
       setSyncMode,
       resolveConflict,
       allNotes,
@@ -1016,6 +1080,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       closeNote,
       openNoteAndReturn,
       saveNote,
+      replaceNoteContent,
       updateFrontmatter,
       createNote,
       deleteNote,
@@ -1030,6 +1095,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       addWorkspace,
       removeWorkspace,
       syncNow,
+      pendingChanges,
+      discardPending,
       setSyncMode,
       resolveConflict,
       allNotes,

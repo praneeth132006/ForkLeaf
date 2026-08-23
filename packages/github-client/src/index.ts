@@ -8,6 +8,7 @@ export {
   type ContentEncoding,
   type CommitOptions,
   type CommitResult,
+  type PagesSite,
 } from "./client";
 
 export { Transport, type RateLimit, type TransportConfig, type HttpResponse } from "./http";

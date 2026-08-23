@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { markdownToHtml, extractMermaidBlocks } from "@forkleaf/markdown-engine";
 import { renderDiagram, LIGHT_THEME, DARK_THEME } from "@forkleaf/diagrams";
 import { useDocumentTheme } from "./useDocumentTheme";
+import { handleWikilinkClick, type LinkBridge } from "./links";
 
 export interface PreviewProps {
   markdown: string;
@@ -19,6 +20,13 @@ export interface PreviewProps {
    * changes.
    */
   resolveImageSrc?: (src: string) => string;
+  /**
+   * How `[[wikilinks]]` resolve, and what a click on one does.
+   *
+   * Memoise it alongside `resolveImageSrc`: it is a render dependency for the
+   * same reason.
+   */
+  links?: LinkBridge;
 }
 
 /**
@@ -46,6 +54,7 @@ export function Preview({
   className,
   onDiagramClick,
   resolveImageSrc,
+  links,
 }: PreviewProps) {
   const documentTheme = useDocumentTheme();
   const resolved = theme ?? documentTheme;
@@ -67,7 +76,13 @@ export function Preview({
 
   // Markdown with each diagram replaced by a token, rendered and sanitised.
   const html = useMemo(() => {
-    const options = resolveImageSrc ? { resolveImageSrc } : undefined;
+    const options =
+      resolveImageSrc || links
+        ? {
+            ...(resolveImageSrc ? { resolveImageSrc } : {}),
+            ...(links ? { resolveWikilink: links.resolve } : {}),
+          }
+        : undefined;
     if (blocks.length === 0) return markdownToHtml(markdown, options);
 
     let source = "";
@@ -80,7 +95,7 @@ export function Preview({
     source += markdown.slice(cursor);
 
     return markdownToHtml(source, options);
-  }, [markdown, blocks, resolveImageSrc]);
+  }, [markdown, blocks, resolveImageSrc, links]);
 
   // Render diagrams off the critical path so typing never blocks on mermaid.
   useEffect(() => {
@@ -127,13 +142,16 @@ export function Preview({
     });
   }, [html, diagrams, blocks]);
 
-  // Diagram clicks are delegated from the container: the SVG is injected as
-  // raw HTML, so there is no React element to attach a handler to.
+  // Diagram and wikilink clicks are both delegated from the container: the
+  // HTML is injected raw, so there is no React element to attach a handler to.
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !onDiagramClick) return;
+    if (!container) return;
 
-    const handler = (event: Event) => {
+    const handler = (event: MouseEvent) => {
+      if (handleWikilinkClick(event, links)) return;
+      if (!onDiagramClick) return;
+
       const figure = (event.target as HTMLElement).closest<HTMLElement>("[data-diagram-index]");
       if (!figure) return;
 
@@ -144,7 +162,7 @@ export function Preview({
 
     container.addEventListener("click", handler);
     return () => container.removeEventListener("click", handler);
-  }, [blocks, onDiagramClick]);
+  }, [blocks, onDiagramClick, links]);
 
   return (
     <div

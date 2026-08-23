@@ -1,5 +1,5 @@
 export { MarkdownEditor, type MarkdownEditorProps } from "./MarkdownEditor";
-export { WysiwygEditor, type WysiwygEditorProps } from "./WysiwygEditor";
+export { WysiwygEditor, markdownOf, type WysiwygEditorProps } from "./WysiwygEditor";
 export {
   SourceEditor,
   type SourceEditorProps,
@@ -31,6 +31,9 @@ export { Modal, type ModalProps } from "./ui/Modal";
 export { ImageDialog, type ImageDialogProps } from "./ui/ImageDialog";
 export { LinkDialog, type LinkDialogProps } from "./ui/LinkDialog";
 export { type ImageBridge, imagesFrom, isEditableImage, IMAGE_ACCEPT } from "./images";
+export { type LinkBridge, wikilinkResolver, handleWikilinkClick } from "./links";
+export { Wikilink, type WikilinkOptions } from "./extensions/Wikilink";
+export { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 export { ResolvedImage, type ResolvedImageOptions } from "./extensions/ResolvedImage";
 
 export { DiagramStudio, type DiagramStudioProps, type StudioView } from "./mermaid/DiagramStudio";

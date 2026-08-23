@@ -20,6 +20,22 @@ export {
 export { markdownToHtml, astToMarkdown, formatMarkdown, type RenderOptions } from "./render";
 
 export {
+  extractWikilinks,
+  wikilinkTargets,
+  resolveWikilink,
+  wikilinkToPath,
+  buildLinkGraph,
+  remarkWikilink,
+  type WikiLink,
+  type LinkCandidate,
+  type LinkSource,
+  type LinkRef,
+  type LinkGraph,
+  type ResolvedWikilink,
+  type WikilinkResolver,
+} from "./wikilinks";
+
+export {
   normalizePath,
   joinPath,
   dirname,

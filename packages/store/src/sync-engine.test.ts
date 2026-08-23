@@ -554,3 +554,72 @@ describe("sync modes", () => {
     expect(timers.delay).toBe(30 * 60_000);
   });
 });
+
+// ─── Handing the queue to someone else ──────────────────────────────────────
+
+describe("pendingFor and discardPending", () => {
+  /**
+   * These exist for the propose-changes flow. A branch created from the base
+   * holds nothing, so the pull request dialog has to commit the queue onto it
+   * directly — which means reading the queue, and then making sure the same
+   * work is not pushed a second time to whatever branch comes next.
+   */
+
+  it("reports one workspace's changes without the others'", async () => {
+    const { engine } = setup({ mode: "manual" });
+    await engine.start();
+
+    await engine.recordUpsert(makeNote({ id: "one::a.md", workspaceId: "one", path: "a.md" }), "a");
+    await engine.recordUpsert(makeNote({ id: "two::b.md", workspaceId: "two", path: "b.md" }), "b");
+
+    expect(engine.pendingFor("one").map((c) => c.path)).toEqual(["a.md"]);
+    expect(engine.pendingFor()).toHaveLength(2);
+  });
+
+  it("hands back a copy, so a caller cannot edit what is about to be pushed", async () => {
+    const { engine } = setup({ mode: "manual" });
+    await engine.start();
+    await engine.recordUpsert(makeNote({ path: "a.md" }), "original");
+
+    const [change] = engine.pendingFor("ws");
+    change!.content = "tampered";
+
+    expect(engine.pendingFor("ws")[0]!.content).toBe("original");
+  });
+
+  it("drops one workspace's queue from memory and from storage", async () => {
+    const { engine, db } = setup({ mode: "manual" });
+    await engine.start();
+
+    await engine.recordUpsert(makeNote({ id: "one::a.md", workspaceId: "one", path: "a.md" }), "a");
+    await engine.recordUpsert(makeNote({ id: "two::b.md", workspaceId: "two", path: "b.md" }), "b");
+
+    await engine.discardPending("one");
+
+    expect(engine.pendingFor("one")).toEqual([]);
+    expect(engine.pendingFor("two")).toHaveLength(1);
+    expect(engine.state.pendingCount).toBe(1);
+    // Not just in memory: a reload must not bring them back.
+    expect(await db.listQueue("one")).toEqual([]);
+    expect(await db.listQueue("two")).toHaveLength(1);
+  });
+
+  it("never pushes what was discarded", async () => {
+    const { engine, gateway, timers } = setup({ mode: "manual" });
+    await engine.start();
+    await engine.recordUpsert(makeNote({ path: "a.md" }), "a");
+
+    await engine.discardPending("ws");
+    await engine.flushNow();
+    await timers.tick();
+
+    expect(gateway.commits).toHaveLength(0);
+  });
+
+  it("is a no-op for a workspace with nothing queued", async () => {
+    const { engine } = setup({ mode: "manual" });
+    await engine.start();
+
+    await expect(engine.discardPending("nobody")).resolves.toBeUndefined();
+  });
+});

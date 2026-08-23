@@ -3,6 +3,17 @@ import { Transport, type RateLimit, type TransportConfig } from "./http";
 import { GitHubError } from "./errors";
 import { encodeBase64, decodeBase64 } from "./base64";
 
+/** A repository's GitHub Pages site, as the publish flow needs it. */
+export interface PagesSite {
+  /** Where the site is served from, e.g. `https://you.github.io/notes/`. */
+  url: string;
+  /** GitHub's build state: `built`, `building`, `errored`, or null. */
+  status: string | null;
+  source?: { branch: string; path: string };
+  /** False for a Pages site behind repository access. */
+  isPublic: boolean;
+}
+
 // ─── API response shapes (only the fields we actually consume) ──────────────
 
 interface ApiUser {
@@ -25,6 +36,16 @@ interface ApiRepo {
 
 interface ApiRef {
   object: { sha: string };
+}
+
+interface ApiPages {
+  url: string;
+  status: string | null;
+  cname: string | null;
+  html_url: string;
+  source?: { branch: string; path: string };
+  public: boolean;
+  build_type?: string;
 }
 
 interface ApiPullRequest {
@@ -806,6 +827,69 @@ export class GitHubClient {
     );
   }
 
+  // ─── GitHub Pages ─────────────────────────────────────────────────────────
+
+  /**
+   * The repository's Pages site, or null when it has none.
+   *
+   * A repository with Pages switched off answers 404 here, which is a fact
+   * about the repository rather than a failure — so it comes back as null, the
+   * same way `getRepo` treats a repository that is not there.
+   */
+  async getPages(owner: string, repo: string): Promise<PagesSite | null> {
+    try {
+      const { data } = await this.transport.request<ApiPages>(`/repos/${owner}/${repo}/pages`);
+      return data ? toPagesSite(data) : null;
+    } catch (error) {
+      if (error instanceof GitHubError && error.code === "not-found") return null;
+      throw error;
+    }
+  }
+
+  /**
+   * Switches Pages on for a branch and folder, or repoints an existing site.
+   *
+   * Two calls rather than one because GitHub uses different verbs for the two:
+   * POST creates a site and fails with 409 if there already is one, PUT
+   * repoints an existing site and fails with 404 if there is not. Which one is
+   * needed depends on state this method is the only reasonable place to check.
+   *
+   * Pages on a private repository needs a paid plan. GitHub answers that with
+   * a 403 whose message says so, which `errorCodeForStatus` turns into
+   * `forbidden` — the caller shows GitHub's own wording rather than guessing
+   * at which of several reasons applies.
+   */
+  async enablePages(
+    owner: string,
+    repo: string,
+    source: { branch: string; path: "/" | "/docs" },
+  ): Promise<PagesSite> {
+    const existing = await this.getPages(owner, repo);
+
+    if (existing) {
+      // Already serving from the right place: repointing it would be a
+      // needless write against someone else's repository settings.
+      if (existing.source?.branch === source.branch && existing.source.path === source.path) {
+        return existing;
+      }
+
+      await this.transport.request(`/repos/${owner}/${repo}/pages`, {
+        method: "PUT",
+        body: { source },
+      });
+
+      return (await this.getPages(owner, repo)) ?? existing;
+    }
+
+    const { data } = await this.transport.request<ApiPages>(`/repos/${owner}/${repo}/pages`, {
+      method: "POST",
+      body: { source },
+    });
+
+    // 201 carries the site; some responses are empty, so fall back to a read.
+    return data ? toPagesSite(data) : ((await this.getPages(owner, repo)) as PagesSite);
+  }
+
   // ─── Convenience wrappers ─────────────────────────────────────────────────
 
   async writeFile(
@@ -839,6 +923,15 @@ export class GitHubClient {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+function toPagesSite(data: ApiPages): PagesSite {
+  return {
+    url: data.html_url,
+    status: data.status,
+    ...(data.source ? { source: data.source } : {}),
+    isPublic: data.public,
+  };
+}
 
 function toPullRequest(data: ApiPullRequest): PullRequestSummary {
   return {

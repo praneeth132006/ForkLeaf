@@ -2,7 +2,7 @@ import React from "react";
 import Link from "next/link";
 
 /** Where privacy and data requests go. */
-export const CONTACT_EMAIL = "praneeth132006b@gmail.com";
+export const CONTACT_EMAIL = "praneeth2006.dev@gmail.com";
 
 /**
  * The date shown on the legal pages.

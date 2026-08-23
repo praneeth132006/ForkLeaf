@@ -2,6 +2,7 @@
 
 import React, { useCallback, useMemo, useState } from "react";
 import type { Note, NoteFrontmatter, SyncMode, Workspace } from "@forkleaf/types";
+import type { LinkRef } from "@forkleaf/markdown-engine";
 import { extractOutline, documentStats, serializeDocument } from "@forkleaf/markdown-engine";
 import { exportNote, printToPdf, downloadResult } from "@forkleaf/exporter";
 import { deriveTitle } from "@forkleaf/markdown-engine";
@@ -15,13 +16,39 @@ export interface EditorRightPanelProps {
   /** Opens the full export dialog, for the formats and options not shortcut here. */
   onExport: () => void;
   onShowHistory: () => void;
+  /** Opens the publish dialog. Absent for a workspace with no repository. */
+  onPublish?: (() => void) | undefined;
   /** Drives the auto-save indicator in the panel header. */
   syncMode: SyncMode;
   onSyncNow: () => void;
+  /** The `[[wikilink]]` neighbourhood of this note. */
+  links: NoteLinks;
 }
 
-/** Frontmatter keys that get a dedicated editor rather than the generic list. */
-const RESERVED = new Set(["title", "tags", "created", "updated"]);
+/** What the Links section draws, and what it can do. */
+export interface NoteLinks {
+  /** False while the graph is still being built. */
+  ready: boolean;
+  /** Notes linking *to* this one. */
+  backlinks: LinkRef[];
+  /** Links written *in* this one. */
+  outgoing: LinkRef[];
+  /** Display title for a path, so a note never read still has a name. */
+  titleFor: (path: string) => string;
+  onOpen: (path: string) => void;
+  /** Creates the note a link points at but that nobody has written yet. */
+  onCreate: (target: string) => void;
+}
+
+/**
+ * Frontmatter keys the panel does not offer as free-text fields.
+ *
+ * Either they have a dedicated editor above (title, tags) or they are
+ * maintained by the app on every save (created, updated, editedBy, generator).
+ * Showing a machine-written field as an editable box invites someone to change
+ * it and then watch it revert on the next keystroke.
+ */
+const RESERVED = new Set(["title", "tags", "created", "updated", "editedBy", "generator"]);
 
 /**
  * Right panel: everything true about the document that is not the document.
@@ -44,8 +71,10 @@ export function EditorRightPanel({
   onFrontmatterChange,
   onExport,
   onShowHistory,
+  onPublish,
   syncMode,
   onSyncNow,
+  links,
 }: EditorRightPanelProps) {
   const [newKey, setNewKey] = useState("");
   const [newTag, setNewTag] = useState<string | null>(null);
@@ -114,7 +143,7 @@ export function EditorRightPanel({
         onClick={onToggle}
         title="Show document panel"
         aria-label="Show document panel"
-        className="w-8 shrink-0 border-l border-[var(--fl-border)] bg-[var(--fl-bg)] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+        className="w-8 shrink-0 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
       >
         ‹
       </button>
@@ -125,7 +154,7 @@ export function EditorRightPanel({
   const hasHistory = Boolean(workspace && !workspace.isLocal && note);
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-l border-[var(--fl-border)] bg-[var(--fl-bg)]">
+    <aside className="flex w-72 shrink-0 flex-col">
       {/* ── Header: the one thing people check without looking away ─────── */}
       <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-3">
         <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[12px]">
@@ -329,6 +358,11 @@ export function EditorRightPanel({
                 >
                   Export PDF
                 </PanelButton>
+                {hasHistory && onPublish && (
+                  <PanelButton onClick={onPublish} icon={<ShareGlyph />}>
+                    Publish as a page
+                  </PanelButton>
+                )}
                 {hasHistory && (
                   <PanelButton onClick={onShowHistory} icon={<HistoryGlyph />}>
                     Version history
@@ -342,6 +376,11 @@ export function EditorRightPanel({
                   More formats and options…
                 </button>
               </div>
+            </Section>
+
+            {/* ── Links ─────────────────────────────────────────────────── */}
+            <Section title="Links">
+              <LinksSection note={note} links={links} />
             </Section>
 
             {/* ── Outline ───────────────────────────────────────────────── */}
@@ -387,6 +426,112 @@ export function EditorRightPanel({
 }
 
 /* ── Pieces ───────────────────────────────────────────────────────────────── */
+
+/**
+ * The note's neighbourhood: what it points at, and what points back.
+ *
+ * Backlinks come first and outgoing links second, which is the opposite of
+ * the order they are written in. Outgoing links are already visible — they are
+ * in the text a few centimetres to the left. Backlinks are the half you cannot
+ * see from the document, and are the only reason to look at this section.
+ */
+function LinksSection({ note, links }: { note: Note; links: NoteLinks }) {
+  const outgoing = links.outgoing;
+  const backlinks = links.backlinks;
+
+  if (!links.ready) {
+    return <p className="text-[12.5px] text-[var(--fl-muted)]">Reading your notes…</p>;
+  }
+
+  if (backlinks.length === 0 && outgoing.length === 0) {
+    return (
+      <p className="text-[12.5px] leading-relaxed text-[var(--fl-muted)]">
+        Write <span className="font-mono text-[11.5px]">[[another note]]</span> to link to it. Notes
+        that link here will show up in this panel.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3.5">
+      {backlinks.length > 0 && (
+        <div>
+          <LinkGroupLabel>
+            {backlinks.length} {backlinks.length === 1 ? "note links here" : "notes link here"}
+          </LinkGroupLabel>
+          <ul className="space-y-1">
+            {backlinks.map((ref, index) => (
+              <li key={`${ref.from}-${index}`}>
+                <button
+                  type="button"
+                  onClick={() => links.onOpen(ref.from)}
+                  className="block w-full rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-[var(--fl-elevated)]"
+                >
+                  <span className="block truncate text-[12.5px] text-[var(--fl-text)]">
+                    {links.titleFor(ref.from)}
+                  </span>
+                  {/* The line the link was written on. A backlink without its
+                      sentence is a filename, which is rarely enough to know
+                      whether it is the one you are looking for. */}
+                  {ref.context && (
+                    <span className="mt-0.5 block truncate text-[11.5px] leading-relaxed text-[var(--fl-muted)]">
+                      {ref.context}
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {outgoing.length > 0 && (
+        <div>
+          <LinkGroupLabel>Links from this note</LinkGroupLabel>
+          <ul className="space-y-1">
+            {outgoing.map((ref, index) => (
+              <li key={`${ref.target}-${index}`}>
+                {ref.to ? (
+                  <button
+                    type="button"
+                    onClick={() => links.onOpen(ref.to!)}
+                    className="flex w-full items-center gap-1.5 rounded-lg px-1.5 py-1 text-left text-[12.5px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
+                  >
+                    <span aria-hidden="true" className="shrink-0 text-[var(--fl-muted)]">
+                      <LinkGlyph />
+                    </span>
+                    <span className="truncate">{links.titleFor(ref.to)}</span>
+                  </button>
+                ) : (
+                  // A link to a note that does not exist is not a mistake: it
+                  // is how an outline gets written. So it offers to make it
+                  // rather than reporting a broken link.
+                  <button
+                    type="button"
+                    onClick={() => links.onCreate(ref.target)}
+                    title={`Create ${ref.target}`}
+                    className="flex w-full items-center gap-1.5 rounded-lg px-1.5 py-1 text-left text-[12.5px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+                  >
+                    <span aria-hidden="true" className="shrink-0">
+                      <PlusGlyph />
+                    </span>
+                    <span className="truncate italic">{ref.target}</span>
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="sr-only">Links for {note.path}</p>
+    </div>
+  );
+}
+
+function LinkGroupLabel({ children }: { children: React.ReactNode }) {
+  return <p className="mb-1 px-1.5 text-[11.5px] text-[var(--fl-muted)]">{children}</p>;
+}
 
 function Section({
   title,
@@ -541,6 +686,41 @@ function FileGlyph() {
     >
       <path d="M9 1.75H4.5A1.75 1.75 0 0 0 2.75 3.5v9c0 .97.78 1.75 1.75 1.75h7a1.75 1.75 0 0 0 1.75-1.75V6z" />
       <path d="M9 1.75V6h4.25" />
+    </svg>
+  );
+}
+
+function ShareGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M8 10.5V2.5M8 2.5 5.25 5.25M8 2.5l2.75 2.75" />
+      <path d="M3.25 9.5v3a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1v-3" />
+    </svg>
+  );
+}
+
+function LinkGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    >
+      <path d="M6.5 9.5a2.75 2.75 0 0 0 4 .25l2-2a2.75 2.75 0 0 0-3.9-3.9l-1.1 1.1" />
+      <path d="M9.5 6.5a2.75 2.75 0 0 0-4-.25l-2 2a2.75 2.75 0 0 0 3.9 3.9l1.1-1.1" />
     </svg>
   );
 }

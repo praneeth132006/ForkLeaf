@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import type { Workspace } from "@forkleaf/types";
+import type { PendingChange, Workspace } from "@forkleaf/types";
 import { suggestBranchName } from "@/lib/branch-name";
 import {
   ApiGatewayError,
+  commitToBranch,
   createBranch,
   forkRepo,
   listBranches,
@@ -19,6 +20,21 @@ export interface ProposeChangesDialogProps {
   login: string;
   /** Seeds the title — usually the note the user is looking at. */
   subject: string;
+  /**
+   * The unpushed changes this pull request is meant to carry.
+   *
+   * Read at submit time rather than passed as a value: the user can keep
+   * typing while the dialog is open, and the edits they made after opening it
+   * are exactly the ones they would expect to be proposed.
+   */
+  pendingChanges: () => PendingChange[];
+  /**
+   * Forgets those changes once they are committed on the branch.
+   *
+   * Without it the same work is queued to be pushed a second time, to whatever
+   * branch the workspace lands on next.
+   */
+  onProposed: () => Promise<void>;
   onClose: () => void;
   /**
    * Moves the workspace onto the branch the changes were written to, so
@@ -46,6 +62,8 @@ export function ProposeChangesDialog({
   workspace,
   login,
   subject,
+  pendingChanges,
+  onProposed,
   onClose,
   onSwitchBranch,
 }: ProposeChangesDialogProps) {
@@ -85,8 +103,33 @@ export function ProposeChangesDialog({
     [branches, base],
   );
 
+  const headBranch = useMemo(
+    () => branches?.find((item) => item.name === branch.trim()) ?? null,
+    [branches, branch],
+  );
+
+  /**
+   * Whether this pull request could contain anything at all.
+   *
+   * GitHub rejects a pull request whose head has no commits the base does not
+   * already have, and the dialog used to walk straight into that: it created
+   * the branch from the base, put nothing on it, and let GitHub answer with
+   * `Validation Failed: [{"resource":"PullRequest","code":"custom",…}]`.
+   *
+   * There are exactly two ways a pull request here has content — unpushed work
+   * to commit onto the branch, or a branch that already carries commits from
+   * an earlier round. Neither, and the button is a trap.
+   */
+  const pending = pendingChanges();
+  const branchAlreadyDiffers = Boolean(
+    headBranch && baseBranch && headBranch.sha !== baseBranch.sha,
+  );
+  // Unknown until the branch list arrives; assume it is fine rather than
+  // flashing a warning that resolves itself a moment later.
+  const nothingToPropose = branches !== null && pending.length === 0 && !branchAlreadyDiffers;
+
   const submit = async () => {
-    if (!branch.trim() || !title.trim()) return;
+    if (!branch.trim() || !title.trim() || nothingToPropose) return;
 
     setStage("working");
     setError(null);
@@ -110,6 +153,33 @@ export function ProposeChangesDialog({
 
         setStep("Creating your branch on the fork…");
         await createBranch({ ...target, name: branch, from: base });
+      }
+
+      // The branch exists but is a copy of the base; the work is still sitting
+      // in the local queue. Committing it here is what gives the pull request
+      // something to be about — and it goes to `target`, which is the fork
+      // when the user cannot push to the original.
+      if (pending.length > 0) {
+        setStep(
+          `Committing ${pending.length === 1 ? "your change" : "your changes"} to ${branch}…`,
+        );
+
+        await commitToBranch({
+          ...target,
+          branch,
+          directory: workspace.repo.directory,
+          message: title.trim(),
+          changes: pending.map((change) => ({
+            op: change.op,
+            path: change.path,
+            ...(change.toPath ? { toPath: change.toPath } : {}),
+            ...(change.content !== undefined ? { content: change.content } : {}),
+          })),
+        });
+
+        // Committed on the branch, so they must stop being queued for the one
+        // the workspace is still on.
+        await onProposed();
       }
 
       setStep("Opening the pull request…");
@@ -173,6 +243,22 @@ export function ProposeChangesDialog({
       ) : (
         <>
           {error != null && <ErrorNotice error={error} />}
+
+          {nothingToPropose && (
+            <div className="mb-3 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3 text-[13px] leading-relaxed">
+              <p className="font-medium text-[var(--fl-text)]">There is nothing to propose yet.</p>
+              <p className="mt-1 text-[var(--fl-muted)]">
+                Everything you have written is already on <span className="font-mono">{base}</span>{" "}
+                — auto-save pushed it there as you typed. A pull request has to carry changes that{" "}
+                <span className="font-mono">{base}</span> does not have yet.
+              </p>
+              <p className="mt-2 text-[var(--fl-muted)]">
+                To propose work instead of committing it directly: set auto-save to{" "}
+                <strong className="font-medium text-[var(--fl-text)]">Manual</strong> in the status
+                bar at the bottom, make your edits, then come back here.
+              </p>
+            </div>
+          )}
 
           <Field label="Pull request title">
             <input
@@ -255,7 +341,7 @@ export function ProposeChangesDialog({
           <button
             type="button"
             onClick={() => void submit()}
-            disabled={stage === "working" || !branch.trim() || !title.trim()}
+            disabled={stage === "working" || !branch.trim() || !title.trim() || nothingToPropose}
             className="w-full rounded-lg bg-[var(--fl-accent)] px-4 py-2.5 text-[13.5px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)] disabled:opacity-40"
           >
             {stage === "working" ? "Working…" : "Open pull request"}
@@ -294,17 +380,49 @@ function Field({
   );
 }
 
+/**
+ * Turns GitHub's validation wording into something a person can act on.
+ *
+ * These arrive as English already, but as GitHub's English: "No commits
+ * between main and my-branch" is an accurate description of a git fact and no
+ * help at all to someone who just wants to know what to do about it.
+ *
+ * Anything unrecognised is shown as it came. Inventing a friendlier message
+ * for a failure nobody has read is how a UI ends up confidently mislabelling
+ * things.
+ */
+export function explainProposeError(message: string): string | null {
+  if (/no commits between/i.test(message)) {
+    return "That branch has no changes the base branch does not already have, so there is nothing to open a pull request about. Unpushed edits are what a pull request carries — with auto-save on, they go straight to the branch instead.";
+  }
+
+  if (/pull request already exists/i.test(message)) {
+    return "A pull request for this branch is already open. Further saves on it show up there automatically — there is no need to open a second one.";
+  }
+
+  // GitHub's wordings here are "Head sha can't be blank", "Head ref must be a
+  // valid ref" and "No such branch" — three phrasings for one situation.
+  if (/head (?:sha|ref) [^,]*(?:blank|valid|exist)|no such branch/i.test(message)) {
+    return "That branch could not be found on GitHub. It may have been deleted since this dialog was opened; try a different branch name.";
+  }
+
+  return null;
+}
+
 function ErrorNotice({ error }: { error: unknown }) {
   const expired = error instanceof ApiGatewayError && error.needsAuth;
+  const raw = error instanceof Error ? error.message : String(error);
+  const explained = explainProposeError(raw);
 
   return (
     <div
       role="alert"
       className="mb-3 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3 text-[13px]"
     >
-      <p className="text-[var(--fl-danger)]">
-        {error instanceof Error ? error.message : String(error)}
-      </p>
+      <p className="text-[var(--fl-danger)]">{explained ?? raw}</p>
+      {/* The original wording is kept where an explanation replaced it: the
+          person debugging this is not always the person reading it. */}
+      {explained && <p className="mt-1.5 text-[12px] text-[var(--fl-muted)]">GitHub said: {raw}</p>}
       {expired && (
         <a
           href="/api/auth/github"
