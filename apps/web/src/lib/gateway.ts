@@ -215,6 +215,48 @@ export interface NoteCommitDto {
  * Read through our own proxy like everything else, so the access token stays
  * server-side and the reader never has to leave the app to see it.
  */
+/**
+ * Publishes a rendered note as a page in the repository's `docs/` folder, and
+ * makes sure GitHub Pages is serving it.
+ *
+ * The page is committed to the user's own repository and served by GitHub, so
+ * nothing about a published note depends on ForkLeaf continuing to exist. See
+ * `api/gh/publish` for why that shape was chosen.
+ */
+export async function publishNote(options: {
+  repo: RepoRef;
+  slug: string;
+  html: string;
+  title: string;
+}): Promise<{ url: string; siteUrl: string; status: string | null; path: string }> {
+  const { repo, ...rest } = options;
+
+  return call("/api/gh/publish", {
+    method: "POST",
+    body: JSON.stringify({
+      owner: repo.owner,
+      repo: repo.repo,
+      branch: repo.branch,
+      dir: repo.directory,
+      ...rest,
+    }),
+  });
+}
+
+/** Deletes a published page. The note itself is left alone. */
+export async function unpublishNote(repo: RepoRef, slug: string): Promise<{ path: string }> {
+  return call("/api/gh/publish", {
+    method: "DELETE",
+    body: JSON.stringify({
+      owner: repo.owner,
+      repo: repo.repo,
+      branch: repo.branch,
+      dir: repo.directory,
+      slug,
+    }),
+  });
+}
+
 export async function listNoteHistory(repo: RepoRef, path: string): Promise<NoteCommitDto[]> {
   const { commits } = await call<{ commits: NoteCommitDto[] }>(
     `/api/gh/history?${repoParams(repo)}&path=${encodeURIComponent(path)}`,

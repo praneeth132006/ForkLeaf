@@ -28,6 +28,7 @@ import { ConflictDialog } from "@/components/ConflictDialog";
 import { ExportDialog } from "@/components/ExportDialog";
 import { ConnectRepoDialog } from "@/components/ConnectRepoDialog";
 import { ProposeChangesDialog } from "@/components/ProposeChangesDialog";
+import { PublishDialog } from "@/components/PublishDialog";
 import { HelpDialog } from "@/components/HelpDialog";
 import { HistoryDialog } from "@/components/HistoryDialog";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
@@ -84,7 +85,7 @@ export function EditorWorkspace() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [dialog, setDialog] = useState<
-    "export" | "connect" | "help" | "history" | "propose" | null
+    "export" | "connect" | "help" | "history" | "propose" | "publish" | null
   >(null);
   // Dismissing the repo chooser has to be remembered, because the condition
   // that raises it stays true until a repository is actually connected.
@@ -572,6 +573,15 @@ export function EditorWorkspace() {
 
       if (workspace && !workspace.isLocal) {
         list.push({
+          id: "publish",
+          label: "Publish this note as a page…",
+          group: "Notes",
+          hint: "A public link, served from your repo",
+          keywords: "share public url link github pages website publish",
+          run: () => setDialog("publish"),
+        });
+
+        list.push({
           id: "history",
           label: "Show this note's history",
           group: "Notes",
@@ -910,6 +920,7 @@ export function EditorWorkspace() {
               onFrontmatterChange={notebook.updateFrontmatter}
               onExport={() => setDialog("export")}
               onShowHistory={() => setDialog("history")}
+              onPublish={workspace && !workspace.isLocal ? () => setDialog("publish") : undefined}
               syncMode={notebook.syncPreference.mode}
               onSyncNow={() => void saveEverything()}
               links={{
@@ -988,6 +999,10 @@ export function EditorWorkspace() {
           onOpenNote={notebook.openNote}
           commands={commands}
         />
+      )}
+
+      {openDialog === "publish" && workspace && !workspace.isLocal && note && (
+        <PublishDialog workspace={workspace} note={note} onClose={() => setDialog(null)} />
       )}
 
       {openDialog === "propose" && workspace && !workspace.isLocal && user && (

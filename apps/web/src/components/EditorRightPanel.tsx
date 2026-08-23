@@ -16,6 +16,8 @@ export interface EditorRightPanelProps {
   /** Opens the full export dialog, for the formats and options not shortcut here. */
   onExport: () => void;
   onShowHistory: () => void;
+  /** Opens the publish dialog. Absent for a workspace with no repository. */
+  onPublish?: (() => void) | undefined;
   /** Drives the auto-save indicator in the panel header. */
   syncMode: SyncMode;
   onSyncNow: () => void;
@@ -62,6 +64,7 @@ export function EditorRightPanel({
   onFrontmatterChange,
   onExport,
   onShowHistory,
+  onPublish,
   syncMode,
   onSyncNow,
   links,
@@ -348,6 +351,11 @@ export function EditorRightPanel({
                 >
                   Export PDF
                 </PanelButton>
+                {hasHistory && onPublish && (
+                  <PanelButton onClick={onPublish} icon={<ShareGlyph />}>
+                    Publish as a page
+                  </PanelButton>
+                )}
                 {hasHistory && (
                   <PanelButton onClick={onShowHistory} icon={<HistoryGlyph />}>
                     Version history
@@ -671,6 +679,24 @@ function FileGlyph() {
     >
       <path d="M9 1.75H4.5A1.75 1.75 0 0 0 2.75 3.5v9c0 .97.78 1.75 1.75 1.75h7a1.75 1.75 0 0 0 1.75-1.75V6z" />
       <path d="M9 1.75V6h4.25" />
+    </svg>
+  );
+}
+
+function ShareGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M8 10.5V2.5M8 2.5 5.25 5.25M8 2.5l2.75 2.75" />
+      <path d="M3.25 9.5v3a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1v-3" />
     </svg>
   );
 }
