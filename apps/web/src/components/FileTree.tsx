@@ -285,13 +285,21 @@ const TreeItem = memo(function TreeItem({
             isFolder ? "hover:text-[var(--fl-text)]" : "pointer-events-none opacity-0"
           }`}
         >
+          {/* A stroked chevron. The solid triangle it replaces was the only
+              filled glyph in the sidebar, so it read as heavier than the folder
+              and the file beside it and pulled the eye to the least important
+              thing in the row. */}
           <svg
             viewBox="0 0 12 12"
-            className={`h-[9px] w-[9px] transition-transform duration-100 ${open ? "rotate-90" : ""}`}
-            fill="currentColor"
+            className={`h-[10px] w-[10px] transition-transform duration-150 ${open ? "rotate-90" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
             aria-hidden="true"
           >
-            <path d="M4 2.5 8.5 6 4 9.5z" />
+            <path d="M4.5 2.5 8 6l-3.5 3.5" />
           </svg>
         </button>
 
@@ -365,13 +373,16 @@ function FolderGlyph({ open }: { open: boolean }) {
       fill="none"
       stroke="currentColor"
       strokeWidth="1.3"
+      strokeLinecap="round"
       strokeLinejoin="round"
     >
-      {open ? (
-        <path d="M1.9 12.4V4.3a.8.8 0 0 1 .8-.8h2.9l1.35 1.55h5.35a.8.8 0 0 1 .8.8v.85M1.9 12.4l1.5-4.85a.8.8 0 0 1 .77-.55h9.96a.5.5 0 0 1 .48.65l-1.4 4.75a.8.8 0 0 1-.77.55H2.7a.8.8 0 0 1-.8-.55Z" />
-      ) : (
-        <path d="M1.9 12.2V4.3a.8.8 0 0 1 .8-.8h2.9l1.35 1.55h6.35a.8.8 0 0 1 .8.8v6.35a.8.8 0 0 1-.8.8H2.7a.8.8 0 0 1-.8-.8Z" />
-      )}
+      {/* One tab-and-body folder, drawn the same whether it is open or shut.
+          The old open state was a splayed perspective shape with a different
+          silhouette and a different optical weight, so expanding a folder made
+          the row visibly jump. The chevron beside it already says which state
+          it is in; the icon only has to say "folder". */}
+      <path d="M2 12.4V4.4a.9.9 0 0 1 .9-.9h2.7l1.4 1.6h6.1a.9.9 0 0 1 .9.9v6.4a.9.9 0 0 1-.9.9H2.9a.9.9 0 0 1-.9-.9Z" />
+      {open && <path d="M2.3 6.9h11.4" />}
     </svg>
   );
 }
@@ -385,11 +396,17 @@ function FileGlyph() {
       fill="none"
       stroke="currentColor"
       strokeWidth="1.3"
-      strokeLinejoin="round"
       strokeLinecap="round"
+      strokeLinejoin="round"
     >
-      <path d="M9.2 2.2H4.6a1.4 1.4 0 0 0-1.4 1.4v8.8a1.4 1.4 0 0 0 1.4 1.4h6.8a1.4 1.4 0 0 0 1.4-1.4V5.8z" />
-      <path d="M9.2 2.2v3.6h3.6" />
+      {/* A page with writing on it. The previous glyph was an empty sheet with
+          a folded corner — the icon for "a file", in a sidebar where every row
+          is a file and the only useful thing an icon can say is what kind. Two
+          ruled lines say "a note" at 15px, which is the distinction that
+          matters next to a folder. */}
+      <path d="M3.6 2.6h5.3l3.5 3.5v7.3a.9.9 0 0 1-.9.9H3.6a.9.9 0 0 1-.9-.9V3.5a.9.9 0 0 1 .9-.9Z" />
+      <path d="M8.9 2.6v3.5h3.5" />
+      <path d="M5.4 9.1h5.2M5.4 11.4h3.4" />
     </svg>
   );
 }

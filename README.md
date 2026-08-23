@@ -1,13 +1,37 @@
 # ForkLeaf
 
-**A local-first Markdown editor with first-class Mermaid diagrams, backed by your own GitHub repository.**
+**Notes that outlive the app that made them.**
+
+A local-first Markdown workspace — linked notes, full-text search, a visual
+Mermaid studio, exports — whose storage is a GitHub repository you already own.
 
 [![CI](https://github.com/praneeth132006/ForkLeaf/actions/workflows/ci.yml/badge.svg)](https://github.com/praneeth132006/ForkLeaf/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-Your notes are plain `.md` files in a repository you own. That means real version
+Every note is a plain `.md` file in a repository you own. That means real version
 history, effectively unlimited storage, access from anywhere, and the ability to
-walk away at any time — clone the repo and every note is still there.
+walk away at any time — clone the repo and every note is still there. There is no
+ForkLeaf database to be locked out of.
+
+Free, all of it, with no tiers. The expensive part of a notes app is storage, and
+ForkLeaf has none.
+
+---
+
+## Contents
+
+- [Why this exists](#why-this-exists)
+- [Features](#features)
+  - [Writing](#writing) · [Links](#links-between-notes) · [Search](#search) ·
+    [Diagrams](#diagrams) · [Sync](#sync) · [History and review](#history-and-review) ·
+    [Dashboard](#dashboard) · [Workspaces](#workspaces) ·
+    [On your desktop](#on-your-desktop) · [Publishing](#publishing) ·
+    [Exporting](#exporting) · [Keyboard](#keyboard)
+- [Quick start](#quick-start)
+- [How it works](#how-it-works)
+- [Documentation](#documentation)
+- [Development](#development)
+- [Contributing](#contributing)
 
 ---
 
@@ -101,6 +125,17 @@ github.com and anywhere else Mermaid is supported.
   other now: the blocked tab asks, the others let go, and it clears in
   milliseconds.
 
+### History and review
+
+- **Every version of every note**, read from the repository's own commit log and
+  shown in the app with a diff — no separate "version history" feature, because
+  git already is one.
+- **Branches.** Switch the branch you are writing on from the status bar; notes
+  are read from and committed to that branch.
+- **Propose changes.** For a repository you cannot push to, ForkLeaf forks it,
+  commits to a branch and opens a pull request — so contributing a documentation
+  fix is the same gesture as editing a note.
+
 ### Dashboard
 
 - Signing in lands on a **dashboard**, not an empty editor: every note across
@@ -150,6 +185,42 @@ Nothing is stored on our servers, hosting costs nothing, and unpublishing is a
 commit that deletes a file. A published note keeps working if ForkLeaf goes
 away, which is the only kind of sharing worth having in an app that promises no
 lock-in.
+
+### Exporting
+
+Six formats, all rendered in the browser — the note never leaves your machine in
+order to become a file:
+
+| Format         | What you get                                     |
+| -------------- | ------------------------------------------------ |
+| **PDF**        | Typeset for printing, diagrams included          |
+| **Word**       | Editable `.docx` with real headings and lists    |
+| **HTML**       | One self-contained file, nothing to host         |
+| **Markdown**   | The original source, with or without frontmatter |
+| **Plain text** | Formatting stripped away                         |
+| **JSON**       | Content, properties and statistics               |
+
+Export one note, or the whole workspace at once.
+
+### Keyboard
+
+| Shortcut | Does                                                 |
+| -------- | ---------------------------------------------------- |
+| `⌘K`     | Search every note, or run any command                |
+| `/`      | Insert a block — heading, list, table, code, diagram |
+| `⌘S`     | Save now rather than waiting for autosave            |
+| `⌘⇧N`    | New note                                             |
+| `⌘⇧E`    | Export                                               |
+| `⌘⇧?`    | Help and the full shortcut list                      |
+
+The complete table, including the rich-text and source-mode bindings, is on the
+`/docs/shortcuts` page of the app itself, and behind `⌘⇧?` while you are writing.
+
+### Themes
+
+Light and dark, following the system by default, with a choice of accent colour.
+Every surface in the app reads from the same set of semantic tokens, so the
+choice applies everywhere at once.
 
 ---
 
@@ -248,6 +319,25 @@ page can read your token.
 | `@forkleaf/web`             | Next.js app: auth, API routes, publishing, application shell           |
 
 More detail in [docs/architecture.md](docs/architecture.md).
+
+---
+
+## Documentation
+
+The app ships its own documentation site at `/docs`, covering every page below.
+Run `pnpm dev` and open <http://localhost:3000/docs>, or read it on the hosted
+instance.
+
+| Section             | Pages                                                      |
+| ------------------- | ---------------------------------------------------------- |
+| Start here          | Getting started · How ForkLeaf works                       |
+| Writing             | The editor · Diagrams · Properties · Exporting · Shortcuts |
+| GitHub              | Signing in · Repositories · Syncing · Conflicts            |
+| Account             | What it costs · Your data · Security model                 |
+| Running it yourself | Self-hosting · Firebase setup · Troubleshooting · FAQ      |
+
+Architecture notes live in [docs/architecture.md](docs/architecture.md), and the
+deployment guide in [docs/self-hosting.md](docs/self-hosting.md).
 
 ---
 

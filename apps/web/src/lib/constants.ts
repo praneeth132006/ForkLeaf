@@ -6,3 +6,4 @@ export const CONTRIBUTING_URL = `${REPO_URL}/blob/main/CONTRIBUTING.md`;
 export const SECURITY_URL = `${REPO_URL}/blob/main/SECURITY.md`;
 export const ARCHITECTURE_URL = `${REPO_URL}/blob/main/docs/architecture.md`;
 export const SELF_HOSTING_URL = `${REPO_URL}/blob/main/docs/self-hosting.md`;
+export const SPONSOR_URL = `https://github.com/sponsors/praneeth132006`;

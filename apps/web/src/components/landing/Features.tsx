@@ -67,7 +67,7 @@ const FEATURES = [
 
 export function Features() {
   return (
-    <section id="features" className="mx-auto w-full max-w-6xl px-6 py-24">
+    <section id="features" className="fl-anchor mx-auto w-full max-w-6xl px-6 py-24">
       <SectionHeading
         eyebrow="Features"
         title="Built like a text editor, not like a database with a text box"
@@ -227,33 +227,65 @@ function ModesArt() {
 
 function DiagramArt() {
   return (
-    <svg viewBox="0 0 200 78" className="w-full" aria-hidden="true">
-      <g stroke="var(--fl-border-strong)" strokeWidth="1" fill="none">
-        <path d="M62 22h22" />
-        <path d="M116 30v14h-4" />
-        <path d="M116 22h22" />
+    <svg
+      viewBox="0 0 200 104"
+      className="mx-auto w-full max-w-md"
+      role="img"
+      aria-label="A flowchart: Draft leads to PR, which leads to Merged or back through Revise to Draft"
+    >
+      {/* Edges are drawn from the edge of one box to the edge of the next, at
+          shared centre lines, so a corner is a right angle and a join is a
+          join. The previous version had its arithmetic off: the arrow out of PR
+          started halfway down the box's right-hand side, dropped fourteen units
+          and stopped four units short of Revise in mid-air. */}
+      <g
+        stroke="var(--fl-border-strong)"
+        strokeWidth="1.25"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {/* Draft → PR, and PR → Merged: straight, along the row's centre. */}
+        <path d="M60 26h12" />
+        <path d="M128 26h12" />
+        {/* PR → Revise: straight down the shared centre. */}
+        <path d="M100 40v22" />
+        {/* Revise → Draft: out of the left edge, along, and up into Draft. */}
+        <path d="M72 76H34V40" />
       </g>
+
+      {/* Arrowheads, drawn rather than markered: a marker cannot inherit the
+          stroke colour reliably across browsers, and these never move. */}
+      <g fill="var(--fl-border-strong)">
+        <path d="M72 26l-4.5-2.5v5z" />
+        <path d="M140 26l-4.5-2.5v5z" />
+        <path d="M100 62l-2.5-4.5h5z" />
+        <path d="M34 40l-2.5 4.5h5z" transform="rotate(180 34 42.25)" />
+      </g>
+
       {[
-        { x: 6, y: 10, w: 56, label: "Draft", accent: false },
-        { x: 84, y: 10, w: 32, label: "PR", accent: true },
-        { x: 138, y: 10, w: 56, label: "Merged", accent: false },
-        { x: 56, y: 48, w: 56, label: "Revise", accent: false },
+        { x: 8, y: 14, w: 52, label: "Draft", accent: false },
+        { x: 74, y: 14, w: 52, label: "PR", accent: true },
+        { x: 140, y: 14, w: 52, label: "Merged", accent: false },
+        { x: 74, y: 62, w: 52, label: "Revise", accent: false },
       ].map((node) => (
         <g key={node.label}>
           <rect
             x={node.x}
             y={node.y}
             width={node.w}
-            height={22}
-            rx={6}
+            height={24}
+            rx={7}
             fill={node.accent ? "var(--fl-accent-soft)" : "var(--fl-elevated)"}
             stroke={node.accent ? "var(--fl-accent)" : "var(--fl-border)"}
+            strokeWidth="1.25"
           />
           <text
             x={node.x + node.w / 2}
-            y={node.y + 15}
+            y={node.y + 16}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="10"
+            fontWeight="500"
             fill={node.accent ? "var(--fl-accent)" : "var(--fl-muted)"}
           >
             {node.label}

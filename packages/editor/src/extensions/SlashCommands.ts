@@ -32,7 +32,19 @@ export function readSlashState(editor: Editor): SlashState {
   if (!empty) return { active: false, query: "", from: 0 };
 
   // Only consider the text between the start of the block and the cursor.
-  const textBefore = $from.parent.textBetween(0, $from.parentOffset, undefined, "￼");
+  //
+  // Leaf nodes are rendered as "\n" rather than the object-replacement
+  // character, because in this editor the leaf that matters is a hard break —
+  // Enter makes a line inside the paragraph rather than splitting it, so a note
+  // reads `<p>first line<br>/</p>`. Rendered as "￼" the break was a non-space
+  // character, the `/` after it looked mid-word, and the menu refused to open
+  // on every line except the first one in a block. Which is to say: it refused
+  // to open essentially always.
+  //
+  // A one-character placeholder is required, not incidental. Positions count a
+  // leaf node as 1, and `from` below is derived from an index into this string;
+  // a placeholder of any other length would slide the deletion range.
+  const textBefore = $from.parent.textBetween(0, $from.parentOffset, undefined, "\n");
   const slashIndex = textBefore.lastIndexOf("/");
   if (slashIndex === -1) return { active: false, query: "", from: 0 };
 

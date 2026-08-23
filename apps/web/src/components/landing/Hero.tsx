@@ -1,24 +1,37 @@
 import Link from "next/link";
 import { AppPreview } from "./AppPreview";
 import { GitHubGlyph } from "./Nav";
+import { SectionLink } from "./SectionLink";
 
 /**
  * The hero.
  *
- * One enormous claim, one sentence explaining it, one button. Everything the
- * previous version carried alongside that — a "New" pill, two competing
- * call-to-action buttons of equal weight, a licence badge, a caveat about local
- * storage — split the visitor's attention three ways before they had decided
- * whether they cared.
+ * It has to answer three questions before the visitor scrolls, in this order:
+ * what is this, why is it different, and what happens if I press the button.
  *
- * The one addition since: a row of plain-text chips naming what this actually
- * is. The sentence above them says where notes are stored, which is the
- * argument; the chips say what the thing does, which is the question somebody
- * reading a headline about ownership has not had answered yet.
- *
- * The display line is set in Instrument Serif at a size that only works because
- * it is short. Resist lengthening it.
+ * 1. The display line makes the claim. It is set in Instrument Serif at a size
+ *    that only works because it is short — resist lengthening it.
+ * 2. The paragraph under it says what the thing actually is, in the plainest
+ *    words available, because "notes you own" is a promise and not a product.
+ * 3. The chips name the capabilities, because somebody reading a headline about
+ *    ownership still does not know whether this can draw a diagram.
+ * 4. The button says what it costs and what it will ask for, next to itself.
+ *    An unpriced button with an OAuth screen behind it is the single most
+ *    common reason a developer closes the tab.
  */
+
+/** Named capabilities, in the order a writer would meet them. */
+const CAPABILITIES = [
+  "Rich, split & source editing",
+  "[[Wikilinks]] & backlinks",
+  "Full-text search",
+  "Visual Mermaid studio",
+  "Offline-first",
+  "Real commit history",
+  "PDF, Word & HTML export",
+  "Publish to a public link",
+] as const;
+
 export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
   return (
     <section className="relative overflow-hidden">
@@ -36,30 +49,35 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
 
       <div className="relative mx-auto w-full max-w-6xl px-6">
         {/* ── Statement ─────────────────────────────────────────────────── */}
-        <div className="fl-rise mx-auto max-w-3xl pb-2 pt-24 text-center md:pt-32">
-          <h1 className="font-serif text-[3.5rem] font-normal leading-[0.98] tracking-[-0.02em] text-[var(--fl-text)] sm:text-[5rem] md:text-[6rem]">
-            Notes you own
-          </h1>
-
-          <p className="mx-auto mt-7 max-w-xl text-[17px] leading-[1.65] text-[var(--fl-muted)]">
-            A Markdown editor that writes straight into a GitHub repository you already have.
-            Wikilinks, backlinks and full-text search over plain{" "}
-            <code className="font-mono text-[15px]">.md</code> files. Every note is a real file.
-            Every save is a real commit.
+        <div className="fl-rise mx-auto max-w-3xl pb-2 pt-20 text-center md:pt-28">
+          {/* The category, stated flatly. A serif headline about ownership is
+              evocative and tells you nothing about what you are looking at. */}
+          <p className="mb-7 inline-flex items-center gap-2 rounded-full border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3.5 py-1.5 text-[12.5px] text-[var(--fl-muted)]">
+            <span
+              aria-hidden="true"
+              className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fl-accent)]"
+            />
+            Markdown notes, in your own GitHub repo
+            <span className="hidden sm:inline">· open source</span>
           </p>
 
-          {/* A short, concrete list under the promise. Someone deciding whether
-              to read on wants to know what this *is*, and four words do that
-              faster than a paragraph — the grid below has the detail. */}
-          <ul className="mx-auto mt-6 flex max-w-2xl flex-wrap items-center justify-center gap-x-2.5 gap-y-2 text-[13px] text-[var(--fl-muted)]">
-            {[
-              "[[Wikilinks]] & backlinks",
-              "Full-text search",
-              "Mermaid diagrams",
-              "Opens .md files from your desktop",
-              "Offline-first",
-              "Publish to a public link",
-            ].map((item) => (
+          <h1 className="font-serif text-[2.75rem] font-normal leading-[1] tracking-[-0.02em] text-[var(--fl-text)] sm:text-[4.25rem] sm:leading-[0.98] md:text-[5.5rem]">
+            Notes that outlive
+            <br />
+            the app that made them
+          </h1>
+
+          <p className="mx-auto mt-6 max-w-2xl text-[16px] leading-[1.6] text-[var(--fl-muted)] sm:mt-7 sm:text-[17.5px] sm:leading-[1.62]">
+            ForkLeaf is a full Markdown workspace — linked notes, search, diagrams, exports — that
+            keeps every note as a plain{" "}
+            <code className="font-mono text-[15px] text-[var(--fl-text)]">.md</code> file in a
+            GitHub repository <em className="not-italic text-[var(--fl-text)]">you</em> own. It
+            saves to your device as you type, and turns those edits into real commits in your own
+            history. There is no ForkLeaf database to be locked out of.
+          </p>
+
+          <ul className="mx-auto mt-7 flex max-w-2xl flex-wrap items-center justify-center gap-x-2 gap-y-2 text-[12.5px] text-[var(--fl-muted)]">
+            {CAPABILITIES.map((item) => (
               <li
                 key={item}
                 className="rounded-full border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-1"
@@ -69,15 +87,21 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
             ))}
           </ul>
 
-          <div className="mt-9 flex justify-center">
+          {/* ── Call to action ──────────────────────────────────────────── */}
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             {githubAvailable ? (
-              <a
-                href="/api/auth/github"
-                className="fl-btn fl-btn-primary !rounded-full !px-6 !py-3.5"
-              >
-                <GitHubGlyph />
-                Continue with GitHub
-              </a>
+              <>
+                <a
+                  href="/api/auth/github"
+                  className="fl-btn fl-btn-primary !rounded-full !px-6 !py-3.5"
+                >
+                  <GitHubGlyph />
+                  Continue with GitHub
+                </a>
+                <Link href="/editor" className="fl-btn fl-btn-ghost !rounded-full !px-6 !py-3.5">
+                  Try it without an account
+                </Link>
+              </>
             ) : (
               <Link href="/editor" className="fl-btn fl-btn-primary !rounded-full !px-6 !py-3.5">
                 Start writing
@@ -88,20 +112,13 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
           <p className="mt-4 text-[13px] text-[var(--fl-muted)]">
             {githubAvailable ? (
               <>
-                Free ·{" "}
-                <a
-                  href="#ownership"
+                Free forever · No card, no trial ·{" "}
+                <SectionLink
+                  hash="#ownership"
                   className="underline decoration-[var(--fl-border-strong)] underline-offset-[3px] transition-colors hover:text-[var(--fl-text)]"
                 >
-                  what GitHub access this asks for
-                </a>{" "}
-                ·{" "}
-                <Link
-                  href="/editor"
-                  className="underline decoration-[var(--fl-border-strong)] underline-offset-[3px] transition-colors hover:text-[var(--fl-text)]"
-                >
-                  or try it without an account
-                </Link>
+                  exactly what GitHub access this asks for
+                </SectionLink>
               </>
             ) : (
               <>Free · Opens in your browser · No install, no account</>
@@ -113,7 +130,7 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
         {/* Deliberately tall and cropped by the fold: the frame continuing past
             the bottom of the viewport is what makes the page feel worth
             scrolling. */}
-        <div className="fl-rise pt-24 [animation-delay:140ms] md:pt-32">
+        <div className="fl-rise pt-20 [animation-delay:140ms] md:pt-24">
           <AppPreview />
         </div>
       </div>

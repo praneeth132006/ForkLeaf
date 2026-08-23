@@ -28,7 +28,10 @@ const LINKS = [
  */
 export function Ownership() {
   return (
-    <section id="ownership" className="border-y border-[var(--fl-border)] bg-[var(--fl-elevated)]">
+    <section
+      id="ownership"
+      className="fl-anchor border-y border-[var(--fl-border)] bg-[var(--fl-elevated)]"
+    >
       <div className="mx-auto w-full max-w-6xl px-6 py-24">
         <SectionHeading
           eyebrow="Ownership"
