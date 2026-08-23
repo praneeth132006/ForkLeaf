@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { EditorViewMode, SessionUser, SyncPreference, Workspace } from "@forkleaf/types";
 import { DEFAULT_SYNC_PREFERENCE } from "@forkleaf/types";
-import { createLocalDatabase, indexedDbAvailable, type LocalDatabase } from "@forkleaf/store";
+import { openLocalDatabase, type LocalDatabase } from "@forkleaf/store";
 import { documentStats } from "@forkleaf/markdown-engine";
 import { signOut } from "@/lib/gateway";
 import { useTheme, type Theme } from "@/hooks/useTheme";
@@ -63,6 +63,7 @@ export function ProfilePanel({ user, githubAvailable }: ProfilePanelProps) {
   const [theme, setTheme] = useTheme();
   const [library, setLibrary] = useState<Library | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const [db, setDb] = useState<LocalDatabase | null>(null);
 
   useEffect(() => {
@@ -70,15 +71,19 @@ export function ProfilePanel({ user, githubAvailable }: ProfilePanelProps) {
 
     void (async () => {
       try {
-        // Inside the async body rather than as an early return: a bare
-        // `setState` in an effect body is a cascading render, and the check
-        // belongs with the thing it guards anyway.
-        if (!indexedDbAvailable()) {
-          if (!cancelled) setUnavailable(true);
+        // Opened inside the async body rather than guarded by an early return:
+        // a bare `setState` in an effect body is a cascading render, and this
+        // has to await the open anyway to know which case it is in.
+        const { db: database, status } = await openLocalDatabase();
+        if (cancelled) return;
+        if (status !== "ready") {
+          // An in-memory store would report a library of zero notes and zero
+          // words, which is a lie the profile page should not tell.
+          if (status === "blocked") setBlocked(true);
+          else setUnavailable(true);
           return;
         }
 
-        const database = await createLocalDatabase();
         const workspaces = await database.listWorkspaces();
         const queue = await database.listQueue();
 
@@ -225,7 +230,12 @@ export function ProfilePanel({ user, githubAvailable }: ProfilePanelProps) {
       <section className="mt-10">
         <SectionHeading>What you have written</SectionHeading>
 
-        {unavailable ? (
+        {blocked ? (
+          <p className="fl-card mt-3 p-6 text-[14px] leading-relaxed text-[var(--fl-muted)]">
+            Another ForkLeaf tab is holding local storage open, so these counts cannot be read.
+            Close the other tabs and reload.
+          </p>
+        ) : unavailable ? (
           <p className="fl-card mt-3 p-6 text-[14px] leading-relaxed text-[var(--fl-muted)]">
             This browser is not letting ForkLeaf use local storage, so there is nothing to count.
             Private windows and blocked third-party storage both do this.

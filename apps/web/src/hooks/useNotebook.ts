@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   SyncEngine,
   NoteRepository,
-  createLocalDatabase,
+  openLocalDatabase,
   type LocalDatabase,
+  type LocalDatabaseStatus,
   type RemoteGateway,
 } from "@forkleaf/store";
 import {
@@ -55,6 +56,8 @@ export interface NotebookState {
    */
   syncPreference: SyncPreference;
   error: string | null;
+  /** Whether local storage is real, held by another tab, or missing entirely. */
+  storage: LocalDatabaseStatus;
   /** Set while a slow operation (bootstrap, opening a note) is running. */
   busy: string | null;
   /**
@@ -93,6 +96,16 @@ const syncPrefKey = (workspace: Workspace) =>
 /** Folders made locally that have no note in them yet. See `emptyFolders`. */
 const emptyFoldersKey = (workspace: string) => `emptyFolders:${workspace}`;
 
+/**
+ * Shown when the browser will not give ForkLeaf durable local storage at all.
+ *
+ * Deliberately does not mention other tabs: that case is recoverable and gets
+ * `StorageBlocked` instead, so anyone reading this is in a private window or
+ * has storage switched off, and telling them to close tabs would be a dead end.
+ */
+const STORAGE_UNAVAILABLE =
+  "This browser will not let ForkLeaf use local storage, so nothing written here survives a reload. Leaving private browsing, or allowing site data for this page, fixes it.";
+
 /** How many notes may be open at once, to bound memory and tab-strip width. */
 const MAX_OPEN_NOTES = 12;
 
@@ -125,6 +138,7 @@ export function useNotebook(request: NotebookRequest = {}) {
     },
     syncPreference: DEFAULT_SYNC_PREFERENCE,
     error: null,
+    storage: "ready",
     busy: null,
     emptyFolders: [],
     needsRepoChoice: false,
@@ -165,7 +179,15 @@ export function useNotebook(request: NotebookRequest = {}) {
         }));
         if (cancelled) return;
 
-        const db = await createLocalDatabase();
+        // Never throws: a browser that refuses IndexedDB gets an in-memory
+        // store rather than a boot failure. Nothing typed into that store
+        // survives the tab, though, so `storage` is carried into the state and
+        // the editor refuses to pretend otherwise.
+        const { db, status: storage } = await openLocalDatabase();
+        if (storage === "blocked") {
+          patch({ ready: true, busy: null, storage });
+          return;
+        }
         const gateway: RemoteGateway =
           session.mode === "github" ? new GitHubGateway() : new LocalGateway();
 
@@ -222,6 +244,8 @@ export function useNotebook(request: NotebookRequest = {}) {
           needsRepoChoice,
           ready: true,
           busy: null,
+          storage,
+          error: storage === "unavailable" ? STORAGE_UNAVAILABLE : null,
         });
       } catch (error) {
         if (!cancelled) {

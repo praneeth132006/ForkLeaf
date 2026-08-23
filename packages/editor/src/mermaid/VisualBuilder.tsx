@@ -27,6 +27,8 @@ import {
   type GraphNode,
   type NodeShape,
 } from "@forkleaf/diagrams";
+import { DraftInput } from "./DraftInput";
+import { resolveDrop } from "./drag";
 
 export interface VisualBuilderProps {
   graph: Graph;
@@ -40,6 +42,14 @@ const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2.5;
 /** Padding left around the content when fitting the view to the graph. */
 const FIT_PADDING = 80;
+/**
+ * Extra room kept below the content when fitting.
+ *
+ * The keyboard-hint strip floats over the bottom of the canvas, so a fit that
+ * treats the full height as usable parks the last row of boxes underneath it —
+ * the node is on screen and still unreadable.
+ */
+const HINT_STRIP = 48;
 
 /** The shape a plain new node takes in each dialect. */
 function defaultShapeFor(kind: Graph["kind"]): NodeShape {
@@ -431,18 +441,41 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
       }
       pending.current = null;
 
-      // Commit happens here, once, rather than on every frame.
-      if (drag.kind === "move" && drag.moved) {
-        // The whole selection moves with the node being dragged.
-        const moved = [...selection].filter((id) => graph.nodes.some((node) => node.id === id));
-        const dx = drag.preview.x - (graph.nodes.find((n) => n.id === drag.nodeId)?.x ?? 0);
-        const dy = drag.preview.y - (graph.nodes.find((n) => n.id === drag.nodeId)?.y ?? 0);
+      // Commit happens here, once, rather than on every frame — and from the
+      // release point rather than from `drag.preview`.
+      //
+      // `preview` and `moved` are only ever written inside the animation
+      // frame, and the frame this very handler just cancelled is usually the
+      // one that would have written them. A drag completed inside a single
+      // frame — a quick flick, a fast mouse, a synthetic event with no
+      // intermediate moves — therefore ended with `moved` still false and the
+      // node snapped back to where it started, having visibly followed the
+      // cursor the whole way. The marquee branch below already worked this
+      // out; the two branches that move things did not.
+      if (drag.kind === "move") {
+        const origin = graph.nodes.find((node) => node.id === drag.nodeId);
+        const to = origin
+          ? resolveDrop({
+              world: toWorld(event),
+              grab: { x: drag.grabX, y: drag.grabY },
+              origin,
+              freeform: event.altKey,
+              snap,
+            })
+          : null;
 
-        commit(
-          moved.length > 1 && moved.includes(drag.nodeId)
-            ? moveNodes(graph, moved, dx, dy)
-            : updateNode(graph, drag.nodeId, { x: drag.preview.x, y: drag.preview.y }),
-        );
+        if (origin && to) {
+          // The whole selection moves with the node being dragged.
+          const together = [...selection].filter((id) =>
+            graph.nodes.some((node) => node.id === id),
+          );
+
+          commit(
+            together.length > 1 && together.includes(drag.nodeId)
+              ? moveNodes(graph, together, to.x - origin.x, to.y - origin.y)
+              : updateNode(graph, drag.nodeId, { x: to.x, y: to.y }),
+          );
+        }
       } else if (drag.kind === "connect") {
         const world = toWorld(event);
         const target = nodeAt(graph, world);
@@ -520,7 +553,9 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
       if (frame.current !== null) cancelAnimationFrame(frame.current);
       frame.current = null;
     };
-  }, [drag, graph, onChange, toWorld, zoom]);
+    // `selection` and `commit` are read inside `onUp`; without them here a
+    // drag begun before a selection change committed against the stale set.
+  }, [drag, graph, onChange, toWorld, zoom, selection, commit]);
 
   // ── Zoom ────────────────────────────────────────────────────────────────
   // Anchored at the cursor, so the point under the pointer stays put — the
@@ -530,6 +565,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
     if (!host) return;
 
     const onWheel = (event: WheelEvent) => {
+      touched.current = true;
+
       // Plain scroll pans vertically; ctrl/cmd (or a pinch, which browsers
       // report as ctrl+wheel) zooms. Matches every canvas app.
       if (!event.ctrlKey && !event.metaKey) {
@@ -574,7 +611,9 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
     const maxY = Math.max(...graph.nodes.map((n) => n.y + sizeOf(n).height));
 
     const contentWidth = maxX - minX + FIT_PADDING * 2;
-    const contentHeight = maxY - minY + FIT_PADDING * 2;
+    // The reserve is spent at the bottom: centring the taller block leaves the
+    // content sitting above the hint strip rather than behind it.
+    const contentHeight = maxY - minY + FIT_PADDING * 2 + HINT_STRIP;
     // Never magnified past life size. Fitting a two-box diagram to the pane
     // zoomed it to 250%, which turned two small boxes into two slabs wider
     // than the canvas — "fit" should mean everything is visible, not that the
@@ -592,14 +631,41 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
     });
   }, [graph.nodes, viewport]);
 
-  // Frame the diagram the first time one exists, so opening the visual tab on
-  // a template does not drop you in an empty corner of the canvas.
-  const framed = useRef(false);
+  /**
+   * Whether the reader has taken control of the view by panning or zooming.
+   *
+   * Once they have, the canvas must never move on its own again — nothing is
+   * more disorienting than a view that re-centres itself while being used.
+   */
+  const touched = useRef(false);
+  const markTouched = useCallback(() => {
+    touched.current = true;
+  }, []);
+
+  /**
+   * Frame the diagram until the reader takes over.
+   *
+   * This used to fire exactly once, against whatever the pane happened to
+   * measure at that instant — which, while a dialog is still settling, is not
+   * the size it ends up. A canvas framed for a 700px pane and then resized to
+   * 292px left every node outside the viewBox: an empty grid, with the diagram
+   * parked somewhere off-screen and nothing on screen to say so.
+   *
+   * Re-framing on each new viewport size fixes that, and keying on the size
+   * means a pane that is not changing shape does not re-frame under a reader
+   * who is placing boxes.
+   */
+  const framedFor = useRef("");
   useEffect(() => {
-    if (framed.current || graph.nodes.length === 0 || viewport.width <= 1) return;
-    framed.current = true;
+    if (touched.current || graph.nodes.length === 0) return;
+    if (viewport.width <= 1 || viewport.height <= 1) return;
+
+    const signature = `${Math.round(viewport.width)}x${Math.round(viewport.height)}`;
+    if (framedFor.current === signature) return;
+
+    framedFor.current = signature;
     fit();
-  }, [graph.nodes.length, viewport.width, fit]);
+  }, [graph.nodes.length, viewport.width, viewport.height, fit]);
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
@@ -708,6 +774,46 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
     setSelection(new Set());
   }, [graph, commit, selection]);
 
+  /**
+   * Undo and redo, re-framing only when the step left nothing on screen.
+   *
+   * A step can restore positions the current view was never framed for: undo
+   * a "Tidy up" and the boxes go back where they were, which — after the
+   * tidy's own re-frame followed them across the canvas — is off the edge of
+   * it. What you saw was an empty grid and no clue the diagram still existed.
+   * Moving the view on *every* undo would be worse, so it moves only when
+   * there is otherwise nothing to look at.
+   */
+  const ensureVisible = useRef(false);
+
+  const undo = useCallback(() => {
+    ensureVisible.current = true;
+    history.undo();
+  }, [history]);
+
+  const redo = useCallback(() => {
+    ensureVisible.current = true;
+    history.redo();
+  }, [history]);
+
+  useEffect(() => {
+    if (!ensureVisible.current) return;
+    ensureVisible.current = false;
+    if (graph.nodes.length === 0) return;
+
+    const onScreen = graph.nodes.some((node) => {
+      const { width, height } = sizeOf(node);
+      return (
+        node.x < view.x + view.width &&
+        node.x + width > view.x &&
+        node.y < view.y + view.height &&
+        node.y + height > view.y
+      );
+    });
+
+    if (!onScreen) fit();
+  }, [graph.nodes, view, fit]);
+
   // ── Keyboard ────────────────────────────────────────────────────────────
   // Declared after the actions it calls, so the dependency array is not
   // evaluated before those consts exist.
@@ -722,14 +828,14 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
       if (accel && event.key.toLowerCase() === "z") {
         event.preventDefault();
-        if (event.shiftKey) history.redo();
-        else history.undo();
+        if (event.shiftKey) redo();
+        else undo();
         return;
       }
 
       if (accel && event.key.toLowerCase() === "y") {
         event.preventDefault();
-        history.redo();
+        redo();
         return;
       }
 
@@ -804,7 +910,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
     editingLabel,
     graph,
     commit,
-    history,
+    undo,
+    redo,
     fit,
     createConnectedNode,
     duplicateSelection,
@@ -843,12 +950,12 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
         <div className="ml-auto flex items-center gap-2">
           <div className="flex items-center rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)]">
-            <ZoomButton label="Undo (⌘Z)" onClick={history.undo} disabled={!history.canUndo}>
+            <ZoomButton label="Undo (⌘Z)" onClick={undo} disabled={!history.canUndo}>
               <UndoGlyph />
             </ZoomButton>
             <ZoomButton
               label="Redo (⌘⇧Z)"
-              onClick={history.redo}
+              onClick={redo}
               disabled={!history.canRedo}
               className="border-l border-[var(--fl-border)]"
             >
@@ -892,7 +999,10 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
           <div className="flex items-center rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)]">
             <ZoomButton
               label="Zoom out"
-              onClick={() => setZoom((z) => clamp(z / 1.2, MIN_ZOOM, MAX_ZOOM))}
+              onClick={() => {
+                markTouched();
+                setZoom((z) => clamp(z / 1.2, MIN_ZOOM, MAX_ZOOM));
+              }}
             >
               −
             </ZoomButton>
@@ -906,7 +1016,10 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             </button>
             <ZoomButton
               label="Zoom in"
-              onClick={() => setZoom((z) => clamp(z * 1.2, MIN_ZOOM, MAX_ZOOM))}
+              onClick={() => {
+                markTouched();
+                setZoom((z) => clamp(z * 1.2, MIN_ZOOM, MAX_ZOOM));
+              }}
             >
               +
             </ZoomButton>
@@ -933,6 +1046,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             // Middle-click pans from anywhere; otherwise this only fires on
             // the empty canvas, because nodes and edges stop the event.
             if (event.target !== event.currentTarget && event.button !== 1) return;
+
+            markTouched();
 
             setEditingLabel(null);
 
@@ -1110,6 +1225,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
               dragging={drag.kind === "move" && drag.nodeId === node.id}
               onPointerDown={(event) => {
                 event.stopPropagation();
+                markTouched();
                 const world = toWorld(event);
                 toggleSelected(node.id, event.shiftKey);
                 setDrag({
@@ -1155,16 +1271,14 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             if (!node) return null;
 
             return (
-              <input
+              <DraftInput
                 autoFocus
                 // Selected on open, so double-clicking a box and typing
                 // replaces its name. Without this the caret landed at one end
                 // and "Process" became "ProcessBuild step".
                 onFocus={(event) => event.currentTarget.select()}
                 value={node.label}
-                onChange={(event) =>
-                  onChange(updateNode(graph, node.id, { label: event.target.value }))
-                }
+                onValueChange={(next) => onChange(updateNode(graph, node.id, { label: next }))}
                 onBlur={() => setEditingLabel(null)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === "Escape") setEditingLabel(null);
@@ -1219,18 +1333,18 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-2 text-[12.5px]">
           {selectedNode && (
             <>
-              <input
+              <DraftInput
                 value={
                   hasMembers(selectedNode.shape)
                     ? splitMembers(selectedNode.label).name
                     : selectedNode.label
                 }
-                onChange={(event) =>
+                onValueChange={(next) =>
                   onChange(
                     updateNode(graph, selectedNode.id, {
                       label: hasMembers(selectedNode.shape)
-                        ? joinMembers(event.target.value, splitMembers(selectedNode.label).members)
-                        : event.target.value,
+                        ? joinMembers(next, splitMembers(selectedNode.label).members)
+                        : next,
                     }),
                   )
                 }
@@ -1241,17 +1355,17 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
               {/* Fields and methods, one per line — the same shape as the
                   mermaid block, so what is typed here is what is written. */}
               {hasMembers(selectedNode.shape) && (
-                <input
+                <DraftInput
                   value={splitMembers(selectedNode.label).members.join("; ")}
                   placeholder={
                     graph.kind === "er" ? "string name; int age" : "+string id; +save() void"
                   }
-                  onChange={(event) =>
+                  onValueChange={(next) =>
                     onChange(
                       updateNode(graph, selectedNode.id, {
                         label: joinMembers(
                           splitMembers(selectedNode.label).name,
-                          event.target.value
+                          next
                             .split(";")
                             .map((member) => member.trim())
                             .filter((member) => member !== ""),
@@ -1294,14 +1408,14 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
           {selectedEdge && (
             <>
-              <input
+              <DraftInput
                 value={selectedEdge.label ?? ""}
                 placeholder="Arrow label"
-                onChange={(event) =>
+                onValueChange={(next) =>
                   onChange({
                     ...graph,
                     edges: graph.edges.map((e) =>
-                      e.id === selectedEdge.id ? { ...e, label: event.target.value } : e,
+                      e.id === selectedEdge.id ? { ...e, label: next } : e,
                     ),
                   })
                 }
@@ -1333,27 +1447,21 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                   list the types is to say how many of each there are. */}
               {(graph.kind === "class" || graph.kind === "er") && (
                 <>
-                  <input
+                  <DraftInput
                     value={selectedEdge.fromCardinality ?? ""}
                     placeholder="1"
-                    onChange={(event) =>
-                      onChange(
-                        updateEdge(graph, selectedEdge.id, {
-                          fromCardinality: event.target.value,
-                        }),
-                      )
+                    onValueChange={(next) =>
+                      onChange(updateEdge(graph, selectedEdge.id, { fromCardinality: next }))
                     }
                     aria-label="Multiplicity at the source"
                     className="w-14 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-center text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
                   />
                   <span className="text-[var(--fl-muted)]">→</span>
-                  <input
+                  <DraftInput
                     value={selectedEdge.toCardinality ?? ""}
                     placeholder="*"
-                    onChange={(event) =>
-                      onChange(
-                        updateEdge(graph, selectedEdge.id, { toCardinality: event.target.value }),
-                      )
+                    onValueChange={(next) =>
+                      onChange(updateEdge(graph, selectedEdge.id, { toCardinality: next }))
                     }
                     aria-label="Multiplicity at the target"
                     className="w-14 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-center text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"

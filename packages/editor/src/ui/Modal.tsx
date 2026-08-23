@@ -23,6 +23,11 @@ export interface ModalProps {
   fullScreen?: boolean;
 }
 
+/** Somewhere text is being typed, which owns Escape before the dialog does. */
+function isTextEntry(element: HTMLElement): boolean {
+  return element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.isContentEditable;
+}
+
 /**
  * A focused overlay for work that does not belong inline in the document.
  *
@@ -52,13 +57,29 @@ export function Modal({
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        const panel = panelRef.current;
+
         // An open suggestion list owns Escape first. This handler is bound in
         // the capture phase so it can trap Tab, which also meant it beat
         // CodeMirror to Escape: typing Mermaid, getting a completion popup and
         // pressing the key that dismisses one everywhere else closed the whole
         // diagram studio instead. Let the inner surface have it, and the next
         // Escape — with no popup left open — closes the dialog.
-        if (panelRef.current?.querySelector(".cm-tooltip-autocomplete")) return;
+        if (panel?.querySelector(".cm-tooltip-autocomplete")) return;
+
+        // A field being typed into owns Escape next. Escape means "stop
+        // editing this", and taking it straight to the dialog meant renaming
+        // a box on the diagram canvas and changing your mind about the name
+        // shut the whole studio. The field gives up focus, and the next
+        // Escape — with nothing being typed into — closes.
+        const active = document.activeElement as HTMLElement | null;
+        if (active && panel?.contains(active) && isTextEntry(active)) {
+          event.stopPropagation();
+          event.preventDefault();
+          active.blur();
+          panel.focus();
+          return;
+        }
 
         event.stopPropagation();
         onClose();
@@ -89,9 +110,26 @@ export function Modal({
     [onClose],
   );
 
+  // The listener is bound once and reads the current handler through a ref.
+  //
+  // Binding it to `handleKeyDown` directly tied *taking focus* to the identity
+  // of the caller's `onClose`. Callers write that inline — a new function every
+  // render — so the effect re-ran after every keystroke and pulled focus back
+  // to the panel: you could type exactly one character into any field in a
+  // modal before the caret jumped out of it.
+  const keyDownRef = useRef(handleKeyDown);
+  keyDownRef.current = handleKeyDown;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => keyDownRef.current(event);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, []);
+
+  // Focus moves in on open and back out on close — once each, on mount and
+  // unmount, never in between.
   useEffect(() => {
     previouslyFocused.current = document.activeElement as HTMLElement | null;
-    document.addEventListener("keydown", handleKeyDown, true);
 
     // The page behind must not scroll while a modal is open.
     const previousOverflow = document.body.style.overflow;
@@ -100,11 +138,10 @@ export function Modal({
     panelRef.current?.focus();
 
     return () => {
-      document.removeEventListener("keydown", handleKeyDown, true);
       document.body.style.overflow = previousOverflow;
       previouslyFocused.current?.focus?.();
     };
-  }, [handleKeyDown]);
+  }, []);
 
   if (typeof document === "undefined") return null;
 

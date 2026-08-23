@@ -9,6 +9,8 @@ import { queryIndex, tagCounts, type IndexEntry, type SortKey } from "@/lib/libr
 import { signOut } from "@/lib/gateway";
 import { useTheme } from "@/hooks/useTheme";
 import { useIndexView, type IndexView } from "@/hooks/useIndexView";
+import { StorageBlocked } from "@/components/StorageBlocked";
+import { BootScreen } from "@/components/BootScreen";
 import { ForkLeafLogo } from "@/components/Brand";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
 import { RepoChooser } from "./RepoChooser";
@@ -166,16 +168,11 @@ export function DashboardPanel({
   }, [router]);
 
   // ── Loading ─────────────────────────────────────────────────────────────
-  if (!library.ready) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[var(--fl-bg)]">
-        <ForkLeafLogo markClassName="h-8 w-8" textClassName="text-xl" />
-        <p className="text-sm text-[var(--fl-muted)]" aria-busy="true">
-          Reading your library…
-        </p>
-      </div>
-    );
-  }
+  // The library cannot be read while another tab holds the database, and an
+  // empty dashboard would read as "you have no notes".
+  if (library.storage === "blocked") return <StorageBlocked />;
+
+  if (!library.ready) return <BootScreen message="Reading your library…" />;
 
   const firstRun = library.needsRepoChoice && !skippedChoice;
 
@@ -586,6 +583,7 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 /** "all 155 read" / "120 of 155 read" — never silent about what is missing. */
 function coverage(read: number, total: number): string {
   if (total === 0) return "";
+  if (total === 1) return read >= 1 ? "from the one note" : "from 0 of 1 note read so far";
   if (read >= total) return `from all ${total.toLocaleString()} notes`;
   return `from ${read.toLocaleString()} of ${total.toLocaleString()} notes read so far`;
 }
