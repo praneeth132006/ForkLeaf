@@ -22,6 +22,7 @@ your notes at all:
 | **History** | Ordinary git commits. `git log` your notes.                       |
 | **Offline** | Everything is written to IndexedDB first, then pushed.            |
 | **Export**  | PDF, HTML, Word, Markdown, plain text, JSON — all in the browser. |
+| **Sharing** | A public page committed to your repo and served by GitHub Pages.  |
 | **Lock-in** | None. They're markdown files in a git repo.                       |
 
 ## Features
@@ -36,6 +37,31 @@ your notes at all:
 - **Command palette** (`⌘K`) — jump to any note by title, or run any editor
   command, without leaving the keyboard.
 - Document outline, word count, reading time and task progress.
+
+### Links between notes
+
+- **`[[Wikilinks]]`**, in the Obsidian dialect — `[[target]]`,
+  `[[target|call it this]]`, `[[target#a heading]]`. Plain text in the file, so
+  Obsidian, github.com and anything else that reads markdown see them too.
+- **Backlinks.** The document panel shows every note that links to the one
+  you're reading, each quoting the line it was written on — so a backlink tells
+  you _what_ was said about the note, not just that something was.
+- **Links resolve loosely on purpose**: by path, by filename, or by title, so
+  `[[q3-roadmap]]` and `[[Q3 roadmap]]` reach the same note.
+- **Linking ahead of yourself is normal.** A link to a note you haven't written
+  is drawn muted rather than broken, and clicking it writes the note.
+
+### Search
+
+- **Full text.** Every word of every note, ranked with BM25 — not just titles,
+  tags and filenames. Results quote the line that matched, with the matching
+  words marked.
+- Titles and tags are weighted above body text, so the note _about_ a thing
+  beats the note that mentions it once.
+- **`"Quoted phrases"`** must appear verbatim. Everything else is an AND search,
+  because "300 of your notes contain one of your words" answers nothing.
+- Runs entirely in the browser against the notes already on your machine. No
+  server, no index to rebuild, works offline.
 
 ### Diagrams
 
@@ -69,12 +95,17 @@ github.com and anywhere else Mermaid is supported.
   reconnect. Closing the tab loses nothing.
 - **Conflict handling.** If a note changed both here and on GitHub, you're asked
   what to keep — nothing is silently overwritten.
+- **Tabs cooperate.** A second ForkLeaf tab used to be able to hold local
+  storage hostage across an upgrade, leaving the other one on a loading screen
+  for eight seconds before telling you to go and close it. They talk to each
+  other now: the blocked tab asks, the others let go, and it clears in
+  milliseconds.
 
 ### Dashboard
 
 - Signing in lands on a **dashboard**, not an empty editor: every note across
   every connected repository, indexed by title, tag and folder rather than
-  filename, and searchable from one box.
+  filename, and searchable — text and all — from one box.
 - Recently edited notes, per-repository statistics, and one click into any note.
 
 ### Workspaces
@@ -83,6 +114,42 @@ github.com and anywhere else Mermaid is supported.
   repository you already have, optionally scoped to a subfolder like `docs/`, or
   create a new one. Nothing is created on your account without you asking.
 - Connect as many repositories as you like and switch between them.
+
+### On your desktop
+
+ForkLeaf installs as an app and registers itself with your operating system as
+a Markdown editor — like gedit, TextEdit or any other installed editor:
+
+- **`xdg-open note.md` opens it**, and so does double-clicking a `.md` file or
+  picking ForkLeaf from "Open with".
+- **⌘S writes that file.** A file opened from your machine becomes a normal
+  note — synced, searchable, in the sidebar — that also saves back to where it
+  came from. Not to a copy in `~/Downloads`.
+- **⇧⌘S is Save as**, and `⌘K → "Open a file from this computer"` is the
+  in-app route to the same thing.
+
+Install it from your browser's address bar (the install icon), then on Linux:
+
+```bash
+./desktop/install-linux.sh
+xdg-mime default forkleaf.desktop text/markdown
+```
+
+That puts a launcher, an icon and a `.desktop` entry under `~/.local` — no root,
+and `./desktop/install-linux.sh --uninstall` removes them. Editing files on your
+machine uses the File System Access API, which today means a Chromium-based
+browser; everything else in ForkLeaf works everywhere.
+
+### Publishing
+
+**Share this note** renders it to one self-contained page — diagrams included —
+commits it to `docs/` in the repository the note already lives in, and switches
+on GitHub Pages. You get a public link.
+
+Nothing is stored on our servers, hosting costs nothing, and unpublishing is a
+commit that deletes a file. A published note keeps working if ForkLeaf goes
+away, which is the only kind of sharing worth having in an app that promises no
+lock-in.
 
 ---
 
@@ -172,13 +239,13 @@ page can read your token.
 | Package                     | Responsibility                                                         |
 | --------------------------- | ---------------------------------------------------------------------- |
 | `@forkleaf/types`           | Shared domain model                                                    |
-| `@forkleaf/markdown-engine` | Frontmatter, parsing, sanitised rendering, path helpers                |
+| `@forkleaf/markdown-engine` | Frontmatter, parsing, sanitised rendering, wikilinks, path helpers     |
 | `@forkleaf/github-client`   | GitHub REST client: trees, files, atomic multi-file commits, squashing |
-| `@forkleaf/store`           | IndexedDB storage, change queue, sync engine, conflict detection       |
+| `@forkleaf/store`           | IndexedDB storage, change queue, sync engine, conflicts, search index  |
 | `@forkleaf/diagrams`        | Mermaid rendering, templates, autocomplete, visual-builder graph model |
 | `@forkleaf/exporter`        | Client-side PDF / HTML / DOCX / Markdown / ZIP export                  |
 | `@forkleaf/editor`          | React editing surfaces (rich text, source, split, diagram studio)      |
-| `@forkleaf/web`             | Next.js app: auth, API routes, application shell                       |
+| `@forkleaf/web`             | Next.js app: auth, API routes, publishing, application shell           |
 
 More detail in [docs/architecture.md](docs/architecture.md).
 
