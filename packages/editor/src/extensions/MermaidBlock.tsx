@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { DiagramStudio } from "../mermaid/DiagramStudio";
@@ -29,10 +29,10 @@ function MermaidNodeView({ node, updateAttributes, editor, selected }: NodeViewP
   const [editing, setEditing] = useState(code.trim() === "");
   const { svg, error } = useDiagramSvg(code);
 
-  const close = () => {
+  const close = useCallback(() => {
     setEditing(false);
     editor.commands.focus();
-  };
+  }, [editor]);
 
   return (
     <NodeViewWrapper className="my-6" data-drag-handle>

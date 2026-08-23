@@ -42,6 +42,14 @@ const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2.5;
 /** Padding left around the content when fitting the view to the graph. */
 const FIT_PADDING = 80;
+/**
+ * Extra room kept below the content when fitting.
+ *
+ * The keyboard-hint strip floats over the bottom of the canvas, so a fit that
+ * treats the full height as usable parks the last row of boxes underneath it —
+ * the node is on screen and still unreadable.
+ */
+const HINT_STRIP = 48;
 
 /** The shape a plain new node takes in each dialect. */
 function defaultShapeFor(kind: Graph["kind"]): NodeShape {
@@ -603,7 +611,9 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
     const maxY = Math.max(...graph.nodes.map((n) => n.y + sizeOf(n).height));
 
     const contentWidth = maxX - minX + FIT_PADDING * 2;
-    const contentHeight = maxY - minY + FIT_PADDING * 2;
+    // The reserve is spent at the bottom: centring the taller block leaves the
+    // content sitting above the hint strip rather than behind it.
+    const contentHeight = maxY - minY + FIT_PADDING * 2 + HINT_STRIP;
     // Never magnified past life size. Fitting a two-box diagram to the pane
     // zoomed it to 250%, which turned two small boxes into two slabs wider
     // than the canvas — "fit" should mean everything is visible, not that the
@@ -764,6 +774,46 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
     setSelection(new Set());
   }, [graph, commit, selection]);
 
+  /**
+   * Undo and redo, re-framing only when the step left nothing on screen.
+   *
+   * A step can restore positions the current view was never framed for: undo
+   * a "Tidy up" and the boxes go back where they were, which — after the
+   * tidy's own re-frame followed them across the canvas — is off the edge of
+   * it. What you saw was an empty grid and no clue the diagram still existed.
+   * Moving the view on *every* undo would be worse, so it moves only when
+   * there is otherwise nothing to look at.
+   */
+  const ensureVisible = useRef(false);
+
+  const undo = useCallback(() => {
+    ensureVisible.current = true;
+    history.undo();
+  }, [history]);
+
+  const redo = useCallback(() => {
+    ensureVisible.current = true;
+    history.redo();
+  }, [history]);
+
+  useEffect(() => {
+    if (!ensureVisible.current) return;
+    ensureVisible.current = false;
+    if (graph.nodes.length === 0) return;
+
+    const onScreen = graph.nodes.some((node) => {
+      const { width, height } = sizeOf(node);
+      return (
+        node.x < view.x + view.width &&
+        node.x + width > view.x &&
+        node.y < view.y + view.height &&
+        node.y + height > view.y
+      );
+    });
+
+    if (!onScreen) fit();
+  }, [graph.nodes, view, fit]);
+
   // ── Keyboard ────────────────────────────────────────────────────────────
   // Declared after the actions it calls, so the dependency array is not
   // evaluated before those consts exist.
@@ -778,14 +828,14 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
       if (accel && event.key.toLowerCase() === "z") {
         event.preventDefault();
-        if (event.shiftKey) history.redo();
-        else history.undo();
+        if (event.shiftKey) redo();
+        else undo();
         return;
       }
 
       if (accel && event.key.toLowerCase() === "y") {
         event.preventDefault();
-        history.redo();
+        redo();
         return;
       }
 
@@ -860,7 +910,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
     editingLabel,
     graph,
     commit,
-    history,
+    undo,
+    redo,
     fit,
     createConnectedNode,
     duplicateSelection,
@@ -899,12 +950,12 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
         <div className="ml-auto flex items-center gap-2">
           <div className="flex items-center rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)]">
-            <ZoomButton label="Undo (⌘Z)" onClick={history.undo} disabled={!history.canUndo}>
+            <ZoomButton label="Undo (⌘Z)" onClick={undo} disabled={!history.canUndo}>
               <UndoGlyph />
             </ZoomButton>
             <ZoomButton
               label="Redo (⌘⇧Z)"
-              onClick={history.redo}
+              onClick={redo}
               disabled={!history.canRedo}
               className="border-l border-[var(--fl-border)]"
             >
