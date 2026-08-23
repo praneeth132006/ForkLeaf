@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { EVERYTHING } from "@/lib/plans";
+import { SPONSOR_URL } from "@/lib/constants";
 import { SectionHeading } from "./SectionHeading";
 
 /**
@@ -23,8 +24,15 @@ export function Pricing() {
         body="Your notes sit in your own GitHub account, so there is no storage for us to charge you for and no paywall between you and your writing. If ForkLeaf ever disappears, your notes are already in your repository and keep working without it."
       />
 
-      <div className="mt-12 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <article className="fl-card flex flex-col border-[var(--fl-accent)] p-7 shadow-[var(--fl-shadow)]">
+      {/* One card, full width, with the sponsorship as a band underneath.
+          It used to be a two-column grid, and the sponsorship column was a
+          GitHub iframe: a fixed 225px box that cannot inherit the page's theme
+          and cannot be styled, sitting in a card stretched to match the tall
+          feature list beside it. The result was a pale widget floating in a
+          well of dead space. A band has no height to match and nothing to
+          embed. */}
+      <div className="mt-12">
+        <article className="fl-card flex flex-col border-[var(--fl-accent)] p-7 shadow-[var(--fl-shadow)] sm:p-9">
           <h3 className="text-[17px] font-semibold tracking-tight text-[var(--fl-text)]">
             Everything
           </h3>
@@ -39,11 +47,14 @@ export function Pricing() {
             <span className="text-[14px] text-[var(--fl-muted)]">forever</span>
           </p>
 
-          <Link href="/editor" className="fl-btn fl-btn-primary mt-6 w-full">
+          <Link
+            href="/editor"
+            className="fl-btn fl-btn-primary mt-6 w-full sm:w-auto sm:self-start sm:!px-8"
+          >
             Start writing
           </Link>
 
-          <ul className="mt-7 grid gap-2.5 text-[14px] text-[var(--fl-muted)] sm:grid-cols-2">
+          <ul className="mt-8 grid gap-x-8 gap-y-3 text-[14px] text-[var(--fl-muted)] sm:grid-cols-2 lg:grid-cols-3">
             {EVERYTHING.map((feature) => (
               <li key={feature} className="flex gap-2.5">
                 <Check />
@@ -52,9 +63,9 @@ export function Pricing() {
             ))}
           </ul>
         </article>
-
-        <Sponsor />
       </div>
+
+      <Sponsor />
     </section>
   );
 }
@@ -62,36 +73,67 @@ export function Pricing() {
 /**
  * The sponsorship ask.
  *
- * GitHub's own card is an iframe, which cannot inherit the page's theme and
- * cannot be styled — so it sits inside a card that carries the framing, and the
- * iframe supplies only the button and the tier count.
+ * Written in markup rather than embedded from github.com. The official card is
+ * an iframe: it cannot inherit the page's tokens, cannot be sized to its own
+ * content, and pulls a third-party frame into a page whose entire argument is
+ * that nothing here phones home. A link and a button say the same thing, match
+ * the theme, and cost nothing to load.
+ *
+ * A band rather than a card, so it reads as a footnote to the pricing above it
+ * rather than as the second of two options.
  */
 function Sponsor() {
   return (
-    <article className="fl-card flex flex-col p-7">
-      <h3 className="text-[17px] font-semibold tracking-tight text-[var(--fl-text)]">
-        Sponsor the work
-      </h3>
-      <p className="mt-1 text-[14px] text-[var(--fl-muted)]">
-        ForkLeaf is built by one person in the open. Sponsoring is entirely optional and buys you
-        nothing extra — every feature is already yours. It just means the work continues.
-      </p>
+    <aside className="mt-4 rounded-[18px] border border-[var(--fl-border)] bg-[var(--fl-elevated)]">
+      <div className="flex flex-col gap-6 p-7 sm:p-8 lg:flex-row lg:items-center lg:justify-between lg:gap-10">
+        <div className="flex gap-4">
+          <span
+            aria-hidden="true"
+            className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] text-[var(--fl-accent)] sm:flex"
+          >
+            <HeartGlyph />
+          </span>
 
-      {/* GitHub fixes the card at 225px and fills most of it with nothing when
-          there are no tiers to show. The frame is clipped to the height its
-          content actually occupies rather than left as a well of dead space. */}
-      <div className="mt-6 h-[150px] overflow-hidden rounded-xl border border-[var(--fl-border)]">
-        <iframe
-          src="https://github.com/sponsors/praneeth132006/card"
-          title="Sponsor praneeth132006"
-          height="225"
-          width="600"
-          loading="lazy"
-          className="block w-full"
-          style={{ border: 0 }}
-        />
+          <div>
+            <h3 className="text-[17px] font-semibold tracking-tight text-[var(--fl-text)]">
+              Sponsor the work
+            </h3>
+            <p className="mt-1.5 max-w-2xl text-[14.5px] leading-relaxed text-[var(--fl-muted)]">
+              ForkLeaf is built by one person in the open. Sponsoring is entirely optional and buys
+              you nothing extra — every feature is already yours, and always will be. It just means
+              the work continues.
+            </p>
+          </div>
+        </div>
+
+        <a
+          href={SPONSOR_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="fl-btn fl-btn-ghost shrink-0 !border-[var(--fl-border-strong)] bg-[var(--fl-surface)]"
+        >
+          <HeartGlyph className="h-4 w-4" />
+          Sponsor on GitHub
+        </a>
       </div>
-    </article>
+    </aside>
+  );
+}
+
+function HeartGlyph({ className = "h-[18px] w-[18px]" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M10 16.5S3 12.4 3 7.9A3.4 3.4 0 0 1 10 6a3.4 3.4 0 0 1 7 1.9c0 4.5-7 8.6-7 8.6Z" />
+    </svg>
   );
 }
 

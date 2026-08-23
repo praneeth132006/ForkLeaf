@@ -2,7 +2,7 @@ import { getSession, githubOAuthConfigured } from "@/lib/session";
 import { SignInError } from "@/components/SignInError";
 import { Nav } from "@/components/landing/Nav";
 import { Hero } from "@/components/landing/Hero";
-import { ScrollStory } from "@/components/landing/ScrollStory";
+import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Toolkit } from "@/components/landing/Toolkit";
 import { Features } from "@/components/landing/Features";
 import { Positioning } from "@/components/landing/Positioning";
@@ -34,8 +34,7 @@ export default async function Home({
   // every anchor on the page: a clip container makes its descendants
   // unreachable to `scrollIntoView`, so the browser's own fragment handling and
   // React's alike changed the URL to `/#features` and then stayed exactly where
-  // they were. `hidden` is not the answer either — it makes a scroll container,
-  // which breaks the `position: sticky` the scroll story is built on.
+  // they were.
   //
   // The glows are clipped by the sections that own them instead, which is where
   // the clipping belonged in the first place.
@@ -51,7 +50,7 @@ export default async function Home({
 
       <main className="flex-1">
         <Hero githubAvailable={githubAvailable} />
-        <ScrollStory />
+        <HowItWorks />
         <Toolkit />
         <Features />
         <Positioning />
