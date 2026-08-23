@@ -2,6 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { ForkLeafLogo } from "@/components/Brand";
 import { CONTRIBUTING_URL, ISSUES_URL, LICENSE_URL, REPO_URL } from "@/lib/constants";
+import { SectionLink } from "./SectionLink";
 
 /**
  * Site footer.
@@ -9,13 +10,20 @@ import { CONTRIBUTING_URL, ISSUES_URL, LICENSE_URL, REPO_URL } from "@/lib/const
  * Every link here goes somewhere real. The previous version advertised a
  * Twitter, a Discord, a changelog and a community page that do not exist, which
  * is a worse first impression than having fewer links.
+ *
+ * The `#`-prefixed entries are sections of the home page, and this footer is
+ * rendered on every page. They go through `SectionLink`, which resolves them
+ * against the current path — as bare fragments they silently did nothing from
+ * `/terms`, `/privacy` and `/docs`.
  */
 const COLUMNS = [
   {
     heading: "Product",
     links: [
-      { label: "Features", href: "#features" },
       { label: "How it works", href: "#how" },
+      { label: "What it does", href: "#toolkit" },
+      { label: "Features", href: "#features" },
+      { label: "Where it fits", href: "#why" },
       { label: "Pricing", href: "#pricing" },
       { label: "Open the editor", href: "/editor" },
     ],
@@ -25,7 +33,10 @@ const COLUMNS = [
     links: [
       { label: "Documentation", href: "/docs" },
       { label: "Getting started", href: "/docs/getting-started" },
+      { label: "The editor", href: "/docs/editor" },
       { label: "Diagrams", href: "/docs/diagrams" },
+      { label: "Exporting", href: "/docs/export" },
+      { label: "Keyboard shortcuts", href: "/docs/shortcuts" },
       { label: "GitHub & sync", href: "/docs/sync" },
       { label: "Self-hosting", href: "/docs/self-hosting" },
       { label: "FAQ", href: "/docs/faq" },
@@ -98,9 +109,18 @@ function FooterLink({ href, children }: { href: string; children: React.ReactNod
   const className =
     "text-[14px] text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]";
 
-  // In-page anchors and app routes stay internal; everything else is the
-  // repository on github.com and should open in its own tab.
-  if (href.startsWith("#") || href.startsWith("/")) {
+  // A section of the home page, which may not be the page we are on.
+  if (href.startsWith("#")) {
+    return (
+      <SectionLink hash={href} className={className}>
+        {children}
+      </SectionLink>
+    );
+  }
+
+  // App routes stay internal; everything else is the repository on github.com
+  // and should open in its own tab.
+  if (href.startsWith("/")) {
     return (
       <Link href={href} className={className}>
         {children}

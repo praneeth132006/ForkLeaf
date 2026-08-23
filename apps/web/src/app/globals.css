@@ -98,6 +98,17 @@
   color-scheme: dark;
 }
 
+/* The header is sticky, so an anchor landing flush with the top of the
+   viewport lands underneath it. Push every fragment target down by a little
+   more than the header's height.
+
+   Deliberately no `scroll-behavior: smooth`: the landing page is over ten
+   thousand pixels tall, and animating a jump of that size is several seconds of
+   the reader watching the scenery go past. */
+html {
+  scroll-padding-top: 5rem;
+}
+
 body {
   background-color: var(--fl-bg);
   color: var(--fl-text);
@@ -239,6 +250,32 @@ h3 {
 .fl-btn-ghost:hover {
   background: var(--fl-elevated);
   border-color: var(--fl-border-strong);
+}
+
+/* An inline link inside a paragraph of body copy. Underlined rather than
+   coloured-only, so it is still identifiable as a link without relying on
+   colour alone — and the underline sits on the hairline colour so a paragraph
+   with four links in it does not read as a fence. */
+.fl-link {
+  color: var(--fl-accent);
+  text-decoration: underline;
+  text-decoration-color: var(--fl-border-strong);
+  text-underline-offset: 3px;
+  transition: text-decoration-color 140ms ease;
+}
+
+.fl-link:hover {
+  text-decoration-color: var(--fl-accent);
+}
+
+/* An inline literal in prose: a scope name, a filename, a snippet of syntax. */
+.fl-code {
+  border-radius: 5px;
+  background: var(--fl-elevated);
+  padding: 0.0625rem 0.3125rem;
+  font-family: var(--font-mono);
+  font-size: 0.8125em;
+  color: var(--fl-text);
 }
 
 .fl-input {
