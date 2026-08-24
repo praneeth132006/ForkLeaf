@@ -75,13 +75,23 @@ function decodePath(target: string): string {
  * A destination safe to sit inside `(…)`.
  *
  * A path with a space or a bracket in it ends the link early, and folder names
- * with spaces in them are entirely normal — `SOC 101/assets/shot.png`. Angle
- * brackets are markdown's own way of saying "all of this is the URL", and are
- * understood by GitHub, CommonMark and this app's own renderer alike.
+ * with spaces are entirely normal — `SOC 101/assets/shot.png`. Percent-encoding
+ * rather than markdown's `<…>` wrapping, because this is the form a rendered
+ * `<img src>` uses, so it is the form the rich editor writes back when the note
+ * is next saved: encoding here means a move produces one diff rather than one
+ * now and another the first time somebody types in the note.
  */
 function encodeDestination(target: string): string {
-  return /[\s()<>]/.test(target) ? `<${target.replace(/[<>]/g, encodeURIComponent)}>` : target;
+  return target.replace(/[ ()<>]/g, (character) => ENCODED[character] ?? character);
 }
+
+const ENCODED: Record<string, string> = {
+  " ": "%20",
+  "(": "%28",
+  ")": "%29",
+  "<": "%3C",
+  ">": "%3E",
+};
 
 /** Ranges of the document that are fenced code, where link syntax is just text. */
 function fencedRanges(markdown: string): Array<[number, number]> {

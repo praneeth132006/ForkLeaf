@@ -1,6 +1,12 @@
 "use client";
 
-import { dirname, normalizePath, stripExtension, uniquePath } from "@forkleaf/markdown-engine";
+import {
+  dirname,
+  relativeFromNote,
+  resolveFromNote,
+  stripExtension,
+  uniquePath,
+} from "@forkleaf/markdown-engine";
 import type { LocalAsset, Workspace } from "@forkleaf/types";
 import { ApiGatewayError } from "@/lib/gateway";
 import { extensionForFile, imageTypeFor, MAX_IMAGE_BYTES, safeAssetName } from "@/lib/media";
@@ -93,26 +99,25 @@ export function readAsDataUrl(file: File): Promise<string> {
  * means the same thing in every one of them.
  */
 export function relativeSrc(fromNotePath: string, toAssetPath: string): string {
-  const from = normalizePath(dirname(fromNotePath)).split("/").filter(Boolean);
-  const to = normalizePath(toAssetPath).split("/").filter(Boolean);
-
-  let shared = 0;
-  while (shared < from.length && shared < to.length - 1 && from[shared] === to[shared]) {
-    shared += 1;
-  }
-
-  const up = from.length - shared;
-  const down = to.slice(shared);
-  const steps = [...Array.from({ length: up }, () => ".."), ...down];
-
-  // A file in the same folder needs the `./`, or a name containing a colon
-  // would be read as a URL scheme.
-  return up === 0 && down.length === 1 ? `./${steps.join("/")}` : steps.join("/");
+  return relativeFromNote(fromNotePath, toAssetPath);
 }
 
-/** Resolves a src written in a note back to the repo path it points at. */
+/**
+ * Resolves a src written in a note back to the repo path it points at.
+ *
+ * The src is percent-decoded first, and that is the whole point of this
+ * function existing rather than being a `normalizePath` call.
+ *
+ * A markdown renderer writes URLs, not paths: a note in `SOC 101` comes back
+ * from both the preview and the rich editor as `../SOC%20101/assets/x.png`,
+ * because that is what belongs in an `<img src>`. Resolving that literally
+ * produced the repo path `SOC%20101/assets/x.png`, which matches nothing in
+ * the local store and asks GitHub for a file whose name really does contain a
+ * per-cent sign — so every image in every folder with a space in its name was
+ * a broken box in this app while rendering perfectly on github.com.
+ */
 export function resolveAgainstNote(notePath: string, src: string): string {
-  return normalizePath(`${dirname(notePath)}/${src}`);
+  return resolveFromNote(notePath, src);
 }
 
 /** True for a src that names a file in the repository rather than somewhere else. */

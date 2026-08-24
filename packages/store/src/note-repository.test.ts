@@ -129,10 +129,10 @@ describe("renameNote", () => {
     const opened = await notes.openNote(WS, "SOC 101/Phishing/notes.md");
     const moved = await notes.renameNote(opened, "OSINT/notes.md");
 
-    expect(moved.content).toContain("![shot](<../SOC 101/Phishing/assets/a.png>)");
+    expect(moved.content).toContain("![shot](../SOC%20101/Phishing/assets/a.png)");
     // And the copy that gets committed says the same thing.
     const stored = await db.getNote(`${WS}::OSINT/notes.md`);
-    expect(stored?.content).toContain("../SOC 101/Phishing/assets/a.png");
+    expect(stored?.content).toContain("../SOC%20101/Phishing/assets/a.png");
   });
 
   it("leaves a note renamed within its own folder untouched", async () => {

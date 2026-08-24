@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { rewriteRelativeLinks } from "@forkleaf/markdown-engine";
 import type { Workspace } from "@forkleaf/types";
 import {
   isRepoRelative,
@@ -181,5 +182,77 @@ describe("assetPathFor", () => {
   it("refuses a file that is not an image it can store", () => {
     const text = new File(["x"], "notes.txt", { type: "text/plain" });
     expect(() => assetPathFor(repo, text, [], "a.md")).toThrow();
+  });
+});
+
+/**
+ * Folders with spaces in their names.
+ *
+ * A markdown renderer hands back URLs, not paths — a note in `SOC 101` comes
+ * back as `../SOC%20101/assets/x.png` from both the preview and the rich
+ * editor. Resolving that without decoding names a file that does not exist,
+ * which made every image in such a folder a broken box here while rendering
+ * perfectly on github.com.
+ */
+describe("a path whose folder has a space in it", () => {
+  const spaced = {
+    id: "octo/notes@main:",
+    isLocal: false,
+    repo: { owner: "octo", repo: "notes", branch: "main", directory: "" },
+  } as Parameters<typeof resolveImageSrc>[0];
+
+  it("finds the copy held on this device", () => {
+    const url = resolveImageSrc(spaced, "SOC 101/Phishing/notes.md", "assets/shot.png", {
+      "SOC 101/Phishing/assets/shot.png": "blob:forkleaf/abc",
+    });
+
+    expect(url).toBe("blob:forkleaf/abc");
+  });
+
+  it("decodes an encoded path before looking it up", () => {
+    const url = resolveImageSrc(spaced, "OSINT/notes.md", "../SOC%20101/Phishing/assets/shot.png", {
+      "SOC 101/Phishing/assets/shot.png": "blob:forkleaf/abc",
+    });
+
+    expect(url).toBe("blob:forkleaf/abc");
+  });
+
+  it("asks the proxy for the real name, not the encoded one", () => {
+    const url = resolveImageSrc(spaced, "OSINT/notes.md", "../SOC%20101/assets/shot.png");
+
+    const path = new URL(url, "https://forkleaf.test").searchParams.get("path");
+    expect(path).toBe("SOC 101/assets/shot.png");
+  });
+});
+
+/**
+ * The whole journey, as somebody actually does it.
+ *
+ * Write a note in a folder whose name has a space in it, paste a screenshot
+ * into it, then move the note somewhere else. Every step of that was broken
+ * for a different reason, so it is worth one test that walks all of it.
+ */
+describe("moving a note that has images", () => {
+  it("still finds the picture afterwards", () => {
+    const workspace = {
+      id: "octo/notes@main:",
+      isLocal: false,
+      repo: { owner: "octo", repo: "notes", branch: "main", directory: "" },
+    } as Parameters<typeof resolveImageSrc>[0];
+
+    const from = "SOC 101/PHYSHING ANALYSIS/notes.md";
+    const to = "OSINT/notes.md";
+    const stored = { "SOC 101/PHYSHING ANALYSIS/assets/shot.png": "blob:forkleaf/abc" };
+
+    // Before the move, it renders from the copy on this device.
+    expect(resolveImageSrc(workspace, from, "./assets/shot.png", stored)).toBe("blob:forkleaf/abc");
+
+    // The move rewrites the link to keep naming the same file…
+    const moved = rewriteRelativeLinks("![shot](./assets/shot.png)", from, to);
+    expect(moved).toBe("![shot](../SOC%20101/PHYSHING%20ANALYSIS/assets/shot.png)");
+
+    // …and the note still shows the picture from its new home.
+    const src = moved.slice(moved.indexOf("(") + 1, -1);
+    expect(resolveImageSrc(workspace, to, src, stored)).toBe("blob:forkleaf/abc");
   });
 });

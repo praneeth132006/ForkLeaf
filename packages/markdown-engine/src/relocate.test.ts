@@ -11,7 +11,7 @@ describe("rewriteRelativeLinks", () => {
     const before = "![shot](./assets/a.png)";
     const after = rewriteRelativeLinks(before, "SOC 101/Phishing/notes.md", "OSINT/notes.md");
 
-    expect(after).toBe("![shot](<../SOC 101/Phishing/assets/a.png>)");
+    expect(after).toBe("![shot](../SOC%20101/Phishing/assets/a.png)");
     // And it names the file it always named.
     expect(resolveFromNote("OSINT/notes.md", "../SOC 101/Phishing/assets/a.png")).toBe(
       "SOC 101/Phishing/assets/a.png",
@@ -61,13 +61,13 @@ describe("rewriteRelativeLinks", () => {
 
   it("reads a path whose spaces were percent-encoded", () => {
     expect(rewriteRelativeLinks("![a](./assets/my%20shot.png)", "a/n.md", "b/n.md")).toBe(
-      "![a](<../a/assets/my shot.png>)",
+      "![a](../a/assets/my%20shot.png)",
     );
   });
 
   it("reads a destination already wrapped in angle brackets", () => {
     expect(rewriteRelativeLinks("![a](<./assets/my shot.png>)", "a/n.md", "b/n.md")).toBe(
-      "![a](<../a/assets/my shot.png>)",
+      "![a](../a/assets/my%20shot.png)",
     );
   });
 
