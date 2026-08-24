@@ -125,3 +125,26 @@ export {
   type RenderSvgOptions,
   type SvgTheme,
 } from "./svg";
+
+export { lintDiagram, lintGraph, lintSequence, type LintFinding, type LintSeverity } from "./lint";
+
+export {
+  diagramNodes,
+  indexDiagrams,
+  normalizeAnchor,
+  resolveDiagramAnchor,
+  searchDiagramNodes,
+  type DiagramIndexEntry,
+  type DiagramNodeRef,
+  type DiagramSearchHit,
+} from "./search";
+
+export {
+  importDiagram,
+  composeToDiagram,
+  gitLogToDiagram,
+  sqlToDiagram,
+  stackTraceToDiagram,
+  type DiagramImport,
+  type ImportKind,
+} from "./import";
