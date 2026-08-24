@@ -73,6 +73,16 @@ export interface NotebookState {
    */
   emptyFolders: string[];
   /**
+   * Notes kept at the top of the sidebar, in the order they were put there.
+   *
+   * A git repository has no file order — the tree is sorted, and any ordering
+   * the app invented would either have to be written into the repository as a
+   * manifest nothing else understands, or be a lie. Pinning is the honest
+   * shape: the handful of notes somebody is living in right now, in an order
+   * they chose, kept alongside the other per-device preferences.
+   */
+  pinnedPaths: string[];
+  /**
    * True when this is a GitHub session with no repository connected yet. The
    * editor turns it into the connect dialog; the dashboard turns it into the
    * first-run repository chooser.
@@ -96,6 +106,7 @@ const syncPrefKey = (workspace: Workspace) =>
   `syncPreference:${workspace.repo.owner}/${workspace.repo.repo}`;
 /** Folders made locally that have no note in them yet. See `emptyFolders`. */
 const emptyFoldersKey = (workspace: string) => `emptyFolders:${workspace}`;
+const pinnedKey = (workspace: string) => `pinned:${workspace}`;
 
 /**
  * Shown when the browser will not give ForkLeaf durable local storage at all.
@@ -150,6 +161,7 @@ export function useNotebook(request: NotebookRequest = {}) {
     storage: "ready",
     busy: null,
     emptyFolders: [],
+    pinnedPaths: [],
     needsRepoChoice: false,
   });
 
@@ -309,6 +321,9 @@ export function useNotebook(request: NotebookRequest = {}) {
 
       const folders = (await dbRef.current?.getMeta<string[]>(emptyFoldersKey(workspace.id))) ?? [];
       if (!cancelled) patch({ emptyFolders: folders });
+
+      const pinned = (await dbRef.current?.getMeta<string[]>(pinnedKey(workspace.id))) ?? [];
+      if (!cancelled) patch({ pinnedPaths: pinned });
 
       // Reopen the tabs this workspace had last time, plus whatever the URL
       // asked for. A note that has since been deleted simply fails to load and
@@ -632,6 +647,44 @@ export function useNotebook(request: NotebookRequest = {}) {
 
     patch({ tree: await notes.getTree(workspace.id) });
   }, [state.activeWorkspace, patch]);
+
+  /** Persists the pinned list and reflects it in state in one step. */
+  const putPinned = useCallback(
+    (next: string[]) => {
+      const workspace = state.activeWorkspace;
+      patch({ pinnedPaths: next });
+      if (workspace) void dbRef.current?.putMeta(pinnedKey(workspace.id), next);
+    },
+    [state.activeWorkspace, patch],
+  );
+
+  /** Pins a note, or unpins one already pinned. */
+  const togglePinned = useCallback(
+    (path: string) => {
+      const pinned = state.pinnedPaths;
+      putPinned(pinned.includes(path) ? pinned.filter((item) => item !== path) : [...pinned, path]);
+    },
+    [state.pinnedPaths, putPinned],
+  );
+
+  /**
+   * Moves a pinned note up or down the list.
+   *
+   * The order is the only thing here anybody chose, so it is directly
+   * editable rather than derived from anything.
+   */
+  const movePinned = useCallback(
+    (path: string, direction: -1 | 1) => {
+      const pinned = [...state.pinnedPaths];
+      const index = pinned.indexOf(path);
+      const target = index + direction;
+      if (index === -1 || target < 0 || target >= pinned.length) return;
+
+      [pinned[index], pinned[target]] = [pinned[target]!, pinned[index]!];
+      putPinned(pinned);
+    },
+    [state.pinnedPaths, putPinned],
+  );
 
   /** Persists the empty-folder list and reflects it in state in one step. */
   const putEmptyFolders = useCallback(
@@ -1049,6 +1102,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       deleteNote,
       renameNote,
       createFolder,
+      togglePinned,
+      movePinned,
       renameFolder,
       deleteFolder,
       setViewMode,
@@ -1094,6 +1149,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       deleteNote,
       renameNote,
       createFolder,
+      togglePinned,
+      movePinned,
       renameFolder,
       deleteFolder,
       displayTree,

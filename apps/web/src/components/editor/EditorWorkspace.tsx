@@ -801,6 +801,9 @@ export function EditorWorkspace() {
             onRenameFolder={handleRenameFolder}
             onDeleteFolder={handleDeleteFolder}
             onMoveNote={handleMoveNote}
+            pinnedPaths={notebook.pinnedPaths}
+            onTogglePin={notebook.togglePinned}
+            onMovePin={notebook.movePinned}
             user={user}
             onSignIn={signIn}
             onSignOut={handleSignOut}

@@ -73,6 +73,9 @@ function renderSidebar(currentFolder: string, overrides: Record<string, unknown>
       onRenameFolder={() => {}}
       onDeleteFolder={() => {}}
       onMoveNote={() => {}}
+      pinnedPaths={[]}
+      onTogglePin={() => {}}
+      onMovePin={() => {}}
       user={null}
       onSignIn={() => {}}
       onSignOut={() => {}}
@@ -124,5 +127,86 @@ describe("EditorSidebar — where new things go", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "notes" }));
 
     expect(onCreateNote).toHaveBeenCalledWith("");
+  });
+});
+
+describe("EditorSidebar — pinned notes", () => {
+  const pinned = ["SOC 101/Phishing analysis/introduction.md"];
+
+  it("shows a pinned note above the tree", () => {
+    renderSidebar("", { pinnedPaths: pinned });
+
+    expect(screen.getByText("Pinned")).toBeTruthy();
+    expect(screen.getByTitle(pinned[0]!)).toBeTruthy();
+  });
+
+  it("says nothing at all when nothing is pinned", () => {
+    renderSidebar("");
+    expect(screen.queryByText("Pinned")).toBeNull();
+  });
+
+  it("opens the note when the pinned row is clicked", () => {
+    const onOpenNote = vi.fn();
+    renderSidebar("", { pinnedPaths: pinned, onOpenNote });
+
+    fireEvent.click(screen.getByTitle(pinned[0]!));
+
+    expect(onOpenNote).toHaveBeenCalledWith(pinned[0]);
+  });
+
+  it("drops a pin whose note no longer exists, rather than showing a dead row", () => {
+    renderSidebar("", { pinnedPaths: ["SOC 101/deleted.md"] });
+    expect(screen.queryByText("Pinned")).toBeNull();
+  });
+
+  it("can reorder the list, which is the only thing about it anybody chose", () => {
+    const onMovePin = vi.fn();
+    const two = [...pinned, "SOC 101/Phishing analysis/second.md"];
+
+    renderSidebar("", {
+      pinnedPaths: two,
+      onMovePin,
+      tree: [
+        {
+          kind: "folder",
+          name: "SOC 101",
+          path: "SOC 101",
+          children: [
+            {
+              kind: "folder",
+              name: "Phishing analysis",
+              path: "SOC 101/Phishing analysis",
+              children: [
+                {
+                  kind: "file",
+                  name: "introduction.md",
+                  path: "SOC 101/Phishing analysis/introduction.md",
+                },
+                {
+                  kind: "file",
+                  name: "second.md",
+                  path: "SOC 101/Phishing analysis/second.md",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByLabelText("Move second down"));
+    expect(onMovePin).not.toHaveBeenCalled(); // already last, so the button is off
+
+    fireEvent.click(screen.getByLabelText("Move second up"));
+    expect(onMovePin).toHaveBeenCalledWith("SOC 101/Phishing analysis/second.md", -1);
+  });
+
+  it("can unpin from the row itself", () => {
+    const onTogglePin = vi.fn();
+    renderSidebar("", { pinnedPaths: pinned, onTogglePin });
+
+    fireEvent.click(screen.getByLabelText("Unpin introduction"));
+
+    expect(onTogglePin).toHaveBeenCalledWith(pinned[0]);
   });
 });
