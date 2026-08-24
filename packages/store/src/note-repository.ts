@@ -6,6 +6,8 @@ import {
   joinPath,
   slugifyFilename,
   uniquePath,
+  dirname,
+  normalizePath,
 } from "@forkleaf/markdown-engine";
 import type { LocalDatabase, RemoteGateway } from "./ports";
 import type { SyncEngine } from "./sync-engine";
@@ -34,7 +36,7 @@ export interface NoteRepositoryOptions {
  * frontmatter as a table above the document, so this is both a credit and the
  * most direct route from someone else's repository back to the project.
  */
-const GENERATOR = "ForkLeaf — https://github.com/praneeth132006/ForkLeaf";
+const GENERATOR = "forkleaf.vercel.app";
 
 /**
  * The API the UI actually talks to.
@@ -258,7 +260,22 @@ export class NoteRepository {
 
   async deleteNote(note: Note): Promise<void> {
     const current = await this.db.getNote(note.id);
-    await this.sync.recordDelete(current ?? note);
+    const target = current ?? note;
+    await this.sync.recordDelete(target);
+
+    // Clean up assets referenced by this note so they don't linger on GitHub.
+    const matches = Array.from(target.content.matchAll(/!\[.*?\]\(([^)]+)\)/g));
+    for (const match of matches) {
+      const src = match[1];
+      if (!src) continue;
+      // Simple check to ensure it's a repo-relative path, not an external URL.
+      if (!/^[a-z][a-z0-9+.-]*:/i.test(src) && !src.startsWith("//") && !src.startsWith("/")) {
+        const assetPath = normalizePath(`${dirname(target.path)}/${src}`);
+        await this.sync.recordAssetDelete(target.workspaceId, assetPath);
+        // Clean up from local IDB cache too.
+        await this.db.deleteAsset(`${target.workspaceId}::${assetPath}`);
+      }
+    }
   }
 
   async renameNote(note: Note, toPath: string): Promise<Note> {

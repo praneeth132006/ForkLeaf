@@ -153,7 +153,7 @@ export async function printToPdf(
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
   frame.style.cssText =
-    "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+    "position:absolute;top:-10000px;left:-10000px;width:1px;height:1px;border:0;";
   document.body.appendChild(frame);
 
   const doc = frame.contentDocument;
@@ -168,8 +168,22 @@ export async function printToPdf(
 
   await new Promise<void>((resolve) => {
     // Wait for fonts and inline SVGs to settle, or the first page prints blank.
-    if (doc.readyState === "complete") resolve();
-    else frame.onload = () => resolve();
+    if (doc.readyState === "complete") {
+      resolve();
+    } else {
+      // frame.onload doesn't always fire reliably for doc.write().
+      const fallback = setTimeout(resolve, 1500);
+      frame.onload = () => {
+        clearTimeout(fallback);
+        resolve();
+      };
+      doc.addEventListener("readystatechange", () => {
+        if (doc.readyState === "complete") {
+          clearTimeout(fallback);
+          resolve();
+        }
+      });
+    }
   });
 
   // And for the images to decode. They are `data:` URLs so nothing is
@@ -177,14 +191,28 @@ export async function printToPdf(
   // produces a PDF with gaps where the pictures should be, which is the exact
   // failure this export is meant to have stopped having.
   await Promise.all(
-    Array.from(doc.images).map((image) =>
-      image.complete
-        ? Promise.resolve()
-        : new Promise<void>((resolve) => {
-            image.addEventListener("load", () => resolve(), { once: true });
-            image.addEventListener("error", () => resolve(), { once: true });
-          }),
-    ),
+    Array.from(doc.images).map((image) => {
+      if (image.complete) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        const fallback = setTimeout(resolve, 3000);
+        image.addEventListener(
+          "load",
+          () => {
+            clearTimeout(fallback);
+            resolve();
+          },
+          { once: true },
+        );
+        image.addEventListener(
+          "error",
+          () => {
+            clearTimeout(fallback);
+            resolve();
+          },
+          { once: true },
+        );
+      });
+    }),
   );
   await new Promise((r) => setTimeout(r, 150));
 

@@ -182,8 +182,8 @@ function describe(sync: SyncState): { label: string; className: string; dot: str
 
     case "error":
       return {
-        label: "Couldn't sync — click to retry",
-        className: "text-[var(--fl-danger)]",
+        label: `Couldn't sync: ${sync.lastError ?? "Unknown error"} — click to retry`,
+        className: "text-[var(--fl-danger)] truncate max-w-[500px]",
         dot: "bg-[var(--fl-danger)]",
       };
 

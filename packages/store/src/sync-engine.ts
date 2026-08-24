@@ -268,6 +268,19 @@ export class SyncEngine {
     this.scheduleFlush();
   }
 
+  async recordAssetDelete(workspaceId: string, path: string): Promise<void> {
+    this.queue = coalesce(this.queue, {
+      workspaceId,
+      path,
+      op: "delete",
+      baseSha: null,
+      now: this.now().toISOString(),
+    });
+
+    await this.persistQueue();
+    this.scheduleFlush();
+  }
+
   async recordRename(note: Note, toPath: string, fileContent: string): Promise<void> {
     await this.db.deleteNote(note.id);
     await this.db.putNote({
