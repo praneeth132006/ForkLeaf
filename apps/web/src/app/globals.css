@@ -646,6 +646,28 @@ select:focus-visible {
   border-radius: 8px;
 }
 
+/* A video in a rendered note. The note itself holds a plain link; this is the
+   player the preview and the export draw for it. 16:9 by padding rather than
+   `aspect-ratio` so the box is the right size before the frame loads. */
+.fl-embed {
+  position: relative;
+  height: 0;
+  width: 100%;
+  padding-bottom: 56.25%;
+  margin: 1.5rem 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #000;
+}
+
+.fl-embed .fl-embed-frame {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  border: 0;
+}
+
 .fl-diagram,
 .fl-diagram-preview {
   margin: 1.5rem 0;

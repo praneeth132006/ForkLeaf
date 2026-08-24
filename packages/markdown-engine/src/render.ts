@@ -12,6 +12,7 @@ import { visit } from "unist-util-visit";
 import type { Root as MdastRoot, Text as MdastText, PhrasingContent, Parent } from "mdast";
 import type { Root as HastRoot, Element } from "hast";
 import { remarkWikilink, type WikilinkResolver } from "./wikilinks";
+import { youtubeEmbedUrl, youtubeVideoFrom, YOUTUBE_EMBED_ORIGIN } from "./youtube";
 
 /**
  * Markdown → HTML rendering.
@@ -76,12 +77,31 @@ const schema: SanitizeSchema = {
     // `loading` keeps a note full of screenshots from fetching every one of
     // them at once; the rest are what the default schema already allows.
     img: [...(defaultSchema.attributes?.img ?? []), ["loading", "lazy"]],
+    /**
+     * The video player, and nothing else.
+     *
+     * An iframe is the one element in this schema that can load a whole other
+     * document, so `src` is pinned to the embed path of the player origin by
+     * pattern rather than allowed as a URL. Note content cannot reach this
+     * anyway — inline HTML in a note is escaped, never parsed — so the only
+     * iframes in the tree are the ones the pass below built. The rule is here
+     * because "the sanitiser would have caught it" should stay true.
+     */
+    iframe: [
+      ["src", new RegExp(`^${YOUTUBE_EMBED_ORIGIN.replace(/[.]/g, "\\.")}/embed/`)],
+      "title",
+      ["loading", "lazy"],
+      "allow",
+      "allowFullScreen",
+      "referrerPolicy",
+      ["className", "fl-embed-frame"],
+    ],
     "*": [...(defaultSchema.attributes?.["*"] ?? []), "id"],
   },
   // `mark` is what `==highlight==` becomes. The editor has always offered
   // highlighting; without this the preview showed the equals signs as literal
   // text, so the button appeared to do nothing.
-  tagNames: [...(defaultSchema.tagNames ?? []), "input", "mark"],
+  tagNames: [...(defaultSchema.tagNames ?? []), "input", "mark", "iframe"],
   protocols: {
     ...defaultSchema.protocols,
     // Notes written offline embed their images inline, so `data:` has to
@@ -191,6 +211,53 @@ function rehypeImages(options: RenderOptions) {
   };
 }
 
+/**
+ * A paragraph that is only a YouTube link becomes the video.
+ *
+ * The rule is deliberately narrow — the link has to be the whole paragraph —
+ * so a sentence that mentions a video stays a sentence with a link in it, and
+ * the writer keeps a way to link to a video without embedding it.
+ *
+ * Nothing about the markdown changes: the file still holds a plain link, which
+ * is what makes the note read correctly on github.com and everywhere else.
+ */
+function rehypeYoutube() {
+  return (tree: HastRoot) => {
+    visit(tree, "element", (node: Element) => {
+      if (node.tagName !== "p") return;
+
+      const children = node.children.filter(
+        (child) => child.type !== "text" || child.value.trim() !== "",
+      );
+      const only = children.length === 1 ? children[0] : undefined;
+      if (!only || only.type !== "element" || only.tagName !== "a") return;
+
+      const href = typeof only.properties?.href === "string" ? only.properties.href : "";
+      const video = youtubeVideoFrom(href);
+      if (!video) return;
+
+      node.tagName = "div";
+      node.properties = { className: ["fl-embed"] };
+      node.children = [
+        {
+          type: "element",
+          tagName: "iframe",
+          properties: {
+            src: youtubeEmbedUrl(video),
+            title: "YouTube video player",
+            className: ["fl-embed-frame"],
+            loading: "lazy",
+            allow: "accelerometer; encrypted-media; picture-in-picture; web-share; fullscreen",
+            allowFullScreen: true,
+            referrerPolicy: "strict-origin-when-cross-origin",
+          },
+          children: [],
+        },
+      ];
+    });
+  };
+}
+
 const buildHtmlPipeline = (options: RenderOptions) =>
   unified()
     .use(remarkParse)
@@ -229,6 +296,7 @@ const buildHtmlPipeline = (options: RenderOptions) =>
     // and colours it misleadingly.
     .use(rehypeHighlight, { detect: false, languages: allLanguages })
     .use(rehypeImages, options)
+    .use(rehypeYoutube)
     .use(rehypeSanitize, schema)
     .use(rehypeStringify);
 
