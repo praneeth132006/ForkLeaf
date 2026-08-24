@@ -123,8 +123,55 @@ export class SyncEngine {
   /** Reloads the queue left over from a previous session. */
   async start(): Promise<void> {
     this.queue = await this.db.listQueue();
-    if (this.queue.length > 0) this.scheduleFlush();
     this.emit();
+  }
+
+  /**
+   * Re-queues local edits that have no queue entry to push them.
+   *
+   * This repairs damage rather than preventing it. An earlier version of this
+   * engine deleted a change from the queue once it had failed five times, which
+   * left the note marked dirty with nothing anywhere that would ever push it —
+   * and the empty queue then reported "All changes saved". Fixing the discard
+   * stops it happening again; it does nothing for the notes already stranded on
+   * somebody's device, and those are the ones with writing in them.
+   *
+   * So every dirty note without a queue entry is queued again. Safe to run on
+   * every load: a note that is genuinely in sync is not dirty, and one that is
+   * already queued is skipped. Called per workspace, because the note store is
+   * addressed that way.
+   */
+  async recoverStrandedEdits(
+    workspaceId: string,
+    serialize: (note: Note) => string,
+  ): Promise<number> {
+    const queued = new Set(
+      this.queue
+        .filter((change) => change.workspaceId === workspaceId)
+        .map((change) => (change.op === "rename" ? (change.toPath ?? change.path) : change.path)),
+    );
+
+    let recovered = 0;
+
+    for (const note of await this.db.listNotes(workspaceId)) {
+      if (!note.dirty || queued.has(note.path)) continue;
+
+      this.queue = coalesce(this.queue, {
+        workspaceId,
+        path: note.path,
+        op: "upsert",
+        content: serialize(note),
+        baseSha: note.baseSha,
+        now: this.now().toISOString(),
+      });
+      recovered += 1;
+    }
+
+    if (recovered > 0) {
+      await this.persistQueue();
+      this.scheduleFlush();
+    }
+    return recovered;
   }
 
   subscribe(listener: Listener): () => void {
@@ -138,6 +185,7 @@ export class SyncEngine {
       status: this.status,
       mode: this.mode,
       pendingCount: this.queue.length,
+      blockedCount: this.blocked().length,
       lastSyncedAt: this.lastSyncedAt,
       lastError: this.lastError,
       conflicts: this.conflicts,
@@ -266,12 +314,20 @@ export class SyncEngine {
     }, delay);
   }
 
-  /** Pushes everything pending right now, bypassing the debounce. */
+  /**
+   * Pushes everything pending right now, bypassing the debounce.
+   *
+   * Un-parks first. This is somebody pressing "sync now", which is a direct
+   * request to try the things that are not being tried — and a Sync Now that
+   * pointedly skipped the changes that had failed would be the least useful
+   * possible reading of the button.
+   */
   async flushNow(): Promise<void> {
     if (this.timer !== null) {
       this.cancel(this.timer);
       this.timer = null;
     }
+    await this.unpark();
     await this.flush();
   }
 
@@ -282,8 +338,8 @@ export class SyncEngine {
       this.dirtyDuringFlush = true;
       return;
     }
-    if (this.queue.length === 0) {
-      this.setStatus("idle");
+    if (this.pushable().length === 0) {
+      this.setStatus(this.restingStatus());
       return;
     }
     if (!this.isOnline()) {
@@ -299,7 +355,9 @@ export class SyncEngine {
 
     try {
       // One commit per workspace: a batch cannot span two repositories.
-      for (const [workspaceId, changes] of groupByWorkspace(this.queue)) {
+      // Parked changes are skipped — they have already had their attempts and
+      // retrying them on every flush would hold up everything behind them.
+      for (const [workspaceId, changes] of groupByWorkspace(this.pushable())) {
         await this.flushWorkspace(workspaceId, changes);
       }
 
@@ -309,7 +367,11 @@ export class SyncEngine {
       this.setStatus(this.restingStatus());
     } catch (err) {
       this.lastError = err instanceof Error ? err.message : String(err);
-      this.setStatus(this.isOnline() ? "error" : "offline");
+      // "error" means a push failed and will be tried again by itself. Once
+      // nothing is left that *will* be tried again, that reading is wrong and
+      // the honest word is "blocked" — it has stopped, and it needs asking.
+      const stalled = this.pushable().length === 0 && this.blocked().length > 0;
+      this.setStatus(this.isOnline() ? (stalled ? "blocked" : "error") : "offline");
       // A failed push used to sit there until the user happened to type again,
       // which is why notes could stay unsynced indefinitely after one blip.
       this.scheduleRetry();
@@ -329,7 +391,7 @@ export class SyncEngine {
    * gets a prompt attempt rather than inheriting a long backoff.
    */
   private scheduleRetry(): void {
-    if (this.queue.length === 0) return;
+    if (this.pushable().length === 0) return;
 
     this.retryDelay = this.retryDelay ? Math.min(this.retryDelay * 2, RETRY_MAX_MS) : RETRY_BASE_MS;
 
@@ -348,7 +410,24 @@ export class SyncEngine {
    */
   retryNow(): void {
     this.retryDelay = 0;
+    // Asking again is exactly what a parked change is waiting for, so this
+    // clears the parking. Without it "click to retry" would do nothing at all
+    // for the changes that most need retrying.
+    void this.unpark();
     if (this.queue.length > 0) this.scheduleFlush();
+  }
+
+  /** Puts every parked change back in line and gives it its attempts back. */
+  private async unpark(): Promise<void> {
+    const parked = this.blocked();
+    if (parked.length === 0) return;
+
+    for (const change of parked) {
+      change.blocked = false;
+      change.attempts = 0;
+      delete change.lastError;
+      await this.db.putQueueItem(change);
+    }
   }
 
   private async flushWorkspace(workspaceId: string, changes: PendingChange[]): Promise<void> {
@@ -369,16 +448,23 @@ export class SyncEngine {
         })),
       });
     } catch (err) {
-      // Count the attempt so a change that can never succeed (a deleted repo,
-      // a revoked token) eventually stops blocking everything behind it.
+      // Count the attempt so a change that can never succeed — a deleted repo,
+      // a revoked token — stops blocking everything queued behind it.
+      //
+      // Parked, never discarded. This used to delete the change from the queue
+      // and from storage once it ran out of attempts, with nothing recorded and
+      // nothing shown. The queue then went empty, the status went to "idle",
+      // and the status bar said "All changes saved" about a note that had never
+      // reached GitHub and now never would, because the only thing that knew
+      // about it had been thrown away. Keeping it costs a row in IndexedDB;
+      // dropping it costs somebody their writing.
+      const message = err instanceof Error ? err.message : String(err);
+
       for (const change of safe) {
         change.attempts += 1;
-        if (change.attempts >= MAX_ATTEMPTS) {
-          this.queue = this.queue.filter((c) => c.id !== change.id);
-          await this.db.deleteQueueItem(change.id);
-        } else {
-          await this.db.putQueueItem(change);
-        }
+        change.lastError = message;
+        if (change.attempts >= MAX_ATTEMPTS) change.blocked = true;
+        await this.db.putQueueItem(change);
       }
       throw err;
     }
@@ -567,7 +653,20 @@ export class SyncEngine {
    */
   private restingStatus(): SyncStatus {
     if (this.conflicts.length > 0) return "conflict";
+    // Outranks "pending": a parked change is not waiting its turn, it has
+    // stopped, and the one thing the status must never do is imply otherwise.
+    if (this.blocked().length > 0) return "blocked";
     return this.queue.length > 0 ? "pending" : "idle";
+  }
+
+  /** Queued changes still eligible for an automatic push. */
+  private pushable(): PendingChange[] {
+    return this.queue.filter((change) => change.blocked !== true);
+  }
+
+  /** Queued changes that have run out of retries and are waiting to be asked. */
+  private blocked(): PendingChange[] {
+    return this.queue.filter((change) => change.blocked === true);
   }
 
   private setStatus(status: SyncStatus): void {

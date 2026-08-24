@@ -22,7 +22,7 @@ import {
   type Workspace,
   type EditorViewMode,
 } from "@forkleaf/types";
-import { dirname } from "@forkleaf/markdown-engine";
+import { dirname, serializeDocument } from "@forkleaf/markdown-engine";
 import { GitHubGateway, LocalGateway, fetchSession, type SessionResponse } from "@/lib/gateway";
 import { LOCAL_WORKSPACE } from "@/lib/workspaces";
 import { assetFrom, assetObjectUrl } from "@/lib/assets";
@@ -152,6 +152,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       status: "idle",
       mode: DEFAULT_SYNC_PREFERENCE.mode,
       pendingCount: 0,
+      blockedCount: 0,
       lastSyncedAt: null,
       lastError: null,
       conflicts: [],
@@ -317,6 +318,20 @@ export function useNotebook(request: NotebookRequest = {}) {
       if (!cancelled) {
         syncRef.current?.setMode(preference.mode, preference.intervalMinutes);
         patch({ syncPreference: preference });
+      }
+
+      // Rescue anything a previous version stranded.
+      //
+      // The sync engine used to delete a change from its queue after five
+      // failed pushes, leaving the note marked dirty with nothing that would
+      // ever push it — and an empty queue reporting "All changes saved". The
+      // discard is gone, but that does nothing for notes already stranded on
+      // this device, which are the ones with writing in them. Every dirty note
+      // with no queue entry is put back in the queue on load.
+      if (!workspace.isLocal) {
+        void syncRef.current?.recoverStrandedEdits(workspace.id, (note) =>
+          serializeDocument(note.content, note.frontmatter),
+        );
       }
 
       const folders = (await dbRef.current?.getMeta<string[]>(emptyFoldersKey(workspace.id))) ?? [];
