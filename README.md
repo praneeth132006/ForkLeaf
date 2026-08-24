@@ -105,8 +105,15 @@ Mermaid is powerful and hard to remember, so there are three ways in:
   writing, plus inline errors that point at the broken line and explain it in
   plain language instead of dumping parser output.
 
-Diagrams are stored as normal ` ```mermaid ` fenced blocks, so they render on
-github.com and anywhere else Mermaid is supported.
+- **Open in tab** — optional, for the diagrams that outgrow a dialog. The same
+  studio opens in a browser tab of its own, for a second screen or a full-height
+  canvas, and every edit is saved into the note as you make it. The note stays
+  the one writer: the block shows "Editing in another tab" with a link that
+  takes editing back, and clicking a diagram still opens it in the note.
+
+Diagrams are drawn in the app's own palette and follow the light/dark theme,
+including in that separate tab. They are stored as normal ` ```mermaid ` fenced
+blocks, so they render on github.com and anywhere else Mermaid is supported.
 
 ### Sync
 

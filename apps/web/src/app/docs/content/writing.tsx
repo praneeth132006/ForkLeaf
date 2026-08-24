@@ -205,6 +205,21 @@ export function Diagrams() {
       </OL>
       <P>Click any diagram in a note to reopen the studio.</P>
 
+      <H2 id="own-tab">Editing a diagram in its own tab</H2>
+      <P>
+        Some diagrams are bigger than a dialog. Hover a diagram in a note and choose{" "}
+        <strong>Open in tab</strong> — or press it in the studio&rsquo;s header — and the same
+        studio opens in a browser tab of its own, which you can move to a second screen and leave
+        open while you write.
+      </P>
+      <P>
+        The note stays the owner of the text. Every edit in that tab is saved into the note as you
+        make it, the header says so as it happens, and the diagram block in the note shows{" "}
+        <strong>Editing in another tab</strong> with an <strong>Edit here</strong> link that takes
+        editing back. Nothing is duplicated and there is nothing to sync by hand — it is entirely
+        optional, and clicking a diagram still opens it in the note.
+      </P>
+
       <H2 id="panes">Source and canvas, side by side</H2>
       <P>
         Both panes are live views of the same Mermaid string, not two modes you switch between: type
