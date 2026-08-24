@@ -19,16 +19,14 @@ import { EditorSidebar } from "./EditorSidebar";
 afterEach(cleanup);
 
 const workspace: Workspace = {
-  id: "ws1",
+  id: "octocat/notes@main:",
   name: "notes",
-  kind: "github",
-  owner: "octocat",
-  repo: "notes",
-  branch: "main",
-  directory: "",
-  syncMode: "automatic",
-  createdAt: new Date().toISOString(),
-} as Workspace;
+  repo: { owner: "octocat", repo: "notes", branch: "main", directory: "" },
+  isDefault: false,
+  isLocal: false,
+  createdAt: new Date(0).toISOString(),
+  lastOpenedAt: new Date(0).toISOString(),
+};
 
 const tree: TreeNode[] = [
   {

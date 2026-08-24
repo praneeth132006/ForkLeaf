@@ -84,6 +84,17 @@ export function EditorWorkspace() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  /**
+   * Which panel is open over the document on a narrow screen.
+   *
+   * On a phone both side panels used to be `hidden`, full stop. Not collapsed
+   * to a rail, not behind a button — absent. That took the file tree, the
+   * dashboard link, export, publish and the note's history off the device
+   * entirely, so a phone could edit whichever note happened to be open and
+   * nothing else. They are the same two panels; on a narrow screen they slide
+   * over the document instead of sitting beside it.
+   */
+  const [drawer, setDrawer] = useState<"files" | "document" | null>(null);
   const [dialog, setDialog] = useState<
     "export" | "connect" | "help" | "history" | "propose" | "publish" | null
   >(null);
@@ -735,8 +746,26 @@ export function EditorWorkspace() {
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
       {/* The gap and the padding are what make the three panels read as
           separate surfaces rather than as one slab divided by hairlines. */}
+      {drawer && (
+        <button
+          type="button"
+          aria-label="Close panel"
+          onClick={() => setDrawer(null)}
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+        />
+      )}
+
       <div className="flex min-h-0 flex-1 gap-2 p-2 pb-0">
-        <div className="fl-panel hidden md:flex">
+        {/* Beside the document from `md` up; a drawer over it below that.
+            One component either way — a second, cut-down mobile file tree
+            would be a second set of bugs. */}
+        <div
+          className={`fl-panel ${
+            drawer === "files"
+              ? "fixed inset-y-2 left-2 z-40 flex w-[min(19rem,85vw)] shadow-[var(--fl-shadow-lg)] md:static md:z-auto md:w-auto md:shadow-none"
+              : "hidden md:flex"
+          }`}
+        >
           <EditorSidebar
             collapsed={sidebarCollapsed}
             onToggle={() => setSidebarCollapsed((value) => !value)}
@@ -746,7 +775,11 @@ export function EditorWorkspace() {
             onConnectRepo={() => setDialog("connect")}
             tree={notebook.tree}
             activePath={note?.path ?? null}
-            onOpenNote={notebook.openNote}
+            onOpenNote={(path) => {
+              notebook.openNote(path);
+              // On a phone the drawer covers the note it just opened.
+              setDrawer(null);
+            }}
             onCreateNote={handleCreate}
             currentFolder={currentFolder}
             onDeleteNote={handleDelete}
@@ -776,9 +809,29 @@ export function EditorWorkspace() {
               is left after the controls have what they need, and scroll when
               that is not enough — which is what makes this fit every width. */}
           <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-2">
-            <Link href="/dashboard" className="shrink-0 px-1 text-[var(--fl-text)] md:hidden">
-              <ForkLeafLogo markClassName="h-6 w-6" textClassName="text-[15px]" />
-            </Link>
+            {/* The way into the file tree — and therefore into the
+                dashboard, the repository picker and everything else that
+                lives in it — on a screen too narrow to show it beside the
+                document. */}
+            <button
+              type="button"
+              onClick={() => setDrawer((open) => (open === "files" ? null : "files"))}
+              aria-expanded={drawer === "files"}
+              aria-label="Notes and folders"
+              className="shrink-0 rounded-lg p-1.5 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] md:hidden"
+            >
+              <svg
+                viewBox="0 0 16 16"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M1.75 4.25c0-.83.67-1.5 1.5-1.5h2.4c.5 0 .96.24 1.25.65l.6.85h5.25c.83 0 1.5.67 1.5 1.5v6.5c0 .83-.67 1.5-1.5 1.5H3.25c-.83 0-1.5-.67-1.5-1.5z" />
+              </svg>
+            </button>
 
             <EditorTabs
               notes={notebook.openNotes}
@@ -792,7 +845,7 @@ export function EditorWorkspace() {
               <div
                 role="tablist"
                 aria-label="Editor mode"
-                className="hidden shrink-0 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] p-0.5 sm:flex"
+                className="flex shrink-0 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] p-0.5"
               >
                 {MODES.map((option) => (
                   <button
@@ -802,7 +855,7 @@ export function EditorWorkspace() {
                     aria-selected={mode === option.value}
                     title={option.hint}
                     onClick={() => notebook.setViewMode(option.value)}
-                    className={`rounded-[6px] px-3 py-1 text-[12.5px] font-medium transition-colors ${
+                    className={`rounded-[6px] px-2 py-1 text-[12.5px] font-medium transition-colors sm:px-3 ${
                       mode === option.value
                         ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
                         : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
@@ -849,6 +902,26 @@ export function EditorWorkspace() {
                 label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
               >
                 {theme === "dark" ? <SunGlyph /> : <MoonGlyph />}
+              </IconButton>
+
+              {/* Export, publish, history and the note's properties all live
+                  in the document panel, so below `lg` this button is the only
+                  route to any of them. */}
+              <IconButton
+                onClick={() => setDrawer((open) => (open === "document" ? null : "document"))}
+                label="Document, export and history"
+                className="inline-flex lg:hidden"
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                >
+                  <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" />
+                  <path d="M10 2.75v10.5" />
+                </svg>
               </IconButton>
 
               <IconButton
@@ -933,17 +1006,36 @@ export function EditorWorkspace() {
           </div>
         </main>
 
-        {!panelCollapsed && (
-          <div className="fl-panel hidden lg:flex">
+        {(!panelCollapsed || drawer === "document") && (
+          <div
+            className={`fl-panel ${
+              drawer === "document"
+                ? "fixed inset-y-2 right-2 z-40 flex w-[min(21rem,88vw)] shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:w-auto lg:shadow-none"
+                : "hidden lg:flex"
+            }`}
+          >
             <EditorRightPanel
               collapsed={false}
-              onToggle={() => setPanelCollapsed(true)}
+              onToggle={() => (drawer === "document" ? setDrawer(null) : setPanelCollapsed(true))}
               note={note}
               workspace={workspace}
               onFrontmatterChange={notebook.updateFrontmatter}
-              onExport={() => setDialog("export")}
-              onShowHistory={() => setDialog("history")}
-              onPublish={workspace && !workspace.isLocal ? () => setDialog("publish") : undefined}
+              onExport={() => {
+                setDrawer(null);
+                setDialog("export");
+              }}
+              onShowHistory={() => {
+                setDrawer(null);
+                setDialog("history");
+              }}
+              onPublish={
+                workspace && !workspace.isLocal
+                  ? () => {
+                      setDrawer(null);
+                      setDialog("publish");
+                    }
+                  : undefined
+              }
               syncMode={notebook.syncPreference.mode}
               onSyncNow={() => void saveEverything()}
               links={{
@@ -1074,7 +1166,16 @@ function IconButton({
   children: React.ReactNode;
   className?: string;
 }) {
-  const shared = `inline-flex h-8 w-8 items-center justify-center rounded-lg text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] ${className}`;
+  // The caller's display utility has to win. Tailwind resolves a conflict by
+  // which class comes later in the generated stylesheet, not by the order they
+  // appear in the attribute — so a base `inline-flex` here beat a `hidden`
+  // passed in, and the panel toggle marked desktop-only was on screen on every
+  // phone. Dropping the base when the caller states one is the only version of
+  // this that cannot silently lose the argument.
+  const statesDisplay = /(^|\s)(hidden|(inline-)?flex|block|inline)(\s|$)/.test(className);
+  const display = statesDisplay ? "" : "inline-flex";
+
+  const shared = `${display} h-8 w-8 items-center justify-center rounded-lg text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] ${className}`;
 
   if (as === "a" && href) {
     return (
