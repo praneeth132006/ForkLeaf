@@ -100,7 +100,10 @@ export function EditorStatusBar({
       )}
 
       {sync.lastError && (
-        <span className="ml-auto truncate text-[var(--fl-danger)]" title={sync.lastError}>
+        <span
+          className="ml-auto truncate text-[var(--fl-danger)]"
+          title={sync.lastErrorDetail ?? sync.lastError}
+        >
           {sync.lastError}
         </span>
       )}
@@ -182,7 +185,9 @@ function describe(sync: SyncState): { label: string; className: string; dot: str
 
     case "error":
       return {
-        label: `Couldn't sync: ${sync.lastError ?? "Unknown error"} — click to retry`,
+        // The message already says what happened and that the work is safe;
+        // "click to retry" is the only thing left to add.
+        label: `${sync.lastError ?? "Could not push to GitHub."} Click to retry.`,
         className: "text-[var(--fl-danger)] truncate max-w-[500px]",
         dot: "bg-[var(--fl-danger)]",
       };

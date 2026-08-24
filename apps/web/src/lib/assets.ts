@@ -1,8 +1,13 @@
 "use client";
 
-import { dirname, normalizePath, stripExtension, uniquePath } from "@forkleaf/markdown-engine";
+import {
+  dirname,
+  relativeFromNote,
+  resolveFromNote,
+  stripExtension,
+  uniquePath,
+} from "@forkleaf/markdown-engine";
 import type { LocalAsset, Workspace } from "@forkleaf/types";
-import { ApiGatewayError } from "@/lib/gateway";
 import { extensionForFile, imageTypeFor, MAX_IMAGE_BYTES, safeAssetName } from "@/lib/media";
 
 /**
@@ -30,13 +35,6 @@ import { extensionForFile, imageTypeFor, MAX_IMAGE_BYTES, safeAssetName } from "
 
 /** Folder, relative to the workspace directory, that uploads are committed to. */
 const ASSET_FOLDER = "assets";
-
-export interface UploadedImage {
-  /** What to write into the markdown — relative to the note. */
-  markdownSrc: string;
-  /** Full repo path of the committed file. */
-  repoPath: string;
-}
 
 /** True for a clipboard or drop payload we can actually store. */
 export function isSupportedImage(file: File): boolean {
@@ -93,26 +91,25 @@ export function readAsDataUrl(file: File): Promise<string> {
  * means the same thing in every one of them.
  */
 export function relativeSrc(fromNotePath: string, toAssetPath: string): string {
-  const from = normalizePath(dirname(fromNotePath)).split("/").filter(Boolean);
-  const to = normalizePath(toAssetPath).split("/").filter(Boolean);
-
-  let shared = 0;
-  while (shared < from.length && shared < to.length - 1 && from[shared] === to[shared]) {
-    shared += 1;
-  }
-
-  const up = from.length - shared;
-  const down = to.slice(shared);
-  const steps = [...Array.from({ length: up }, () => ".."), ...down];
-
-  // A file in the same folder needs the `./`, or a name containing a colon
-  // would be read as a URL scheme.
-  return up === 0 && down.length === 1 ? `./${steps.join("/")}` : steps.join("/");
+  return relativeFromNote(fromNotePath, toAssetPath);
 }
 
-/** Resolves a src written in a note back to the repo path it points at. */
+/**
+ * Resolves a src written in a note back to the repo path it points at.
+ *
+ * The src is percent-decoded first, and that is the whole point of this
+ * function existing rather than being a `normalizePath` call.
+ *
+ * A markdown renderer writes URLs, not paths: a note in `SOC 101` comes back
+ * from both the preview and the rich editor as `../SOC%20101/assets/x.png`,
+ * because that is what belongs in an `<img src>`. Resolving that literally
+ * produced the repo path `SOC%20101/assets/x.png`, which matches nothing in
+ * the local store and asks GitHub for a file whose name really does contain a
+ * per-cent sign — so every image in every folder with a space in its name was
+ * a broken box in this app while rendering perfectly on github.com.
+ */
 export function resolveAgainstNote(notePath: string, src: string): string {
-  return normalizePath(`${dirname(notePath)}/${src}`);
+  return resolveFromNote(notePath, src);
 }
 
 /** True for a src that names a file in the repository rather than somewhere else. */
@@ -177,62 +174,6 @@ export function resolveImageSrc(
   if (workspace.repo.directory) params.set("dir", workspace.repo.directory);
 
   return `/api/gh/raw?${params.toString()}`;
-}
-
-/**
- * Commits an image and returns the src to write into the note.
- *
- * `taken` is every path already in the workspace, so two screenshots pasted a
- * second apart do not overwrite one another.
- */
-export async function uploadImage(options: {
-  workspace: Workspace;
-  notePath: string;
-  file: File;
-  taken: Iterable<string>;
-  /** When supplied, the file is committed at this path instead of computing a
-   *  new one. The caller already chose a path for local storage and wrote it
-   *  into the markdown, so the GitHub commit must land at the same place. */
-  repoPath?: string;
-}): Promise<UploadedImage> {
-  const { workspace, notePath, file, taken } = options;
-
-  if (file.size > MAX_IMAGE_BYTES) {
-    throw new Error("That image is larger than 10 MB.");
-  }
-
-  // Use the caller's path when one was supplied, so the file on GitHub
-  // matches the path already written into the note's markdown.
-  const repoPath = options.repoPath ?? assetPathFor(workspace, file, taken);
-  const content = await readAsBase64(file);
-
-  const response = await fetch("/api/gh/asset", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      owner: workspace.repo.owner,
-      repo: workspace.repo.repo,
-      branch: workspace.repo.branch,
-      dir: workspace.repo.directory,
-      path: repoPath,
-      content,
-      message: `add ${repoPath}`,
-    }),
-  });
-
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as {
-      error?: { code?: string; message?: string };
-    } | null;
-
-    throw new ApiGatewayError(
-      body?.error?.code ?? "unknown",
-      body?.error?.message ?? "That image could not be uploaded.",
-      response.status,
-    );
-  }
-
-  return { markdownSrc: relativeSrc(notePath, repoPath), repoPath };
 }
 
 // ─── Local storage ──────────────────────────────────────────────────────────

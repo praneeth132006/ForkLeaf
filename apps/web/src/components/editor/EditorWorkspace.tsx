@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import type { CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
@@ -36,8 +36,8 @@ import { StorageBlocked } from "@/components/StorageBlocked";
 import { BootScreen } from "@/components/BootScreen";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { signOut } from "@/lib/gateway";
-import { assetPathFor, relativeSrc, resolveImageSrc, uploadImage } from "@/lib/assets";
-import { repairNoteLinks } from "@/lib/repair-links";
+import { assetPathFor, relativeSrc, resolveImageSrc } from "@/lib/assets";
+import { hasRelativeImages, repairNoteLinks } from "@/lib/repair-links";
 import { flattenTree, isMarkdown } from "@/lib/library";
 import { track } from "@/lib/firebase/analytics";
 import { upsertUserProfile } from "@/lib/firebase/users";
@@ -97,6 +97,14 @@ export function EditorWorkspace() {
   const [dialog, setDialog] = useState<
     "export" | "connect" | "help" | "history" | "propose" | "publish" | null
   >(null);
+  /**
+   * Something worth saying that is not a failure.
+   *
+   * The error banner is red and stays until dismissed, which is right for "that
+   * did not save" and wrong for "your images are back". This is the quiet
+   * channel: neutral, and it goes away on its own.
+   */
+  const [notice, setNotice] = useState<string | null>(null);
   // Dismissing the repo chooser has to be remembered, because the condition
   // that raises it stays true until a repository is actually connected.
   const [repoChoiceDismissed, setRepoChoiceDismissed] = useState(false);
@@ -168,37 +176,25 @@ export function EditorWorkspace() {
 
         const repoPath = assetPathFor(workspace, file, takenPaths, notePath);
 
-        // On this device first, always — including for a connected repository.
-        //
-        // Pasting a screenshot used to wait on a full commit to GitHub before
-        // anything appeared, so on a phone or a slow connection the editor sat
-        // there doing nothing for seconds and the paste read as broken. The
-        // bytes are already in hand; storing them locally is instant and gives
-        // the image a URL to render from, which is the whole point of a
-        // local-first app. The commit is the same commit, made a moment later.
+        /**
+         * On this device first, and queued for GitHub second.
+         *
+         * Pasting a screenshot used to wait on a full commit before anything
+         * appeared, so on a phone or a slow connection the editor sat there
+         * doing nothing and the paste read as broken. The bytes are already in
+         * hand: storing them locally is instant and gives the image something
+         * to render from, which is the whole point of a local-first app.
+         *
+         * The commit is then the *same* commit as the note's own text, made by
+         * the sync queue a moment later. That matters more than it sounds:
+         * pushing the image separately meant a failed upload was lost in
+         * silence while the note that referenced it synced happily, leaving a
+         * note on GitHub pointing at a file which had never been committed —
+         * and no way for either side to notice.
+         */
         await notebook.putAsset(repoPath, file, false);
-        const markdownSrc = relativeSrc(notePath, repoPath);
 
-        if (workspace.isLocal) return markdownSrc;
-
-        // Pushed in the background. A failure here is worth saying out loud —
-        // the note renders either way, so silence would leave someone
-        // believing an image had been committed when it had not.
-        // The repoPath computed above is passed through so that the file
-        // committed to GitHub lands at the same path the markdown references.
-        // Without it, uploadImage recomputed a new random filename and the
-        // note pointed at a file that did not exist on GitHub.
-        void uploadImage({ workspace, notePath, file, taken: takenPaths, repoPath })
-          .then(() => notebook.putAsset(repoPath, file, true))
-          .catch((error: unknown) => {
-            notebook.reportError(
-              error instanceof Error
-                ? `That image is on this device but has not reached GitHub: ${error.message}`
-                : "That image is on this device but has not reached GitHub.",
-            );
-          });
-
-        return markdownSrc;
+        return relativeSrc(notePath, repoPath);
       },
     }),
     [workspace, notePath, takenPaths, notebook],
@@ -485,48 +481,97 @@ export function EditorWorkspace() {
   /**
    * Points a note's broken images back at the files they meant.
    *
-   * Notes written before images were filed beside the note that uses them —
-   * or moved to another folder by a version of this app that did not carry
-   * their links along — refer to paths that hold nothing, and every picture in
-   * them is a broken box here and on github.com. The files are still in the
-   * repository; only the link is wrong, and that is repairable.
+   * Notes written before images were filed beside the note that uses them — or
+   * moved by a version of this app that did not carry their links along — refer
+   * to paths that hold nothing, and every picture in them is a broken box here
+   * and on github.com. The files are still there; only the link is wrong, and
+   * that is repairable without asking anybody anything.
    *
-   * Offered as a command rather than done silently on open: it rewrites the
-   * note, which is a commit, and a commit nobody asked for is not something an
-   * editor should be making on its own.
+   * So it repairs itself, on open, rather than waiting for someone to discover
+   * a menu item. A person who opens a note full of broken images wants the
+   * images, not a diagnosis — and this is the only kind of edit an editor may
+   * reasonably make unbidden: one that restores what the note already said,
+   * changing where a link points and never what the note means.
+   *
+   * It is deliberately timid. Only links that resolve to nothing are touched,
+   * only where the file is identifiable beyond doubt, and if the note has moved
+   * on since — because somebody kept typing — the repair is dropped rather than
+   * written over their work.
    */
-  const repairImages = useCallback(async () => {
-    const note = notebook.note;
-    if (!workspace || !note) return;
+  const repairImages = useCallback(
+    async (options: { announce: boolean }) => {
+      const note = notebook.note;
+      if (!note || !hasRelativeImages(note.content)) return;
 
-    if (workspace.isLocal) {
-      notebook.reportError("Connect a repository first — there is nowhere to look for the files.");
-      return;
-    }
+      const opened = note.content;
+      const path = note.path;
 
-    try {
-      const result = await repairNoteLinks(workspace, note.path, note.content);
-
-      if (result.fixed.length === 0) {
-        notebook.reportError(
-          result.unresolved.length > 0
-            ? `Nothing in the repository matches ${result.unresolved.length === 1 ? "that link" : "those links"}: ${result.unresolved.slice(0, 3).join(", ")}`
-            : "Every image in this note already points at a file that exists.",
+      try {
+        const result = await repairNoteLinks(
+          workspace,
+          path,
+          opened,
+          Object.keys(notebook.assetUrls),
         );
-        return;
-      }
 
-      await notebook.saveNote(result.content);
-      notebook.reportError(
-        `Repointed ${result.fixed.length} ${result.fixed.length === 1 ? "image" : "images"}` +
-          (result.unresolved.length > 0 ? `; ${result.unresolved.length} still not found.` : "."),
-      );
-    } catch (error) {
-      notebook.reportError(
-        error instanceof Error ? error.message : "Those images could not be looked up.",
-      );
-    }
-  }, [notebook, workspace]);
+        if (result.fixed.length === 0) {
+          if (!options.announce) return;
+          setNotice(
+            result.unresolved.length > 0
+              ? `Nothing in this repository matches ${result.unresolved.length === 1 ? "that link" : "those links"}: ${result.unresolved.slice(0, 3).join(", ")}`
+              : "Every image in this note points at a file that exists.",
+          );
+          return;
+        }
+
+        // Typed since it was read: their version is the one that counts.
+        if (notebook.note?.path !== path || notebook.note.content !== opened) return;
+
+        await notebook.saveNote(result.content);
+        setNotice(
+          `${result.fixed.length} ${result.fixed.length === 1 ? "image was" : "images were"} pointing at the wrong place. Fixed.` +
+            (result.unresolved.length > 0
+              ? ` ${result.unresolved.length} could not be found.`
+              : ""),
+        );
+      } catch (error) {
+        // Silent when nobody asked: a repository that cannot be read right now
+        // is not a thing to interrupt somebody's writing about, and the note is
+        // no worse off than it was.
+        if (!options.announce) return;
+        notebook.reportError(
+          error instanceof Error ? error.message : "Those images could not be looked up.",
+        );
+      }
+    },
+    [notebook, workspace],
+  );
+
+  /**
+   * Runs the repair once per note, as it is opened.
+   *
+   * Keyed by the note's path and checked against a set, so switching tabs back
+   * and forth does not re-ask, and a note being typed in is never interrupted
+   * by a second pass.
+   */
+  const healed = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const path = notebook.note?.path;
+    if (!path || healed.current.has(path)) return;
+
+    healed.current.add(path);
+    void repairImages({ announce: false });
+    // `repairImages` reads the open note through `notebook`, which changes on
+    // every keystroke; depending on it here would re-run this on each one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notebook.note?.path]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 8000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const handleSignOut = useCallback(async () => {
     await signOut();
@@ -580,7 +625,7 @@ export function EditorWorkspace() {
         label: "Find this note's missing images",
         group: "Notes",
         keywords: "broken image link repair fix missing picture",
-        run: () => void repairImages(),
+        run: () => void repairImages({ announce: true }),
       },
       {
         id: "connect",
@@ -1017,6 +1062,23 @@ export function EditorWorkspace() {
           </header>
 
           {/* ── Banners ──────────────────────────────────────────────── */}
+          {notice && (
+            <div
+              role="status"
+              className="flex items-center gap-2 border-b border-[var(--fl-border)] bg-[var(--fl-elevated)] px-4 py-2 text-sm text-[var(--fl-text)]"
+            >
+              <span className="flex-1">{notice}</span>
+              <button
+                type="button"
+                onClick={() => setNotice(null)}
+                aria-label="Dismiss"
+                className="shrink-0 px-2 text-[var(--fl-muted)]"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {[
             { text: notebook.error, dismiss: notebook.dismissError },
             { text: localFiles.error, dismiss: localFiles.clearError },

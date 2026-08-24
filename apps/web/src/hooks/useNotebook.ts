@@ -155,6 +155,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       blockedCount: 0,
       lastSyncedAt: null,
       lastError: null,
+      lastErrorDetail: null,
       conflicts: [],
     },
     syncPreference: DEFAULT_SYNC_PREFERENCE,
@@ -332,6 +333,10 @@ export function useNotebook(request: NotebookRequest = {}) {
         void syncRef.current?.recoverStrandedEdits(workspace.id, (note) =>
           serializeDocument(note.content, note.frontmatter),
         );
+        // The same for images. They were pushed outside the queue for a long
+        // time, so a failed upload left the file here and nothing anywhere
+        // that remembered it still had somewhere to be.
+        void syncRef.current?.recoverStrandedAssets(workspace.id);
       }
 
       const folders = (await dbRef.current?.getMeta<string[]>(emptyFoldersKey(workspace.id))) ?? [];
@@ -1082,6 +1087,19 @@ export function useNotebook(request: NotebookRequest = {}) {
 
       const asset = await assetFrom({ workspace, repoPath, file, pushed });
       await db.putAsset(asset);
+
+      /**
+       * Queued for GitHub the same way the note's text is.
+       *
+       * Not pushed on the spot: an upload that fails — offline, a tab closed a
+       * second after the paste, a token expiring — used to be lost silently,
+       * leaving a note on GitHub pointing at a file that was never committed.
+       * In the queue it retries, survives a restart, and lands in the same
+       * commit as the writing that refers to it.
+       */
+      if (!pushed && !workspace.isLocal) {
+        await syncRef.current?.recordAssetUpsert(workspace.id, repoPath, asset.data);
+      }
 
       // Replacing a path that already had a URL: the old one is dropped from
       // the cache here, since nothing else will ever ask for it again.

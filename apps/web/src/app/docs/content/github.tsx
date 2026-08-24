@@ -248,8 +248,8 @@ export function Sync() {
             "No network. Everything is on this device and will go up automatically when you reconnect.",
           ],
           [
-            <strong key="e">Couldn&apos;t sync — click to retry</strong>,
-            "GitHub rejected the push. The reason is at the right of the status bar. Nothing was lost.",
+            <strong key="e">A sentence saying what went wrong — click to retry</strong>,
+            "The push failed. The message says what happened and what to do about it; nothing was lost, and your work is on this device either way.",
           ],
           [
             <strong key="f">2 conflicts — click to resolve</strong>,

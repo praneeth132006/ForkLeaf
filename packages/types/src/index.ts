@@ -182,7 +182,17 @@ export interface SyncState {
    */
   blockedCount: number;
   lastSyncedAt: string | null;
+  /**
+   * Why the last push failed, in words a reader can act on.
+   *
+   * Deliberately not the server's own text. GitHub answers a rejected commit
+   * with things like `GitRPC::BadObjectState`, and putting that in front of
+   * somebody who is trying to write notes tells them only that something is
+   * broken and nothing about what to do.
+   */
   lastError: string | null;
+  /** The underlying message, for a tooltip and for bug reports. */
+  lastErrorDetail: string | null;
   conflicts: Conflict[];
 }
 
@@ -196,6 +206,14 @@ export interface PendingChange {
   toPath?: string;
   /** Full file text including frontmatter. Absent for deletes. */
   content?: string;
+  /**
+   * How `content` is encoded.
+   *
+   * Images go through this queue exactly as notes do — that is what gives them
+   * the same retries, the same offline behaviour and the same commit — and an
+   * image is bytes, not text.
+   */
+  encoding?: "utf8" | "base64";
   baseSha: string | null;
   queuedAt: string;
   attempts: number;

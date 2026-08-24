@@ -54,6 +54,8 @@ export interface RemoteCommitInput {
     path: string;
     toPath?: string;
     content?: string;
+    /** How `content` is encoded. Images are base64; notes are text. */
+    encoding?: "utf8" | "base64";
   }[];
 }
 

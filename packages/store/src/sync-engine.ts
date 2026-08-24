@@ -72,6 +72,7 @@ export class SyncEngine {
   private retryDelay = 0;
   private lastSyncedAt: string | null = null;
   private lastError: string | null = null;
+  private lastErrorDetail: string | null = null;
   private readonly listeners = new Set<Listener>();
 
   constructor(options: SyncEngineOptions) {
@@ -174,6 +175,50 @@ export class SyncEngine {
     return recovered;
   }
 
+  /**
+   * Queues images that are on this device but never reached GitHub.
+   *
+   * The counterpart of `recoverStrandedEdits`, and it exists for the same
+   * reason: for a long time images were posted straight to GitHub outside the
+   * queue, so an upload that failed left the file on this device with nothing
+   * anywhere that remembered it still had somewhere to be. The note pointing at
+   * it synced regardless, which is how a repository ends up full of notes
+   * referring to images it does not have.
+   *
+   * Runs when a workspace is opened, so those images heal themselves on the
+   * next visit rather than needing anybody to know they are missing.
+   */
+  async recoverStrandedAssets(workspaceId: string): Promise<number> {
+    const queued = new Set(
+      this.queue
+        .filter((change) => change.workspaceId === workspaceId)
+        .map((change) => change.path),
+    );
+
+    let recovered = 0;
+
+    for (const asset of await this.db.listAssets(workspaceId)) {
+      if (asset.pushed || queued.has(asset.path)) continue;
+
+      this.queue = coalesce(this.queue, {
+        workspaceId,
+        path: asset.path,
+        op: "upsert",
+        content: asset.data,
+        encoding: "base64",
+        baseSha: null,
+        now: this.now().toISOString(),
+      });
+      recovered += 1;
+    }
+
+    if (recovered > 0) {
+      await this.persistQueue();
+      this.scheduleFlush();
+    }
+    return recovered;
+  }
+
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
     listener(this.state);
@@ -188,6 +233,7 @@ export class SyncEngine {
       blockedCount: this.blocked().length,
       lastSyncedAt: this.lastSyncedAt,
       lastError: this.lastError,
+      lastErrorDetail: this.lastErrorDetail,
       conflicts: this.conflicts,
     };
   }
@@ -261,6 +307,35 @@ export class SyncEngine {
       path: note.path,
       op: "delete",
       baseSha: note.baseSha,
+      now: this.now().toISOString(),
+    });
+
+    await this.persistQueue();
+    this.scheduleFlush();
+  }
+
+  /**
+   * Queues an image to be committed, exactly as a note is.
+   *
+   * Images used to be posted straight to GitHub the moment they were pasted,
+   * outside this queue. That looked fine and failed silently: a paste made
+   * offline, or in a tab that was closed a second later, or while the token was
+   * expiring, never reached the repository — while the note referencing it
+   * synced perfectly well. The result was a note on GitHub pointing at a file
+   * that had never existed, which is indistinguishable from a broken note.
+   *
+   * Going through the queue gives an image what a note already had: retries, a
+   * record that survives a restart, and a place in the same commit as the text
+   * that refers to it, so the two can never arrive apart.
+   */
+  async recordAssetUpsert(workspaceId: string, path: string, base64: string): Promise<void> {
+    this.queue = coalesce(this.queue, {
+      workspaceId,
+      path,
+      op: "upsert",
+      content: base64,
+      encoding: "base64",
+      baseSha: null,
       now: this.now().toISOString(),
     });
 
@@ -381,10 +456,12 @@ export class SyncEngine {
 
       this.lastSyncedAt = this.now().toISOString();
       this.lastError = null;
+      this.lastErrorDetail = null;
       this.retryDelay = 0;
       this.setStatus(this.restingStatus());
     } catch (err) {
-      this.lastError = err instanceof Error ? err.message : String(err);
+      this.lastError = plainly(err);
+      this.lastErrorDetail = err instanceof Error ? err.message : String(err);
       // "error" means a push failed and will be tried again by itself. Once
       // nothing is left that *will* be tried again, that reading is wrong and
       // the honest word is "blocked" — it has stopped, and it needs asking.
@@ -486,6 +563,7 @@ export class SyncEngine {
           path: c.path,
           ...(c.toPath !== undefined ? { toPath: c.toPath } : {}),
           ...(c.content !== undefined ? { content: c.content } : {}),
+          ...(c.encoding !== undefined ? { encoding: c.encoding } : {}),
         })),
       });
 
@@ -546,7 +624,15 @@ export class SyncEngine {
       if (change.op === "delete" || !newSha) continue;
 
       const note = await this.db.getNote(`${workspaceId}::${path}`);
-      if (note) await this.db.putNote({ ...note, baseSha: newSha, dirty: false });
+      if (note) {
+        await this.db.putNote({ ...note, baseSha: newSha, dirty: false });
+        continue;
+      }
+
+      // Not a note: an image, now genuinely on GitHub. Recording that is what
+      // lets a later deletion know there is something there to delete.
+      const asset = await this.db.getAsset(`${workspaceId}::${path}`);
+      if (asset && !asset.pushed) await this.db.putAsset({ ...asset, pushed: true });
     }
   }
 
@@ -793,4 +879,43 @@ function isContentRejection(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const { code, status } = err as { code?: unknown; status?: unknown };
   return code === "validation" || status === 422;
+}
+
+/**
+ * A push failure, said in a way somebody can act on.
+ *
+ * GitHub answers a refused commit with its own internal vocabulary —
+ * `GitRPC::BadObjectState` is a real thing it says — and the status bar used to
+ * print that verbatim. It tells a person writing notes nothing except that
+ * something is wrong, and it reads like the app has crashed.
+ *
+ * Every branch here says the same two things: what happened, and whether their
+ * writing is safe. It always is; that is the whole point of saving locally
+ * first, and it is the first thing anybody wants to know.
+ */
+export function plainly(err: unknown): string {
+  const { code, status } = (err ?? {}) as { code?: unknown; status?: unknown };
+
+  switch (code) {
+    case "unauthorized":
+      return "Your GitHub sign-in has expired. Sign in again to push these changes — they are safe on this device.";
+    case "forbidden":
+      return "GitHub would not accept this change. Check you still have write access to this repository.";
+    case "rate-limited":
+      return "GitHub is asking us to slow down. This will push itself shortly.";
+    case "not-found":
+      return "That repository or branch is no longer there. Your notes are safe on this device.";
+    case "conflict":
+      return "This note also changed on GitHub. Open it to choose which version to keep.";
+    case "validation":
+      return "GitHub refused one of these changes. Everything else has been pushed, and this note is safe on this device.";
+    case "network":
+      return "Could not reach GitHub. Your work is saved on this device and will push when the connection returns.";
+  }
+
+  if (typeof status === "number" && status >= 500) {
+    return "GitHub is having trouble at the moment. This will retry by itself.";
+  }
+
+  return "Could not push to GitHub just now. Your work is saved on this device and will be retried.";
 }
