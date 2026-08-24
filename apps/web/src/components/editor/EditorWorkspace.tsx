@@ -183,7 +183,11 @@ export function EditorWorkspace() {
         // Pushed in the background. A failure here is worth saying out loud —
         // the note renders either way, so silence would leave someone
         // believing an image had been committed when it had not.
-        void uploadImage({ workspace, notePath, file, taken: takenPaths })
+        // The repoPath computed above is passed through so that the file
+        // committed to GitHub lands at the same path the markdown references.
+        // Without it, uploadImage recomputed a new random filename and the
+        // note pointed at a file that did not exist on GitHub.
+        void uploadImage({ workspace, notePath, file, taken: takenPaths, repoPath })
           .then(() => notebook.putAsset(repoPath, file, true))
           .catch((error: unknown) => {
             notebook.reportError(

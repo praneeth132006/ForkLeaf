@@ -190,6 +190,10 @@ export async function uploadImage(options: {
   notePath: string;
   file: File;
   taken: Iterable<string>;
+  /** When supplied, the file is committed at this path instead of computing a
+   *  new one. The caller already chose a path for local storage and wrote it
+   *  into the markdown, so the GitHub commit must land at the same place. */
+  repoPath?: string;
 }): Promise<UploadedImage> {
   const { workspace, notePath, file, taken } = options;
 
@@ -197,7 +201,9 @@ export async function uploadImage(options: {
     throw new Error("That image is larger than 10 MB.");
   }
 
-  const repoPath = assetPathFor(workspace, file, taken);
+  // Use the caller's path when one was supplied, so the file on GitHub
+  // matches the path already written into the note's markdown.
+  const repoPath = options.repoPath ?? assetPathFor(workspace, file, taken);
   const content = await readAsBase64(file);
 
   const response = await fetch("/api/gh/asset", {
