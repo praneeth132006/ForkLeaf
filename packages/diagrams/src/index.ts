@@ -78,3 +78,50 @@ export {
   type SequenceMessage,
   type MessageArrow,
 } from "./sequence-model";
+
+export {
+  sizeOf,
+  hasMembers,
+  isMarker,
+  clamp,
+  textWidth,
+  NODE_WIDTH,
+  NODE_HEIGHT,
+  MEMBER_HEADER,
+  MEMBER_HEIGHT,
+  LABEL_CHAR_WIDTH,
+  LABEL_PADDING,
+  type Size,
+} from "./geometry";
+
+export {
+  diffDiagrams,
+  diffGraphs,
+  diffSequences,
+  pairDiagrams,
+  summarizeDiff,
+  type DiagramDiff,
+  type DiagramPair,
+  type DiffCounts,
+  type DiffStatus,
+  type EdgeDiff,
+  type FieldChange,
+  type GraphDiff,
+  type GraphDiffOptions,
+  type MessageDiff,
+  type NodeDiff,
+  type OpaqueDiff,
+  type SequenceDiff,
+} from "./diff";
+
+export {
+  graphToSvg,
+  mermaidToSvg,
+  diffToSvg,
+  isDrawableDiff,
+  escapeXml,
+  LIGHT_SVG_THEME,
+  DARK_SVG_THEME,
+  type RenderSvgOptions,
+  type SvgTheme,
+} from "./svg";
