@@ -109,6 +109,21 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
             )}
           </div>
 
+          {githubAvailable && (
+            /* Said here rather than discovered on GitHub's own consent screen.
+               The default grant covers every repository the account can reach,
+               which is a great deal to hand a notes app — so the narrower one
+               is offered next to it instead of being a thing you would have to
+               know to ask for. */
+            <p className="mt-3 text-[12.5px] text-[var(--fl-muted)]">
+              Keeping notes in public repositories?{" "}
+              <a href="/api/auth/github?access=public" className="fl-link">
+                Grant public-repository access only
+              </a>
+              .
+            </p>
+          )}
+
           <p className="mt-4 text-[13px] text-[var(--fl-muted)]">
             {githubAvailable ? (
               <>
