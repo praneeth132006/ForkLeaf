@@ -449,14 +449,127 @@ describe("SyncEngine", () => {
     expect(ctx.engine.state.pendingCount).toBe(0);
   });
 
-  it("gives up on a change that keeps failing rather than blocking the queue forever", async () => {
+  /**
+   * What happens to a change that can never be pushed.
+   *
+   * This used to be asserted the other way round — the change was deleted from
+   * the queue and from storage after five attempts, and the test called that
+   * "gives up rather than blocking the queue forever". It did stop blocking the
+   * queue. It also emptied it, which moved the status to "idle" and put "All
+   * changes saved" on screen for a note that had never reached GitHub and, now
+   * that the only record of it was gone, never would.
+   *
+   * Nothing may be discarded. It is parked: kept, counted, and reported as
+   * something that has stopped rather than something in progress.
+   */
+  it("parks a change that keeps failing, and never throws it away", async () => {
     ctx.gateway.files.set("a.md", { content: "old", sha: "sha-original" });
     ctx.gateway.failNext = 99;
 
     await ctx.engine.recordUpsert(makeNote(), "doomed");
-    for (let i = 0; i < 5; i += 1) await ctx.engine.flushNow();
+    // The automatic path, which is what actually retries: each tick runs the
+    // flush and schedules the next attempt.
+    for (let i = 0; i < 6; i += 1) await ctx.timers.tick();
 
+    expect(ctx.engine.state.blockedCount).toBe(1);
+    expect(ctx.engine.state.pendingCount).toBe(1);
+
+    // The text is still there to be pushed once whatever was wrong is fixed.
+    expect(await ctx.db.listQueue()).toHaveLength(1);
+    expect((await ctx.db.listQueue())[0]?.content).toBe("doomed");
+  });
+
+  it("never says everything is saved while a change is parked", async () => {
+    ctx.gateway.files.set("a.md", { content: "old", sha: "sha-original" });
+    ctx.gateway.failNext = 99;
+
+    await ctx.engine.recordUpsert(makeNote(), "doomed");
+    for (let i = 0; i < 6; i += 1) await ctx.timers.tick();
+
+    expect(ctx.engine.state.status).toBe("blocked");
+    expect(ctx.engine.state.status).not.toBe("idle");
+  });
+
+  it("stops retrying a parked change, so the queue behind it still drains", async () => {
+    ctx.gateway.files.set("a.md", { content: "old", sha: "sha-original" });
+    ctx.gateway.failNext = 99;
+
+    await ctx.engine.recordUpsert(makeNote(), "doomed");
+    for (let i = 0; i < 6; i += 1) await ctx.timers.tick();
+    expect(ctx.engine.state.blockedCount).toBe(1);
+
+    // A second note, in a workspace that is working again.
+    ctx.gateway.failNext = 0;
+    await ctx.engine.recordUpsert(makeNote({ id: "ws::b.md", path: "b.md" }), "fine");
+    await ctx.timers.tick();
+
+    const pushed = ctx.gateway.commits.flatMap((c) => c.changes.map((x) => x.path));
+    expect(pushed).toContain("b.md");
+    // And the parked one is still parked rather than quietly re-attempted.
+    expect(ctx.engine.state.blockedCount).toBe(1);
+  });
+
+  it("tries a parked change again when asked, which is what retry means", async () => {
+    ctx.gateway.files.set("a.md", { content: "old", sha: "sha-original" });
+    ctx.gateway.failNext = 99;
+
+    await ctx.engine.recordUpsert(makeNote(), "doomed");
+    for (let i = 0; i < 6; i += 1) await ctx.timers.tick();
+    expect(ctx.engine.state.blockedCount).toBe(1);
+
+    // Whatever was wrong is fixed, and the reader presses sync.
+    ctx.gateway.failNext = 0;
+    await ctx.engine.flushNow();
+
+    expect(ctx.engine.state.blockedCount).toBe(0);
     expect(ctx.engine.state.pendingCount).toBe(0);
+    expect(ctx.gateway.files.get("a.md")?.content).toBe("doomed");
+  });
+
+  it("remembers why it stopped, so the reason can be shown", async () => {
+    ctx.gateway.files.set("a.md", { content: "old", sha: "sha-original" });
+    ctx.gateway.failNext = 99;
+
+    await ctx.engine.recordUpsert(makeNote(), "doomed");
+    for (let i = 0; i < 6; i += 1) await ctx.timers.tick();
+
+    expect((await ctx.db.listQueue())[0]?.lastError).toContain("server error");
+  });
+
+  /**
+   * Healing the damage the old discard left behind.
+   *
+   * Fixing the discard stops new notes being stranded. It does nothing for the
+   * ones already sitting on somebody's device, dirty, with no queue entry and
+   * an "All changes saved" label above them — and those are the ones with
+   * writing in them.
+   */
+  it("re-queues a dirty note that nothing is left to push", async () => {
+    const stranded = makeNote({ content: "words nobody pushed", dirty: true });
+    await ctx.db.putNote(stranded);
+
+    const recovered = await ctx.engine.recoverStrandedEdits("ws", (note) => note.content);
+
+    expect(recovered).toBe(1);
+    expect(ctx.engine.state.pendingCount).toBe(1);
+
+    await ctx.engine.flushNow();
+    expect(ctx.gateway.files.get("a.md")?.content).toBe("words nobody pushed");
+  });
+
+  it("leaves a note that is already in sync alone", async () => {
+    await ctx.db.putNote(makeNote({ dirty: false }));
+
+    expect(await ctx.engine.recoverStrandedEdits("ws", (n) => n.content)).toBe(0);
+    expect(ctx.engine.state.pendingCount).toBe(0);
+  });
+
+  it("does not queue a second copy of something already queued", async () => {
+    await ctx.engine.recordUpsert(makeNote(), "already queued");
+    expect(ctx.engine.state.pendingCount).toBe(1);
+
+    expect(await ctx.engine.recoverStrandedEdits("ws", (n) => n.content)).toBe(0);
+    expect(ctx.engine.state.pendingCount).toBe(1);
   });
 
   it("notifies subscribers as the status changes", async () => {

@@ -187,6 +187,16 @@ function describe(sync: SyncState): { label: string; className: string; dot: str
         dot: "bg-[var(--fl-danger)]",
       };
 
+    case "blocked":
+      // The one status that must never be mistaken for progress. These changes
+      // have stopped retrying and will not move until somebody asks them to,
+      // so the label says what is true and what to do about it.
+      return {
+        label: `${sync.blockedCount} change${sync.blockedCount === 1 ? "" : "s"} not on GitHub — click to retry`,
+        className: "text-[var(--fl-danger)] font-medium",
+        dot: "bg-[var(--fl-danger)]",
+      };
+
     case "local":
       return { label: "Saved on this device", className: "", dot: "bg-[var(--fl-muted)]" };
 

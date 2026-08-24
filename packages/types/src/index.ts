@@ -132,7 +132,15 @@ export type SyncStatus =
   | "syncing" // a push is in flight
   | "offline" // no network; changes are queued
   | "conflict" // remote moved on; needs user resolution
-  | "error";
+  | "error"
+  /**
+   * Changes that have run out of retries and are parked.
+   *
+   * Distinct from `error`, which is a push that just failed and will be tried
+   * again on its own. This one will not retry until somebody asks it to, so it
+   * is the state that must never be mistaken for "saved".
+   */
+  | "blocked";
 
 /**
  * How eagerly changes are pushed to GitHub.
@@ -164,8 +172,15 @@ export interface SyncState {
   status: SyncStatus;
   /** How this workspace is configured to push. */
   mode: SyncMode;
-  /** Number of notes with unpushed changes. */
+  /** Number of notes with unpushed changes, parked ones included. */
   pendingCount: number;
+  /**
+   * Changes that gave up retrying and are waiting to be asked again.
+   *
+   * Reported separately because it is the one number that means something is
+   * wrong rather than merely in progress.
+   */
+  blockedCount: number;
   lastSyncedAt: string | null;
   lastError: string | null;
   conflicts: Conflict[];
@@ -184,6 +199,18 @@ export interface PendingChange {
   baseSha: string | null;
   queuedAt: string;
   attempts: number;
+  /**
+   * True once this has exhausted its retries.
+   *
+   * It stays in the queue. A change that cannot be pushed used to be deleted
+   * from the queue and from storage after five attempts — no record, nothing
+   * shown — which emptied the queue, moved the status to "idle" and put "All
+   * changes saved" on screen for a note that had never reached GitHub. Parking
+   * it keeps the text and keeps the app honest.
+   */
+  blocked?: boolean;
+  /** Why it stopped, for the message offering to try again. */
+  lastError?: string;
 }
 
 /** A remote change that collides with an unpushed local change. */
