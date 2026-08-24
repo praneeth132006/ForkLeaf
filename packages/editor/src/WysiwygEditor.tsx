@@ -68,6 +68,7 @@ import { imagesFrom, type ImageBridge } from "./images";
 import { MermaidBlock } from "./extensions/MermaidBlock";
 import { Wikilink } from "./extensions/Wikilink";
 import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
+import { ShortcutsAfterLineBreak } from "./extensions/ShortcutsAfterLineBreak";
 import type { LinkBridge } from "./links";
 import { readSlashState } from "./extensions/SlashCommands";
 import { isolateCurrentLine } from "./isolate-line";
@@ -196,6 +197,9 @@ export function WysiwygEditor({
       // After the nodes it defers to, so their own Enter handling is already
       // registered when this decides whether to step aside.
       EnterIsALineBreak,
+      // After it, because it exists to repair what that one changes: a line
+      // that begins after a hard break rather than at the start of a block.
+      ShortcutsAfterLineBreak,
       Markdown.configure({
         html: false,
         transformPastedText: true,
