@@ -9,6 +9,9 @@ export {
   type CommitOptions,
   type CommitResult,
   type PagesSite,
+  type PullRequestSummary,
+  type PullRequestDetail,
+  type PullRequestFile,
 } from "./client";
 
 export { Transport, type RateLimit, type TransportConfig, type HttpResponse } from "./http";

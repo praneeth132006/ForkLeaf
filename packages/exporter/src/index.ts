@@ -1,10 +1,10 @@
 import type { ExportFormat, ExportOptions, Note } from "@forkleaf/types";
 import { serializeDocument, documentStats } from "@forkleaf/markdown-engine";
 import { renderDiagram, toStandaloneSvg, LIGHT_THEME, DARK_THEME } from "@forkleaf/diagrams";
-import { toHtml } from "./html";
+import { toHtml, type ImageResolver } from "./html";
 import { toDocx } from "./docx";
 
-export { toHtml } from "./html";
+export { toHtml, type ImageResolver } from "./html";
 export { toDocx } from "./docx";
 
 /**
@@ -75,8 +75,19 @@ export const DEFAULT_EXPORT_OPTIONS: Omit<ExportOptions, "title" | "format"> = {
   theme: "light",
 };
 
-/** Produces the export as a Blob. PDF is handled separately by `printToPdf`. */
-export async function exportNote(note: Note, options: ExportOptions): Promise<ExportResult> {
+/**
+ * Produces the export as a Blob. PDF is handled separately by `printToPdf`.
+ *
+ * `resolveImage` turns the note's relative image paths into `data:` URLs, so
+ * an exported file carries its pictures instead of pointing at a location the
+ * reader does not have. Only the app knows where the bytes live, so it is
+ * passed in; without it the paths are left exactly as written.
+ */
+export async function exportNote(
+  note: Note,
+  options: ExportOptions,
+  resolveImage?: ImageResolver,
+): Promise<ExportResult> {
   const filename = `${safeFilename(options.title)}.${extensionFor(options.format)}`;
 
   switch (options.format) {
@@ -88,7 +99,7 @@ export async function exportNote(note: Note, options: ExportOptions): Promise<Ex
     }
 
     case "html": {
-      const html = await toHtml(note.content, note.frontmatter, options);
+      const html = await toHtml(note.content, note.frontmatter, options, resolveImage);
       return { blob: blob(html, "html"), filename };
     }
 
@@ -113,7 +124,7 @@ export async function exportNote(note: Note, options: ExportOptions): Promise<Ex
     case "pdf": {
       // The caller should use printToPdf, which opens the print dialog. We
       // still return the HTML so a caller with its own pipeline can use it.
-      const html = await toHtml(note.content, note.frontmatter, options);
+      const html = await toHtml(note.content, note.frontmatter, options, resolveImage);
       return { blob: blob(html, "html"), filename: filename.replace(/\.pdf$/, ".html") };
     }
   }
@@ -125,10 +136,19 @@ export async function exportNote(note: Note, options: ExportOptions): Promise<Ex
  * A hidden same-origin iframe is used rather than a popup: popups are commonly
  * blocked, and an iframe keeps the app's own UI out of the printed output.
  */
-export async function printToPdf(note: Note, options: ExportOptions): Promise<void> {
+export async function printToPdf(
+  note: Note,
+  options: ExportOptions,
+  resolveImage?: ImageResolver,
+): Promise<void> {
   if (typeof document === "undefined") throw new Error("printToPdf requires a browser");
 
-  const html = await toHtml(note.content, note.frontmatter, { ...options, format: "html" });
+  const html = await toHtml(
+    note.content,
+    note.frontmatter,
+    { ...options, format: "html" },
+    resolveImage,
+  );
 
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
@@ -151,6 +171,21 @@ export async function printToPdf(note: Note, options: ExportOptions): Promise<vo
     if (doc.readyState === "complete") resolve();
     else frame.onload = () => resolve();
   });
+
+  // And for the images to decode. They are `data:` URLs so nothing is
+  // fetched, but decoding is still asynchronous — printing before it finishes
+  // produces a PDF with gaps where the pictures should be, which is the exact
+  // failure this export is meant to have stopped having.
+  await Promise.all(
+    Array.from(doc.images).map((image) =>
+      image.complete
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => {
+            image.addEventListener("load", () => resolve(), { once: true });
+            image.addEventListener("error", () => resolve(), { once: true });
+          }),
+    ),
+  );
   await new Promise((r) => setTimeout(r, 150));
 
   frame.contentWindow?.focus();
@@ -248,13 +283,14 @@ export async function exportWorkspace(
   notes: Note[],
   format: Extract<ExportFormat, "md" | "html" | "txt">,
   options: Omit<ExportOptions, "format" | "title">,
+  resolveImage?: ImageResolver,
 ): Promise<ExportResult> {
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
 
   for (const note of notes) {
     const title = (note.frontmatter.title as string) ?? note.path;
-    const result = await exportNote(note, { ...options, format, title });
+    const result = await exportNote(note, { ...options, format, title }, resolveImage);
     // Keep the repo's folder layout so the archive mirrors what the user sees.
     const path = note.path.replace(/\.mdx?$/i, `.${extensionFor(format)}`);
     zip.file(path, result.blob);

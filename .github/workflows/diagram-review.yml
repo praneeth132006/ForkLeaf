@@ -1,0 +1,117 @@
+name: Diagram review
+
+# Posts a link to a visual diff of the Mermaid diagrams a pull request changes.
+#
+# The point of the link is where it appears. Architecture diagrams rot because
+# nobody can review them: `- B --> C` next to `+ B --> D` in a markdown diff is
+# unreadable, so diagram changes get waved through. This puts the picture one
+# click from the review someone is already doing.
+#
+# Copy this file into your own repository to get the same comment on your pull
+# requests. Nothing is installed and no token of ours is involved — the comment
+# is written by the repository's own `GITHUB_TOKEN`, and the link is read by
+# whoever clicks it.
+
+on:
+  pull_request:
+    paths:
+      - "**.md"
+      - "**.mdx"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: diagram-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Find changed diagrams
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ask ForkLeaf what changed
+        id: diagrams
+        env:
+          # Point this at your own deployment if you run one.
+          FORKLEAF_URL: ${{ vars.FORKLEAF_URL || 'https://forkleaf.app' }}
+          REPOSITORY: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          owner="${REPOSITORY%%/*}"
+          repo="${REPOSITORY##*/}"
+
+          # The API answers with the diagrams that actually changed, having
+          # compared them as graphs — so a reformatted or reordered diagram
+          # comes back as nothing at all and no comment is posted.
+          if ! curl --fail --silent --show-error --max-time 60 \
+              "${FORKLEAF_URL}/api/gh/pr-diagrams?owner=${owner}&repo=${repo}&number=${NUMBER}" \
+              --output response.json; then
+            echo "Could not reach ForkLeaf; skipping the comment." >&2
+            echo "changed=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed="$(jq '[.files[].diagrams[]] | length' response.json)"
+          echo "changed=${changed}" >> "$GITHUB_OUTPUT"
+          echo "url=${FORKLEAF_URL}/diagram-diff?pr=${owner}/${repo}/${NUMBER}" >> "$GITHUB_OUTPUT"
+
+          # One markdown list item per changed diagram: the file it is in and
+          # what happened to it, which is the part worth reading in the
+          # notification email without opening anything.
+          jq -r '
+            .files[] | . as $file |
+            .diagrams[] |
+            "- `\($file.path)` — \(.summary)"
+          ' response.json > summary.md
+
+      - name: Comment on the pull request
+        if: steps.diagrams.outputs.changed != '0'
+        uses: actions/github-script@v7
+        # A pull request opened from a fork gets a read-only token, so the
+        # comment cannot be posted. That is a limitation of the event, not a
+        # failure of the review — the job should not go red for it.
+        continue-on-error: true
+        with:
+          script: |
+            const fs = require("node:fs");
+
+            const changed = Number("${{ steps.diagrams.outputs.changed }}");
+            const url = "${{ steps.diagrams.outputs.url }}";
+            const summary = fs.readFileSync("summary.md", "utf8").trim();
+
+            // A hidden marker so the comment is edited on the next push
+            // rather than a new one being added for every commit.
+            const marker = "<!-- forkleaf:diagram-review -->";
+
+            const body = [
+              marker,
+              `### ${changed} diagram${changed === 1 ? "" : "s"} changed`,
+              "",
+              summary,
+              "",
+              `[**See the visual diff →**](${url})`,
+              "",
+              "<sub>Compared as graphs, not as text: a renamed box reads as a rename, and reformatting reads as no change.</sub>",
+            ].join("\n");
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const existing = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+            });
+
+            const mine = existing.find((comment) => comment.body?.includes(marker));
+
+            if (mine) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

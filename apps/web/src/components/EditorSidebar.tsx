@@ -17,6 +17,17 @@ export interface EditorSidebarProps {
   activePath: string | null;
   onOpenNote: (path: string) => void;
   onCreateNote: (folder: string) => void;
+  /**
+   * The folder a new note belongs in when nobody has said otherwise — the
+   * folder of the note being edited.
+   *
+   * Without this, "New note" always meant "new note at the repository root",
+   * so someone working inside `SOC 101/Phishing analysis` who pressed the
+   * button got a file at the top of their repository. They then had to notice
+   * it had happened and drag it back, which on GitHub had already been
+   * committed to the wrong place.
+   */
+  currentFolder: string;
   onDeleteNote: (path: string) => void;
   onRenameNote: (path: string) => void;
   /** Make a folder inside `parent`. An empty string means the repository root. */
@@ -25,6 +36,10 @@ export interface EditorSidebarProps {
   onDeleteFolder: (path: string) => void;
   /** Moves a note into another folder, from a drag within the tree. */
   onMoveNote: (path: string, toFolder: string) => void;
+  /** Notes kept at the top, in the order they were put there. */
+  pinnedPaths: readonly string[];
+  onTogglePin: (path: string) => void;
+  onMovePin: (path: string, direction: -1 | 1) => void;
   user: SessionUser | null;
   onSignIn: () => void;
   onSignOut: () => void;
@@ -52,6 +67,13 @@ export function EditorSidebar(props: EditorSidebarProps) {
   // the top level meant a note could never be put in a subfolder from here.
   const folders = useMemo(() => collectFolders(props.tree), [props.tree]);
 
+  // A pinned note that has since been deleted or renamed elsewhere is dropped
+  // from the list rather than shown as a row that opens nothing.
+  const pinned = useMemo(() => {
+    const existing = new Set(collectFilePaths(props.tree));
+    return props.pinnedPaths.filter((path) => existing.has(path));
+  }, [props.pinnedPaths, props.tree]);
+
   if (props.collapsed) {
     return (
       <nav className="flex w-12 shrink-0 flex-col items-center gap-1 py-2.5">
@@ -74,7 +96,10 @@ export function EditorSidebar(props: EditorSidebarProps) {
             <path d="M2.5 4h11M2.5 8h11M2.5 12h11" />
           </svg>
         </RailButton>
-        <RailButton label="New note" onClick={() => props.onCreateNote("")}>
+        <RailButton
+          label={props.currentFolder ? `New note in ${props.currentFolder}` : "New note"}
+          onClick={() => props.onCreateNote(props.currentFolder)}
+        >
           <svg
             viewBox="0 0 16 16"
             className="h-4 w-4"
@@ -232,8 +257,12 @@ export function EditorSidebar(props: EditorSidebarProps) {
       <div className="relative flex items-stretch gap-1.5 px-2 pt-2">
         <button
           type="button"
-          onClick={() => props.onCreateNote("")}
-          title="New note (⌘⇧N)"
+          onClick={() => props.onCreateNote(props.currentFolder)}
+          title={
+            props.currentFolder
+              ? `New note in ${props.currentFolder} (⌘⇧N)`
+              : "New note at the top of the repository (⌘⇧N)"
+          }
           className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--fl-accent)] px-3 py-2 text-[13px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
         >
           <svg
@@ -252,8 +281,8 @@ export function EditorSidebar(props: EditorSidebarProps) {
 
         <button
           type="button"
-          onClick={() => props.onCreateFolder("")}
-          title="New folder"
+          onClick={() => props.onCreateFolder(props.currentFolder)}
+          title={props.currentFolder ? `New folder in ${props.currentFolder}` : "New folder"}
           aria-label="New folder"
           className="flex w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--fl-border)] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)]"
         >
@@ -294,6 +323,20 @@ export function EditorSidebar(props: EditorSidebarProps) {
             <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
               New note in
             </p>
+            {/* The root is a destination like any other, and now that the
+                button itself follows the open note it is the one place that
+                would otherwise have become unreachable from here. */}
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                props.onCreateNote("");
+                setShowFolders(false);
+              }}
+              className="block w-full truncate rounded-lg px-2.5 py-1.5 text-left text-[12.5px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
+            >
+              {props.activeWorkspace?.name ?? "Repository root"}
+            </button>
             {folders.map((folder) => (
               <button
                 key={folder}
@@ -362,6 +405,64 @@ export function EditorSidebar(props: EditorSidebarProps) {
 
       {/* ── Tree ──────────────────────────────────────────────────────── */}
       <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
+        {/* Pinned notes, above the tree.
+            A repository has no file order of its own — git sorts the tree —
+            so an order the app invented would have to be written into the
+            repository as a manifest nothing else reads. Pinning is the honest
+            version of "put these where I can reach them": a handful of notes,
+            in an order somebody chose, kept with the other per-device
+            preferences rather than committed. */}
+        {pinned.length > 0 && (
+          <>
+            <p className="px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
+              Pinned
+            </p>
+            <ul className="mb-2 space-y-px">
+              {pinned.map((path, index) => (
+                <li key={path} className="group/pin flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => props.onOpenNote(path)}
+                    title={path}
+                    className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-[var(--fl-elevated)] ${
+                      props.activePath === path
+                        ? "bg-[var(--fl-elevated)] text-[var(--fl-text)]"
+                        : "text-[var(--fl-muted)]"
+                    }`}
+                  >
+                    <PinGlyph />
+                    <span className="min-w-0 flex-1 truncate">{nameOf(path)}</span>
+                  </button>
+
+                  {/* Reordering is the only thing about this list anybody
+                      chose, so it is directly editable. Shown on hover and on
+                      keyboard focus — a control reachable only by hovering is
+                      not reachable by keyboard at all. */}
+                  <span className="flex shrink-0 opacity-0 transition-opacity focus-within:opacity-100 group-hover/pin:opacity-100">
+                    <PinMoveButton
+                      label={`Move ${nameOf(path)} up`}
+                      disabled={index === 0}
+                      onClick={() => props.onMovePin(path, -1)}
+                      direction="up"
+                    />
+                    <PinMoveButton
+                      label={`Move ${nameOf(path)} down`}
+                      disabled={index === pinned.length - 1}
+                      onClick={() => props.onMovePin(path, 1)}
+                      direction="down"
+                    />
+                    <PinMoveButton
+                      label={`Unpin ${nameOf(path)}`}
+                      onClick={() => props.onTogglePin(path)}
+                      direction="unpin"
+                    />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+
         <p className="px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
           {props.activeWorkspace?.isLocal ? "Notes" : "Repository"}
         </p>
@@ -374,6 +475,8 @@ export function EditorSidebar(props: EditorSidebarProps) {
           onCreateIn={props.onCreateNote}
           onCreateFolder={props.onCreateFolder}
           onMoveNote={props.onMoveNote}
+          onTogglePin={props.onTogglePin}
+          pinnedPaths={props.pinnedPaths}
           onRenameFolder={props.onRenameFolder}
           onDeleteFolder={props.onDeleteFolder}
           filter={filter}
@@ -505,6 +608,81 @@ function collectFolders(nodes: TreeNode[]): string[] {
 
   walk(nodes);
   return paths;
+}
+
+/** Every note path in the tree, for checking a pinned path still exists. */
+function collectFilePaths(nodes: TreeNode[]): string[] {
+  const paths: string[] = [];
+
+  const walk = (list: TreeNode[]) => {
+    for (const node of list) {
+      if (node.kind === "file") paths.push(node.path);
+      walk(node.children ?? []);
+    }
+  };
+
+  walk(nodes);
+  return paths;
+}
+
+/** `SOC 101/intro.md` → `intro`, which is what the row is called. */
+function nameOf(path: string): string {
+  return (path.split("/").pop() ?? path).replace(/\.mdx?$/i, "");
+}
+
+function PinGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5 shrink-0 text-[var(--fl-accent)]"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9.6 1.9 14.1 6.4l-2 .5-2.4 2.4-.4 3.2-3.4-3.4-3.9 3.9 3.9-3.9L2.5 5.7l3.2-.4L8.1 2.9z" />
+    </svg>
+  );
+}
+
+function PinMoveButton({
+  label,
+  onClick,
+  disabled,
+  direction,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  direction: "up" | "down" | "unpin";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className="rounded p-1 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] disabled:opacity-30 disabled:hover:bg-transparent"
+    >
+      <svg
+        viewBox="0 0 16 16"
+        aria-hidden="true"
+        className="h-3 w-3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {direction === "up" && <path d="M8 12.5v-9M4 7.5 8 3.5l4 4" />}
+        {direction === "down" && <path d="M8 3.5v9M4 8.5l4 4 4-4" />}
+        {direction === "unpin" && <path d="m4 4 8 8M12 4l-8 8" />}
+      </svg>
+    </button>
+  );
 }
 
 function RailButton({
