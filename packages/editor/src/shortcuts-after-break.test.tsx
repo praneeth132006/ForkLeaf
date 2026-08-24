@@ -53,8 +53,11 @@ function type(editor: Editor, text: string): void {
 
   for (const character of text) {
     const { from, to } = view.state.selection;
+    // The fifth argument is the transaction ProseMirror would have applied
+    // had no handler claimed the keystroke — passed through so this stays the
+    // real signature rather than a convenient subset of it.
     const handled = view.someProp("handleTextInput", (handler) =>
-      handler(view, from, to, character),
+      handler(view, from, to, character, () => view.state.tr.insertText(character, from, to)),
     );
     if (!handled) view.dispatch(view.state.tr.insertText(character, from, to));
   }

@@ -204,10 +204,6 @@ interface TreeItemProps {
     node: TreeNode,
   ) => void;
   onMoveNote?: (path: string, toFolder: string) => void;
-  /** Pins a note to the top of the sidebar, or unpins one already there. */
-  onTogglePin?: (path: string) => void;
-  /** Paths currently pinned, so the menu can say which way it will go. */
-  pinnedPaths?: readonly string[];
   dropTarget: string | null;
   onDropTarget: (path: string | null) => void;
   forceOpen: boolean;
@@ -229,8 +225,6 @@ const TreeItem = memo(function TreeItem({
   onOpen,
   onContextMenu,
   onMoveNote,
-  onTogglePin,
-  pinnedPaths,
   dropTarget,
   onDropTarget,
   forceOpen,

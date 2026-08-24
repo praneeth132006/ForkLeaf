@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import type { CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
@@ -35,7 +34,6 @@ import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
 import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { StorageBlocked } from "@/components/StorageBlocked";
 import { BootScreen } from "@/components/BootScreen";
-import { ForkLeafLogo } from "@/components/Brand";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { signOut } from "@/lib/gateway";
 import { assetPathFor, relativeSrc, resolveImageSrc, uploadImage } from "@/lib/assets";
