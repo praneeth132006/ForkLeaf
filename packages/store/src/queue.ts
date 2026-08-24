@@ -16,6 +16,7 @@ export interface CoalesceInput {
   op: "upsert" | "delete" | "rename";
   toPath?: string;
   content?: string;
+  encoding?: "utf8" | "base64";
   baseSha: string | null;
   now: string;
   /**
@@ -85,6 +86,7 @@ function upsert(
       path: input.path,
       op: "upsert",
       ...(input.content !== undefined ? { content: input.content } : {}),
+      ...(input.encoding !== undefined ? { encoding: input.encoding } : {}),
       // Keep the SHA we originally branched from. Adopting a newer one would
       // silently mask a remote edit that landed while we were typing.
       baseSha: prior ? prior.baseSha : input.baseSha,

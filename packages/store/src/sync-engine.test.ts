@@ -3,6 +3,7 @@ import type { Note, SyncMode, TreeNode } from "@forkleaf/types";
 import { SyncEngine } from "./sync-engine";
 import { MemoryDatabase } from "./memory-db";
 import { coalesce, describeChanges } from "./queue";
+import { plainly } from "./sync-engine";
 import type { RemoteCommitInput, RemoteGateway } from "./ports";
 
 // ─── Test doubles ───────────────────────────────────────────────────────────
@@ -255,6 +256,97 @@ describe("queue coalescing", () => {
     expect(queue).toHaveLength(1);
     expect(queue[0]!.op).toBe("rename");
     expect(queue[0]!.content).toBe("v2");
+  });
+});
+
+/**
+ * What the status bar says when a push fails.
+ *
+ * GitHub's own words for a refused commit are things like
+ * `GitRPC::BadObjectState`, which used to be printed verbatim to somebody who
+ * was only trying to write notes.
+ */
+describe("a failure reported to the reader", () => {
+  it("says what happened rather than what the server called it", async () => {
+    const ctx = setup();
+    ctx.gateway.rejects.add("a.md");
+
+    await ctx.engine.recordUpsert(makeNote({ path: "a.md", baseSha: null }), "a");
+    await ctx.timers.tick();
+
+    expect(ctx.engine.state.lastError).not.toContain("GitRPC");
+    expect(ctx.engine.state.lastError).toContain("safe on this device");
+    // The server's own words are kept, for a tooltip and for bug reports.
+    expect(ctx.engine.state.lastErrorDetail).toContain("BadObjectState");
+  });
+
+  it("names the fix when the sign-in is what expired", () => {
+    expect(plainly({ code: "unauthorized", status: 401 })).toContain("Sign in again");
+  });
+
+  it("has something useful to say about an error it has never seen", () => {
+    expect(plainly(new Error("something nobody predicted"))).toContain("saved on this device");
+  });
+});
+
+/**
+ * Images, queued the way notes are.
+ *
+ * A pasted screenshot used to be posted straight to GitHub outside this queue,
+ * so an upload that failed — offline, a tab closed a second later — was lost in
+ * silence while the note referencing it synced perfectly well. What was left on
+ * GitHub was a note pointing at a file that had never been committed.
+ */
+describe("images waiting to be pushed", () => {
+  it("goes up in the same commit as the note that uses it", async () => {
+    const ctx = setup();
+
+    await ctx.engine.recordUpsert(makeNote({ path: "a.md", baseSha: null }), "![s](assets/s.png)");
+    await ctx.engine.recordAssetUpsert("ws", "assets/s.png", "aGVsbG8=");
+
+    await ctx.timers.tick();
+
+    expect(ctx.gateway.commits).toHaveLength(1);
+    const changes = ctx.gateway.commits[0]!.changes;
+    expect(changes.map((c) => c.path).sort()).toEqual(["a.md", "assets/s.png"]);
+    expect(changes.find((c) => c.path === "assets/s.png")?.encoding).toBe("base64");
+  });
+
+  it("picks up an image that was left behind before it ever reached GitHub", async () => {
+    const ctx = setup();
+
+    await ctx.db.putAsset({
+      id: "ws::assets/old.png",
+      workspaceId: "ws",
+      path: "assets/old.png",
+      mimeType: "image/png",
+      data: "aGVsbG8=",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      pushed: false,
+    });
+
+    expect(await ctx.engine.recoverStrandedAssets("ws")).toBe(1);
+    await ctx.timers.tick();
+
+    expect(ctx.gateway.commits[0]!.changes[0]!.path).toBe("assets/old.png");
+  });
+
+  it("survives being pasted with no connection", async () => {
+    const ctx = setup({ online: false });
+    ctx.setOnline(false);
+
+    await ctx.engine.recordAssetUpsert("ws", "assets/s.png", "aGVsbG8=");
+    await ctx.timers.tick();
+
+    expect(ctx.gateway.commits).toHaveLength(0);
+    // Still queued, so it goes up when the connection does.
+    expect((await ctx.db.listQueue("ws")).map((item) => item.path)).toEqual(["assets/s.png"]);
+
+    ctx.setOnline(true);
+    await ctx.engine.flushNow();
+
+    expect(ctx.gateway.commits).toHaveLength(1);
+    expect(ctx.gateway.commits[0]!.changes[0]!.path).toBe("assets/s.png");
   });
 });
 

@@ -129,10 +129,16 @@ export function Editor() {
         Moving a note takes its images with it. The link in the file is relative to where the note
         sits — that is what makes it work on github.com — so ForkLeaf rewrites those links as part
         of the move; the image files themselves stay where they are, since other notes may be using
-        them. If a note written before this still shows broken images, run{" "}
-        <strong>Find this note&rsquo;s missing images</strong> from <Code>⌘K</Code>: it searches the
-        repository for the files by name and repoints the ones it can identify with certainty.
+        them.
       </P>
+
+      <Note>
+        A note written elsewhere — or moved by an older version of ForkLeaf — can point at image
+        paths that hold nothing, and every picture in it shows as a broken box. Opening such a note
+        repairs it: ForkLeaf looks for the files by name, repoints the ones it can identify with
+        certainty, and says how many it moved. Nothing that already works is touched, and a name
+        that matches two different files is left alone rather than guessed at.
+      </Note>
 
       <H2 id="videos">YouTube videos</H2>
       <P>

@@ -2,6 +2,7 @@ import { type NextRequest } from "next/server";
 import type { FileChange } from "@forkleaf/github-client";
 import { handle, requireClient, readRepoRefFromBody, normalize, ApiError } from "@/lib/api-helpers";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { imageTypeFor, MAX_IMAGE_BYTES } from "@/lib/media";
 
 /** Largest single note we will accept, to keep one bad paste from wedging a repo. */
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -19,6 +20,7 @@ interface CommitBody {
     path?: string;
     toPath?: string;
     content?: string;
+    encoding?: string;
   }[];
 }
 
@@ -58,6 +60,14 @@ export async function POST(request: NextRequest) {
 
         case "upsert": {
           const content = change.content ?? "";
+
+          // An image travels through the same queue as a note, so it arrives
+          // here too — as bytes rather than text.
+          if (change.encoding === "base64") {
+            assertImage(content, path);
+            return { op: "upsert", path, content, encoding: "base64" };
+          }
+
           assertSize(content, path);
           return { op: "upsert", path, content };
         }
@@ -84,6 +94,35 @@ export async function POST(request: NextRequest) {
 
     return result;
   });
+}
+
+/**
+ * Checks an image the same way the single-image route always has.
+ *
+ * The extension decides how the file is served back, so an unsupported one is
+ * refused here rather than becoming a file nothing can render — and base64 is
+ * verified as base64 before it is handed to GitHub.
+ */
+function assertImage(content: string, path: string): void {
+  if (!imageTypeFor(path)) {
+    throw new ApiError(
+      400,
+      "validation",
+      "Only PNG, JPEG, GIF, WebP, AVIF, BMP and ICO images can be uploaded.",
+    );
+  }
+
+  const packed = content.replace(/\s/g, "");
+  if (!packed) throw new ApiError(400, "validation", "The image is empty.");
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(packed)) {
+    throw new ApiError(400, "validation", "The image is not valid base64.");
+  }
+
+  // Base64 carries three bytes in every four characters; no need to decode to
+  // know whether it is over the limit.
+  if (Math.floor((packed.length * 3) / 4) > MAX_IMAGE_BYTES) {
+    throw new ApiError(413, "validation", `${path} is larger than 10 MB.`);
+  }
 }
 
 function assertSize(content: string, path: string): void {
