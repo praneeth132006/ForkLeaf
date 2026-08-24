@@ -193,14 +193,26 @@ export class NoteRepository {
   /** Saves an edit locally and queues it for GitHub. Returns immediately. */
   async saveNote(note: Note, content: string, frontmatter?: NoteFrontmatter): Promise<Note> {
     const nextFrontmatter = this.stamp(frontmatter ?? note.frontmatter);
+
+    // The note passed from the UI might have a stale baseSha if a background
+    // sync finished and updated the database since the UI last read it.
+    // Overwriting the database with the UI's stale baseSha causes the next
+    // sync to falsely detect a conflict. Read the current baseSha from the
+    // store first.
+    const current = await this.db.getNote(`${note.workspaceId}::${note.path}`);
+    const baseSha = current?.baseSha ?? note.baseSha;
+
     const updated: Note = {
       ...note,
+      baseSha,
       content,
       frontmatter: nextFrontmatter,
       updatedAt: this.now().toISOString(),
       dirty: true,
     };
 
+    // The IndexedDB write happens inside recordUpsert, in the same transaction
+    // as the queue write.
     await this.sync.recordUpsert(updated, serializeDocument(content, nextFrontmatter));
     return updated;
   }
@@ -245,13 +257,17 @@ export class NoteRepository {
   }
 
   async deleteNote(note: Note): Promise<void> {
-    await this.sync.recordDelete(note);
+    const current = await this.db.getNote(note.id);
+    await this.sync.recordDelete(current ?? note);
   }
 
   async renameNote(note: Note, toPath: string): Promise<Note> {
-    const content = serializeDocument(note.content, note.frontmatter);
-    await this.sync.recordRename(note, toPath, content);
-    return { ...note, id: noteId(note.workspaceId, toPath), path: toPath };
+    const current = await this.db.getNote(note.id);
+    const freshNote = current ?? note;
+
+    const content = serializeDocument(freshNote.content, freshNote.frontmatter);
+    await this.sync.recordRename(freshNote, toPath, content);
+    return { ...freshNote, id: noteId(freshNote.workspaceId, toPath), path: toPath };
   }
 
   /** Persists the per-note editor mode without queueing a GitHub commit. */
