@@ -33,13 +33,64 @@ const CUSTOM_KEY = "forkleaf-custom-accent";
 
 const listeners = new Set<() => void>();
 
+/**
+ * Applies a theme choice made in another tab.
+ *
+ * A `storage` event tells this tab the value changed, but the snapshot reads
+ * the DOM — which no other tab can write to — so notifying alone re-rendered
+ * with the old theme still on `<html>`. The attribute has to be re-applied
+ * here. That matters now that a diagram can be edited in a window of its own:
+ * a diagram is drawn in the theme's palette, and having it drawn in the other
+ * one because the toggle was pressed in the note tab is exactly the mismatch
+ * the palette work exists to avoid.
+ */
+function adoptStoredTheme(event: StorageEvent): void {
+  if (
+    event.key !== null &&
+    event.key !== STORAGE_KEY &&
+    event.key !== PALETTE_KEY &&
+    event.key !== CUSTOM_KEY
+  ) {
+    return;
+  }
+
+  const root = document.documentElement;
+
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    const theme: Theme = stored === "dark" || stored === "light" ? stored : getSnapshot();
+    root.dataset.theme = theme;
+
+    // The accent is chosen separately and stored separately, so it is adopted
+    // separately — a tab that only learns about the mode ends up in the right
+    // mode wearing the other tab's accent.
+    const storedPalette = window.localStorage.getItem(PALETTE_KEY);
+    if (
+      storedPalette &&
+      (PALETTES.some((palette) => palette.id === storedPalette) || storedPalette === "custom")
+    ) {
+      root.dataset.palette = storedPalette;
+    }
+
+    applyAccent(root, accentFor(paletteSnapshot(), theme, readCustom()));
+  } catch {
+    // Storage went away mid-session; this tab simply keeps its own theme.
+  }
+}
+
 function subscribe(onChange: () => void): () => void {
   listeners.add(onChange);
+
   // Keep other tabs in step.
-  window.addEventListener("storage", onChange);
+  const onStorage = (event: StorageEvent) => {
+    adoptStoredTheme(event);
+    onChange();
+  };
+
+  window.addEventListener("storage", onStorage);
   return () => {
     listeners.delete(onChange);
-    window.removeEventListener("storage", onChange);
+    window.removeEventListener("storage", onStorage);
   };
 }
 
