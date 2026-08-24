@@ -37,6 +37,16 @@ export { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 export { ResolvedImage, type ResolvedImageOptions } from "./extensions/ResolvedImage";
 
 export { DiagramStudio, type DiagramStudioProps, type StudioView } from "./mermaid/DiagramStudio";
+export {
+  diagramPopoutSupported,
+  useDiagramPopoutHost,
+  useDiagramPopoutSession,
+  sweepSessions,
+  DIAGRAM_POPOUT_PATH,
+  type DiagramPopoutHost,
+  type DiagramPopoutSession,
+  type DiagramLinkStatus,
+} from "./mermaid/popout";
 export { VisualBuilder, type VisualBuilderProps } from "./mermaid/VisualBuilder";
 export { SequenceCanvas, type SequenceCanvasProps } from "./mermaid/SequenceCanvas";
 export { TemplateGallery, type TemplateGalleryProps } from "./mermaid/TemplateGallery";
@@ -46,6 +56,6 @@ export { Cheatsheet, type CheatsheetProps } from "./mermaid/Cheatsheet";
 export { useDiagramSvg } from "./mermaid/useDiagramSvg";
 export { useDocumentTheme, type DocumentTheme } from "./useDocumentTheme";
 
-export { MermaidBlock } from "./extensions/MermaidBlock";
+export { MermaidBlock, type MermaidBlockOptions } from "./extensions/MermaidBlock";
 export { markdownSlashCommands, markdownSlashSource } from "./codemirror/slash-markdown";
 export { readSlashState, type SlashState } from "./extensions/SlashCommands";

@@ -29,6 +29,20 @@ import { SequenceCanvas } from "./SequenceCanvas";
 /** What the right-hand pane is showing. */
 export type StudioView = "canvas" | "preview";
 
+/**
+ * How the studio is dressed.
+ *
+ * `flat` is one continuous slab divided by hairlines — right for a dialog,
+ * which is already a card sitting on top of the note.
+ *
+ * `layered` gives the toolbar and each pane a surface of its own, separated by
+ * a gap, the way the editor treats its sidebar, document and properties
+ * panels. That reading only works when the studio owns the whole window: it is
+ * the difference between "a panel with two halves" and "two panels", and the
+ * second is what a screen full of diagram should look like.
+ */
+export type StudioChrome = "flat" | "layered";
+
 export interface DiagramStudioProps {
   code: string;
   onChange: (code: string) => void;
@@ -36,12 +50,27 @@ export interface DiagramStudioProps {
   theme?: "light" | "dark";
   /** Which pane the right-hand side opens on. */
   initialView?: StudioView;
+  /** How the panes are dressed. See `StudioChrome`. */
+  chrome?: StudioChrome;
+  /**
+   * Where the divider starts, as a percentage of the width given to the
+   * source. A window with room for a real canvas should hand the canvas that
+   * room; a dialog splits closer to the middle, because its source pane is
+   * narrow enough to wrap without it.
+   */
+  initialSplit?: number;
 }
 
 /** Where the divider sits, as a percentage of the studio's width. */
 const DEFAULT_SPLIT = 46;
 const MIN_SPLIT = 22;
 const MAX_SPLIT = 78;
+
+/** Keeps a caller's starting split inside the range the divider can reach. */
+function clampSplit(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_SPLIT;
+  return Math.min(MAX_SPLIT, Math.max(MIN_SPLIT, value));
+}
 
 /**
  * The diagram editing surface. Callers render it inside a modal.
@@ -66,7 +95,10 @@ export function DiagramStudio({
   onChange,
   theme,
   initialView = "canvas",
+  chrome = "flat",
+  initialSplit = DEFAULT_SPLIT,
 }: DiagramStudioProps) {
+  const layered = chrome === "layered";
   const documentTheme = useDocumentTheme();
   const resolvedTheme = theme ?? documentTheme;
 
@@ -90,7 +122,7 @@ export function DiagramStudio({
   const [showSource, setShowSource] = useState(true);
   const [showDiagram, setShowDiagram] = useState(true);
 
-  const [split, setSplit] = useState(DEFAULT_SPLIT);
+  const [split, setSplit] = useState(() => clampSplit(initialSplit));
   const [dragging, setDragging] = useState(false);
 
   const [svg, setSvg] = useState<string | null>(null);
@@ -248,9 +280,19 @@ export function DiagramStudio({
   const bothPanes = showSource && showDiagram;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      className={`flex min-h-0 flex-1 flex-col ${
+        // Layered: the gap and the padding are what make the panes read as
+        // separate surfaces rather than one slab split by a hairline.
+        layered ? "gap-2 bg-[var(--fl-bg)] p-2" : ""
+      }`}
+    >
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--fl-border)] bg-[var(--fl-surface)] px-4 py-2.5">
+      <div
+        className={`flex shrink-0 flex-wrap items-center gap-2 bg-[var(--fl-surface)] px-4 py-2.5 ${
+          layered ? "fl-panel" : "border-b border-[var(--fl-border)]"
+        }`}
+      >
         <div
           className="flex rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] p-0.5"
           role="group"
@@ -311,10 +353,18 @@ export function DiagramStudio({
           Stacked, the whole body scrolls: two panes that each need a few
           hundred pixels do not both fit in a dialog, and clipping them is
           worse than letting the reader scroll to the one they are using. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-visible">
+      <div
+        className={`flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-visible ${
+          layered ? "gap-2" : ""
+        }`}
+      >
         {showSource && (
           <div
-            className={`flex min-h-[200px] min-w-0 flex-col border-b border-[var(--fl-border)] lg:border-b-0 ${
+            className={`flex min-h-[200px] min-w-0 flex-col ${
+              layered
+                ? "fl-panel bg-[var(--fl-surface)]"
+                : "border-b border-[var(--fl-border)] lg:border-b-0"
+            } ${
               bothPanes
                 ? // Stacked, the source is the pane that gives way: it stays
                   // readable at a few lines, while a canvas needs room to be
@@ -364,16 +414,32 @@ export function DiagramStudio({
             }}
             // A 1px rule is a dexterity test, so the hit area is 9px with the
             // visible line drawn inside it.
-            className="group relative hidden w-[9px] shrink-0 cursor-col-resize focus:outline-none lg:block"
+            className={`group relative hidden shrink-0 cursor-col-resize focus:outline-none lg:block ${
+              // Layered: the gap between two panels IS the handle, so it needs
+              // no rule drawn down it — just a grip that appears where the
+              // pointer already is.
+              layered ? "-mx-1 w-[10px]" : "w-[9px]"
+            }`}
           >
-            <span
-              aria-hidden="true"
-              className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-colors ${
-                dragging
-                  ? "bg-[var(--fl-accent)]"
-                  : "bg-[var(--fl-border)] group-hover:bg-[var(--fl-accent)] group-focus:bg-[var(--fl-accent)]"
-              }`}
-            />
+            {layered ? (
+              <span
+                aria-hidden="true"
+                className={`absolute left-1/2 top-1/2 h-10 w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full transition-all ${
+                  dragging
+                    ? "bg-[var(--fl-accent)]"
+                    : "bg-[var(--fl-border-strong)] opacity-0 group-hover:opacity-100 group-focus:bg-[var(--fl-accent)] group-focus:opacity-100"
+                }`}
+              />
+            ) : (
+              <span
+                aria-hidden="true"
+                className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-colors ${
+                  dragging
+                    ? "bg-[var(--fl-accent)]"
+                    : "bg-[var(--fl-border)] group-hover:bg-[var(--fl-accent)] group-focus:bg-[var(--fl-accent)]"
+                }`}
+              />
+            )}
           </div>
         )}
 
@@ -381,7 +447,11 @@ export function DiagramStudio({
             the two toolbar rows, the hint strip and the inspector is still a
             canvas. */}
         {showDiagram && (
-          <div className="flex min-h-[420px] min-w-0 flex-1 flex-col bg-[var(--fl-surface)]">
+          <div
+            className={`flex min-h-[420px] min-w-0 flex-1 flex-col bg-[var(--fl-surface)] ${
+              layered ? "fl-panel" : ""
+            }`}
+          >
             <div className="flex shrink-0 items-center gap-2 px-4 pb-1 pt-2.5">
               <PaneHeading bare>
                 {effectiveView === "canvas" ? "Canvas — drag to edit" : "Preview"}
