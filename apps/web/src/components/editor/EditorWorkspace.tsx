@@ -118,6 +118,17 @@ export function EditorWorkspace() {
   const words = useMemo(() => (note ? documentStats(note.content).words : 0), [note]);
 
   const notePath = note?.path ?? null;
+
+  /**
+   * The folder the reader is currently working in.
+   *
+   * The note that is open, which is the only thing on screen that says where
+   * "here" is. Everything that creates something — the button, the shortcut,
+   * the command palette — starts from this rather than from the repository
+   * root, because a note made while you are three folders deep belongs three
+   * folders deep.
+   */
+  const currentFolder = notePath ? dirname(notePath) : "";
   const takenPaths = useMemo(() => flattenTree(notebook.tree), [notebook.tree]);
 
   /**
@@ -297,10 +308,16 @@ export function EditorWorkspace() {
   const handleCreate = useCallback(
     (folder: string) => {
       setPrompt({
-        title: "New note",
+        title: folder ? `New note in ${folder}` : "New note",
         label: "Title",
         initialValue: "Untitled note",
         confirmLabel: "Create",
+        // Where it lands, stated before it lands there. A note created into
+        // the wrong folder on a connected repository is already a commit by
+        // the time anybody notices.
+        body: folder
+          ? `Saved as a file inside “${folder}”.`
+          : "Saved at the top of your repository. Open a note first to create alongside it.",
         onConfirm: async (value) => {
           await notebook.createNote(value || "Untitled note", folder);
           track("note_created");
@@ -368,7 +385,9 @@ export function EditorWorkspace() {
         label: "Folder name",
         initialValue: "",
         confirmLabel: "Create",
-        body: "Folders are made of the notes inside them, so this one appears in your repository as soon as it holds its first note.",
+        body:
+          "Folders are made of the notes inside them, so this one appears in your repository as soon as it holds its first note. " +
+          "Use slashes to make several at once, as in “SOC 101/Phishing analysis”.",
         onConfirm: async (value) => {
           const name = value.trim();
           if (!name) return;
@@ -458,7 +477,7 @@ export function EditorWorkspace() {
         group: "Notes",
         hint: "⌘⇧N",
         keywords: "create add write",
-        run: () => handleCreate(""),
+        run: () => handleCreate(currentFolder),
       },
       {
         id: "dashboard",
@@ -615,6 +634,7 @@ export function EditorWorkspace() {
     router,
     toggleTheme,
     handleCreate,
+    currentFolder,
     handleRename,
     handleDelete,
     localFiles,
@@ -668,7 +688,7 @@ export function EditorWorkspace() {
         case "n":
           if (event.shiftKey) {
             event.preventDefault();
-            handleCreate("");
+            handleCreate(currentFolder);
           }
           break;
 
@@ -701,7 +721,7 @@ export function EditorWorkspace() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [note, notebook, handleCreate, router, localFiles, saveEverything, title]);
+  }, [note, notebook, handleCreate, currentFolder, router, localFiles, saveEverything, title]);
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -728,6 +748,7 @@ export function EditorWorkspace() {
             activePath={note?.path ?? null}
             onOpenNote={notebook.openNote}
             onCreateNote={handleCreate}
+            currentFolder={currentFolder}
             onDeleteNote={handleDelete}
             onRenameNote={handleRename}
             onCreateFolder={handleCreateFolder}

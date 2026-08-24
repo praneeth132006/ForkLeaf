@@ -17,6 +17,17 @@ export interface EditorSidebarProps {
   activePath: string | null;
   onOpenNote: (path: string) => void;
   onCreateNote: (folder: string) => void;
+  /**
+   * The folder a new note belongs in when nobody has said otherwise — the
+   * folder of the note being edited.
+   *
+   * Without this, "New note" always meant "new note at the repository root",
+   * so someone working inside `SOC 101/Phishing analysis` who pressed the
+   * button got a file at the top of their repository. They then had to notice
+   * it had happened and drag it back, which on GitHub had already been
+   * committed to the wrong place.
+   */
+  currentFolder: string;
   onDeleteNote: (path: string) => void;
   onRenameNote: (path: string) => void;
   /** Make a folder inside `parent`. An empty string means the repository root. */
@@ -74,7 +85,10 @@ export function EditorSidebar(props: EditorSidebarProps) {
             <path d="M2.5 4h11M2.5 8h11M2.5 12h11" />
           </svg>
         </RailButton>
-        <RailButton label="New note" onClick={() => props.onCreateNote("")}>
+        <RailButton
+          label={props.currentFolder ? `New note in ${props.currentFolder}` : "New note"}
+          onClick={() => props.onCreateNote(props.currentFolder)}
+        >
           <svg
             viewBox="0 0 16 16"
             className="h-4 w-4"
@@ -232,8 +246,12 @@ export function EditorSidebar(props: EditorSidebarProps) {
       <div className="relative flex items-stretch gap-1.5 px-2 pt-2">
         <button
           type="button"
-          onClick={() => props.onCreateNote("")}
-          title="New note (⌘⇧N)"
+          onClick={() => props.onCreateNote(props.currentFolder)}
+          title={
+            props.currentFolder
+              ? `New note in ${props.currentFolder} (⌘⇧N)`
+              : "New note at the top of the repository (⌘⇧N)"
+          }
           className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--fl-accent)] px-3 py-2 text-[13px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
         >
           <svg
@@ -252,8 +270,8 @@ export function EditorSidebar(props: EditorSidebarProps) {
 
         <button
           type="button"
-          onClick={() => props.onCreateFolder("")}
-          title="New folder"
+          onClick={() => props.onCreateFolder(props.currentFolder)}
+          title={props.currentFolder ? `New folder in ${props.currentFolder}` : "New folder"}
           aria-label="New folder"
           className="flex w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--fl-border)] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)]"
         >
@@ -294,6 +312,20 @@ export function EditorSidebar(props: EditorSidebarProps) {
             <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
               New note in
             </p>
+            {/* The root is a destination like any other, and now that the
+                button itself follows the open note it is the one place that
+                would otherwise have become unreachable from here. */}
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                props.onCreateNote("");
+                setShowFolders(false);
+              }}
+              className="block w-full truncate rounded-lg px-2.5 py-1.5 text-left text-[12.5px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
+            >
+              {props.activeWorkspace?.name ?? "Repository root"}
+            </button>
             {folders.map((folder) => (
               <button
                 key={folder}
