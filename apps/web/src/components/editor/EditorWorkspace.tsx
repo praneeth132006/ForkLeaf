@@ -167,21 +167,34 @@ export function EditorWorkspace() {
           throw new Error("Open a note before adding an image to it.");
         }
 
-        if (workspace.isLocal) {
-          const repoPath = assetPathFor(workspace, file, takenPaths);
-          await notebook.putAsset(repoPath, file, false);
-          return relativeSrc(notePath, repoPath);
-        }
+        const repoPath = assetPathFor(workspace, file, takenPaths, notePath);
 
-        const { markdownSrc, repoPath } = await uploadImage({
-          workspace,
-          notePath,
-          file,
-          taken: takenPaths,
-        });
-        // Cached so it renders straight away, rather than after a round trip
-        // through the proxy for bytes this tab already has in hand.
-        await notebook.putAsset(repoPath, file, true);
+        // On this device first, always — including for a connected repository.
+        //
+        // Pasting a screenshot used to wait on a full commit to GitHub before
+        // anything appeared, so on a phone or a slow connection the editor sat
+        // there doing nothing for seconds and the paste read as broken. The
+        // bytes are already in hand; storing them locally is instant and gives
+        // the image a URL to render from, which is the whole point of a
+        // local-first app. The commit is the same commit, made a moment later.
+        await notebook.putAsset(repoPath, file, false);
+        const markdownSrc = relativeSrc(notePath, repoPath);
+
+        if (workspace.isLocal) return markdownSrc;
+
+        // Pushed in the background. A failure here is worth saying out loud —
+        // the note renders either way, so silence would leave someone
+        // believing an image had been committed when it had not.
+        void uploadImage({ workspace, notePath, file, taken: takenPaths })
+          .then(() => notebook.putAsset(repoPath, file, true))
+          .catch((error: unknown) => {
+            notebook.reportError(
+              error instanceof Error
+                ? `That image is on this device but has not reached GitHub: ${error.message}`
+                : "That image is on this device but has not reached GitHub.",
+            );
+          });
+
         return markdownSrc;
       },
     }),

@@ -1066,6 +1066,14 @@ export function useNotebook(request: NotebookRequest = {}) {
       putAsset,
       dismissError: () => patch({ error: null }),
       /**
+       * Surfaces a failure from work that finished after its caller returned.
+       *
+       * Background work has nobody left to throw to. A pasted image that is
+       * saved on this device but never reaches GitHub has to say so, or
+       * somebody closes the tab believing it was committed.
+       */
+      reportError: (message: string) => patch({ error: message }),
+      /**
        * The tree as the sidebar should draw it: what is in the repository,
        * plus the folders made here that are still waiting for their first note.
        */

@@ -7,6 +7,7 @@ import {
   resolveAgainstNote,
   resolveImageSrc,
   isImagePath,
+  assetPathFor,
 } from "./assets";
 import { extensionForFile, extensionOf, imageTypeFor, safeAssetName } from "./media";
 
@@ -136,5 +137,49 @@ describe("media", () => {
   it("reads no extension when there is none", () => {
     expect(extensionOf("Makefile")).toBe("");
     expect(extensionOf("dir.with.dots/file")).toBe("");
+  });
+});
+
+describe("assetPathFor", () => {
+  /** A stand-in for a pasted screenshot, which is always called this. */
+  const screenshot = new File([new Uint8Array([1, 2, 3])], "image.png", { type: "image/png" });
+
+  it("files an image beside the note that uses it", () => {
+    const path = assetPathFor(repo, screenshot, [], "SOC 101/Phishing analysis/introduction.md");
+
+    expect(path.startsWith("SOC 101/Phishing analysis/assets/")).toBe(true);
+    expect(path.endsWith(".png")).toBe(true);
+  });
+
+  it("uses the repository root for a note that sits there", () => {
+    expect(assetPathFor(repo, screenshot, [], "README.md").startsWith("assets/")).toBe(true);
+  });
+
+  it("falls back to the workspace directory when there is no note", () => {
+    const nested = {
+      ...repo,
+      repo: { ...repo.repo, directory: "notes" },
+    } as Workspace;
+
+    expect(assetPathFor(nested, screenshot, []).startsWith("notes/assets/")).toBe(true);
+  });
+
+  it("dates the file, so a week of screenshots is not one heap", () => {
+    const path = assetPathFor(repo, screenshot, [], "a.md");
+    const today = new Date().toISOString().slice(0, 10);
+
+    expect(path).toContain(`/${today}-`);
+  });
+
+  it("never reuses a path that is already taken", () => {
+    const first = assetPathFor(repo, screenshot, [], "a.md");
+    const second = assetPathFor(repo, screenshot, [first], "a.md");
+
+    expect(second).not.toBe(first);
+  });
+
+  it("refuses a file that is not an image it can store", () => {
+    const text = new File(["x"], "notes.txt", { type: "text/plain" });
+    expect(() => assetPathFor(repo, text, [], "a.md")).toThrow();
   });
 });
