@@ -81,7 +81,11 @@ export function Editor() {
           ["Divider", "Horizontal rule", <Code key="h">---</Code>],
           ["Link", "Asks for the text and the address", <Code key="i">[](…)</Code>],
           ["Image", "Opens the image picker", <Code key="j">![](…)</Code>],
-          ["YouTube video", "Asks for the video's address", <Code key="k">https://youtu.be/…</Code>],
+          [
+            "YouTube video",
+            "Asks for the video's address",
+            <Code key="k">https://youtu.be/…</Code>,
+          ],
         ]}
       />
       <P>
