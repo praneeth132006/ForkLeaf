@@ -267,6 +267,7 @@ export class NoteRepository {
     const matches = Array.from(target.content.matchAll(/!\[.*?\]\(([^)]+)\)/g));
     for (const match of matches) {
       const src = match[1];
+      if (!src) continue;
       // Simple check to ensure it's a repo-relative path, not an external URL.
       if (!/^[a-z][a-z0-9+.-]*:/i.test(src) && !src.startsWith("//") && !src.startsWith("/")) {
         const assetPath = normalizePath(`${dirname(target.path)}/${src}`);
