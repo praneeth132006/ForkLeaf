@@ -6,7 +6,9 @@ import {
   normalize,
   readOwnerRepo,
   readRepoRef,
+  withRateLimitAdvice,
 } from "./api-helpers";
+import { GitHubError } from "@forkleaf/github-client";
 
 /**
  * These are the input guards on the GitHub proxy routes.
@@ -114,5 +116,40 @@ describe("normalize", () => {
     expect(normalize("../../secrets.md")).toBe("secrets.md");
     expect(normalize("/docs/./notes/../a.md")).toBe("docs/notes/a.md");
     expect(normalize("")).toBe("");
+  });
+});
+
+describe("withRateLimitAdvice", () => {
+  const rateLimited = () =>
+    Promise.reject(new GitHubError("rate-limited", "API rate limit exceeded"));
+
+  it("passes a successful call straight through", async () => {
+    await expect(withRateLimitAdvice(async () => "ok", false)).resolves.toBe("ok");
+  });
+
+  it("tells a signed-out reader the thing that actually helps them", async () => {
+    await expect(withRateLimitAdvice(rateLimited, false)).rejects.toMatchObject({
+      status: 429,
+      code: "rate-limited",
+    });
+
+    // Not GitHub's wording: the useful fact is that signing in fixes it.
+    await withRateLimitAdvice(rateLimited, false).catch((error: ApiError) => {
+      expect(error.message).toContain("Sign in with GitHub");
+      expect(error.message).toContain("5,000");
+    });
+  });
+
+  it("leaves the error alone for somebody already signed in", async () => {
+    // Their limit is 5,000 an hour, so signing in is not the advice — this is
+    // a real rate limit and should be reported as one.
+    await expect(withRateLimitAdvice(rateLimited, true)).rejects.toBeInstanceOf(GitHubError);
+  });
+
+  it("never rewrites an unrelated failure", async () => {
+    const notFound = () => Promise.reject(new GitHubError("not-found", "Not Found"));
+
+    await expect(withRateLimitAdvice(notFound, false)).rejects.toBeInstanceOf(GitHubError);
+    await expect(withRateLimitAdvice(notFound, false)).rejects.toMatchObject({ code: "not-found" });
   });
 });

@@ -3,7 +3,7 @@ import { GitHubClient } from "@forkleaf/github-client";
 import { extractMermaidBlocks } from "@forkleaf/markdown-engine";
 import { pairDiagrams, diffDiagrams, summarizeDiff } from "@forkleaf/diagrams";
 import type { RepoRef } from "@forkleaf/types";
-import { ApiError, assertName, handle } from "@/lib/api-helpers";
+import { ApiError, assertName, handle, withRateLimitAdvice } from "@/lib/api-helpers";
 import { getSession } from "@/lib/session";
 
 /**
@@ -41,9 +41,26 @@ export async function GET(request: NextRequest) {
     }
 
     const session = await getSession();
-    const client = new GitHubClient({ token: session?.token ?? "", userAgent: "forkleaf" });
 
-    const pull = await client.getPullRequest(owner, repo, number);
+    // No retry budget for a rate limit on this route.
+    //
+    // The transport waits out a rate limit — up to a minute per attempt — which
+    // is right for the sync engine, a background queue that can afford to. It
+    // is wrong here. This is a page load, and anonymous callers share GitHub's
+    // 60-per-hour-per-IP budget, so hitting the limit is an ordinary event
+    // rather than a rare one. Waiting three minutes to then say "rate limited"
+    // is strictly worse than saying it at once, because the useful response is
+    // the same either way: sign in, and the limit stops being the problem.
+    const client = new GitHubClient({
+      token: session?.token ?? "",
+      userAgent: "forkleaf",
+      maxRetries: 0,
+    });
+
+    const pull = await withRateLimitAdvice(
+      () => client.getPullRequest(owner, repo, number),
+      session !== null,
+    );
     const touched = await client.listPullRequestFiles(owner, repo, number);
 
     const markdown = touched.filter((file) => /\.mdx?$/i.test(file.path));

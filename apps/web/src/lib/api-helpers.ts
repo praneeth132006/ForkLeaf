@@ -135,6 +135,30 @@ export function normalize(path: string): string {
     .join("/");
 }
 
+/**
+ * Turns GitHub's rate-limit refusal into the sentence that helps.
+ *
+ * "API rate limit exceeded" is GitHub telling the server something. What the
+ * reader needs to know is that signing in fixes it: an authenticated call gets
+ * 5,000 an hour, where an anonymous one shares 60 with everybody else on the
+ * same address. That only applies to a route that answers anonymous callers at
+ * all — which is why it takes `signedIn` rather than guessing.
+ */
+export async function withRateLimitAdvice<T>(run: () => Promise<T>, signedIn: boolean): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof GitHubError && error.code === "rate-limited" && !signedIn) {
+      throw new ApiError(
+        429,
+        "rate-limited",
+        "GitHub's rate limit for signed-out requests is used up. Sign in with GitHub to read this pull request — signing in raises the limit from 60 requests an hour to 5,000.",
+      );
+    }
+    throw error;
+  }
+}
+
 /** Runs a handler, converting known failures into a consistent JSON error. */
 export async function handle<T>(fn: () => Promise<T>): Promise<NextResponse> {
   try {
