@@ -119,11 +119,16 @@ export class Transport {
 
   private async attempt<T>(url: string, options: HttpOptions): Promise<HttpResponse<T>> {
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${this.token}`,
       Accept: options.accept ?? "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28",
       "User-Agent": this.userAgent,
     };
+
+    // Anonymous when there is no token, rather than sending `Bearer ` and
+    // being refused. GitHub serves public repositories unauthenticated at a
+    // lower rate limit, which is what lets a reviewer follow a link from a
+    // pull request without signing in first.
+    if (this.token !== "") headers["Authorization"] = `Bearer ${this.token}`;
 
     if (options.etag) headers["If-None-Match"] = options.etag;
     if (options.body !== undefined) headers["Content-Type"] = "application/json";
