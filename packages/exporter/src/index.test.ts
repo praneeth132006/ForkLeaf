@@ -223,3 +223,61 @@ describe("toHtml — what a printed page needs", () => {
     expect(html).toContain('a[href^="http"]::after');
   });
 });
+
+/**
+ * Exported documents are printed, and printing has its own rules.
+ *
+ * The renderer marks images lazy, which is right on screen and wrong in a
+ * print frame: a lazy image never approaches a viewport there, so it never
+ * loads, and it prints as a gap.
+ */
+describe("HTML prepared for printing", () => {
+  it("never leaves an image lazy", async () => {
+    const html = await toHtml("![shot](https://example.com/a.png)", {}, options());
+
+    expect(html).not.toContain('loading="lazy"');
+    expect(html).toContain('decoding="sync"');
+  });
+
+  it("inlines the bytes an image needs to travel with the file", async () => {
+    const html = await toHtml("![shot](./assets/a.png)", {}, options(), async (src) =>
+      src === "./assets/a.png" ? "data:image/png;base64,AAA" : null,
+    );
+
+    expect(html).toContain('src="data:image/png;base64,AAA"');
+    expect(html).not.toContain('src="./assets/a.png"');
+  });
+
+  it("keeps backgrounds and holds oversized images inside the page", async () => {
+    const html = await toHtml("# Title", {}, options());
+
+    expect(html).toContain("print-color-adjust: exact");
+    expect(html).toContain("max-height: 88vh");
+  });
+});
+
+describe("the document's title block", () => {
+  it("does not print the title twice", async () => {
+    const html = await toHtml(
+      "# Phishing attacks\n\nBody.",
+      {},
+      options({
+        title: "Phishing attacks",
+      }),
+    );
+
+    // One heading: the document's own title block. The body's copy is gone.
+    expect(html.match(/<h1\b/g)?.length).toBe(1);
+    expect(html).toContain('class="doc-title">Phishing attacks</h1>');
+  });
+
+  it("keeps a first heading that says something else", async () => {
+    const html = await toHtml(
+      "# Introduction\n\nBody.",
+      {},
+      options({ title: "Phishing attacks" }),
+    );
+
+    expect(html).toContain(">Introduction</h1>");
+  });
+});

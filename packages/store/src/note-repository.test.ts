@@ -112,3 +112,35 @@ describe("openNote", () => {
     expect(note.updatedAt).toBe("2025-06-01T12:00:00.000Z");
   });
 });
+
+/**
+ * Moving a note.
+ *
+ * Images are referenced relative to the note, which is what makes a note
+ * render on github.com — and what makes moving the file break every one of
+ * them unless the links move with it.
+ */
+describe("renameNote", () => {
+  it("repoints relative images at the files they already named", async () => {
+    const { notes, db } = repository({
+      "SOC 101/Phishing/notes.md": "# Notes\n\n![shot](./assets/a.png)\n",
+    });
+
+    const opened = await notes.openNote(WS, "SOC 101/Phishing/notes.md");
+    const moved = await notes.renameNote(opened, "OSINT/notes.md");
+
+    expect(moved.content).toContain("![shot](<../SOC 101/Phishing/assets/a.png>)");
+    // And the copy that gets committed says the same thing.
+    const stored = await db.getNote(`${WS}::OSINT/notes.md`);
+    expect(stored?.content).toContain("../SOC 101/Phishing/assets/a.png");
+  });
+
+  it("leaves a note renamed within its own folder untouched", async () => {
+    const { notes } = repository({ "a/notes.md": "![shot](./assets/a.png)\n" });
+
+    const opened = await notes.openNote(WS, "a/notes.md");
+    const renamed = await notes.renameNote(opened, "a/better-name.md");
+
+    expect(renamed.content).toContain("![shot](./assets/a.png)");
+  });
+});

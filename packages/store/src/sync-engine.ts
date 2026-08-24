@@ -273,7 +273,12 @@ export class SyncEngine {
       workspaceId,
       path,
       op: "delete",
+      // Images are committed directly rather than through this queue, so there
+      // is no sha to carry — but the file is on GitHub, and saying so is what
+      // keeps the "never synced, never needs deleting" rule from discarding
+      // the request.
       baseSha: null,
+      existsRemotely: true,
       now: this.now().toISOString(),
     });
 
@@ -447,20 +452,63 @@ export class SyncEngine {
     const safe = await this.filterConflicts(workspaceId, changes);
     if (safe.length === 0) return;
 
-    let result;
+    await this.push(workspaceId, safe);
+  }
+
+  /**
+   * Pushes a batch as one commit, isolating a change the server will never
+   * accept.
+   *
+   * A flush is deliberately atomic: everything queued for a workspace lands as
+   * a single commit or none of it does. The failure mode that has is that one
+   * impossible change — a deletion of a path that is not in the repository, a
+   * file the server rejects — fails the commit that carries everybody else's
+   * writing too, and keeps failing it on every retry until the whole queue is
+   * marked blocked. "Couldn't sync, click to retry", forever, with the notes
+   * still on the device and nothing explaining which one is at fault.
+   *
+   * So a batch that fails for a reason specific to its *content* is split and
+   * retried in halves, down to single changes. Everything that can be pushed
+   * is pushed, and the one that cannot ends up alone, where its attempt count
+   * and its error message describe it rather than the queue it was standing
+   * in. Failures that are nothing to do with the content — offline, signed
+   * out, rate limited — are not split: they would fail identically in halves
+   * and cost a burst of requests to prove it.
+   */
+  private async push(workspaceId: string, changes: PendingChange[]): Promise<void> {
     try {
-      result = await this.gateway.commit({
+      const result = await this.gateway.commit({
         workspaceId,
-        message: describeChanges(safe),
+        message: describeChanges(changes),
         squashWindowMs: this.squashWindowMs,
-        changes: safe.map((c) => ({
+        changes: changes.map((c) => ({
           op: c.op,
           path: c.path,
           ...(c.toPath !== undefined ? { toPath: c.toPath } : {}),
           ...(c.content !== undefined ? { content: c.content } : {}),
         })),
       });
+
+      await this.settle(workspaceId, changes, result);
     } catch (err) {
+      if (changes.length > 1 && isContentRejection(err)) {
+        const middle = Math.ceil(changes.length / 2);
+        const failures: unknown[] = [];
+
+        for (const half of [changes.slice(0, middle), changes.slice(middle)]) {
+          try {
+            await this.push(workspaceId, half);
+          } catch (halfError) {
+            failures.push(halfError);
+          }
+        }
+
+        // The flush still failed — the status bar has to say so — but only for
+        // what actually failed.
+        if (failures.length > 0) throw failures[0];
+        return;
+      }
+
       // Count the attempt so a change that can never succeed — a deleted repo,
       // a revoked token — stops blocking everything queued behind it.
       //
@@ -473,7 +521,7 @@ export class SyncEngine {
       // dropping it costs somebody their writing.
       const message = err instanceof Error ? err.message : String(err);
 
-      for (const change of safe) {
+      for (const change of changes) {
         change.attempts += 1;
         change.lastError = message;
         if (change.attempts >= MAX_ATTEMPTS) change.blocked = true;
@@ -481,10 +529,15 @@ export class SyncEngine {
       }
       throw err;
     }
+  }
 
-    // Committed successfully: clear these from the queue and record the new
-    // blob SHAs so the next edit knows what it is based on.
-    for (const change of safe) {
+  /** Clears pushed changes from the queue and records what they were based on. */
+  private async settle(
+    workspaceId: string,
+    changes: PendingChange[],
+    result: { blobShas: Record<string, string> },
+  ): Promise<void> {
+    for (const change of changes) {
       this.queue = this.queue.filter((c) => c.id !== change.id);
       await this.db.deleteQueueItem(change.id);
 
@@ -725,4 +778,19 @@ function forkPath(path: string): string {
   const dot = path.lastIndexOf(".");
   if (dot <= path.lastIndexOf("/")) return `${path} (local copy)`;
   return `${path.slice(0, dot)} (local copy)${path.slice(dot)}`;
+}
+
+/**
+ * True when the server rejected *what* was sent rather than the fact that we
+ * sent it.
+ *
+ * A 422 is GitHub saying this particular set of paths and contents cannot be
+ * committed — a deletion of something that is not there, a path it will not
+ * accept. Splitting the batch finds the one at fault. Everything else (signed
+ * out, rate limited, offline, a conflict) applies to the whole batch equally.
+ */
+function isContentRejection(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const { code, status } = err as { code?: unknown; status?: unknown };
+  return code === "validation" || status === 422;
 }

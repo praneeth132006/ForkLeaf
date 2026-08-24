@@ -125,6 +125,14 @@ export function Editor() {
         You can also link to an image already on the web. Those are stored as the URL you give,
         untouched.
       </P>
+      <P>
+        Moving a note takes its images with it. The link in the file is relative to where the note
+        sits — that is what makes it work on github.com — so ForkLeaf rewrites those links as part
+        of the move; the image files themselves stay where they are, since other notes may be using
+        them. If a note written before this still shows broken images, run{" "}
+        <strong>Find this note&rsquo;s missing images</strong> from <Code>⌘K</Code>: it searches the
+        repository for the files by name and repoints the ones it can identify with certainty.
+      </P>
 
       <H2 id="videos">YouTube videos</H2>
       <P>

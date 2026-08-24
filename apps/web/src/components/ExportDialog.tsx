@@ -63,7 +63,11 @@ export function ExportDialog({
         const notes = await loadAllNotes();
         if (notes.length === 0) throw new Error("There are no notes to export yet.");
 
-        downloadResult(await exportWorkspace(notes, bulkFormat, options, images));
+        downloadResult(
+          await exportWorkspace(notes, bulkFormat, options, (each) =>
+            exportImageResolver(workspace, each.path, assetUrls),
+          ),
+        );
       } else if (format === "pdf") {
         // Goes through the browser's print pipeline so the PDF has real,
         // selectable text rather than a rasterised page.
