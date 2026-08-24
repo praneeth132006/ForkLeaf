@@ -8,6 +8,18 @@ export interface ResolvedImageOptions {
    * unaware of where images live.
    */
   resolveSrc?: (src: string) => string;
+  /**
+   * Tells us the resolver's answers have changed, so images can re-ask.
+   *
+   * Resolving is not a pure function of the `src`: it is a lookup in a store
+   * that fills up while the note is open — an image pasted a second ago is
+   * still being written to the local asset store when its node is inserted.
+   * Without this, the first answer is the only answer, and "not on this
+   * device" is what a freshly pasted screenshot renders as forever.
+   *
+   * Returns an unsubscribe function.
+   */
+  subscribe?: (listener: () => void) => () => void;
 }
 
 /**
@@ -27,6 +39,7 @@ export const ResolvedImage = Image.extend<ResolvedImageOptions & Record<string, 
     return {
       ...this.parent?.(),
       resolveSrc: undefined,
+      subscribe: undefined,
     };
   },
 
@@ -48,6 +61,81 @@ export const ResolvedImage = Image.extend<ResolvedImageOptions & Record<string, 
           return resolved === src ? { src } : { src: resolved, "data-src": src };
         },
       },
+    };
+  },
+
+  /**
+   * The rendered `<img>`, kept in step with the resolver.
+   *
+   * ProseMirror renders a node's DOM once and reuses it for as long as the
+   * node itself does not change, so `renderHTML` alone gives an image exactly
+   * one chance to be resolved. For a pasted screenshot that chance comes a
+   * moment too early: the node is inserted as soon as the bytes are stored,
+   * and the store the resolver reads has not yet published the new entry, so
+   * the image resolved to the "not on this device" placeholder and stayed
+   * there until the note was closed and opened again.
+   *
+   * A node view can re-ask. The node's own `src` attribute — the one that gets
+   * serialised back to markdown — is never touched, so re-resolving cannot
+   * change what is written to the file, and it never marks the note dirty.
+   */
+  addNodeView() {
+    return ({ node, HTMLAttributes }) => {
+      const options = this.options as ResolvedImageOptions;
+      const dom = document.createElement("img");
+
+      for (const [key, value] of Object.entries(HTMLAttributes)) {
+        if (key === "src" || key === "data-src") continue;
+        if (value === null || value === undefined) continue;
+        dom.setAttribute(key, String(value));
+      }
+
+      let attrs = node.attrs as Record<string, unknown>;
+
+      const paint = () => {
+        const src = typeof attrs.src === "string" ? attrs.src : "";
+        if (!src) {
+          dom.removeAttribute("src");
+          return;
+        }
+
+        const resolved = options.resolveSrc?.(src) ?? src;
+        // Only on a real change: reassigning the same src restarts the load,
+        // which flickers the image on every keystroke in the note.
+        if (dom.getAttribute("src") !== resolved) dom.setAttribute("src", resolved);
+        // What the markdown says, carried through any HTML round trip so
+        // copying an image between notes does not paste a proxy URL.
+        if (resolved !== src) dom.setAttribute("data-src", src);
+        else dom.removeAttribute("data-src");
+      };
+
+      const applyText = () => {
+        const alt = typeof attrs.alt === "string" ? attrs.alt : "";
+        const title = typeof attrs.title === "string" ? attrs.title : "";
+        if (alt) dom.setAttribute("alt", alt);
+        else dom.removeAttribute("alt");
+        if (title) dom.setAttribute("title", title);
+        else dom.removeAttribute("title");
+      };
+
+      applyText();
+      paint();
+
+      const unsubscribe = options.subscribe?.(paint);
+
+      return {
+        dom,
+        update: (updated) => {
+          if (updated.type.name !== node.type.name) return false;
+          attrs = updated.attrs as Record<string, unknown>;
+          applyText();
+          paint();
+          return true;
+        },
+        destroy: () => {
+          unsubscribe?.();
+        },
+      };
     };
   },
 

@@ -18,6 +18,14 @@ export {
 } from "./analyze";
 
 export { markdownToHtml, astToMarkdown, formatMarkdown, type RenderOptions } from "./render";
+export {
+  youtubeVideoFrom,
+  youtubeEmbedUrl,
+  youtubeWatchUrl,
+  isYoutubeUrl,
+  YOUTUBE_EMBED_ORIGIN,
+  type YoutubeVideo,
+} from "./youtube";
 
 export {
   extractWikilinks,

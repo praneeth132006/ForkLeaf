@@ -81,6 +81,7 @@ export function Editor() {
           ["Divider", "Horizontal rule", <Code key="h">---</Code>],
           ["Link", "Asks for the text and the address", <Code key="i">[](…)</Code>],
           ["Image", "Opens the image picker", <Code key="j">![](…)</Code>],
+          ["YouTube video", "Asks for the video's address", <Code key="k">https://youtu.be/…</Code>],
         ]}
       />
       <P>
@@ -120,6 +121,24 @@ export function Editor() {
         You can also link to an image already on the web. Those are stored as the URL you give,
         untouched.
       </P>
+
+      <H2 id="videos">YouTube videos</H2>
+      <P>
+        Put a YouTube link on a line of its own — paste it into an empty line, or use the{" "}
+        <strong>YouTube video</strong> item in the <Code>/</Code> menu — and Rich view and the
+        preview show the player. Watch links, <Code>youtu.be</Code> short links, Shorts and live
+        URLs are all understood, and a <Code>?t=</Code> start time is kept.
+      </P>
+      <P>
+        Nothing unusual is written to the file: the note holds the plain Markdown link and nothing
+        else, so it reads as a link on github.com, in an IDE and in every other Markdown tool. A
+        link inside a sentence stays a link — only a line that is nothing but the link becomes a
+        player — which leaves you a way to mention a video without embedding it.
+      </P>
+      <Note>
+        The player is loaded from <Code>youtube-nocookie.com</Code>, so opening a note that contains
+        a video does not drop tracking cookies on whoever is reading it.
+      </Note>
 
       <H2 id="formatting">Inline formatting</H2>
       <P>

@@ -63,6 +63,7 @@ export function markdownOf(editor: Editor): string {
 }
 import { CodeBlock } from "./extensions/CodeBlock";
 import { ResolvedImage } from "./extensions/ResolvedImage";
+import { YoutubeEmbed } from "./extensions/YoutubeEmbed";
 import { TextSelection } from "@tiptap/pm/state";
 import { imagesFrom, type ImageBridge } from "./images";
 import { MermaidBlock } from "./extensions/MermaidBlock";
@@ -130,6 +131,32 @@ export function WysiwygEditor({
   const linksRef = useRef<LinkBridge | undefined>(links);
   linksRef.current = links;
 
+  /**
+   * Images waiting to hear that the resolver knows something new.
+   *
+   * The bridge resolves a note-relative path against a store that fills up
+   * while the note is open, so an image inserted before its bytes are
+   * published there resolves to a placeholder. Each rendered image subscribes
+   * and re-asks whenever a new bridge arrives, which is what a new entry in
+   * that store looks like from in here.
+   */
+  const resolveListeners = useRef<Set<() => void>>(new Set());
+  const subscribeToResolver = useCallback((listener: () => void) => {
+    resolveListeners.current.add(listener);
+    return () => {
+      resolveListeners.current.delete(listener);
+    };
+  }, []);
+
+  // Deliberately without a dependency list. What images need to hear about is
+  // a change in what the resolver *answers*, and the bridge is a closure over
+  // state held by the app — its identity says nothing reliable about that.
+  // Re-asking is a lookup per image, and only touches the DOM when the answer
+  // has actually changed.
+  useEffect(() => {
+    for (const listener of resolveListeners.current) listener();
+  });
+
   // Guards the value-sync effect: without it, our own serialised output feeds
   // straight back in and resets the cursor to the top on every keystroke.
   const applyingExternal = useRef(false);
@@ -176,6 +203,7 @@ export function WysiwygEditor({
         inline: false,
         allowBase64: true,
         resolveSrc: (src: string) => imagesRef.current?.resolve?.(src) ?? src,
+        subscribe: subscribeToResolver,
         HTMLAttributes: { loading: "lazy" },
       }),
       Link.configure({
@@ -191,6 +219,7 @@ export function WysiwygEditor({
       TableCell,
       CodeBlock,
       MermaidBlock,
+      YoutubeEmbed,
       // Read through the ref, not captured: the extension list is built once,
       // and the bridge arrives a render later once the workspace resolves.
       Wikilink.configure({ bridge: () => linksRef.current }),
@@ -221,7 +250,7 @@ export function WysiwygEditor({
         linkify: true,
       }),
     ],
-    [placeholder],
+    [placeholder, subscribeToResolver],
   );
 
   /**
@@ -255,6 +284,14 @@ export function WysiwygEditor({
         // Anything after the first lands below the one before it.
         position = target + node.nodeSize;
       }
+      // The upload stored the image locally and called setAssetUrls(), which
+      // is a React state update. That update was processed while `await`
+      // yielded — *before* the node was created and its view registered a
+      // resolve listener. So the useEffect that normally notifies listeners
+      // already ran against an empty set. Fire every listener now so the
+      // freshly-registered paint() callbacks re-ask the resolver, which
+      // already has the correct blob URL.
+      for (const listener of resolveListeners.current) listener();
       onImageStatusRef.current?.({ busy: false, error: null });
     } catch (error) {
       onImageStatusRef.current?.({

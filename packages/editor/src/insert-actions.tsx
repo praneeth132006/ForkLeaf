@@ -4,6 +4,7 @@ import React from "react";
 import type { Editor } from "@tiptap/core";
 import type { InsertAction } from "./EditorToolbar";
 import type { SourceEditorHandle } from "./SourceEditor";
+import { isYoutubeUrl } from "@forkleaf/markdown-engine";
 
 /** Matches any ATX heading marker, so switching levels replaces rather than stacks. */
 const HEADING_PATTERN = /^#{1,6} /;
@@ -79,6 +80,18 @@ function promptImageUrl(): string | null {
     return null;
   }
   return url;
+}
+
+/** Prompts for a YouTube URL, rejecting anything that is not a video. */
+function promptYoutubeUrl(): string | null {
+  const url = window.prompt("YouTube video URL");
+  if (!url) return null;
+
+  if (!isYoutubeUrl(url.trim())) {
+    window.alert("That does not look like a YouTube video link.");
+    return null;
+  }
+  return url.trim();
 }
 
 const MERMAID_STARTER = "flowchart TD\n  A[Start] --> B[Finish]";
@@ -246,6 +259,19 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
       if (url) editor.chain().focus().setImage({ src: url }).run();
     },
     markdown: { text: "![](https://)", cursor: 2 },
+  },
+  {
+    id: "youtube",
+    keywords: ["video", "youtube", "embed", "watch", "clip"],
+    label: "YouTube video",
+    hint: "Embed a video — saved as a plain link",
+    icon: <Glyph d="M1.5 4.5h13v7h-13zM6.5 6.5l3.5 1.5-3.5 1.5z" />,
+    rich: (editor) => {
+      const url = promptYoutubeUrl();
+      if (url) editor.chain().focus().insertYoutubeEmbed(url).run();
+    },
+    // On its own line, which is what makes it an embed rather than a link.
+    markdown: { text: "https://www.youtube.com/watch?v=", cursor: 32 },
   },
   {
     id: "h4",
