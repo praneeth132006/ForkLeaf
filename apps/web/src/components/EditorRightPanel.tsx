@@ -5,6 +5,7 @@ import type { Note, NoteFrontmatter, SyncMode, Workspace } from "@forkleaf/types
 import type { LinkRef } from "@forkleaf/markdown-engine";
 import { extractOutline, documentStats, serializeDocument } from "@forkleaf/markdown-engine";
 import { exportNote, printToPdf, downloadResult } from "@forkleaf/exporter";
+import { exportImageResolver } from "@/lib/export-images";
 import { deriveTitle } from "@forkleaf/markdown-engine";
 
 export interface EditorRightPanelProps {
@@ -23,6 +24,8 @@ export interface EditorRightPanelProps {
   onSyncNow: () => void;
   /** The `[[wikilink]]` neighbourhood of this note. */
   links: NoteLinks;
+  /** Object URLs for assets held on this device, keyed by repository path. */
+  assetUrls: Readonly<Record<string, string>>;
 }
 
 /** What the Links section draws, and what it can do. */
@@ -75,6 +78,7 @@ export function EditorRightPanel({
   syncMode,
   onSyncNow,
   links,
+  assetUrls,
 }: EditorRightPanelProps) {
   const [newKey, setNewKey] = useState("");
   const [newTag, setNewTag] = useState<string | null>(null);
@@ -125,15 +129,19 @@ export function EditorRightPanel({
           theme: "light" as const,
         };
 
+        // Images travel as data URLs, so the file that leaves carries its
+        // pictures rather than pointing at a place the reader does not have.
+        const images = exportImageResolver(workspace, note.path, assetUrls);
+
         // PDF goes through the browser's print pipeline, which is the only way
         // to get selectable text without shipping a rendering engine.
-        if (format === "pdf") await printToPdf(note, options);
-        else downloadResult(await exportNote(note, options));
+        if (format === "pdf") await printToPdf(note, options, images);
+        else downloadResult(await exportNote(note, options, images));
       } finally {
         setBusy(null);
       }
     },
-    [note],
+    [note, workspace, assetUrls],
   );
 
   if (collapsed) {
@@ -363,9 +371,12 @@ export function EditorRightPanel({
                     Publish as a page
                   </PanelButton>
                 )}
+                {/* Named for the thing it shows. "Version history" is accurate
+                    and is not what anybody searches for — every save here is a
+                    git commit, and people go looking for the word "commits". */}
                 {hasHistory && (
                   <PanelButton onClick={onShowHistory} icon={<HistoryGlyph />}>
-                    Version history
+                    History &amp; commits
                   </PanelButton>
                 )}
                 <button

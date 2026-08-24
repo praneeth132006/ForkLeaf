@@ -1038,6 +1038,7 @@ export function EditorWorkspace() {
               }
               syncMode={notebook.syncPreference.mode}
               onSyncNow={() => void saveEverything()}
+              assetUrls={notebook.assetUrls}
               links={{
                 ready: links.ready,
                 backlinks: note ? links.backlinksFor(note.path) : [],
@@ -1070,6 +1071,8 @@ export function EditorWorkspace() {
       {openDialog === "export" && note && (
         <ExportDialog
           note={note}
+          workspace={workspace}
+          assetUrls={notebook.assetUrls}
           loadAllNotes={notebook.allNotes}
           onClose={() => setDialog(null)}
         />

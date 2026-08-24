@@ -3,6 +3,60 @@ import { renderDiagram, LIGHT_THEME, DARK_THEME } from "@forkleaf/diagrams";
 import type { ExportOptions } from "@forkleaf/types";
 
 /**
+ * Turns a note-relative image path into something that survives leaving the
+ * app — a `data:` URL.
+ *
+ * Notes reference images the way a hand-written markdown file does, by a
+ * relative path like `../assets/chart.png`. That is the right thing to store,
+ * and it is meaningless once the HTML is a file on somebody's desktop or a
+ * page inside a print frame: the browser resolves it against the wrong base,
+ * gets nothing, and draws a broken-image icon. Every exported image was
+ * missing from every PDF for exactly this reason.
+ *
+ * Resolving is the app's job, not this package's — only the app knows where
+ * the bytes are, which for a private repository means a same-origin proxy and
+ * for a local workspace means IndexedDB. So the caller passes this in.
+ */
+export type ImageResolver = (src: string) => Promise<string | null>;
+
+/**
+ * Rewrites every `src` in the rendered HTML through the resolver.
+ *
+ * Done on the HTML rather than on the markdown so it catches images however
+ * they were written — markdown syntax, an inline `<img>`, a reference link.
+ * A resolver that returns null leaves the original path alone, which is right
+ * for an absolute URL and honest for an image we genuinely cannot find.
+ */
+async function inlineImages(html: string, resolve: ImageResolver): Promise<string> {
+  const sources = new Set<string>();
+  for (const match of html.matchAll(/<img\b[^>]*?\bsrc="([^"]*)"/gi)) {
+    if (match[1]) sources.add(match[1]);
+  }
+  if (sources.size === 0) return html;
+
+  const resolved = new Map<string, string>();
+  await Promise.all(
+    [...sources].map(async (src) => {
+      try {
+        const data = await resolve(src);
+        if (data) resolved.set(src, data);
+      } catch {
+        // One unreadable image must not fail the whole export; the original
+        // path stays and the rest of the document is still produced.
+      }
+    }),
+  );
+
+  return html.replace(
+    /(<img\b[^>]*?\bsrc=")([^"]*)(")/gi,
+    (whole, before: string, src: string, after: string) => {
+      const data = resolved.get(src);
+      return data ? `${before}${data}${after}` : whole;
+    },
+  );
+}
+
+/**
  * Standalone HTML export.
  *
  * Everything is inlined — styles, and diagrams as SVG — so the resulting file
@@ -46,6 +100,7 @@ export async function toHtml(
   markdown: string,
   frontmatter: Record<string, unknown>,
   options: ExportOptions,
+  resolveImage?: ImageResolver,
 ): Promise<string> {
   const source = options.includeFrontmatter ? serializeDocument(markdown, frontmatter) : markdown;
 
@@ -70,8 +125,19 @@ export async function toHtml(
     (_match, index: string) => `<div class="diagram">${svgs[Number(index)] ?? ""}</div>`,
   );
 
+  if (resolveImage) body = await inlineImages(body, resolveImage);
+
   return document(options.title, body, options.theme);
 }
+
+/**
+ * The ForkLeaf mark, as inline SVG.
+ *
+ * Inline rather than linked, because the whole promise of this export is one
+ * file that opens from a USB stick with no network — a logo fetched from a
+ * server would be the one thing in the document that needed one.
+ */
+const BRAND_MARK = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21v-7"/><path d="M12 14 6.5 8.5A4 4 0 0 1 5.4 5.7L5 3l2.7.4a4 4 0 0 1 2.8 1.1L12 6"/><path d="m12 14 5.5-5.5a4 4 0 0 0 1.1-2.8L19 3l-2.7.4a4 4 0 0 0-2.8 1.1L12 6"/></svg>`;
 
 function document(title: string, body: string, theme: "light" | "dark"): string {
   const dark = theme === "dark";
@@ -152,21 +218,108 @@ function document(title: string, body: string, theme: "light" | "dark"): string 
   input[type="checkbox"] { margin-right: 0.5rem; }
   .diagram { margin: 2rem 0; text-align: center; overflow-x: auto; }
   .diagram svg { max-width: 100%; height: auto; }
+  /* ── The document's own title block ──────────────────────────────────
+     A PDF gets handed on with no filename attached to it once it is in an
+     email, so it has to say what it is on the page itself. */
+  .doc-head {
+    margin: 0 0 2.5rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  .doc-title {
+    margin: 0;
+    font-size: 2.25rem;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    font-weight: 650;
+  }
+  .doc-meta { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.85rem; }
+  /* The body's own leading H1 would repeat the title block. */
+  .doc-head + h1:first-of-type { margin-top: 0; }
+
+  /* ── The footer ──────────────────────────────────────────────────────
+     Hidden on screen, where the app's own chrome is already saying all of
+     this, and shown on paper where nothing else is. */
+  .doc-foot { display: none; }
+
   /* Keep headings with their content and never split a diagram across pages. */
   @media print {
+    /* Margins belong to the page, not the body: a body margin is applied once
+       at the top of the document, so every page after the first printed into
+       the sheet's edge. */
+    @page { margin: 18mm 16mm 20mm; }
     body { padding: 0; background: #fff; color: #000; }
     h1, h2, h3 { break-after: avoid; }
-    pre, blockquote, table, .diagram { break-inside: avoid; }
+    pre, blockquote, table, .diagram, figure, img { break-inside: avoid; }
     a { color: inherit; text-decoration: none; }
+    /* A link is worth nothing on paper unless you can see where it goes. */
+    a[href^="http"]::after {
+      content: " (" attr(href) ")";
+      font-size: 0.8em;
+      color: #555;
+      word-break: break-all;
+    }
+    .doc-head { border-bottom-color: #ccc; }
+    .doc-meta { color: #555; }
+
+    /* A fixed element inside a paged context repeats on every sheet, which is
+       how a running footer is done without the @page margin boxes that no
+       browser actually implements. */
+    .doc-foot {
+      position: fixed;
+      bottom: -12mm;
+      left: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding-top: 2mm;
+      border-top: 1px solid #ddd;
+      font-size: 9pt;
+      color: #666;
+    }
+    .doc-foot-title {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .doc-foot-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      white-space: nowrap;
+    }
   }
 </style>
 </head>
 <body>
 <main>
+<header class="doc-head">
+  <h1 class="doc-title">${escapeHtml(title)}</h1>
+  <p class="doc-meta">${escapeHtml(printedOn())}</p>
+</header>
 ${body}
 </main>
+<footer class="doc-foot" aria-hidden="true">
+  <span class="doc-foot-title">${escapeHtml(title)}</span>
+  <span class="doc-foot-brand">${BRAND_MARK} ForkLeaf</span>
+</footer>
 </body>
 </html>`;
+}
+
+/** The date the file was made, in the reader's own locale. */
+function printedOn(): string {
+  try {
+    return new Date().toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
 }
 
 function escapeHtml(text: string): string {

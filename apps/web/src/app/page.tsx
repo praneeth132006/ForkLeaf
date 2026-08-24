@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getSession, githubOAuthConfigured } from "@/lib/session";
 import { SignInError } from "@/components/SignInError";
 import { Nav } from "@/components/landing/Nav";
@@ -21,11 +22,29 @@ export const metadata = {
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; home?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, home } = await searchParams;
   const githubAvailable = githubOAuthConfigured();
   const session = await getSession();
+
+  /**
+   * Somebody who has already signed in wants their notes, not the pitch.
+   *
+   * The dashboard is the right landing place because it is the only screen
+   * that shows the whole notebook — every note in every connected repository,
+   * indexed and searchable — where the editor opens on whatever happened to be
+   * last. Arriving at a page selling the product you already use, and having
+   * to find the way in from it, is a step that never had a reason.
+   *
+   * `?home=1` still shows it, so the landing page stays reachable rather than
+   * becoming something only signed-out people can read. An error from the
+   * sign-in round trip is shown here too — that is the one thing this page has
+   * to say to somebody who is already signed in.
+   */
+  if (session?.user && !error && home !== "1") {
+    redirect("/dashboard");
+  }
 
   // No overflow containment on the root, deliberately.
   //

@@ -141,3 +141,85 @@ describe("format catalogue", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 });
+
+describe("toHtml — images", () => {
+  const PIXEL =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+  it("inlines a relative image, which is what makes it survive the export", async () => {
+    const html = await toHtml("![Chart](../assets/chart.png)", {}, options(), async (src) =>
+      src === "../assets/chart.png" ? PIXEL : null,
+    );
+
+    expect(html).toContain(`src="${PIXEL}"`);
+    expect(html).not.toContain("../assets/chart.png");
+  });
+
+  it("leaves the path alone when the image cannot be found", async () => {
+    const html = await toHtml("![Gone](../assets/gone.png)", {}, options(), async () => null);
+
+    expect(html).toContain("../assets/gone.png");
+  });
+
+  it("keeps producing the document when one image throws", async () => {
+    const html = await toHtml("![One](../a.png) ![Two](../b.png)", {}, options(), async (src) => {
+      if (src === "../a.png") throw new Error("unreadable");
+      return PIXEL;
+    });
+
+    expect(html).toContain("../a.png");
+    expect(html).toContain(`src="${PIXEL}"`);
+  });
+
+  it("asks for each distinct source once, however often it appears", async () => {
+    const seen: string[] = [];
+    await toHtml("![a](../x.png)\n\n![b](../x.png)", {}, options(), async (src) => {
+      seen.push(src);
+      return PIXEL;
+    });
+
+    expect(seen).toEqual(["../x.png"]);
+  });
+
+  it("does nothing at all without a resolver", async () => {
+    const html = await toHtml("![Chart](../assets/chart.png)", {}, options());
+    expect(html).toContain("../assets/chart.png");
+  });
+});
+
+describe("toHtml — what a printed page needs", () => {
+  it("puts the title on the page, since a PDF loses its filename", async () => {
+    const html = await toHtml("Body text.", {}, options({ title: "Phishing attack types" }));
+
+    expect(html).toContain('class="doc-title">Phishing attack types<');
+    expect(html).toContain('class="doc-meta"');
+  });
+
+  it("escapes a title that would otherwise close the tag", async () => {
+    const html = await toHtml("Body.", {}, options({ title: "</h1><script>alert(1)</script>" }));
+
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).toContain("&lt;script&gt;");
+  });
+
+  it("carries a footer that names the document and its origin", async () => {
+    const html = await toHtml("Body.", {}, options({ title: "Runbook" }));
+
+    expect(html).toContain('class="doc-foot"');
+    expect(html).toContain("ForkLeaf");
+    // Hidden on screen, shown on paper — the app's own chrome says this
+    // everywhere else.
+    expect(html).toContain(".doc-foot { display: none; }");
+    expect(html).toContain("position: fixed");
+  });
+
+  it("gives the page real margins, not just the first sheet", async () => {
+    const html = await toHtml("Body.", {}, options());
+    expect(html).toContain("@page { margin:");
+  });
+
+  it("spells out where a link goes, which paper cannot show otherwise", async () => {
+    const html = await toHtml("Body.", {}, options());
+    expect(html).toContain('a[href^="http"]::after');
+  });
+});
