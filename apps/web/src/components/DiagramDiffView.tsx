@@ -113,16 +113,32 @@ export function DiagramDiffView() {
 
   const target = useMemo(() => parseTarget(new URLSearchParams(params.toString())), [params]);
 
-  const [load, setLoad] = useState<Load>({ state: "idle" });
+  /** One string per request, so a change of target is a value to compare. */
+  const targetKey = target ? `${target.owner}/${target.repo}/${target.number}` : "";
+
+  const [load, setLoad] = useState<Load>(() =>
+    targetKey ? { state: "loading" } : { state: "idle" },
+  );
+
+  /**
+   * Resets to "loading" when the request being viewed changes.
+   *
+   * Adjusted during render rather than in an effect. Setting state
+   * synchronously inside an effect body renders once with the previous pull
+   * request's results still on screen and then again with the reset — which is
+   * both a wasted pass and, for the fraction of a second in between, a page
+   * showing one request's diagrams under another one's title.
+   */
+  const [shown, setShown] = useState(targetKey);
+  if (shown !== targetKey) {
+    setShown(targetKey);
+    setLoad(targetKey ? { state: "loading" } : { state: "idle" });
+  }
 
   useEffect(() => {
-    if (!target) {
-      setLoad({ state: "idle" });
-      return;
-    }
+    if (!target) return;
 
     let cancelled = false;
-    setLoad({ state: "loading" });
 
     const query = new URLSearchParams({
       owner: target.owner,
