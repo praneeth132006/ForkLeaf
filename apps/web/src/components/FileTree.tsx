@@ -17,6 +17,10 @@ export interface FileTreeProps {
   onDeleteFolder: (path: string) => void;
   /** Moves a note to another folder. Called by drag-and-drop within the tree. */
   onMoveNote?: (path: string, toFolder: string) => void;
+  /** Pins a note to the top of the sidebar, or unpins one already there. */
+  onTogglePin?: (path: string) => void;
+  /** Paths currently pinned, so the menu can say which way it will go. */
+  pinnedPaths?: readonly string[];
   filter: string;
 }
 
@@ -45,6 +49,8 @@ export function FileTree({
   onRenameFolder,
   onDeleteFolder,
   onMoveNote,
+  onTogglePin,
+  pinnedPaths,
   filter,
 }: FileTreeProps) {
   // Which folders are open, by full path — so opening `a/b` says nothing about
@@ -103,8 +109,18 @@ export function FileTree({
       ];
     }
 
+    const pinned = pinnedPaths?.includes(node.path) ?? false;
+
     return [
       { label: "Open", onSelect: () => onOpen(node.path) },
+      ...(onTogglePin
+        ? [
+            {
+              label: pinned ? "Unpin from top" : "Pin to top",
+              onSelect: () => onTogglePin(node.path),
+            },
+          ]
+        : []),
       { label: "Rename…", onSelect: () => onRename(node.path) },
       { label: "Delete note", destructive: true, onSelect: () => onDelete(node.path) },
     ];
@@ -118,6 +134,8 @@ export function FileTree({
     onOpen,
     onRename,
     onDelete,
+    onTogglePin,
+    pinnedPaths,
   ]);
 
   if (visible.length === 0) {
@@ -186,6 +204,10 @@ interface TreeItemProps {
     node: TreeNode,
   ) => void;
   onMoveNote?: (path: string, toFolder: string) => void;
+  /** Pins a note to the top of the sidebar, or unpins one already there. */
+  onTogglePin?: (path: string) => void;
+  /** Paths currently pinned, so the menu can say which way it will go. */
+  pinnedPaths?: readonly string[];
   dropTarget: string | null;
   onDropTarget: (path: string | null) => void;
   forceOpen: boolean;
@@ -207,6 +229,8 @@ const TreeItem = memo(function TreeItem({
   onOpen,
   onContextMenu,
   onMoveNote,
+  onTogglePin,
+  pinnedPaths,
   dropTarget,
   onDropTarget,
   forceOpen,
