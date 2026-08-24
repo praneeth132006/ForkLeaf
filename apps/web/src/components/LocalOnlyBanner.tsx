@@ -63,7 +63,11 @@ export function LocalOnlyBanner({ githubAvailable, onSignIn, onLearnMore }: Loca
         </svg>
       </span>
 
-      <p className="min-w-0 flex-1 text-[var(--fl-text)]">
+      {/* `flex-1 min-w-0` alone let the paragraph shrink to almost nothing
+          once the buttons had taken their width, so on a phone this banner
+          rendered one word per line down the whole screen. On a narrow screen
+          the sentence takes the row and the buttons wrap underneath it. */}
+      <p className="w-full min-w-0 text-[var(--fl-text)] sm:w-auto sm:flex-1">
         <strong className="font-semibold">These notes are only on this device.</strong>{" "}
         <span className="text-[var(--fl-muted)]">
           {githubAvailable
@@ -72,7 +76,7 @@ export function LocalOnlyBanner({ githubAvailable, onSignIn, onLearnMore }: Loca
         </span>
       </p>
 
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex w-full shrink-0 items-center gap-1.5 sm:w-auto">
         {githubAvailable && (
           <button
             type="button"
