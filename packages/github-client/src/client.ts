@@ -812,7 +812,22 @@ export class GitHubClient {
       }
     }
 
-    const newTreeSha = await this.createTree(repo, baseTreeSha, treeEntries);
+    const entries = await this.withoutPhantomDeletes(repo, baseTreeSha, treeEntries);
+
+    /**
+     * Nothing left to write.
+     *
+     * Every change in this batch turned out to be the removal of something the
+     * repository does not have — an image that never reached it, a file
+     * already deleted from another device. There is no commit to make, and
+     * making an empty one would be noise in the history. Reporting HEAD is
+     * honest: the requested state is the state the branch is in.
+     */
+    if (entries.length === 0) {
+      return { sha: headSha, blobShas: {}, squashed: false };
+    }
+
+    const newTreeSha = await this.createTree(repo, baseTreeSha, entries);
 
     const commitSha = await this.createCommit(repo, {
       message: `${COMMIT_MARKER} ${options.message}`,
@@ -885,6 +900,55 @@ export class GitHubClient {
     );
     if (!data) throw new GitHubError("unknown", "Empty tree creation response");
     return data.sha;
+  }
+
+  /**
+   * Drops deletions of paths the repository does not actually have.
+   *
+   * Asking the tree API to remove a path that is not in the base tree is not
+   * ignored — GitHub answers 422 `GitRPC::BadObjectState` and refuses the
+   * whole commit. Since a commit here carries every queued change at once,
+   * one stale deletion — an image that was only ever stored on the device, a
+   * file already removed from another machine — was enough to stop a
+   * repository syncing at all, and to keep stopping it on every retry.
+   *
+   * The tree is read once, and only when there is a deletion to check.
+   */
+  private async withoutPhantomDeletes(
+    repo: RepoRef,
+    baseTree: string,
+    entries: { path: string; mode: string; type: "blob"; sha: string | null }[],
+  ): Promise<{ path: string; mode: string; type: "blob"; sha: string | null }[]> {
+    if (!entries.some((entry) => entry.sha === null)) return entries;
+
+    const existing = await this.blobPaths(repo, baseTree);
+    // Unknown — a tree too large for one response — means no filtering. A
+    // commit that might fail beats dropping a deletion the user asked for.
+    if (!existing) return entries;
+
+    return entries.filter((entry) => entry.sha !== null || existing.has(entry.path));
+  }
+
+  /**
+   * Every blob path in a tree, or null when it cannot be known.
+   *
+   * Null for a tree GitHub truncated, and null if the read itself fails: this
+   * is a guard, and a guard that cannot run must not become a second way for
+   * the commit to fail.
+   */
+  private async blobPaths(repo: RepoRef, treeSha: string): Promise<Set<string> | null> {
+    try {
+      const { data } = await this.transport.request<{
+        tree: { path: string; type: string }[];
+        truncated?: boolean;
+      }>(`/repos/${repo.owner}/${repo.repo}/git/trees/${treeSha}?recursive=1`);
+
+      if (!data || data.truncated) return null;
+
+      return new Set(data.tree.filter((entry) => entry.type === "blob").map((entry) => entry.path));
+    } catch {
+      return null;
+    }
   }
 
   private async createCommit(

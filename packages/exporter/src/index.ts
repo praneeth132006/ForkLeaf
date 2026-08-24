@@ -119,7 +119,7 @@ export async function exportNote(
     }
 
     case "docx":
-      return { blob: await toDocx(note.content, options.title), filename };
+      return { blob: await toDocx(note.content, options.title, resolveImage), filename };
 
     case "pdf": {
       // The caller should use printToPdf, which opens the print dialog. We
@@ -152,8 +152,29 @@ export async function printToPdf(
 
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
-  frame.style.cssText =
-    "position:absolute;top:-10000px;left:-10000px;width:1px;height:1px;border:0;";
+  frame.setAttribute("tabindex", "-1");
+  /**
+   * A page-sized frame, parked off screen.
+   *
+   * It used to be one pixel by one pixel, which is where the ruined layout in
+   * every exported PDF came from: a document laid out in a 1px viewport has
+   * nothing to wrap against, so tables collapsed, diagrams shrank to a sliver
+   * and anything sized against the viewport came out wrong — and then that was
+   * what got printed. Giving the frame the dimensions of a sheet of paper
+   * costs nothing and lets the document lay itself out the way it will be
+   * printed. It stays invisible, and out of the tab order.
+   */
+  frame.style.cssText = [
+    "position:fixed",
+    "left:-10000px",
+    "top:0",
+    "width:210mm",
+    "height:297mm",
+    "border:0",
+    "opacity:0",
+    "pointer-events:none",
+    "z-index:-1",
+  ].join(";");
   document.body.appendChild(frame);
 
   const doc = frame.contentDocument;
@@ -166,61 +187,83 @@ export async function printToPdf(
   doc.write(html);
   doc.close();
 
-  await new Promise<void>((resolve) => {
-    // Wait for fonts and inline SVGs to settle, or the first page prints blank.
-    if (doc.readyState === "complete") {
-      resolve();
-    } else {
-      // frame.onload doesn't always fire reliably for doc.write().
-      const fallback = setTimeout(resolve, 1500);
-      frame.onload = () => {
-        clearTimeout(fallback);
-        resolve();
-      };
-      doc.addEventListener("readystatechange", () => {
-        if (doc.readyState === "complete") {
-          clearTimeout(fallback);
-          resolve();
-        }
-      });
-    }
-  });
+  try {
+    await frameReady(doc, frame);
+    await imagesReady(doc);
+    await fontsReady(doc);
+    // One more frame, so the last layout pass has run before the snapshot the
+    // print dialog takes.
+    await new Promise((resolve) => setTimeout(resolve, 150));
 
-  // And for the images to decode. They are `data:` URLs so nothing is
-  // fetched, but decoding is still asynchronous — printing before it finishes
-  // produces a PDF with gaps where the pictures should be, which is the exact
-  // failure this export is meant to have stopped having.
-  await Promise.all(
+    frame.contentWindow?.focus();
+    frame.contentWindow?.print();
+  } finally {
+    // The print dialog is modal but not awaitable; the frame has to outlive
+    // this call or the dialog prints a document that no longer exists.
+    setTimeout(() => frame.remove(), 60_000);
+  }
+}
+
+/** Resolves once the written document has finished parsing. */
+function frameReady(doc: Document, frame: HTMLIFrameElement): Promise<void> {
+  if (doc.readyState === "complete") return Promise.resolve();
+
+  return new Promise<void>((resolve) => {
+    // `frame.onload` does not fire reliably for a document written with
+    // `doc.write`, so both signals are watched and whichever arrives first
+    // wins. The timeout is the third: printing a slightly early document beats
+    // never opening the dialog at all.
+    const fallback = setTimeout(resolve, 2000);
+    const done = () => {
+      clearTimeout(fallback);
+      resolve();
+    };
+
+    frame.onload = done;
+    doc.addEventListener("readystatechange", () => {
+      if (doc.readyState === "complete") done();
+    });
+  });
+}
+
+/**
+ * Resolves once every image has actually decoded.
+ *
+ * The pictures are `data:` URLs by the time they get here, so nothing is
+ * fetched — but decoding is asynchronous, and a print that starts first
+ * produces a PDF with holes in it. `decode()` is the exact signal; `load` is
+ * the fallback for browsers that lack it.
+ */
+function imagesReady(doc: Document): Promise<unknown> {
+  return Promise.all(
     Array.from(doc.images).map((image) => {
+      if (typeof image.decode === "function") {
+        // A broken image rejects, which must not fail the export: one missing
+        // picture is a gap, a thrown error is no PDF at all.
+        return image.decode().catch(() => undefined);
+      }
       if (image.complete) return Promise.resolve();
+
       return new Promise<void>((resolve) => {
         const fallback = setTimeout(resolve, 3000);
-        image.addEventListener(
-          "load",
-          () => {
-            clearTimeout(fallback);
-            resolve();
-          },
-          { once: true },
-        );
-        image.addEventListener(
-          "error",
-          () => {
-            clearTimeout(fallback);
-            resolve();
-          },
-          { once: true },
-        );
+        const done = () => {
+          clearTimeout(fallback);
+          resolve();
+        };
+        image.addEventListener("load", done, { once: true });
+        image.addEventListener("error", done, { once: true });
       });
     }),
   );
-  await new Promise((r) => setTimeout(r, 150));
+}
 
-  frame.contentWindow?.focus();
-  frame.contentWindow?.print();
+/** Resolves once webfonts have loaded, so nothing reflows mid-print. */
+function fontsReady(doc: Document): Promise<unknown> {
+  const fonts = (doc as Document & { fonts?: { ready?: Promise<unknown> } }).fonts;
+  if (!fonts?.ready) return Promise.resolve();
 
-  // The print dialog is modal but not awaitable; remove the frame afterwards.
-  setTimeout(() => frame.remove(), 60_000);
+  // Capped: a font that never resolves must not hold the dialog shut.
+  return Promise.race([fonts.ready, new Promise((resolve) => setTimeout(resolve, 2000))]);
 }
 
 /** Exports a single diagram as SVG or PNG. */
@@ -311,14 +354,22 @@ export async function exportWorkspace(
   notes: Note[],
   format: Extract<ExportFormat, "md" | "html" | "txt">,
   options: Omit<ExportOptions, "format" | "title">,
-  resolveImage?: ImageResolver,
+  /**
+   * How to find images, *for a given note*.
+   *
+   * A factory rather than one resolver, because a note refers to its images
+   * relative to itself: `../assets/chart.png` means a different file depending
+   * on which note it is written in. Handing the whole archive a single note's
+   * resolver was quietly wrong for every other note in it.
+   */
+  resolveImageFor?: (note: Note) => ImageResolver | undefined,
 ): Promise<ExportResult> {
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
 
   for (const note of notes) {
     const title = (note.frontmatter.title as string) ?? note.path;
-    const result = await exportNote(note, { ...options, format, title }, resolveImage);
+    const result = await exportNote(note, { ...options, format, title }, resolveImageFor?.(note));
     // Keep the repo's folder layout so the archive mirrors what the user sees.
     const path = note.path.replace(/\.mdx?$/i, `.${extensionFor(format)}`);
     zip.file(path, result.blob);

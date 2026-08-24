@@ -6,8 +6,9 @@ import {
   joinPath,
   slugifyFilename,
   uniquePath,
-  dirname,
-  normalizePath,
+  rewriteRelativeLinks,
+  isRelativeLink,
+  resolveFromNote,
 } from "@forkleaf/markdown-engine";
 import type { LocalDatabase, RemoteGateway } from "./ports";
 import type { SyncEngine } from "./sync-engine";
@@ -267,20 +268,51 @@ export class NoteRepository {
     const matches = Array.from(target.content.matchAll(/!\[.*?\]\(([^)]+)\)/g));
     for (const match of matches) {
       const src = match[1];
-      if (!src) continue;
-      // Simple check to ensure it's a repo-relative path, not an external URL.
-      if (!/^[a-z][a-z0-9+.-]*:/i.test(src) && !src.startsWith("//") && !src.startsWith("/")) {
-        const assetPath = normalizePath(`${dirname(target.path)}/${src}`);
+      if (!src || !isRelativeLink(src)) continue;
+
+      const assetPath = resolveFromNote(target.path, src);
+      const id = `${target.workspaceId}::${assetPath}`;
+      const stored = await this.db.getAsset(id);
+
+      /**
+       * An asset that never reached GitHub must not be deleted from it.
+       *
+       * Asking git to remove a path that is not in the tree is not a no-op —
+       * GitHub rejects the whole commit with `GitRPC::BadObjectState`, and
+       * since a flush is one atomic commit, that one impossible deletion took
+       * every note queued behind it down with it. The queue then retried the
+       * same impossible commit forever, which is what "couldn't sync" that
+       * never clears actually was.
+       *
+       * No local record means the note came from the repository and its images
+       * are presumed to be there too, which is the case worth attempting.
+       */
+      if (!stored || stored.pushed) {
         await this.sync.recordAssetDelete(target.workspaceId, assetPath);
-        // Clean up from local IDB cache too.
-        await this.db.deleteAsset(`${target.workspaceId}::${assetPath}`);
       }
+
+      // Local copy goes either way: the note that used it is gone.
+      await this.db.deleteAsset(id);
     }
   }
 
+  /**
+   * Moves or renames a note, and takes its images with it.
+   *
+   * The links inside the note are relative to where the note sits — that is
+   * what makes them work on github.com — so moving the file one folder across
+   * silently repoints every image in it at a path that holds nothing. The
+   * rewrite is part of the move rather than a follow-up commit: a note that is
+   * moved but not repointed is a broken note, and there is no moment at which
+   * anyone would want to see one.
+   */
   async renameNote(note: Note, toPath: string): Promise<Note> {
     const current = await this.db.getNote(note.id);
-    const freshNote = current ?? note;
+    const stored = current ?? note;
+    const freshNote: Note = {
+      ...stored,
+      content: rewriteRelativeLinks(stored.content, stored.path, toPath),
+    };
 
     const content = serializeDocument(freshNote.content, freshNote.frontmatter);
     await this.sync.recordRename(freshNote, toPath, content);

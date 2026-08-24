@@ -37,6 +37,7 @@ import { BootScreen } from "@/components/BootScreen";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { signOut } from "@/lib/gateway";
 import { assetPathFor, relativeSrc, resolveImageSrc, uploadImage } from "@/lib/assets";
+import { repairNoteLinks } from "@/lib/repair-links";
 import { flattenTree, isMarkdown } from "@/lib/library";
 import { track } from "@/lib/firebase/analytics";
 import { upsertUserProfile } from "@/lib/firebase/users";
@@ -481,6 +482,52 @@ export function EditorWorkspace() {
     [notebook],
   );
 
+  /**
+   * Points a note's broken images back at the files they meant.
+   *
+   * Notes written before images were filed beside the note that uses them —
+   * or moved to another folder by a version of this app that did not carry
+   * their links along — refer to paths that hold nothing, and every picture in
+   * them is a broken box here and on github.com. The files are still in the
+   * repository; only the link is wrong, and that is repairable.
+   *
+   * Offered as a command rather than done silently on open: it rewrites the
+   * note, which is a commit, and a commit nobody asked for is not something an
+   * editor should be making on its own.
+   */
+  const repairImages = useCallback(async () => {
+    const note = notebook.note;
+    if (!workspace || !note) return;
+
+    if (workspace.isLocal) {
+      notebook.reportError("Connect a repository first — there is nowhere to look for the files.");
+      return;
+    }
+
+    try {
+      const result = await repairNoteLinks(workspace, note.path, note.content);
+
+      if (result.fixed.length === 0) {
+        notebook.reportError(
+          result.unresolved.length > 0
+            ? `Nothing in the repository matches ${result.unresolved.length === 1 ? "that link" : "those links"}: ${result.unresolved.slice(0, 3).join(", ")}`
+            : "Every image in this note already points at a file that exists.",
+        );
+        return;
+      }
+
+      await notebook.saveNote(result.content);
+      notebook.reportError(
+        `Repointed ${result.fixed.length} ${result.fixed.length === 1 ? "image" : "images"}` +
+          (result.unresolved.length > 0 ? `; ${result.unresolved.length} still not found.` : "."),
+      );
+    } catch (error) {
+      notebook.reportError(
+        error instanceof Error ? error.message : "Those images could not be looked up.",
+      );
+    }
+  }, [notebook, workspace]);
+
   const handleSignOut = useCallback(async () => {
     await signOut();
     router.push("/");
@@ -527,6 +574,13 @@ export function EditorWorkspace() {
         hint: "⌘S",
         keywords: "commit save upload",
         run: () => void notebook.syncNow(),
+      },
+      {
+        id: "repair-images",
+        label: "Find this note's missing images",
+        group: "Notes",
+        keywords: "broken image link repair fix missing picture",
+        run: () => void repairImages(),
       },
       {
         id: "connect",
@@ -663,6 +717,7 @@ export function EditorWorkspace() {
     currentFolder,
     handleRename,
     handleDelete,
+    repairImages,
     localFiles,
   ]);
 

@@ -127,7 +127,67 @@ export async function toHtml(
 
   if (resolveImage) body = await inlineImages(body, resolveImage);
 
-  return document(options.title, body, options.theme);
+  return document(
+    options.title,
+    forPrinting(withoutRepeatedTitle(body, options.title)),
+    options.theme,
+  );
+}
+
+/**
+ * Drops the note's own opening heading when it repeats the document title.
+ *
+ * Every note here begins `# Its Title`, and the exported document puts that
+ * same title in a header block of its own — because a PDF forwarded in an email
+ * has no filename left to say what it is. The two together meant every export
+ * opened with its title printed twice, one directly under the other, which is
+ * the first thing anybody notices about the file.
+ *
+ * Only an exact match is removed, and only at the very top: a note whose first
+ * heading says something else is saying something else, and keeping it is the
+ * whole point.
+ */
+function withoutRepeatedTitle(html: string, title: string): string {
+  const wanted = normaliseHeading(title);
+  if (!wanted) return html;
+
+  return html.replace(/^\s*<h1\b[^>]*>([\s\S]*?)<\/h1>/i, (whole, inner: string) =>
+    normaliseHeading(stripTags(inner)) === wanted ? "" : whole,
+  );
+}
+
+function stripTags(html: string): string {
+  return html.replace(/<[^>]*>/g, "");
+}
+
+/** Whitespace, case and entity differences are not differences in a title. */
+function normaliseHeading(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Undoes the reader-facing image loading strategy.
+ *
+ * The renderer marks every image `loading="lazy"`, which is right in the app —
+ * a note with forty screenshots should not fetch forty screenshots to show its
+ * first paragraph. It is wrong in a document that is about to be printed: a
+ * lazy image only loads when it approaches the viewport, and the print frame
+ * has no viewport worth speaking of, so every picture below the first screen
+ * stayed unloaded and the PDF came out with gaps where they should have been.
+ *
+ * `decoding="sync"` is the other half: it keeps the browser from deferring the
+ * decode past the moment the page is handed to the printer.
+ */
+function forPrinting(html: string): string {
+  return html.replace(/<img\b/gi, '<img decoding="sync"').replace(/\sloading="lazy"/gi, "");
 }
 
 /**
@@ -251,6 +311,12 @@ function document(title: string, body: string, theme: "light" | "dark"): string 
     body { padding: 0; background: #fff; color: #000; }
     h1, h2, h3 { break-after: avoid; }
     pre, blockquote, table, .diagram, figure, img { break-inside: avoid; }
+    /* An image taller than a sheet has to be allowed to shrink, or the printer
+       clips it at the page edge and the bottom half is simply gone. */
+    img { max-height: 88vh; object-fit: contain; }
+    /* Backgrounds are what tells a code block from prose; browsers drop them
+       when printing unless asked not to. */
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     a { color: inherit; text-decoration: none; }
     /* A link is worth nothing on paper unless you can see where it goes. */
     a[href^="http"]::after {

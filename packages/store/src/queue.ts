@@ -18,6 +18,18 @@ export interface CoalesceInput {
   content?: string;
   baseSha: string | null;
   now: string;
+  /**
+   * True when the path is known to exist in the repository despite our having
+   * no sha for it.
+   *
+   * A note that was created and deleted before it ever synced does not need to
+   * reach GitHub at all, and "no base sha" is how that is normally recognised.
+   * An image is the case that breaks the rule: it is committed directly rather
+   * than through this queue, so it has no sha here and yet is very much on
+   * GitHub — and the rule quietly threw away every request to remove one,
+   * leaving orphaned screenshots behind for notes that no longer exist.
+   */
+  existsRemotely?: boolean;
 }
 
 /**
@@ -92,7 +104,7 @@ function remove(
   // A note created offline and deleted before it ever synced never needs to
   // reach GitHub at all — drop it from the queue entirely.
   const neverPushed = prior ? prior.baseSha === null : input.baseSha === null;
-  if (neverPushed) return others;
+  if (neverPushed && !input.existsRemotely) return others;
 
   return [
     ...others,

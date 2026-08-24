@@ -19,6 +19,14 @@ export {
 
 export { markdownToHtml, astToMarkdown, formatMarkdown, type RenderOptions } from "./render";
 export {
+  rewriteRelativeLinks,
+  repairRelativeLinks,
+  type LinkRepair,
+  relativeFromNote,
+  resolveFromNote,
+  isRelativeLink,
+} from "./relocate";
+export {
   youtubeVideoFrom,
   youtubeEmbedUrl,
   youtubeWatchUrl,

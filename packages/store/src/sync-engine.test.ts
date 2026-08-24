@@ -13,6 +13,8 @@ class FakeGateway implements RemoteGateway {
   files = new Map<string, { content: string; sha: string }>();
   online = true;
   failNext = 0;
+  /** Paths the fake server refuses, the way GitHub refuses a bad tree entry. */
+  rejects = new Set<string>();
   private counter = 0;
 
   async listTree(): Promise<TreeNode[]> {
@@ -29,6 +31,14 @@ class FakeGateway implements RemoteGateway {
     if (this.failNext > 0) {
       this.failNext -= 1;
       throw new Error("server error");
+    }
+
+    const refused = input.changes.find((change) => this.rejects.has(change.path));
+    if (refused) {
+      throw Object.assign(new Error(`GitRPC::BadObjectState on ${refused.path}`), {
+        code: "validation",
+        status: 422,
+      });
     }
 
     this.commits.push(structuredClone(input));
@@ -245,6 +255,19 @@ describe("queue coalescing", () => {
     expect(queue).toHaveLength(1);
     expect(queue[0]!.op).toBe("rename");
     expect(queue[0]!.content).toBe("v2");
+  });
+});
+
+describe("asset deletions", () => {
+  it("keeps the request to remove an image, which has no sha of its own", async () => {
+    const ctx = setup();
+
+    await ctx.engine.recordAssetDelete("ws", "notes/assets/shot.png");
+
+    const queued = await ctx.db.listQueue("ws");
+    expect(queued.map((item) => `${item.op} ${item.path}`)).toEqual([
+      "delete notes/assets/shot.png",
+    ]);
   });
 });
 
@@ -734,5 +757,54 @@ describe("pendingFor and discardPending", () => {
     await engine.start();
 
     await expect(engine.discardPending("nobody")).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * One change the server will never accept.
+ *
+ * A flush is a single commit, so a change GitHub refuses outright fails the
+ * commit carrying everybody else's writing too — and keeps failing it, every
+ * retry, until the whole queue is blocked and the status bar just says
+ * "couldn't sync" forever.
+ */
+describe("a change the server refuses", () => {
+  it("does not stop the rest of the queue from reaching GitHub", async () => {
+    const ctx = setup();
+    ctx.gateway.rejects.add("assets/ghost.png");
+
+    await ctx.engine.recordUpsert(makeNote({ path: "a.md", baseSha: null }), "a");
+    await ctx.engine.recordUpsert(makeNote({ id: "ws::b.md", path: "b.md", baseSha: null }), "b");
+    await ctx.engine.recordAssetDelete("ws", "assets/ghost.png");
+
+    await ctx.timers.tick();
+
+    // The two notes landed, in whatever grouping the split produced.
+    const written = ctx.gateway.commits.flatMap((commit) =>
+      commit.changes.map((change) => change.path),
+    );
+    expect(written).toContain("a.md");
+    expect(written).toContain("b.md");
+    expect(written).not.toContain("assets/ghost.png");
+
+    // And the one that failed is still queued, described by its own error.
+    const queued = await ctx.db.listQueue("ws");
+    expect(queued.map((item) => item.path)).toEqual(["assets/ghost.png"]);
+    expect(queued[0]?.lastError).toContain("BadObjectState");
+  });
+
+  it("does not split a failure that has nothing to do with the content", async () => {
+    const ctx = setup();
+    ctx.gateway.failNext = 1;
+
+    await ctx.engine.recordUpsert(makeNote({ path: "a.md", baseSha: null }), "a");
+    await ctx.engine.recordUpsert(makeNote({ id: "ws::b.md", path: "b.md", baseSha: null }), "b");
+
+    await ctx.timers.tick();
+
+    // One attempt at the batch, not one per half.
+    const queued = await ctx.db.listQueue("ws");
+    expect(queued).toHaveLength(2);
+    expect(queued.every((item) => item.attempts === 1)).toBe(true);
   });
 });

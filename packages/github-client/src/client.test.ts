@@ -607,3 +607,84 @@ describe("pull requests", () => {
     expect(calls[0]!.url).toContain("head=me%3Atopic");
   });
 });
+
+/**
+ * Deleting something the repository does not have.
+ *
+ * GitHub does not shrug at a tree entry that removes a path it cannot find: it
+ * answers 422 `GitRPC::BadObjectState` and refuses the entire commit. Since a
+ * commit here carries every queued change, one stale deletion used to stop a
+ * repository syncing altogether — and keep stopping it, on every retry.
+ */
+describe("deletions of paths that are not in the repository", () => {
+  const tree = {
+    "GET /repos/octo/notes/git/trees/head-tree?recursive=1": {
+      tree: [
+        { path: "a.md", type: "blob" },
+        { path: "assets/real.png", type: "blob" },
+      ],
+      truncated: false,
+    },
+  };
+
+  it("drops the impossible deletion and commits the rest", async () => {
+    const { calls, fetchImpl } = fakeGitHub(tree);
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    await client.commitChanges(
+      repo,
+      [
+        { op: "upsert", path: "a.md", content: "a" },
+        { op: "delete", path: "assets/real.png" },
+        { op: "delete", path: "assets/never-pushed.png" },
+      ],
+      { message: "batch" },
+    );
+
+    const body = calls.find((c) => c.url.endsWith("/git/trees") && c.method === "POST")?.body as {
+      tree: { path: string; sha: string | null }[];
+    };
+
+    expect(body.tree.map((entry) => entry.path)).toEqual(["a.md", "assets/real.png"]);
+  });
+
+  it("makes no commit at all when nothing is left to write", async () => {
+    const { calls, fetchImpl } = fakeGitHub(tree);
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    const result = await client.commitChanges(
+      repo,
+      [{ op: "delete", path: "assets/never-pushed.png" }],
+      { message: "tidy up" },
+    );
+
+    // Reporting HEAD: the branch is already in the state that was asked for.
+    expect(result.sha).toBe("head-sha");
+    expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/git/commits"))).toBe(false);
+  });
+
+  it("does not read the tree when there is nothing to delete", async () => {
+    const { calls, fetchImpl } = fakeGitHub(tree);
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    await client.commitChanges(repo, [{ op: "upsert", path: "a.md", content: "a" }], {
+      message: "edit",
+    });
+
+    expect(calls.some((c) => c.url.includes("recursive=1"))).toBe(false);
+  });
+
+  it("commits as asked when the tree cannot be read", async () => {
+    // No tree route: the guard cannot run, and must not become a second way
+    // for the commit to fail.
+    const { calls, fetchImpl } = fakeGitHub();
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    await client.commitChanges(repo, [{ op: "delete", path: "gone.md" }], { message: "delete" });
+
+    const body = calls.find((c) => c.url.endsWith("/git/trees") && c.method === "POST")?.body as {
+      tree: { path: string }[];
+    };
+    expect(body.tree.map((entry) => entry.path)).toEqual(["gone.md"]);
+  });
+});
