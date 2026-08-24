@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { detectKind, mermaidToGraph } from "@forkleaf/diagrams";
 import { DiagramStudio, useDiagramPopoutSession, type DiagramLinkStatus } from "@forkleaf/editor";
 import { ForkLeafLogo } from "@/components/Brand";
 import { useTheme } from "@/hooks/useTheme";
@@ -68,48 +69,67 @@ export function DiagramWindow() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-[var(--fl-bg)]">
-      <header className="flex shrink-0 items-center gap-3 border-b border-[var(--fl-border)] px-4 py-2.5">
-        <ForkLeafLogo markClassName="h-5 w-5" textClassName="text-sm" />
+    // The same layered shell the editor uses: floating surfaces on the page
+    // colour, a title bar of their own, and a status strip underneath. A
+    // window that reads like the app it came out of does not feel like a
+    // second application you have been thrown into.
+    <div className="flex h-screen flex-col overflow-hidden bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
+      <div className="shrink-0 px-2 pt-2">
+        <header className="fl-panel flex h-[52px] items-center gap-3 px-3">
+          <ForkLeafLogo markClassName="h-5 w-5" textClassName="text-sm" />
 
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[13.5px] font-semibold text-[var(--fl-text)]">{title}</h1>
-          <SaveState status={status} savedAt={savedAt} dirty={dirty} />
-        </div>
+          <span aria-hidden="true" className="h-5 w-px shrink-0 bg-[var(--fl-border)]" />
 
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="fl-btn fl-btn-ghost text-[13px]"
-          title="Diagrams are drawn in the theme's own palette, so this redraws them too"
-        >
-          {theme === "dark" ? "Light" : "Dark"}
-        </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-[13.5px] font-semibold leading-tight text-[var(--fl-text)]">
+              {title}
+            </h1>
+            <SaveState status={status} savedAt={savedAt} dirty={dirty} />
+          </div>
 
-        <button
-          type="button"
-          onClick={() => window.close()}
-          className="fl-btn fl-btn-ghost text-[13px]"
-        >
-          Close
-        </button>
-      </header>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            title="Diagrams are drawn in the theme's own palette, so this redraws them too"
+            className="shrink-0 rounded-lg border border-[var(--fl-border)] px-2.5 py-1.5 text-[12.5px] font-medium text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)]"
+          >
+            {theme === "dark" ? "Light" : "Dark"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => window.close()}
+            className="shrink-0 rounded-lg border border-[var(--fl-border)] px-2.5 py-1.5 text-[12.5px] font-medium text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)]"
+          >
+            Close
+          </button>
+        </header>
+      </div>
 
       {status === "detached" && (
-        <p className="shrink-0 border-b border-[var(--fl-warning-border,var(--fl-border))] bg-[var(--fl-surface)] px-4 py-2 text-[12.5px] text-[var(--fl-muted)]">
-          The note tab is not answering, so edits are being kept in this browser instead of saved
-          into the note. Reopen the note and this window will reconnect on its own.
-        </p>
+        <div className="shrink-0 px-2 pt-2">
+          <p className="fl-panel border-[var(--fl-danger)]/40 px-3 py-2 text-[12.5px] text-[var(--fl-muted)]">
+            <span className="font-medium text-[var(--fl-danger)]">Not saving to the note.</span> The
+            note tab is not answering, so edits are being kept in this browser. Reopen the note and
+            this window will reconnect on its own.
+          </p>
+        </div>
       )}
 
       {/* The studio fills the window — which is the entire reason to be here.
           It is mounted only once the source is known: it reads that source on
           its first render to decide between a canvas and the "what are you
           drawing?" picker, so mounting it a paint early asks someone who
-          clicked an existing diagram what they would like to draw. */}
+          clicked an existing diagram what they would like to draw.
+
+          The canvas gets roughly two thirds of the width to start with, and
+          the divider is still there to move: the reason to open a diagram in
+          a window is the canvas, so it should not have to be uncovered first.
+          A dialog splits nearer the middle because its source pane is narrow
+          enough to wrap without the help. */}
       <div className="flex min-h-0 flex-1 flex-col">
         {ready ? (
-          <DiagramStudio code={code} onChange={setCode} />
+          <DiagramStudio code={code} onChange={setCode} chrome="layered" initialSplit={32} />
         ) : (
           <p
             className="flex flex-1 items-center justify-center text-sm text-[var(--fl-muted)]"
@@ -119,7 +139,51 @@ export function DiagramWindow() {
           </p>
         )}
       </div>
+
+      <StatusBar code={code} status={status} />
     </div>
+  );
+}
+
+/**
+ * The strip along the bottom, matching the editor's.
+ *
+ * It answers the two questions the chrome above deliberately does not repeat:
+ * what this diagram actually is, and where its text ends up. Facts, not
+ * controls — the same job the editor's status bar does for a note.
+ */
+function StatusBar({ code, status }: { code: string; status: DiagramLinkStatus }) {
+  const facts = useMemo(() => {
+    const kind = detectKind(code);
+    const lines = code.trim() === "" ? 0 : code.trim().split("\n").length;
+    // Null for diagram types the graph model does not cover, and for a
+    // flowchart mid-keystroke. Counts are then simply left off rather than
+    // reported as zero.
+    const graph = mermaidToGraph(code);
+
+    return [
+      kind ?? "diagram",
+      graph ? `${graph.nodes.length} ${graph.nodes.length === 1 ? "node" : "nodes"}` : null,
+      graph ? `${graph.edges.length} ${graph.edges.length === 1 ? "arrow" : "arrows"}` : null,
+      `${lines} ${lines === 1 ? "line" : "lines"}`,
+    ].filter((fact): fact is string => fact !== null);
+  }, [code]);
+
+  return (
+    <footer className="flex shrink-0 items-center gap-3 px-4 py-1.5 text-[11px] text-[var(--fl-muted)]">
+      <span className="flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className={`h-1.5 w-1.5 rounded-full ${
+            status === "linked" ? "bg-[var(--fl-accent)]" : "bg-[var(--fl-border-strong)]"
+          }`}
+        />
+        {status === "linked" ? "Saving into the note" : "Not saving into the note"}
+      </span>
+
+      <span className="ml-auto truncate font-mono">{facts.join("  ·  ")}</span>
+      <span className="hidden sm:inline">Mermaid</span>
+    </footer>
   );
 }
 
