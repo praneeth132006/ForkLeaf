@@ -154,10 +154,9 @@ function policy(nonce: string | null, isDev: boolean): string {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    // The GitHub Sponsors card is an iframe, and the only one in the app. With
-    // `'none'` here it was blocked everywhere it appears — the landing page and
-    // the profile both drew an empty bordered box where the card should be.
-    "frame-src https://github.com",
+    // The GitHub Sponsors card is an iframe.
+    // YouTube embeds are iframes served from youtube-nocookie.com.
+    "frame-src https://github.com https://www.youtube-nocookie.com",
     "worker-src 'self' blob:",
     "manifest-src 'self'",
     ...(isDev ? [] : ["upgrade-insecure-requests"]),
