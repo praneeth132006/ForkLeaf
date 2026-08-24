@@ -36,7 +36,7 @@ export interface NoteRepositoryOptions {
  * frontmatter as a table above the document, so this is both a credit and the
  * most direct route from someone else's repository back to the project.
  */
-const GENERATOR = "ForkLeaf — https://github.com/praneeth132006/ForkLeaf";
+const GENERATOR = "forkleaf.vercel.app";
 
 /**
  * The API the UI actually talks to.
