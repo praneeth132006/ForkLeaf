@@ -54,8 +54,16 @@ interface ApiPullRequest {
   state: string;
   title: string;
   draft?: boolean;
-  head: { ref: string };
-  base: { ref: string };
+  head: { ref: string; sha?: string };
+  base: { ref: string; sha?: string };
+  user?: { login: string } | null;
+  merged?: boolean;
+}
+
+interface ApiPullRequestFile {
+  filename: string;
+  status: string;
+  previous_filename?: string;
 }
 
 interface ApiCommit {
@@ -129,6 +137,31 @@ export interface PullRequestSummary {
   draft: boolean;
   head: string;
   base: string;
+}
+
+/**
+ * A pull request as a diagram review needs it: the two commits to compare.
+ *
+ * `PullRequestSummary` is what the "propose changes" flow gets back after
+ * opening one, and it deliberately carries only branch names. Reviewing needs
+ * the commits those branches pointed at when the request was opened — a branch
+ * name resolves to whatever it points at *now*, which is not the revision the
+ * request is about.
+ */
+export interface PullRequestDetail extends PullRequestSummary {
+  headSha: string;
+  baseSha: string;
+  author: string | null;
+  merged: boolean;
+}
+
+/** A file a pull request touches. */
+export interface PullRequestFile {
+  path: string;
+  /** GitHub's own word: added, removed, modified, renamed, copied, changed. */
+  status: string;
+  /** Where the file was before a rename, so the two sides can be paired. */
+  previousPath: string | null;
 }
 
 /** One entry in a note's history, flattened for display. */
@@ -491,6 +524,52 @@ export class GitHubClient {
     );
 
     return pulls[0] ? toPullRequest(pulls[0]) : null;
+  }
+
+  /**
+   * Reads one pull request, including the commits it is actually about.
+   *
+   * The base SHA GitHub reports here is the tip of the base branch, which is
+   * not necessarily the merge base — but it is the revision the request is
+   * stated against, and comparing against anything else would show the
+   * reviewer changes that came from other people's merges.
+   */
+  async getPullRequest(owner: string, repo: string, number: number): Promise<PullRequestDetail> {
+    const { data } = await this.transport.request<ApiPullRequest>(
+      `/repos/${owner}/${repo}/pulls/${number}`,
+    );
+    if (!data) throw new GitHubError("not-found", `Pull request #${number} not found`);
+
+    return {
+      ...toPullRequest(data),
+      headSha: data.head.sha ?? data.head.ref,
+      baseSha: data.base.sha ?? data.base.ref,
+      author: data.user?.login ?? null,
+      merged: data.merged === true,
+    };
+  }
+
+  /**
+   * Every file a pull request touches.
+   *
+   * Paginated, because the endpoint caps at 100 per page and a request that
+   * touches more files than that is exactly the one where finding the changed
+   * diagrams by hand is hopeless.
+   */
+  async listPullRequestFiles(
+    owner: string,
+    repo: string,
+    number: number,
+  ): Promise<PullRequestFile[]> {
+    const files = await this.transport.paginate<ApiPullRequestFile>(
+      `/repos/${owner}/${repo}/pulls/${number}/files?per_page=100`,
+    );
+
+    return files.map((file) => ({
+      path: file.filename,
+      status: file.status,
+      previousPath: file.previous_filename ?? null,
+    }));
   }
 
   // ─── Reading ──────────────────────────────────────────────────────────────

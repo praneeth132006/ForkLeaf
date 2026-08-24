@@ -41,10 +41,12 @@ import { THEME_INIT_HASH } from "@/lib/theme-script-hash";
  *
  * These are the screens built out of the user's own repositories: the editor,
  * which injects rendered markdown and diagram SVG as HTML; the dashboard,
- * which builds an index out of every note in them; and the pop-out diagram
- * window, which is the editor's diagram studio in a tab of its own.
+ * which builds an index out of every note in them; the pop-out diagram
+ * window, which is the editor's diagram studio in a tab of its own; and the
+ * pull-request diagram review, which injects SVG built from a repository
+ * anyone may have opened a request against.
  */
-const NONCED_ROUTES = ["/editor", "/dashboard", "/diagram"];
+const NONCED_ROUTES = ["/editor", "/dashboard", "/diagram", "/diagram-diff"];
 
 /** Methods that can change something. Everything else is a read. */
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
