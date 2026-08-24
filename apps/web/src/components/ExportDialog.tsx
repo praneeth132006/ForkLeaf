@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ExportFormat, Note } from "@forkleaf/types";
+import type { ExportFormat, Note, Workspace } from "@forkleaf/types";
 import {
   EXPORT_FORMATS,
   exportNote,
@@ -11,9 +11,14 @@ import {
 } from "@forkleaf/exporter";
 import { deriveTitle } from "@forkleaf/markdown-engine";
 import { Dialog } from "./Dialog";
+import { exportImageResolver } from "@/lib/export-images";
 
 export interface ExportDialogProps {
   note: Note;
+  /** Where the note lives, which is how its images are found. */
+  workspace: Workspace | null;
+  /** Object URLs for assets held on this device, keyed by repository path. */
+  assetUrls: Readonly<Record<string, string>>;
   /** Loads every note in the workspace, for the "export everything" option. */
   loadAllNotes: () => Promise<Note[]>;
   onClose: () => void;
@@ -25,7 +30,13 @@ export interface ExportDialogProps {
  * Everything is produced in the browser — the note is never uploaded anywhere
  * to be converted, which is both faster and means a private note stays private.
  */
-export function ExportDialog({ note, loadAllNotes, onClose }: ExportDialogProps) {
+export function ExportDialog({
+  note,
+  workspace,
+  assetUrls,
+  loadAllNotes,
+  onClose,
+}: ExportDialogProps) {
   const [format, setFormat] = useState<ExportFormat>("pdf");
   const [includeFrontmatter, setIncludeFrontmatter] = useState(false);
   const [renderDiagrams, setRenderDiagrams] = useState(true);
@@ -41,6 +52,8 @@ export function ExportDialog({ note, loadAllNotes, onClose }: ExportDialogProps)
 
     try {
       const options = { format, title, includeFrontmatter, renderDiagrams, theme };
+      // Images are inlined as data URLs, so what leaves carries its pictures.
+      const images = exportImageResolver(workspace, note.path, assetUrls);
 
       if (scope === "workspace") {
         // PDF and DOCX cannot be produced in bulk without a print dialog per
@@ -50,13 +63,13 @@ export function ExportDialog({ note, loadAllNotes, onClose }: ExportDialogProps)
         const notes = await loadAllNotes();
         if (notes.length === 0) throw new Error("There are no notes to export yet.");
 
-        downloadResult(await exportWorkspace(notes, bulkFormat, options));
+        downloadResult(await exportWorkspace(notes, bulkFormat, options, images));
       } else if (format === "pdf") {
         // Goes through the browser's print pipeline so the PDF has real,
         // selectable text rather than a rasterised page.
-        await printToPdf(note, options);
+        await printToPdf(note, options, images);
       } else {
-        downloadResult(await exportNote(note, options));
+        downloadResult(await exportNote(note, options, images));
       }
 
       if (format !== "pdf" || scope === "workspace") onClose();
