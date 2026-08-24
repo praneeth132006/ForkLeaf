@@ -234,21 +234,40 @@ export async function uploadImage(options: {
 /**
  * Chooses the repository path a file should be committed to.
  *
+ * Images are filed under the folder of the note that uses them —
+ * `SOC 101/Phishing analysis/assets/…` for a note in `SOC 101/Phishing
+ * analysis` — rather than all together at the top of the repository.
+ *
+ * One flat `assets/` folder is fine for a week and unusable after a year: a
+ * few hundred screenshots from unrelated notes in one listing, none of which
+ * can be traced back to what they belong to without opening them. Filing them
+ * beside their note means the folder you are reading contains the pictures
+ * that folder uses, deleting a project takes its images with it, and the
+ * relative link in the note is shorter and more obviously correct.
+ *
  * A pasted screenshot arrives called "image.png" every single time. The date
- * keeps a week of them apart in the folder listing, and the random tail keeps
- * two pasted in the same minute from overwriting each other — the repository
- * tree we index only lists markdown, so there is no reliable "does this name
+ * keeps a week of them apart in the listing, and the random tail keeps two
+ * pasted in the same minute from overwriting each other — the repository tree
+ * we index only lists markdown, so there is no reliable "does this name
  * already exist" to ask.
  */
-export function assetPathFor(workspace: Workspace, file: File, taken: Iterable<string>): string {
+export function assetPathFor(
+  workspace: Workspace,
+  file: File,
+  taken: Iterable<string>,
+  /** The note the image is being added to; its folder is where they are kept. */
+  notePath?: string,
+): string {
   const extension = extensionForFile(file);
   if (!extension) {
     throw new Error("That file is not an image ForkLeaf can store.");
   }
 
-  const folder = workspace.repo.directory
-    ? `${workspace.repo.directory}/${ASSET_FOLDER}`
-    : ASSET_FOLDER;
+  // The note's folder, then the workspace's own subdirectory, then the root —
+  // whichever is the most specific thing we actually know.
+  const noteFolder = notePath ? dirname(notePath) : "";
+  const base = noteFolder || workspace.repo.directory || "";
+  const folder = base ? `${base}/${ASSET_FOLDER}` : ASSET_FOLDER;
 
   const stamp = new Date().toISOString().slice(0, 10);
   const tail = Math.random().toString(36).slice(2, 6);
