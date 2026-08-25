@@ -50,7 +50,7 @@ export interface RemoteCommitInput {
   message: string;
   squashWindowMs: number;
   changes: {
-    op: "upsert" | "delete" | "rename";
+    op: "upsert" | "delete" | "rename" | "move";
     path: string;
     toPath?: string;
     content?: string;
@@ -73,6 +73,16 @@ export interface RemoteCommitResult {
  */
 export interface RemoteGateway {
   listTree(workspaceId: string): Promise<TreeNode[]>;
+  /**
+   * Every file in the repository, notes and images alike.
+   *
+   * `listTree` is the notebook — Markdown only — which is the right answer for
+   * the sidebar and the wrong one for anything that has to act on a folder as
+   * a whole. A folder holds the pictures its notes use, and deleting or moving
+   * only the Markdown leaves those behind in a directory nothing points at any
+   * more.
+   */
+  listAllPaths(workspaceId: string): Promise<string[]>;
   readFile(workspaceId: string, path: string): Promise<{ content: string; sha: string } | null>;
   commit(input: RemoteCommitInput): Promise<RemoteCommitResult>;
 }

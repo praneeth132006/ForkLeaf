@@ -13,7 +13,7 @@ import type { PendingChange } from "@forkleaf/types";
 export interface CoalesceInput {
   workspaceId: string;
   path: string;
-  op: "upsert" | "delete" | "rename";
+  op: "upsert" | "delete" | "rename" | "move";
   toPath?: string;
   content?: string;
   encoding?: "utf8" | "base64";
@@ -54,6 +54,8 @@ export function coalesce(queue: PendingChange[], input: CoalesceInput): PendingC
       return remove(others, existing, input);
     case "rename":
       return rename(others, existing, input);
+    case "move":
+      return move(others, existing, input);
   }
 }
 
@@ -165,6 +167,52 @@ function rename(
   ];
 }
 
+/**
+ * A move: a rename that carries no content.
+ *
+ * Images travel this way. Nothing about the file changes, so there is nothing
+ * to upload — the commit reuses the blob already in the repository — but the
+ * same queue rules apply as for a note, because a move made offline still has
+ * to survive a restart and still has to arrive in the commit that moved the
+ * note beside it.
+ */
+function move(
+  others: PendingChange[],
+  existing: PendingChange[],
+  input: CoalesceInput,
+): PendingChange[] {
+  const prior = existing[0];
+  const toPath = input.toPath ?? input.path;
+
+  // Never reached GitHub, so there is nothing there to move. If bytes are
+  // still queued for the old path, redirect them to the new one; otherwise the
+  // whole thing is moot.
+  if (prior && prior.baseSha === null && prior.op === "upsert") {
+    return [
+      ...others,
+      { ...prior, id: changeId(input.workspaceId, toPath), path: toPath, queuedAt: input.now },
+    ];
+  }
+
+  // Chained moves (a → b → c) collapse to a single a → c.
+  const from = prior?.op === "move" || prior?.op === "rename" ? prior.path : input.path;
+  if (from === toPath) return others;
+
+  return [
+    ...others,
+    {
+      id: changeId(input.workspaceId, from),
+      workspaceId: input.workspaceId,
+      path: from,
+      op: "move",
+      toPath,
+      baseSha: prior ? prior.baseSha : input.baseSha,
+      queuedAt: input.now,
+      attempts: 0,
+    },
+  ];
+}
+
 export function changeId(workspaceId: string, path: string): string {
   return `${workspaceId}::${path}`;
 }
@@ -188,16 +236,19 @@ export function describeChanges(changes: PendingChange[]): string {
         return `delete ${name}`;
       case "rename":
         return `rename ${name} to ${fileName(change.toPath ?? "")}`;
+      case "move":
+        return `move ${name} to ${fileName(change.toPath ?? "")}`;
     }
   }
 
-  const counts = { upsert: 0, delete: 0, rename: 0 };
+  const counts = { upsert: 0, delete: 0, rename: 0, move: 0 };
   for (const change of changes) counts[change.op] += 1;
 
   const parts: string[] = [];
   if (counts.upsert) parts.push(`update ${counts.upsert} note${counts.upsert === 1 ? "" : "s"}`);
   if (counts.delete) parts.push(`delete ${counts.delete}`);
   if (counts.rename) parts.push(`rename ${counts.rename}`);
+  if (counts.move) parts.push(`move ${counts.move}`);
 
   return parts.join(", ");
 }

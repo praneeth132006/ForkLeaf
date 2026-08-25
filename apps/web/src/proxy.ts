@@ -154,9 +154,12 @@ function policy(nonce: string | null, isDev: boolean): string {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    // The GitHub Sponsors card is an iframe.
-    // YouTube embeds are iframes served from youtube-nocookie.com.
-    "frame-src https://github.com https://www.youtube-nocookie.com",
+    // YouTube embeds are iframes served from youtube-nocookie.com, and are now
+    // the only third-party frame the app has. github.com was here for the
+    // Sponsors card on the profile page; with that card gone, so is the
+    // permission — an origin allowed to frame us is worth removing the moment
+    // nothing needs it.
+    "frame-src https://www.youtube-nocookie.com",
     "worker-src 'self' blob:",
     "manifest-src 'self'",
     ...(isDev ? [] : ["upgrade-insecure-requests"]),

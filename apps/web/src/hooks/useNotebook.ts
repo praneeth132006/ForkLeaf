@@ -793,14 +793,12 @@ export function useNotebook(request: NotebookRequest = {}) {
 
       patch({ busy: "Renaming folder…" });
       try {
-        for (const path of collectPaths(state.tree).filter((candidate) =>
-          candidate.startsWith(`${source}/`),
-        )) {
-          const note =
-            state.openNotes.find((candidate) => candidate.path === path) ??
-            (await notes.openNote(workspace.id, path));
-          await notes.renameNote(note, `${target}${path.slice(source.length)}`);
-        }
+        // Everything under it, not just the notes. The tree the sidebar is
+        // built from lists Markdown only, so renaming from it moved the notes
+        // and left their `assets` directory behind at the old path — a folder
+        // that had been "moved" was still half there on github.com, and the
+        // images every note in it used were in the half that stayed.
+        await notes.moveFolderContents(workspace.id, source, target, collectPaths(state.tree));
 
         putEmptyFolders(
           state.emptyFolders.map((folder) =>
@@ -815,15 +813,10 @@ export function useNotebook(request: NotebookRequest = {}) {
         patch({ busy: null });
       }
     },
-    [
-      state.tree,
-      state.openNotes,
-      state.activeWorkspace,
-      state.emptyFolders,
-      putEmptyFolders,
-      refreshTree,
-      patch,
-    ],
+    // `state.openNotes` was here to find an already-open note to rename;
+    // `moveFolderContents` looks that up itself, so keeping it in this list
+    // would rebuild the callback on every keystroke in any open note.
+    [state.tree, state.activeWorkspace, state.emptyFolders, putEmptyFolders, refreshTree, patch],
   );
 
   /** Deletes a folder and every note inside it. */
@@ -836,15 +829,12 @@ export function useNotebook(request: NotebookRequest = {}) {
 
       patch({ busy: "Deleting folder…" });
       try {
-        for (const notePath of collectPaths(state.tree).filter((candidate) =>
-          candidate.startsWith(`${folder}/`),
-        )) {
-          // By path: a folder is deleted as a whole, and one note inside it
-          // that cannot be read — signed out, offline, never opened — used to
-          // throw here and abandon the deletion halfway through, leaving the
-          // folder on screen with some of its notes gone.
-          await notes.deletePath(workspace.id, notePath, shaFor(state.tree, notePath));
-        }
+        // Everything under it, not just the notes. Deleting from the sidebar's
+        // Markdown-only tree removed the notes and left the `assets` directory
+        // beside them, so a folder deleted here was still on github.com
+        // holding files — and, with no note left in it, no longer reachable
+        // from the app that made it.
+        await notes.deleteFolderContents(workspace.id, folder, collectPaths(state.tree));
 
         putEmptyFolders(
           state.emptyFolders.filter(

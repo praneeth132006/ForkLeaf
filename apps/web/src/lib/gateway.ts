@@ -103,6 +103,22 @@ export class GitHubGateway implements RemoteGateway {
     return tree;
   }
 
+  async listAllPaths(workspaceId: string): Promise<string[]> {
+    const { tree } = await call<{ tree: TreeNode[] }>(
+      `/api/gh/tree?${repoParams(this.resolve(workspaceId))}&all=1`,
+    );
+
+    const paths: string[] = [];
+    const walk = (nodes: TreeNode[]) => {
+      for (const node of nodes) {
+        if (node.kind === "file") paths.push(node.path);
+        if (node.children) walk(node.children);
+      }
+    };
+    walk(tree);
+    return paths;
+  }
+
   async readFile(
     workspaceId: string,
     path: string,
@@ -142,6 +158,11 @@ export class GitHubGateway implements RemoteGateway {
  */
 export class LocalGateway implements RemoteGateway {
   async listTree(): Promise<TreeNode[]> {
+    return [];
+  }
+
+  async listAllPaths(): Promise<string[]> {
+    // Nothing is ever remote, so there is nothing on GitHub to tidy up.
     return [];
   }
 
@@ -232,7 +253,7 @@ export async function commitToBranch(options: {
   directory: string;
   message: string;
   changes: {
-    op: "upsert" | "delete" | "rename";
+    op: "upsert" | "delete" | "rename" | "move";
     path: string;
     toPath?: string;
     content?: string;

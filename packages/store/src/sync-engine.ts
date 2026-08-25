@@ -152,7 +152,11 @@ export class SyncEngine {
     const queued = new Set(
       this.queue
         .filter((change) => change.workspaceId === workspaceId)
-        .map((change) => (change.op === "rename" ? (change.toPath ?? change.path) : change.path)),
+        .map((change) =>
+          change.op === "rename" || change.op === "move"
+            ? (change.toPath ?? change.path)
+            : change.path,
+        ),
     );
 
     let recovered = 0;
@@ -358,6 +362,30 @@ export class SyncEngine {
       // the request.
       baseSha: null,
       existsRemotely: true,
+      now: this.now().toISOString(),
+    });
+
+    await this.persistQueue();
+    this.scheduleFlush();
+  }
+
+  /**
+   * Queues a file to move without re-uploading it.
+   *
+   * For images carried along with the folder they live in. `recordRename` is
+   * the note version and needs the text, because a note's relative links are
+   * rewritten as part of the move; an image has neither.
+   */
+  async recordAssetMove(workspaceId: string, from: string, to: string): Promise<void> {
+    this.queue = coalesce(this.queue, {
+      workspaceId,
+      path: from,
+      op: "move",
+      toPath: to,
+      // An image has no sha here — it is not committed through this queue —
+      // and the commit does not need one: it finds the blob by looking the old
+      // path up in the tree it is committing against.
+      baseSha: null,
       now: this.now().toISOString(),
     });
 
@@ -625,7 +653,10 @@ export class SyncEngine {
       this.queue = this.queue.filter((c) => c.id !== change.id);
       await this.db.deleteQueueItem(change.id);
 
-      const path = change.op === "rename" ? (change.toPath ?? change.path) : change.path;
+      const path =
+        change.op === "rename" || change.op === "move"
+          ? (change.toPath ?? change.path)
+          : change.path;
       const newSha = result.blobShas[path];
       if (change.op === "delete" || !newSha) continue;
 

@@ -400,27 +400,10 @@ export function ProfilePanel({ user, githubAvailable }: ProfilePanelProps) {
         </div>
       </section>
 
-      {/* ── Sponsor ───────────────────────────────────────────────────── */}
-      <section className="mt-10">
-        <SectionHeading>Sponsor</SectionHeading>
-        <div className="fl-card mt-3 p-6">
-          <p className="max-w-2xl text-[14.5px] leading-relaxed text-[var(--fl-muted)]">
-            ForkLeaf is built in the open by one person. Sponsoring unlocks nothing — there is
-            nothing left to unlock — it just keeps the work going.
-          </p>
-          <div className="mt-4 max-w-[600px] overflow-hidden rounded-xl border border-[var(--fl-border)]">
-            <iframe
-              src="https://github.com/sponsors/praneeth132006/card"
-              title="Sponsor praneeth132006"
-              height="225"
-              width="600"
-              loading="lazy"
-              className="block w-full"
-              style={{ border: 0 }}
-            />
-          </div>
-        </div>
-      </section>
+      {/* The sponsorship ask used to sit here, as a GitHub Sponsors iframe.
+          It belongs on the pricing page, where somebody is deciding what this
+          costs — not in the account settings of somebody who has already
+          decided and is here to change their theme. It is still on /pricing. */}
     </div>
   );
 }

@@ -224,8 +224,18 @@ export interface PendingChange {
   id: string;
   workspaceId: string;
   path: string;
-  op: "upsert" | "delete" | "rename";
-  /** Destination path for renames. */
+  /**
+   * `move` is a rename with no content of its own.
+   *
+   * A note is renamed by writing its text at the new path, because the text
+   * changes — its relative links are rewritten to suit where it now sits. An
+   * image has no links to rewrite and no text to send, and re-uploading a
+   * megabyte of screenshot to change its name would be absurd, so a move
+   * carries the path pair alone and the commit reuses the blob already in the
+   * repository. Which is what a rename is in git.
+   */
+  op: "upsert" | "delete" | "rename" | "move";
+  /** Destination path for renames and moves. */
   toPath?: string;
   /** Full file text including frontmatter. Absent for deletes. */
   content?: string;
