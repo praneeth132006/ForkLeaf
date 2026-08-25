@@ -3,6 +3,7 @@ import type {
   ConflictResolution,
   Note,
   PendingChange,
+  SyncErrorCode,
   SyncMode,
   SyncState,
   SyncStatus,
@@ -74,6 +75,7 @@ export class SyncEngine {
   private lastSyncedAt: string | null = null;
   private lastError: string | null = null;
   private lastErrorDetail: string | null = null;
+  private lastErrorCode: SyncErrorCode | null = null;
   private readonly listeners = new Set<Listener>();
 
   constructor(options: SyncEngineOptions) {
@@ -235,6 +237,7 @@ export class SyncEngine {
       lastSyncedAt: this.lastSyncedAt,
       lastError: this.lastError,
       lastErrorDetail: this.lastErrorDetail,
+      lastErrorCode: this.lastErrorCode,
       conflicts: this.conflicts,
     };
   }
@@ -458,11 +461,13 @@ export class SyncEngine {
       this.lastSyncedAt = this.now().toISOString();
       this.lastError = null;
       this.lastErrorDetail = null;
+      this.lastErrorCode = null;
       this.retryDelay = 0;
       this.setStatus(this.restingStatus());
     } catch (err) {
       this.lastError = plainly(err);
       this.lastErrorDetail = err instanceof Error ? err.message : String(err);
+      this.lastErrorCode = codeOf(err);
       // "error" means a push failed and will be tried again by itself. Once
       // nothing is left that *will* be tried again, that reading is wrong and
       // the honest word is "blocked" — it has stopped, and it needs asking.
@@ -914,6 +919,40 @@ function isContentRejection(err: unknown): boolean {
  * writing is safe. It always is; that is the whole point of saving locally
  * first, and it is the first thing anybody wants to know.
  */
+/**
+ * The same failure, in a form the UI can branch on.
+ *
+ * `plainly` says what happened; this says what *kind* of thing happened, which
+ * is what decides whether the honest offer is "try again" or "sign in again".
+ * Kept beside it so the two can never drift into disagreeing about one error.
+ */
+export function codeOf(err: unknown): SyncErrorCode {
+  const { code, status } = (err ?? {}) as { code?: unknown; status?: unknown };
+
+  switch (code) {
+    case "unauthorized":
+    case "forbidden":
+    case "not-found":
+    case "rate-limited":
+    case "conflict":
+    case "validation":
+    case "network":
+      return code;
+  }
+
+  if (typeof status === "number") {
+    if (status === 401) return "unauthorized";
+    if (status === 403) return "forbidden";
+    if (status === 404) return "not-found";
+    if (status === 409) return "conflict";
+    if (status === 422) return "validation";
+    if (status === 429) return "rate-limited";
+    if (status >= 500) return "server";
+  }
+
+  return "unknown";
+}
+
 export function plainly(err: unknown): string {
   const { code, status } = (err ?? {}) as { code?: unknown; status?: unknown };
 

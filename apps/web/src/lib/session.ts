@@ -17,6 +17,7 @@ import type { SessionUser } from "@forkleaf/types";
 
 const COOKIE_NAME = "forkleaf_session";
 const STATE_COOKIE = "forkleaf_oauth_state";
+const RETURN_COOKIE = "forkleaf_return_to";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 export interface SessionPayload {
@@ -136,6 +137,31 @@ export async function createOAuthState(): Promise<string> {
   store.set(STATE_COOKIE, state, { ...cookieOptions, maxAge: 600 });
 
   return state;
+}
+
+/**
+ * Remembers where to go once GitHub has answered.
+ *
+ * In a cookie rather than in the `state` parameter or GitHub's `redirect_uri`:
+ * the redirect URI has to match what is registered on the OAuth app exactly,
+ * and `state` is compared byte for byte as a CSRF token. A cookie keeps the
+ * destination on this origin, where it was already checked.
+ */
+export async function setReturnPath(path: string | null): Promise<void> {
+  const store = await cookies();
+  if (!path) {
+    store.delete(RETURN_COOKIE);
+    return;
+  }
+  store.set(RETURN_COOKIE, path, { ...cookieOptions, maxAge: 600 });
+}
+
+/** Reads and clears the remembered destination. Single use, like the state. */
+export async function consumeReturnPath(): Promise<string | null> {
+  const store = await cookies();
+  const value = store.get(RETURN_COOKIE)?.value ?? null;
+  store.delete(RETURN_COOKIE);
+  return value;
 }
 
 /** Verifies and consumes the state parameter. Single use. */

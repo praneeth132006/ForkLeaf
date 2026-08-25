@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { appUrl } from "@/lib/app-url";
+import { appUrl, safeReturnPath } from "@/lib/app-url";
 import { clientKey } from "@/lib/rate-limit";
-import { createOAuthState, githubOAuthConfigured } from "@/lib/session";
+import { createOAuthState, githubOAuthConfigured, setReturnPath } from "@/lib/session";
 
 /**
  * Starts the GitHub OAuth flow.
@@ -44,6 +44,12 @@ export async function GET(request: NextRequest) {
   }
 
   const state = await createOAuthState();
+
+  // Where to land afterwards. Somebody whose token expired mid-sentence is
+  // signing in *from* the editor, and finishing on the dashboard with their
+  // note nowhere in sight reads as though the sign-in went somewhere else.
+  // Validated here, so nothing but a path on this deployment can be stored.
+  await setReturnPath(safeReturnPath(new URL(request.url).searchParams.get("next")));
 
   const authorize = new URL("https://github.com/login/oauth/authorize");
   authorize.searchParams.set("client_id", process.env.GITHUB_OAUTH_CLIENT_ID!);
