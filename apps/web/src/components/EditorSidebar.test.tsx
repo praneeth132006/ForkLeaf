@@ -214,20 +214,32 @@ describe("EditorSidebar — pinned notes", () => {
 /**
  * The account card at the bottom of the sidebar.
  *
- * It looks exactly like a button — avatar, name, handle, in a bordered card
- * where every application puts the way into your account — and did nothing at
- * all when clicked. The menu beside it opened but never closed except by
- * clicking the same gear again.
+ * It was two controls in one card — the avatar and name navigated to the
+ * profile, a gear beside them opened a menu whose first item went to the same
+ * profile — with nothing to mark where one ended and the other began. It is
+ * one button now, and everything it can do is named in the menu.
  */
 describe("the account card", () => {
   const user = { login: "praneeth132006", name: "Praneeth", avatarUrl: "https://x/y.png" };
 
-  it("goes to the profile when clicked", () => {
+  it("is a single control, whichever part of it you press", () => {
     renderSidebar("", { user });
 
-    const link = screen.getByTitle("Your profile");
+    // No second control hiding inside the card: the avatar, the name and the
+    // gear all belong to the one button.
+    const card = screen.getByLabelText("Account");
+    expect(card.textContent).toContain("Praneeth");
+    expect(card.textContent).toContain("@praneeth132006");
+    expect(card.querySelectorAll("a, button")).toHaveLength(0);
+  });
+
+  it("offers the profile in the menu rather than under half the card", () => {
+    renderSidebar("", { user });
+
+    fireEvent.click(screen.getByLabelText("Account"));
+
+    const link = screen.getByText("Your profile");
     expect(link.getAttribute("href")).toBe("/profile");
-    expect(link.textContent).toContain("Praneeth");
   });
 
   it("closes its menu on Escape", () => {

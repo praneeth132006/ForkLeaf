@@ -406,23 +406,6 @@ export function EditorSidebar(props: EditorSidebarProps) {
         </button>
       </div>
 
-      {/* ── Out of the editor ─────────────────────────────────────────── */}
-      {/* The editor used to be a room with no marked exits: once you were in
-          it, the only way back to the rest of the app was the logo, and the
-          dashboard could not be reached at all. */}
-      <div className="px-2 pb-1">
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
-        >
-          <DashboardGlyph />
-          <span className="min-w-0 flex-1 truncate">Dashboard</span>
-          <kbd className="shrink-0 rounded border border-[var(--fl-border)] px-1 py-px font-sans text-[10px] text-[var(--fl-muted)]">
-            ⌘⇧D
-          </kbd>
-        </Link>
-      </div>
-
       {/* ── Tree ──────────────────────────────────────────────────────── */}
       <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
         {/* Pinned notes, above the tree.
@@ -444,7 +427,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
                     type="button"
                     onClick={() => props.onOpenNote(path)}
                     title={path}
-                    className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-[var(--fl-elevated)] ${
+                    className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-[5px] text-left text-[14px] transition-colors hover:bg-[var(--fl-elevated)] ${
                       props.activePath === path
                         ? "bg-[var(--fl-elevated)] text-[var(--fl-text)]"
                         : "text-[var(--fl-muted)]"
@@ -505,8 +488,28 @@ export function EditorSidebar(props: EditorSidebarProps) {
         />
       </div>
 
-      {/* ── Footer: repo shortcut, help, account ──────────────────────── */}
+      {/* ── Footer: the ways out, help, account ───────────────────────── */}
       <div className="border-t border-[var(--fl-border)] p-2">
+        {/* The editor used to be a room with no marked exits: once you were in
+            it, the only way back to the rest of the app was the logo, and the
+            dashboard could not be reached at all.
+
+            It sat between the search row and the tree, which put a link to
+            another page in the middle of the column you use to move around this
+            one — you read past it every time you looked for a note. Down here it
+            is with the other exits, next to help and the account, and the file
+            tree runs uninterrupted from the filter to the bottom. */}
+        <Link
+          href="/dashboard"
+          className="mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+        >
+          <DashboardGlyph className="h-3.5 w-3.5" />
+          <span className="min-w-0 flex-1 truncate text-left">Dashboard</span>
+          <kbd className="shrink-0 rounded border border-[var(--fl-border)] px-1 py-px font-sans text-[10px]">
+            ⌘⇧D
+          </kbd>
+        </Link>
+
         <button
           type="button"
           onClick={props.onOpenHelp}
@@ -528,56 +531,54 @@ export function EditorSidebar(props: EditorSidebarProps) {
 
         {props.user ? (
           <div className="relative" ref={accountRef}>
-            <div className="flex items-center gap-1 rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] pr-1.5">
-              {/* The card itself goes to the profile.
+            {/* One card, one button, one thing it does: open the account menu.
 
-                  It looked exactly like a button — an avatar, a name, a handle,
-                  in a bordered card at the bottom of the sidebar, which is where
-                  every application in the world puts the way into your account —
-                  and it did nothing at all when clicked. */}
-              <Link
-                href="/profile"
-                title="Your profile"
-                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-l-xl px-2.5 py-2 transition-colors hover:bg-[var(--fl-elevated)]"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element -- avatars are
-                    remote GitHub URLs; next/image would need a domain allowlist for
-                    every possible avatar host. */}
-                <img
-                  src={props.user.avatarUrl}
-                  alt=""
-                  width={30}
-                  height={30}
-                  className="h-[30px] w-[30px] shrink-0 rounded-full"
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[12.5px] font-medium text-[var(--fl-text)]">
-                    {props.user.name ?? props.user.login}
-                  </span>
-                  <span className="block truncate text-[11px] text-[var(--fl-muted)]">
-                    @{props.user.login}
-                  </span>
+                It used to be two controls wearing a single card — the avatar and
+                name went straight to the profile, the gear beside them opened a
+                menu whose first item also went to the profile. Nothing marked the
+                boundary, so which of the two you got depended on where inside the
+                card your cursor happened to land. The menu is the honest version:
+                every destination is named in it, including the profile. */}
+            <button
+              type="button"
+              onClick={() => setShowAccount((value) => !value)}
+              aria-expanded={showAccount}
+              aria-haspopup="menu"
+              title="Account"
+              aria-label="Account"
+              className="flex w-full items-center gap-2.5 rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2.5 py-2 text-left transition-colors hover:bg-[var(--fl-elevated)]"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- avatars are
+                  remote GitHub URLs; next/image would need a domain allowlist for
+                  every possible avatar host. */}
+              <img
+                src={props.user.avatarUrl}
+                alt=""
+                width={30}
+                height={30}
+                className="h-[30px] w-[30px] shrink-0 rounded-full"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12.5px] font-medium text-[var(--fl-text)]">
+                  {props.user.name ?? props.user.login}
                 </span>
-              </Link>
-              <button
-                type="button"
-                onClick={() => setShowAccount((value) => !value)}
-                aria-expanded={showAccount}
-                aria-haspopup="menu"
-                title="Account"
-                aria-label="Account"
-                className="shrink-0 rounded-lg p-1 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
-              >
-                <GearGlyph />
-              </button>
-            </div>
+                <span className="block truncate text-[11px] text-[var(--fl-muted)]">
+                  @{props.user.login}
+                </span>
+              </span>
+              <GearGlyph className="shrink-0 text-[var(--fl-muted)]" />
+            </button>
 
             {showAccount && (
-              <div className="absolute bottom-full left-0 right-0 z-30 mb-1 overflow-hidden rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1 shadow-[var(--fl-shadow-lg)]">
+              <div
+                role="menu"
+                className="absolute bottom-full left-0 right-0 z-30 mb-1 overflow-hidden rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1 shadow-[var(--fl-shadow-lg)]"
+              >
                 <MenuLink href="/profile">Your profile</MenuLink>
                 <MenuLink href="/docs">Documentation</MenuLink>
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={props.onSignOut}
                   className="block w-full rounded-lg px-2.5 py-1.5 text-left text-[13px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
                 >
@@ -609,12 +610,12 @@ export function EditorSidebar(props: EditorSidebarProps) {
   );
 }
 
-function DashboardGlyph() {
+function DashboardGlyph({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 16 16"
       aria-hidden="true"
-      className="h-4 w-4 shrink-0 text-[var(--fl-muted)]"
+      className={`shrink-0 ${className}`}
       fill="none"
       stroke="currentColor"
       strokeWidth="1.5"
@@ -669,7 +670,7 @@ function PinGlyph() {
     <svg
       viewBox="0 0 16 16"
       aria-hidden="true"
-      className="h-3.5 w-3.5 shrink-0 text-[var(--fl-accent)]"
+      className="h-[17px] w-[17px] shrink-0 text-[var(--fl-accent)]"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.5"
@@ -771,19 +772,31 @@ function SearchGlyph() {
   );
 }
 
-function GearGlyph() {
+/**
+ * A cog: two concentric circles about (8, 8) and eight teeth at multiples of
+ * 45°, so it is symmetric by construction.
+ *
+ * The hand-written outline it replaces was not. Its teeth were laid out with
+ * relative moves that did not close back to where they started, which pushed
+ * the outline a fraction to the left of the hub — enough that the hole looked
+ * off-centre to the right at 16px, which is exactly how it was reported.
+ */
+function GearGlyph({ className = "" }: { className?: string }) {
   return (
     <svg
       aria-hidden="true"
       viewBox="0 0 16 16"
-      className="h-4 w-4"
+      className={`h-4 w-4 ${className}`}
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.5"
+      strokeWidth="1.4"
+      strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <circle cx="8" cy="8" r="2.1" />
-      <path d="M8 1.75h.01l.35 1.6a5 5 0 0 1 1.3.54l1.4-.86 1.42 1.42-.86 1.4c.24.4.42.84.54 1.3l1.6.35v2l-1.6.35a5 5 0 0 1-.54 1.3l.86 1.4-1.42 1.42-1.4-.86a5 5 0 0 1-1.3.54l-.35 1.6h-2l-.35-1.6a5 5 0 0 1-1.3-.54l-1.4.86-1.42-1.42.86-1.4a5 5 0 0 1-.54-1.3l-1.6-.35v-2l1.6-.35c.12-.46.3-.9.54-1.3l-.86-1.4 1.42-1.42 1.4.86a5 5 0 0 1 1.3-.54l.35-1.6Z" />
+      <circle cx="8" cy="8" r="4.15" />
+      <circle cx="8" cy="8" r="1.55" />
+      <path d="M8 3.85V2.1M8 12.15V13.9M3.85 8H2.1M12.15 8H13.9" />
+      <path d="M5.07 5.07 3.83 3.83M10.93 10.93l1.24 1.24M10.93 5.07l1.24-1.24M5.07 10.93l-1.24 1.24" />
     </svg>
   );
 }

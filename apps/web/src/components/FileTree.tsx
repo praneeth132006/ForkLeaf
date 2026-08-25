@@ -276,7 +276,11 @@ const TreeItem = memo(function TreeItem({
   // The whole row is one indent step deeper than its parent. Every row reserves
   // the triangle's width whether or not it has one, so names line up in a
   // column instead of stepping raggedly in and out.
-  const indent = 0.375 + depth * 0.75;
+  //
+  // The step grew along with the rows: at the old 0.75rem, a name set two
+  // levels deep sat almost under its grandparent, and the nesting had to be
+  // inferred from the chevrons rather than seen.
+  const indent = 0.375 + depth * 0.85;
 
   return (
     <li role="treeitem" aria-expanded={isFolder ? open : undefined} aria-selected={active}>
@@ -338,7 +342,7 @@ const TreeItem = memo(function TreeItem({
             event.stopPropagation();
             if (isFolder) onToggle(node.path);
           }}
-          className={`flex h-[26px] w-4 shrink-0 items-center justify-center text-[var(--fl-muted)] ${
+          className={`flex h-[30px] w-[18px] shrink-0 items-center justify-center text-[var(--fl-muted)] ${
             isFolder ? "hover:text-[var(--fl-text)]" : "pointer-events-none opacity-0"
           }`}
         >
@@ -348,7 +352,7 @@ const TreeItem = memo(function TreeItem({
               thing in the row. */}
           <svg
             viewBox="0 0 12 12"
-            className={`h-[10px] w-[10px] transition-transform duration-150 ${open ? "rotate-90" : ""}`}
+            className={`h-[11px] w-[11px] transition-transform duration-150 ${open ? "rotate-90" : ""}`}
             fill="none"
             stroke="currentColor"
             strokeWidth="1.6"
@@ -365,7 +369,7 @@ const TreeItem = memo(function TreeItem({
           onClick={() => (isFolder ? onToggle(node.path) : onOpen(node.path))}
           onContextMenu={(event) => onContextMenu(event, node)}
           title={node.path}
-          className="flex min-w-0 flex-1 items-center gap-1.5 py-[3px] pl-0.5 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2 py-[5px] pl-0.5 text-left"
         >
           <span
             className={`shrink-0 ${active ? "text-[var(--fl-accent)]" : "text-[var(--fl-muted)]"}`}
@@ -373,7 +377,7 @@ const TreeItem = memo(function TreeItem({
             {isFolder ? <FolderGlyph open={open} /> : <FileGlyph />}
           </span>
           <span
-            className={`truncate text-[13px] ${
+            className={`truncate text-[14px] leading-[1.35] ${
               active
                 ? "font-medium text-[var(--fl-text)]"
                 : isFolder
@@ -388,8 +392,8 @@ const TreeItem = memo(function TreeItem({
 
       {isFolder && open && (node.children?.length ?? 0) === 0 && (
         <p
-          style={{ paddingLeft: `${indent + 1.4}rem` }}
-          className="py-[3px] text-[11.5px] italic text-[var(--fl-muted)]"
+          style={{ paddingLeft: `${indent + 1.5}rem` }}
+          className="py-[5px] text-[12.5px] italic text-[var(--fl-muted)]"
         >
           Empty
         </p>
@@ -426,7 +430,7 @@ function FolderGlyph({ open }: { open: boolean }) {
     <svg
       viewBox="0 0 16 16"
       aria-hidden="true"
-      className="h-[15px] w-[15px]"
+      className="h-[17px] w-[17px]"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.3"
@@ -449,7 +453,7 @@ function FileGlyph() {
     <svg
       viewBox="0 0 16 16"
       aria-hidden="true"
-      className="h-[15px] w-[15px]"
+      className="h-[17px] w-[17px]"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.3"

@@ -311,9 +311,10 @@ service cloud.firestore {
 
       <H2 id="scope">Known trade-offs</H2>
       <Def term="The repo scope is broad">
-        It is the narrowest classic OAuth scope that allows writing to a private repository. A
-        GitHub App gives per-repository consent and is supported for self-hosters — see{" "}
-        <A href="/docs/self-hosting">Self-hosting</A>.
+        It is the narrowest classic OAuth scope that allows writing to a private repository, and it
+        is the only scope requested — no profile, email or organisation permission is asked for
+        alongside it. A GitHub App gives per-repository consent and is supported for self-hosters —
+        see <A href="/docs/self-hosting">Self-hosting</A>.
       </Def>
       <Def term="Notes are only as private as the repository">
         ForkLeaf creates the notes repository private, but if you make it public, or connect a
