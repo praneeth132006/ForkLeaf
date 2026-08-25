@@ -260,3 +260,13 @@ describe("images and highlights", () => {
     expect(markdownToHtml("==open\nclose==")).not.toContain("<mark>");
   });
 });
+
+describe("statistics and highlight markup", () => {
+  it("does not count the markup of a coloured highlight as writing", () => {
+    const plain = documentStats("one two three");
+    const coloured = documentStats('one <mark class="fl-hl-blue">two</mark> three');
+
+    expect(coloured.words).toBe(plain.words);
+    expect(coloured.characters).toBe(plain.characters);
+  });
+});

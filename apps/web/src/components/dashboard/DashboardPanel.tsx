@@ -12,6 +12,9 @@ import { useIndexView, type IndexView } from "@/hooks/useIndexView";
 import { StorageBlocked } from "@/components/StorageBlocked";
 import { BootScreen } from "@/components/BootScreen";
 import { ForkLeafLogo } from "@/components/Brand";
+import { Footer } from "@/components/landing/Footer";
+import { explainAccessFailure } from "@/lib/github-help";
+import type { SessionResponse } from "@/lib/gateway";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
 import { RepoChooser } from "./RepoChooser";
 import { FolderNav } from "./FolderNav";
@@ -209,7 +212,7 @@ export function DashboardPanel({
   const firstRun = library.needsRepoChoice && !skippedChoice;
 
   return (
-    <div className="min-h-screen bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
+    <div className="flex min-h-screen flex-col bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
       <Header
         user={user}
         theme={theme}
@@ -218,15 +221,8 @@ export function DashboardPanel({
         githubAvailable={githubAvailable}
       />
 
-      <div className="mx-auto w-full max-w-6xl px-6 pb-20 pt-8">
-        {library.error && (
-          <p
-            role="alert"
-            className="mb-6 rounded-lg border border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/8 px-4 py-3 text-sm text-[var(--fl-danger)]"
-          >
-            {library.error}
-          </p>
-        )}
+      <div className="mx-auto w-full max-w-6xl flex-1 px-6 pb-20 pt-8">
+        {library.error && <AccessError info={library.errorInfo} session={library.session} />}
 
         {/* ── Greeting ─────────────────────────────────────────────────── */}
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -528,6 +524,14 @@ export function DashboardPanel({
         </section>
       </div>
 
+      {/* The same footer every other page has.
+
+          The dashboard is where signing in lands, and it was the one page with
+          no way out to the documentation, the licence, the privacy page or the
+          source — the things somebody deciding whether to trust an app with
+          their notes goes looking for. */}
+      <Footer />
+
       {prompt && <PromptDialog request={prompt} onClose={() => setPrompt(null)} />}
     </div>
   );
@@ -591,7 +595,7 @@ function Header({
             </>
           ) : (
             githubAvailable && (
-              <a href="/api/auth/github" className="fl-btn fl-btn-primary !py-2 !text-sm">
+              <a href="/sign-in" className="fl-btn fl-btn-primary !py-2 !text-sm">
                 Sign in with GitHub
               </a>
             )
@@ -609,6 +613,59 @@ function SectionLabel({ children, className = "" }: { children: ReactNode; class
     >
       {children}
     </h2>
+  );
+}
+
+/**
+ * A failure from GitHub, explained.
+ *
+ * The old banner printed whatever GitHub said — "Not Found" — which for the
+ * most common cause is actively misleading: a private repository is genuinely
+ * invisible to a public-only token, and the person reading it is looking at
+ * that repository in another tab. What they need is the reason and the steps,
+ * so both are here, along with the one link that ends it.
+ */
+function AccessError({
+  info,
+  session,
+}: {
+  info: { code?: string; status?: number; message: string } | null;
+  session: SessionResponse | null;
+}) {
+  const problem = explainAccessFailure(info, session);
+
+  return (
+    <div
+      role="alert"
+      className="mb-6 rounded-xl border border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/8 px-4 py-3.5"
+    >
+      <p className="text-sm font-medium text-[var(--fl-danger)]">{problem.summary}</p>
+
+      <ol className="mt-2 space-y-1 text-[13.5px] text-[var(--fl-muted)]">
+        {problem.steps.map((step, index) => (
+          <li key={step} className="flex gap-2">
+            <span className="shrink-0 tabular-nums">{index + 1}.</span>
+            <span>{step}</span>
+          </li>
+        ))}
+      </ol>
+
+      {problem.action && (
+        <a
+          href={problem.action.href}
+          {...(problem.action.href.startsWith("http")
+            ? { target: "_blank", rel: "noopener noreferrer" }
+            : {})}
+          className="fl-btn fl-btn-ghost mt-3 !py-1.5 !text-[13px]"
+        >
+          {problem.action.label}
+        </a>
+      )}
+
+      {info?.message && (
+        <p className="mt-2 text-[11.5px] text-[var(--fl-muted)]">GitHub said: {info.message}</p>
+      )}
+    </div>
   );
 }
 

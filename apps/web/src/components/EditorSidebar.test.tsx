@@ -210,3 +210,43 @@ describe("EditorSidebar — pinned notes", () => {
     expect(onTogglePin).toHaveBeenCalledWith(pinned[0]);
   });
 });
+
+/**
+ * The account card at the bottom of the sidebar.
+ *
+ * It looks exactly like a button — avatar, name, handle, in a bordered card
+ * where every application puts the way into your account — and did nothing at
+ * all when clicked. The menu beside it opened but never closed except by
+ * clicking the same gear again.
+ */
+describe("the account card", () => {
+  const user = { login: "praneeth132006", name: "Praneeth", avatarUrl: "https://x/y.png" };
+
+  it("goes to the profile when clicked", () => {
+    renderSidebar("", { user });
+
+    const link = screen.getByTitle("Your profile");
+    expect(link.getAttribute("href")).toBe("/profile");
+    expect(link.textContent).toContain("Praneeth");
+  });
+
+  it("closes its menu on Escape", () => {
+    renderSidebar("", { user });
+
+    fireEvent.click(screen.getByLabelText("Account"));
+    expect(screen.getByText("Sign out")).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByText("Sign out")).toBeNull();
+  });
+
+  it("closes its menu when something else is clicked", () => {
+    renderSidebar("", { user });
+
+    fireEvent.click(screen.getByLabelText("Account"));
+    expect(screen.getByText("Sign out")).toBeTruthy();
+
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByText("Sign out")).toBeNull();
+  });
+});

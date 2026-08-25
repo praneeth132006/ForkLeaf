@@ -360,3 +360,56 @@ describe("conflicts under adversarial conditions", () => {
     expect(ctx.engine.state.status).not.toBe("conflict");
   });
 });
+
+/**
+ * A "conflict" that is only a timestamp.
+ *
+ * Every save stamps `updated` and `editedBy`, so two devices holding the same
+ * note produce files that differ while saying exactly the same thing. Asking
+ * somebody to choose between them teaches them to dismiss the dialog without
+ * reading it — and the next one will be about their actual writing.
+ */
+describe("differences that are only bookkeeping", () => {
+  const body = "# Plan\n\nSame words on both sides.\n";
+  const withStamp = (updated: string, editedBy: string) =>
+    `---\ntitle: Plan\nupdated: ${updated}\neditedBy: ${editedBy}\ngenerator: https://forkleaf.vercel.app\n---\n\n${body}`;
+
+  it("resolves itself instead of asking", async () => {
+    const ctx = setup();
+    ctx.gateway.files.set("plan.md", {
+      content: withStamp("2026-08-20T10:00:00.000Z", "someone-else"),
+      sha: "sha-remote",
+    });
+
+    await ctx.engine.recordUpsert(
+      makeNote({ path: "plan.md", baseSha: "sha-original" }),
+      withStamp("2026-08-21T10:00:00.000Z", "me"),
+    );
+    await ctx.timers.tick();
+
+    expect(ctx.engine.state.conflicts).toHaveLength(0);
+    expect(ctx.gateway.commits).toHaveLength(1);
+    // Pushed against what is on GitHub now, so it lands rather than bouncing.
+    expect(ctx.gateway.files.get("plan.md")?.content).toContain("2026-08-21");
+  });
+
+  it("still asks when the words themselves differ", async () => {
+    const ctx = setup();
+    ctx.gateway.files.set("plan.md", {
+      content: withStamp("2026-08-20T10:00:00.000Z", "someone-else").replace(
+        "Same words",
+        "Different words",
+      ),
+      sha: "sha-remote",
+    });
+
+    await ctx.engine.recordUpsert(
+      makeNote({ path: "plan.md", baseSha: "sha-original" }),
+      withStamp("2026-08-21T10:00:00.000Z", "me"),
+    );
+    await ctx.timers.tick();
+
+    expect(ctx.engine.state.conflicts).toHaveLength(1);
+    expect(ctx.gateway.commits).toHaveLength(0);
+  });
+});

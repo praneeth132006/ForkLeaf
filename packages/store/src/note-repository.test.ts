@@ -144,3 +144,24 @@ describe("renameNote", () => {
     expect(renamed.content).toContain("![shot](./assets/a.png)");
   });
 });
+
+/**
+ * The credit a note carries into its repository.
+ *
+ * GitHub renders frontmatter as a table above the document and linkifies a URL
+ * in it. A bare domain is just text somebody would have to retype.
+ */
+describe("the generator stamp", () => {
+  it("is a link, not a word", async () => {
+    const { notes } = repository({});
+
+    const note = await notes.createNote({
+      workspaceId: WS,
+      title: "A note",
+      folder: "",
+      existingPaths: [],
+    });
+
+    expect(note.frontmatter.generator).toBe("https://forkleaf.vercel.app");
+  });
+});

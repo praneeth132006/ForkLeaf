@@ -425,7 +425,7 @@ function ErrorNotice({ error }: { error: unknown }) {
       {explained && <p className="mt-1.5 text-[12px] text-[var(--fl-muted)]">GitHub said: {raw}</p>}
       {expired && (
         <a
-          href="/api/auth/github"
+          href="/sign-in"
           className="mt-2 inline-block text-[var(--fl-accent)] underline underline-offset-2"
         >
           Sign in with GitHub again

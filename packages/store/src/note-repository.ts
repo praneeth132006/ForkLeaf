@@ -36,8 +36,12 @@ export interface NoteRepositoryOptions {
  * reader who finds one has no way of knowing what made it. GitHub renders
  * frontmatter as a table above the document, so this is both a credit and the
  * most direct route from someone else's repository back to the project.
+ *
+ * Written in full, with its scheme, because that is what makes it a link
+ * rather than a piece of text somebody has to retype: GitHub linkifies a URL
+ * in that table and does nothing at all with a bare domain.
  */
-const GENERATOR = "forkleaf.vercel.app";
+const GENERATOR = "https://forkleaf.vercel.app";
 
 /**
  * The API the UI actually talks to.

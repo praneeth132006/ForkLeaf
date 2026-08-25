@@ -83,6 +83,14 @@ export interface NotebookState {
    */
   pinnedPaths: string[];
   /**
+   * Folders the reader has open, in the order they were opened.
+   *
+   * Null until this workspace's record has been read — which is different from
+   * an empty list: no record is a first visit, where the top level opens by
+   * itself, and an empty list is somebody who closed everything.
+   */
+  expandedFolders: string[] | null;
+  /**
    * True when this is a GitHub session with no repository connected yet. The
    * editor turns it into the connect dialog; the dashboard turns it into the
    * first-run repository chooser.
@@ -107,6 +115,14 @@ const syncPrefKey = (workspace: Workspace) =>
 /** Folders made locally that have no note in them yet. See `emptyFolders`. */
 const emptyFoldersKey = (workspace: string) => `emptyFolders:${workspace}`;
 const pinnedKey = (workspace: string) => `pinned:${workspace}`;
+/**
+ * Which folders the reader had open, in the order they opened them.
+ *
+ * Kept per workspace and written to disk, because a sidebar that forgets is a
+ * sidebar you have to re-navigate on every visit — and the folders somebody
+ * opened are a fair description of what they are working on.
+ */
+const expandedKey = (workspace: string) => `expanded:${workspace}`;
 
 /**
  * Shown when the browser will not give ForkLeaf durable local storage at all.
@@ -164,6 +180,7 @@ export function useNotebook(request: NotebookRequest = {}) {
     busy: null,
     emptyFolders: [],
     pinnedPaths: [],
+    expandedFolders: null,
     needsRepoChoice: false,
   });
 
@@ -344,6 +361,11 @@ export function useNotebook(request: NotebookRequest = {}) {
 
       const pinned = (await dbRef.current?.getMeta<string[]>(pinnedKey(workspace.id))) ?? [];
       if (!cancelled) patch({ pinnedPaths: pinned });
+
+      const expanded = await dbRef.current?.getMeta<string[]>(expandedKey(workspace.id));
+      // No record at all is a first visit, not a deliberate "all closed" — the
+      // top level opens, as it always did.
+      if (!cancelled) patch({ expandedFolders: expanded ?? null });
 
       // Reopen the tabs this workspace had last time, plus whatever the URL
       // asked for. A note that has since been deleted simply fails to load and
@@ -1115,6 +1137,16 @@ export function useNotebook(request: NotebookRequest = {}) {
     [state.activeWorkspace, urlForAsset],
   );
 
+  /** Remembers which folders are open, for the next visit. */
+  const setExpandedFolders = useCallback(
+    (paths: string[]) => {
+      const workspace = state.activeWorkspace;
+      patch({ expandedFolders: paths });
+      if (workspace) void dbRef.current?.putMeta(expandedKey(workspace.id), paths);
+    },
+    [state.activeWorkspace, patch],
+  );
+
   const displayTree = useMemo(
     () => withEmptyFolders(state.tree, state.emptyFolders),
     [state.tree, state.emptyFolders],
@@ -1152,6 +1184,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       allNotes,
       assetUrls,
       putAsset,
+      setExpandedFolders,
       dismissError: () => patch({ error: null }),
       /**
        * Surfaces a failure from work that finished after its caller returned.
@@ -1172,6 +1205,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       activeNote,
       assetUrls,
       putAsset,
+      setExpandedFolders,
       openNote,
       closeNote,
       openNoteAndReturn,

@@ -59,6 +59,22 @@ export function SigningIn() {
         for your account, install ForkLeaf as a GitHub App instead, where you grant access
         repository by repository. See <A href="/docs/self-hosting">Self-hosting</A>.
       </Note>
+      <P>
+        You are not made to take the wide one. <A href="/sign-in">Signing in</A> offers{" "}
+        <Code>public_repo</Code> as an equal choice — with it, ForkLeaf cannot open a private
+        repository at all, because GitHub refuses the token rather than because we decline to try.
+        Pick it if your notes are going to be public; you can sign in again with the wider
+        permission whenever that changes, and nothing has to be redone.
+      </P>
+      <P>
+        Whichever you choose, ForkLeaf reads and writes exactly one repository — the one you connect
+        — plus the list of repository names, so the picker has something to show. If a repository
+        you can see on github.com is missing from that list, it is almost always one of two things:
+        it is private and you granted public-only access, or it belongs to an organisation that has
+        not approved ForkLeaf under <em>Settings → Third-party Access</em>. The dashboard says
+        which, and what to do about it, rather than repeating GitHub&rsquo;s &ldquo;Not
+        Found&rdquo;.
+      </P>
 
       <H2 id="token">Where the token lives</H2>
       <P>

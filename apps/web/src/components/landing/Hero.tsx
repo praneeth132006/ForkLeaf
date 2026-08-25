@@ -91,10 +91,7 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             {githubAvailable ? (
               <>
-                <a
-                  href="/api/auth/github"
-                  className="fl-btn fl-btn-primary !rounded-full !px-6 !py-3.5"
-                >
+                <a href="/sign-in" className="fl-btn fl-btn-primary !rounded-full !px-6 !py-3.5">
                   <GitHubGlyph />
                   Continue with GitHub
                 </a>
@@ -117,7 +114,7 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
                know to ask for. */
             <p className="mt-3 text-[12.5px] text-[var(--fl-muted)]">
               Keeping notes in public repositories?{" "}
-              <a href="/api/auth/github?access=public" className="fl-link">
+              <a href="/sign-in" className="fl-link">
                 Grant public-repository access only
               </a>
               .

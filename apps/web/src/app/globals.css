@@ -59,6 +59,11 @@
   --fl-accent-hover: #324a63;
   --fl-accent-contrast: #ffffff;
   --fl-accent-soft: rgba(61, 90, 120, 0.1);
+  /* Selected text, which has to be *seen* — `--fl-accent-soft` is a tint for
+     hover states, and at a tenth of an opacity it left a selection you had to
+     hunt for. Strong enough to read at a glance, light enough to keep the text
+     on top of it legible. */
+  --fl-selection: rgba(61, 90, 120, 0.32);
 
   --fl-warn: #a76a0a;
   --fl-danger: #c2372d;
@@ -85,6 +90,7 @@
   --fl-accent-hover: #9db0cc;
   --fl-accent-contrast: #0c1018;
   --fl-accent-soft: rgba(138, 155, 184, 0.14);
+  --fl-selection: rgba(138, 155, 184, 0.42);
 
   --fl-warn: #d4b94f;
   --fl-danger: #d4544f;
@@ -190,8 +196,23 @@ h3 {
 }
 
 ::selection {
-  background: var(--fl-accent-soft);
+  background: var(--fl-selection);
   color: var(--fl-text);
+}
+
+/* Firefox keeps its own pseudo-element, and inherits nothing from the one
+   above. */
+::-moz-selection {
+  background: var(--fl-selection);
+  color: var(--fl-text);
+}
+
+/* A selection made in a window that has since lost focus stays visible, dimmer.
+   Without this the browser greys it out to near-invisibility, which is the
+   state you are in every time you reach for a menu mid-selection. */
+.ProseMirror-selectednode {
+  outline: 2px solid var(--fl-accent);
+  outline-offset: 2px;
 }
 
 /* ── Floating panels ───────────────────────────────────────────────────────
@@ -638,6 +659,55 @@ select:focus-visible {
 .fl-prose th {
   background: var(--fl-elevated);
   font-weight: 600;
+}
+
+/* ── Highlight colours ──────────────────────────────────────────────────────
+   By name rather than by value in the file, so each theme picks its own shade:
+   a highlight that reads on white is unreadable on black, and the note should
+   not carry a colour that stops working when the lights go out. */
+:root {
+  --fl-hl-yellow: rgba(250, 204, 21, 0.38);
+  --fl-hl-green: rgba(74, 222, 128, 0.34);
+  --fl-hl-blue: rgba(96, 165, 250, 0.34);
+  --fl-hl-pink: rgba(244, 114, 182, 0.32);
+  --fl-hl-purple: rgba(167, 139, 250, 0.34);
+  --fl-hl-orange: rgba(251, 146, 60, 0.34);
+}
+
+[data-theme="dark"] {
+  --fl-hl-yellow: rgba(250, 204, 21, 0.3);
+  --fl-hl-green: rgba(74, 222, 128, 0.28);
+  --fl-hl-blue: rgba(96, 165, 250, 0.3);
+  --fl-hl-pink: rgba(244, 114, 182, 0.28);
+  --fl-hl-purple: rgba(167, 139, 250, 0.3);
+  --fl-hl-orange: rgba(251, 146, 60, 0.28);
+}
+
+mark,
+.fl-prose mark {
+  background: var(--fl-hl-yellow);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0.05em 0.15em;
+}
+
+mark.fl-hl-yellow {
+  background: var(--fl-hl-yellow);
+}
+mark.fl-hl-green {
+  background: var(--fl-hl-green);
+}
+mark.fl-hl-blue {
+  background: var(--fl-hl-blue);
+}
+mark.fl-hl-pink {
+  background: var(--fl-hl-pink);
+}
+mark.fl-hl-purple {
+  background: var(--fl-hl-purple);
+}
+mark.fl-hl-orange {
+  background: var(--fl-hl-orange);
 }
 
 .fl-prose img {

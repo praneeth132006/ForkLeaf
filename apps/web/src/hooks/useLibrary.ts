@@ -52,6 +52,14 @@ export interface LibraryState {
   storage: LocalDatabaseStatus;
   error: string | null;
   /**
+   * The failure behind `error`, with GitHub's own code kept.
+   *
+   * A message alone cannot be explained usefully: "Not Found" means one thing
+   * for a typo and quite another for a private repository a public-only token
+   * cannot see, and those two need different instructions.
+   */
+  errorInfo: { code?: string; status?: number; message: string } | null;
+  /**
    * Bumped whenever notes are added to the full-text index.
    *
    * The index is a mutable object in a ref — searching it is not a render, and
@@ -102,6 +110,7 @@ export function useLibrary() {
     indexing: false,
     storage: "ready",
     error: null,
+    errorInfo: null,
     searchVersion: 0,
     searchable: 0,
   });
@@ -246,6 +255,7 @@ export function useLibrary() {
           patch({
             ready: true,
             error: error instanceof Error ? error.message : "Could not read your library.",
+            errorInfo: failureInfo(error, "Could not read your library."),
           });
         }
       }
@@ -537,3 +547,21 @@ function sortWorkspaces(slices: LibraryWorkspace[]): LibraryWorkspace[] {
 }
 
 export { workspaceId };
+
+/** Keeps GitHub's own code alongside its message, for explaining afterwards. */
+function failureInfo(
+  error: unknown,
+  fallback: string,
+): { code?: string; status?: number; message: string } {
+  const { code, status, message } = (error ?? {}) as {
+    code?: string;
+    status?: number;
+    message?: string;
+  };
+
+  return {
+    ...(code ? { code } : {}),
+    ...(typeof status === "number" ? { status } : {}),
+    message: message ?? fallback,
+  };
+}
