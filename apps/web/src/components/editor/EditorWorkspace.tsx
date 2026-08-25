@@ -332,6 +332,20 @@ export function EditorWorkspace() {
     router.push("/sign-in");
   }, [router]);
 
+  /**
+   * Signing in again after a token expired, which is a different errand.
+   *
+   * It interrupted something: there is a note open and a queue waiting behind
+   * a 401. So it says so on the sign-in page, and it comes back here rather
+   * than to the dashboard — being bounced to a repository picker after fixing
+   * a sign-in reads as having lost the note you were writing.
+   */
+  const signInAgain = useCallback(() => {
+    track("github_sign_in_started");
+    const here = `${window.location.pathname}${window.location.search}`;
+    router.push(`/sign-in?expired=1&next=${encodeURIComponent(here)}`);
+  }, [router]);
+
   // ── Actions ─────────────────────────────────────────────────────────────
 
   const handleCreate = useCallback(
@@ -474,10 +488,10 @@ export function EditorWorkspace() {
         confirmLabel: "Delete",
         body: `“${path}” will be deleted. On a connected repository this is committed to GitHub, so it stays recoverable from your git history.`,
         onConfirm: async () => {
-          // Load it first so the sync engine knows the base SHA to delete against.
-          const target =
-            notebook.note?.path === path ? notebook.note : await notebook.openNoteAndReturn(path);
-          if (target) await notebook.deleteNote(target);
+          // By path, not by opening it first: reading the note reaches for
+          // GitHub, and a note GitHub will not hand over — expired sign-in, no
+          // connection — used to make Delete do nothing at all.
+          await notebook.deleteNoteAt(path);
         },
       });
     },
@@ -1110,6 +1124,34 @@ export function EditorWorkspace() {
               </div>
             ))}
 
+          {/* An expired sign-in gets a banner rather than only a line in the
+              status bar. It stops every push until it is dealt with, and the
+              fix is one button — so the button is where the reader is looking,
+              not eight point type at the bottom of the window. */}
+          {notebook.sync.lastErrorCode === "unauthorized" && (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/8 px-4 py-2.5 text-[13px]"
+            >
+              <p className="w-full min-w-0 text-[var(--fl-text)] sm:w-auto sm:flex-1">
+                <strong className="font-semibold">Your GitHub sign-in has expired.</strong>{" "}
+                <span className="text-[var(--fl-muted)]">
+                  {notebook.sync.pendingCount > 0
+                    ? `${notebook.sync.pendingCount} change${notebook.sync.pendingCount === 1 ? "" : "s"} are saved on this device and will push as soon as you are back in.`
+                    : "Your notes are saved on this device. Signing in again resumes pushing to GitHub."}
+                </span>
+              </p>
+
+              <button
+                type="button"
+                onClick={signInAgain}
+                className="shrink-0 rounded-lg bg-[var(--fl-accent)] px-3 py-1.5 text-[12.5px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
+              >
+                Sign in again
+              </button>
+            </div>
+          )}
+
           {!user && (
             <LocalOnlyBanner
               githubAvailable={notebook.session?.githubAvailable ?? false}
@@ -1208,6 +1250,7 @@ export function EditorWorkspace() {
         onSyncModeChange={notebook.setSyncMode}
         onSyncNow={() => void saveEverything()}
         onShowConflicts={() => setConflictsDismissed(false)}
+        onSignIn={signInAgain}
       />
 
       {/* ── Dialogs ────────────────────────────────────────────────────── */}

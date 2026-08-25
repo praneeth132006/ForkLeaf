@@ -135,7 +135,7 @@ export class NoteRepository {
       try {
         const fresh = await this.gateway.listTree(workspaceId);
         await this.db.putTreeCache(workspaceId, fresh);
-        onUpdate?.(fresh);
+        onUpdate?.(this.withPending(workspaceId, fresh));
       } catch {
         // Offline or rate limited: the cached tree stays on screen.
       }
@@ -146,14 +146,51 @@ export class NoteRepository {
       try {
         const fresh = await this.gateway.listTree(workspaceId);
         await this.db.putTreeCache(workspaceId, fresh);
-        return fresh;
+        return this.withPending(workspaceId, fresh);
       } catch {
-        return cached;
+        return this.withPending(workspaceId, cached);
       }
     }
 
     void refresh();
-    return cached;
+    return this.withPending(workspaceId, cached);
+  }
+
+  /**
+   * The repository's tree, corrected by what has not been pushed yet.
+   *
+   * Both trees this method is handed describe GitHub: the cache is the last
+   * answer GitHub gave, and a refresh is the current one. Neither knows about
+   * a note deleted thirty seconds ago and still sitting in the queue — so the
+   * sidebar used to put deleted notes and deleted folders straight back on
+   * screen the moment anything refreshed the tree, which is indistinguishable
+   * from delete not working. With a queue that cannot drain — an expired
+   * sign-in, no connection — they came back and stayed.
+   *
+   * Applying the queue on top makes the sidebar agree with what the person
+   * did, and it stops agreeing the moment the deletion is really committed and
+   * GitHub stops listing the path.
+   */
+  private withPending(workspaceId: string, tree: TreeNode[]): TreeNode[] {
+    const pending = this.sync.pendingFor(workspaceId);
+    if (pending.length === 0) return tree;
+
+    // Images go through the same queue and are not part of the notebook; the
+    // tree only ever lists Markdown.
+    const markdown = (path: string) => path.toLowerCase().endsWith(".md");
+
+    let next = tree;
+    for (const change of pending) {
+      if (change.op === "delete") {
+        next = withoutPath(next, change.path);
+      } else if (change.op === "rename") {
+        next = withoutPath(next, change.path);
+        if (change.toPath && markdown(change.toPath)) next = withPath(next, change.toPath);
+      } else if (markdown(change.path)) {
+        next = withPath(next, change.path);
+      }
+    }
+    return next;
   }
 
   // ─── Notes ────────────────────────────────────────────────────────────────
@@ -263,6 +300,48 @@ export class NoteRepository {
     return note;
   }
 
+  /**
+   * Deletes a note by path, whether or not it can be read first.
+   *
+   * Deleting used to require opening the note, because the delete is recorded
+   * against the note's own base SHA. But opening reaches for GitHub, and when
+   * GitHub will not answer — an expired token, no connection, a file that was
+   * only ever listed in the tree and never opened — the read threw and the
+   * delete never happened. Nothing was removed and nothing said why, which is
+   * exactly the state where somebody most wants to be able to tidy up.
+   *
+   * So a note we cannot read is deleted on the strength of its path and the
+   * SHA the tree already reported. That is all the commit needs.
+   */
+  async deletePath(workspaceId: string, path: string, sha?: string): Promise<void> {
+    const id = noteId(workspaceId, path);
+    const stored = await this.db.getNote(id);
+    if (stored) {
+      await this.deleteNote(stored);
+      return;
+    }
+
+    let note: Note | null = null;
+    try {
+      note = await this.openNote(workspaceId, path);
+    } catch {
+      // Unreadable, which is not a reason to refuse to delete it.
+    }
+
+    await this.deleteNote(
+      note ?? {
+        id,
+        workspaceId,
+        path,
+        content: "",
+        frontmatter: {},
+        baseSha: sha ?? null,
+        updatedAt: null,
+        dirty: false,
+      },
+    );
+  }
+
   async deleteNote(note: Note): Promise<void> {
     const current = await this.db.getNote(note.id);
     const target = current ?? note;
@@ -341,4 +420,65 @@ export class NoteRepository {
 
 export function noteId(workspaceId: string, path: string): string {
   return `${workspaceId}::${path}`;
+}
+
+/**
+ * The tree without one path, and without any folder that path was the last
+ * thing in.
+ *
+ * Leaving an empty folder behind would be a lie in the other direction: git
+ * has no empty directories, so a folder whose every note has been deleted does
+ * not exist in the repository either.
+ */
+function withoutPath(tree: TreeNode[], path: string): TreeNode[] {
+  return tree
+    .filter((node) => node.path !== path)
+    .map((node) => (node.children ? { ...node, children: withoutPath(node.children, path) } : node))
+    .filter((node) => node.kind !== "folder" || (node.children?.length ?? 0) > 0);
+}
+
+/** The tree with one path added, creating the folders on the way to it. */
+function withPath(tree: TreeNode[], path: string): TreeNode[] {
+  const segments = path.split("/");
+  const name = segments.pop();
+  if (!name) return tree;
+
+  const insert = (nodes: TreeNode[], depth: number, prefix: string): TreeNode[] => {
+    if (depth === segments.length) {
+      if (nodes.some((node) => node.path === path)) return nodes;
+      return sortNodes([...nodes, { path, name, kind: "file" as const }]);
+    }
+
+    const folderName = segments[depth]!;
+    const folderPath = prefix ? `${prefix}/${folderName}` : folderName;
+    const existing = nodes.find((node) => node.path === folderPath && node.kind === "folder");
+
+    if (existing) {
+      return nodes.map((node) =>
+        node === existing
+          ? { ...node, children: insert(node.children ?? [], depth + 1, folderPath) }
+          : node,
+      );
+    }
+
+    return sortNodes([
+      ...nodes,
+      {
+        path: folderPath,
+        name: folderName,
+        kind: "folder" as const,
+        children: insert([], depth + 1, folderPath),
+      },
+    ]);
+  };
+
+  return insert(tree, 0, "");
+}
+
+/** Folders first, then by name — the order the tree already arrives in. */
+function sortNodes(nodes: TreeNode[]): TreeNode[] {
+  return [...nodes].sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
 }

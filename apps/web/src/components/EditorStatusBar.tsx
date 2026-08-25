@@ -31,6 +31,15 @@ export interface EditorStatusBarProps {
   onSwitchBranch: (branch: string) => void | Promise<void>;
   /** Opens the pull-request flow for the current work. */
   onPropose: () => void;
+  /**
+   * Starts signing in again, and comes back here afterwards.
+   *
+   * Needed because "retry" is the wrong offer for an expired token: the queue
+   * would push into the same 401 it just failed on, and the status bar would
+   * report the same sentence again with nothing having moved. When the reason
+   * is the sign-in, the button has to be the sign-in.
+   */
+  onSignIn: () => void;
 }
 
 /**
@@ -53,20 +62,45 @@ export function EditorStatusBar({
   onShowConflicts,
   onSwitchBranch,
   onPropose,
+  onSignIn,
 }: EditorStatusBarProps) {
-  const status = describe(sync);
+  /**
+   * An expired sign-in is the one failure retrying cannot fix, so it takes
+   * over the whole status control rather than sitting behind it.
+   */
+  const expired = sync.lastErrorCode === "unauthorized";
+  const status = describe(sync, expired);
 
   return (
     <footer className="flex h-8 shrink-0 items-center gap-3 px-4 text-[0.7rem] text-[var(--fl-muted)]">
       <button
         type="button"
-        onClick={sync.conflicts.length > 0 ? onShowConflicts : onSyncNow}
-        title={sync.conflicts.length > 0 ? "Resolve conflicts" : "Sync now"}
+        onClick={sync.conflicts.length > 0 ? onShowConflicts : expired ? onSignIn : onSyncNow}
+        title={
+          sync.conflicts.length > 0
+            ? "Resolve conflicts"
+            : expired
+              ? "Sign in to GitHub again"
+              : "Sync now"
+        }
         className="flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-[var(--fl-elevated)]"
       >
         <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
         <span className={status.className}>{status.label}</span>
       </button>
+
+      {/* The way out, drawn as a button rather than left as advice inside a
+          sentence. Somebody reading "sign in again" in red text has no reason
+          to guess that the red text is clickable. */}
+      {expired && (
+        <button
+          type="button"
+          onClick={onSignIn}
+          className="shrink-0 rounded bg-[var(--fl-accent)] px-2 py-0.5 text-[0.7rem] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
+        >
+          Sign in again
+        </button>
+      )}
 
       {workspace?.isLocal && <span className="hidden truncate sm:inline">Local storage</span>}
 
@@ -99,7 +133,9 @@ export function EditorStatusBar({
         </>
       )}
 
-      {sync.lastError && (
+      {/* Only when the status control is not already saying it: the same
+          sentence printed twice across one bar reads as two problems. */}
+      {sync.lastError && sync.status !== "error" && sync.status !== "blocked" && (
         <span
           className="ml-auto truncate text-[var(--fl-danger)]"
           title={sync.lastErrorDetail ?? sync.lastError}
@@ -146,7 +182,10 @@ export function EditorStatusBar({
   );
 }
 
-function describe(sync: SyncState): { label: string; className: string; dot: string } {
+function describe(
+  sync: SyncState,
+  expired: boolean,
+): { label: string; className: string; dot: string } {
   if (sync.conflicts.length > 0) {
     return {
       label: `${sync.conflicts.length} conflict${sync.conflicts.length === 1 ? "" : "s"} — click to resolve`,
@@ -186,8 +225,12 @@ function describe(sync: SyncState): { label: string; className: string; dot: str
     case "error":
       return {
         // The message already says what happened and that the work is safe;
-        // "click to retry" is the only thing left to add.
-        label: `${sync.lastError ?? "Could not push to GitHub."} Click to retry.`,
+        // what to press is the only thing left to add — and for an expired
+        // token that is not "retry", which is what made the old label a dead
+        // end for the one failure people actually hit.
+        label: expired
+          ? `${sync.lastError ?? "Your GitHub sign-in has expired."} Click to sign in.`
+          : `${sync.lastError ?? "Could not push to GitHub."} Click to retry.`,
         className: "text-[var(--fl-danger)] truncate max-w-[500px]",
         dot: "bg-[var(--fl-danger)]",
       };
@@ -197,7 +240,9 @@ function describe(sync: SyncState): { label: string; className: string; dot: str
       // have stopped retrying and will not move until somebody asks them to,
       // so the label says what is true and what to do about it.
       return {
-        label: `${sync.blockedCount} change${sync.blockedCount === 1 ? "" : "s"} not on GitHub — click to retry`,
+        label: expired
+          ? `${sync.blockedCount} change${sync.blockedCount === 1 ? "" : "s"} not on GitHub — click to sign in again`
+          : `${sync.blockedCount} change${sync.blockedCount === 1 ? "" : "s"} not on GitHub — click to retry`,
         className: "text-[var(--fl-danger)] font-medium",
         dot: "bg-[var(--fl-danger)]",
       };

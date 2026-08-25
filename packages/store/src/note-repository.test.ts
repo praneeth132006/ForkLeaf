@@ -165,3 +165,74 @@ describe("the generator stamp", () => {
     expect(note.frontmatter.generator).toBe("https://forkleaf.vercel.app");
   });
 });
+
+/**
+ * Deleting, when GitHub will not answer.
+ *
+ * The failure this covers is the one people hit: a sign-in expires, the queue
+ * stops draining, and from then on deleting a note did nothing whatsoever —
+ * the delete needed to read the note first, the read was refused, and the
+ * refusal was swallowed. Then the tree refreshed and put everything back.
+ */
+describe("deleting without being able to read", () => {
+  const tree = [
+    {
+      path: "notes",
+      name: "notes",
+      kind: "folder" as const,
+      children: [
+        { path: "notes/a.md", name: "a.md", kind: "file" as const, sha: "sha-a" },
+        { path: "notes/b.md", name: "b.md", kind: "file" as const, sha: "sha-b" },
+      ],
+    },
+  ];
+
+  function signedOut() {
+    const db = new MemoryDatabase();
+    const unauthorized = Object.assign(new Error("Bad credentials"), { code: "unauthorized" });
+
+    const gateway: RemoteGateway = {
+      listTree: async () => tree,
+      readFile: async () => {
+        throw unauthorized;
+      },
+      commit: async () => {
+        throw unauthorized;
+      },
+    };
+
+    const sync = new SyncEngine({ db, gateway, isOnline: () => false });
+    return { db, sync, notes: new NoteRepository({ db, gateway, sync }) };
+  }
+
+  it("deletes a note it was never able to open", async () => {
+    const { notes, sync } = signedOut();
+
+    await notes.deletePath(WS, "notes/a.md", "sha-a");
+
+    const queued = sync.pendingFor(WS);
+    expect(queued).toHaveLength(1);
+    expect(queued[0]!.op).toBe("delete");
+    expect(queued[0]!.path).toBe("notes/a.md");
+    expect(queued[0]!.baseSha).toBe("sha-a");
+  });
+
+  it("keeps the deleted note out of the tree until the deletion is pushed", async () => {
+    const { notes } = signedOut();
+
+    await notes.deletePath(WS, "notes/a.md", "sha-a");
+
+    const shown = await notes.getTree(WS);
+    const paths = shown.flatMap((node) => node.children ?? []).map((node) => node.path);
+    expect(paths).toEqual(["notes/b.md"]);
+  });
+
+  it("drops a folder once every note in it is gone", async () => {
+    const { notes } = signedOut();
+
+    await notes.deletePath(WS, "notes/a.md", "sha-a");
+    await notes.deletePath(WS, "notes/b.md", "sha-b");
+
+    expect(await notes.getTree(WS)).toEqual([]);
+  });
+});

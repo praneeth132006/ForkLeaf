@@ -1,7 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { GitHubClient } from "@forkleaf/github-client";
-import { appUrl } from "@/lib/app-url";
-import { consumeOAuthState, setSessionCookie, githubOAuthConfigured } from "@/lib/session";
+import { appUrl, safeReturnPath } from "@/lib/app-url";
+import {
+  consumeOAuthState,
+  consumeReturnPath,
+  setSessionCookie,
+  githubOAuthConfigured,
+} from "@/lib/session";
 
 /**
  * Completes the GitHub OAuth flow.
@@ -59,10 +64,18 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // The dashboard, not the editor: a fresh sign-in has no repository chosen
-    // yet, and dropping someone into an empty editor is how the repo choice
-    // used to get made silently on their behalf.
-    return NextResponse.redirect(appUrl(request, "/dashboard"));
+    // Back where the sign-in was started from, when it was started somewhere
+    // specific — signing in again because a token expired should return to the
+    // note that was open, not to a dashboard.
+    //
+    // Otherwise the dashboard, not the editor: a fresh sign-in has no
+    // repository chosen yet, and dropping someone into an empty editor is how
+    // the repo choice used to get made silently on their behalf.
+    //
+    // Re-checked on the way out as well as on the way in: a cookie is not a
+    // safer source of a redirect target than a query string is.
+    const back = safeReturnPath(await consumeReturnPath());
+    return NextResponse.redirect(appUrl(request, back ?? "/dashboard"));
   } catch (error) {
     console.error("[forkleaf] OAuth callback failed:", error);
     return NextResponse.redirect(withError(home, "exchange_failed"));

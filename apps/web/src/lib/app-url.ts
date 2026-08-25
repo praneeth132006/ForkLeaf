@@ -47,3 +47,33 @@ export function appBaseUrl(request: NextRequest): URL {
 export function appUrl(request: NextRequest, path: string): URL {
   return new URL(path, appBaseUrl(request));
 }
+
+/**
+ * A place on this deployment it is safe to send somebody after signing in.
+ *
+ * Signing in again from the editor should end in the editor. Doing that means
+ * carrying a destination through the OAuth round trip, and a destination taken
+ * from a query string and used unchecked is an open redirect: `?next=//evil`
+ * is a protocol-relative URL, and a browser follows it off this origin
+ * entirely. So only a plain, single-slash, same-origin path is accepted, and
+ * anything else falls back to the default rather than being repaired.
+ */
+export function safeReturnPath(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (value.length > 512) return null;
+  // Must be rooted here, and must not be `//host` or `/\host`, both of which
+  // browsers read as another origin.
+  if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return null;
+  // A newline or a NUL in a `Location` header is a header-splitting attempt.
+  if (/[\u0000-\u001f\u007f]/.test(value)) return null;
+
+  try {
+    // Parsed against a throwaway origin purely to reject anything that is not
+    // a path once escapes are resolved.
+    const url = new URL(value, "https://forkleaf.invalid");
+    if (url.origin !== "https://forkleaf.invalid") return null;
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
+}

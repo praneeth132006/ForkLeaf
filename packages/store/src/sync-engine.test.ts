@@ -3,7 +3,7 @@ import type { Note, SyncMode, TreeNode } from "@forkleaf/types";
 import { SyncEngine } from "./sync-engine";
 import { MemoryDatabase } from "./memory-db";
 import { coalesce, describeChanges } from "./queue";
-import { plainly } from "./sync-engine";
+import { plainly, codeOf } from "./sync-engine";
 import type { RemoteCommitInput, RemoteGateway } from "./ports";
 
 // ─── Test doubles ───────────────────────────────────────────────────────────
@@ -286,6 +286,41 @@ describe("a failure reported to the reader", () => {
 
   it("has something useful to say about an error it has never seen", () => {
     expect(plainly(new Error("something nobody predicted"))).toContain("saved on this device");
+  });
+
+  /**
+   * The message alone left the UI with one offer — retry — which for an
+   * expired token retries into the same 401 forever. The code is what lets the
+   * status bar offer the sign-in instead.
+   */
+  it("reports the kind of failure, not only the sentence", async () => {
+    const ctx = setup();
+    ctx.gateway.rejects.add("a.md");
+
+    await ctx.engine.recordUpsert(makeNote({ path: "a.md", baseSha: null }), "a");
+    await ctx.timers.tick();
+
+    expect(ctx.engine.state.lastErrorCode).toBe("validation");
+  });
+
+  it("recognises a signed-out failure however GitHub phrases it", () => {
+    expect(codeOf({ code: "unauthorized" })).toBe("unauthorized");
+    expect(codeOf({ status: 401 })).toBe("unauthorized");
+    expect(codeOf({ status: 503 })).toBe("server");
+    expect(codeOf(new Error("who knows"))).toBe("unknown");
+  });
+
+  it("forgets the failure once a push succeeds", async () => {
+    const ctx = setup();
+    ctx.gateway.failNext = 1;
+
+    await ctx.engine.recordUpsert(makeNote({ path: "a.md", baseSha: null }), "a");
+    await ctx.timers.tick();
+    expect(ctx.engine.state.lastErrorCode).not.toBeNull();
+
+    ctx.engine.retryNow();
+    await ctx.timers.tick();
+    expect(ctx.engine.state.lastErrorCode).toBeNull();
   });
 });
 

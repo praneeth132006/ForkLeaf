@@ -168,6 +168,18 @@ export const DEFAULT_SYNC_PREFERENCE: SyncPreference = {
   intervalMinutes: 15,
 };
 
+/** The failure kinds a push can end in, as the UI needs to tell them apart. */
+export type SyncErrorCode =
+  | "unauthorized"
+  | "forbidden"
+  | "not-found"
+  | "rate-limited"
+  | "conflict"
+  | "validation"
+  | "network"
+  | "server"
+  | "unknown";
+
 export interface SyncState {
   status: SyncStatus;
   /** How this workspace is configured to push. */
@@ -193,6 +205,17 @@ export interface SyncState {
   lastError: string | null;
   /** The underlying message, for a tooltip and for bug reports. */
   lastErrorDetail: string | null;
+  /**
+   * What kind of failure it was, so the UI can offer the fix rather than
+   * describe it.
+   *
+   * A message alone leaves every failure looking the same: one button that
+   * says "retry", which for an expired sign-in retries into the same 401
+   * forever. Carrying the code lets the status bar put "Sign in again" where
+   * the retry would have been — the difference between a dead end and a way
+   * out.
+   */
+  lastErrorCode: SyncErrorCode | null;
   conflicts: Conflict[];
 }
 

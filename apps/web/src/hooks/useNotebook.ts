@@ -172,6 +172,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       lastSyncedAt: null,
       lastError: null,
       lastErrorDetail: null,
+      lastErrorCode: null,
       conflicts: [],
     },
     syncPreference: DEFAULT_SYNC_PREFERENCE,
@@ -630,22 +631,32 @@ export function useNotebook(request: NotebookRequest = {}) {
     [state.activeWorkspace, state.tree, state.openNotes, state.emptyFolders, patch, rememberTabs],
   );
 
-  const deleteNote = useCallback(
-    async (note: Note) => {
+  /**
+   * Deletes whatever is at a path, opened or not.
+   *
+   * By path rather than by note, because requiring the note first meant a
+   * delete could only happen for something the app had managed to read — and
+   * an unreadable note (signed out, offline, never opened) is precisely the
+   * one somebody is trying to get rid of. The repository handles the rest.
+   */
+  const deleteNoteAt = useCallback(
+    async (path: string) => {
       const notes = repoRef.current;
-      if (!notes) return;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace) return;
 
-      await notes.deleteNote(note);
+      await notes.deletePath(workspace.id, path, shaFor(state.tree, path));
 
-      const open = state.openNotes.filter((candidate) => candidate.path !== note.path);
-      const activePath =
-        state.activePath === note.path ? (open[0]?.path ?? null) : state.activePath;
+      const open = state.openNotes.filter((candidate) => candidate.path !== path);
+      const activePath = state.activePath === path ? (open[0]?.path ?? null) : state.activePath;
 
-      patch({ tree: removeFromTree(state.tree, note.path), openNotes: open, activePath });
-      if (state.activeWorkspace) rememberTabs(state.activeWorkspace.id, open, activePath);
+      patch({ tree: removeFromTree(state.tree, path), openNotes: open, activePath });
+      rememberTabs(workspace.id, open, activePath);
     },
     [state.tree, state.openNotes, state.activePath, state.activeWorkspace, patch, rememberTabs],
   );
+
+  const deleteNote = useCallback(async (note: Note) => deleteNoteAt(note.path), [deleteNoteAt]);
 
   const renameNote = useCallback(
     async (note: Note, toPath: string) => {
@@ -828,10 +839,11 @@ export function useNotebook(request: NotebookRequest = {}) {
         for (const notePath of collectPaths(state.tree).filter((candidate) =>
           candidate.startsWith(`${folder}/`),
         )) {
-          const note =
-            state.openNotes.find((candidate) => candidate.path === notePath) ??
-            (await notes.openNote(workspace.id, notePath));
-          await notes.deleteNote(note);
+          // By path: a folder is deleted as a whole, and one note inside it
+          // that cannot be read — signed out, offline, never opened — used to
+          // throw here and abandon the deletion halfway through, leaving the
+          // folder on screen with some of its notes gone.
+          await notes.deletePath(workspace.id, notePath, shaFor(state.tree, notePath));
         }
 
         putEmptyFolders(
@@ -1165,6 +1177,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       updateFrontmatter,
       createNote,
       deleteNote,
+      deleteNoteAt,
       renameNote,
       createFolder,
       togglePinned,
@@ -1214,6 +1227,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       updateFrontmatter,
       createNote,
       deleteNote,
+      deleteNoteAt,
       renameNote,
       createFolder,
       togglePinned,
@@ -1369,4 +1383,16 @@ function sortNodes(nodes: TreeNode[]): TreeNode[] {
     if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1;
     return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
   });
+}
+
+/** The blob SHA the tree reported for a path, when it reported one. */
+function shaFor(tree: TreeNode[], path: string): string | undefined {
+  for (const node of tree) {
+    if (node.path === path) return node.sha;
+    if (node.children) {
+      const found = shaFor(node.children, path);
+      if (found) return found;
+    }
+  }
+  return undefined;
 }

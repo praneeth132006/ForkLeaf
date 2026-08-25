@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SiteShell } from "@/components/SiteShell";
+import { safeReturnPath } from "@/lib/app-url";
 import { githubOAuthConfigured } from "@/lib/session";
 
 export const metadata = {
@@ -21,7 +22,23 @@ export const metadata = {
  * never grant access to their private code, and until now they had no way to
  * say so without reading the documentation first.
  */
-export default function SignInPage() {
+export default async function SignInPage({
+  searchParams,
+}: {
+  /**
+   * `next` is where to return to afterwards, and `expired` says this is a
+   * sign-in that interrupted something rather than a first one. Both arrive
+   * from the editor, which is the only place that knows either.
+   */
+  searchParams: Promise<{ next?: string; expired?: string }>;
+}) {
+  const params = await searchParams;
+  const back = safeReturnPath(params.next);
+  const expired = params.expired === "1";
+  // Appended to both grant links, so whichever level is chosen ends up in the
+  // same place. Encoded once, here, rather than in each href.
+  const next = back ? `&next=${encodeURIComponent(back)}` : "";
+
   if (!githubOAuthConfigured()) {
     return (
       <SiteShell>
@@ -35,7 +52,7 @@ export default function SignInPage() {
             </Link>{" "}
             takes a few minutes.
           </p>
-          <Link href="/editor" className="fl-btn fl-btn-primary mt-6 inline-flex">
+          <Link href={back ?? "/editor"} className="fl-btn fl-btn-primary mt-6 inline-flex">
             Start writing on this device
           </Link>
         </Frame>
@@ -46,7 +63,20 @@ export default function SignInPage() {
   return (
     <SiteShell>
       <Frame>
-        <h1 className="text-3xl font-semibold tracking-tight">Sign in with GitHub</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">
+          {expired ? "Sign in to GitHub again" : "Sign in with GitHub"}
+        </h1>
+
+        {expired && (
+          <p
+            role="status"
+            className="mt-4 max-w-2xl rounded-lg border border-[var(--fl-warn)]/40 bg-[var(--fl-warn)]/10 px-4 py-3 text-sm text-[var(--fl-text)]"
+          >
+            Your previous sign-in expired, which is why pushing stopped. Nothing was lost — every
+            change is saved on this device and goes to GitHub as soon as you are back in.
+          </p>
+        )}
+
         <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-[var(--fl-muted)]">
           ForkLeaf keeps your notes as Markdown files in a repository you own, so it needs
           permission to read and write files there. Choose how much of your account that covers. You
@@ -55,7 +85,7 @@ export default function SignInPage() {
 
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           <Choice
-            href="/api/auth/github?access=all"
+            href={`/api/auth/github?access=all${next}`}
             scope="repo"
             title="Private and public repositories"
             recommended
@@ -69,7 +99,7 @@ export default function SignInPage() {
           />
 
           <Choice
-            href="/api/auth/github?access=public"
+            href={`/api/auth/github?access=public${next}`}
             scope="public_repo"
             title="Public repositories only"
             need="Enough if your notes are going to be public. ForkLeaf literally cannot open a private repository with this — the token is refused by GitHub, not by us."
