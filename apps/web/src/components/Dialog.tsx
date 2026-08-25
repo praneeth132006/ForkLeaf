@@ -23,14 +23,32 @@ export function Dialog({ title, subtitle, onClose, children, wide = false }: Dia
   useEffect(() => {
     previouslyFocused.current = document.activeElement as HTMLElement | null;
 
-    // Move focus into the dialog so a keyboard user is not left outside it.
-    // An element marked `autofocus` wins: otherwise focus lands on the close
-    // button and typing goes nowhere, which is worse than no focus at all.
+    // Move focus into the dialog so a keyboard user is not left outside it,
+    // and specifically onto the field they came here to type in.
+    //
+    // This used to look for `[autofocus]`, which never matched: React applies
+    // `autoFocus` by calling `.focus()` itself and does not leave the attribute
+    // in the DOM, so the query returned null on every dialog. Focus then fell
+    // through to the first focusable element in the whole panel — the close
+    // button in the header, which precedes the content — and the effect below
+    // ran after React's own autofocus, so it took focus back off the input.
+    //
+    // The cost was not just a missing cursor. With the close button focused,
+    // Enter dismissed the dialog, so "type a name and press Enter" threw the
+    // name away and every folder had to be created with the mouse.
+    //
+    // So: search the content region only, never the header, and prefer a field
+    // over a button. `data-autofocus` is the explicit override, because unlike
+    // `autoFocus` it is a real attribute that survives into the DOM.
     const panel = panelRef.current;
+    const content = panel?.querySelector<HTMLElement>("[data-dialog-content]") ?? panel;
     const preferred =
-      panel?.querySelector<HTMLElement>("[autofocus]") ??
-      panel?.querySelector<HTMLElement>(
-        'input, select, textarea, [href], button, [tabindex]:not([tabindex="-1"])',
+      content?.querySelector<HTMLElement>("[data-autofocus]") ??
+      content?.querySelector<HTMLElement>(
+        'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])',
+      ) ??
+      content?.querySelector<HTMLElement>(
+        '[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
       );
     (preferred ?? panel)?.focus();
 
@@ -110,7 +128,9 @@ export function Dialog({ title, subtitle, onClose, children, wide = false }: Dia
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
+        <div data-dialog-content className="min-h-0 flex-1 overflow-y-auto p-5">
+          {children}
+        </div>
       </div>
     </div>
   );

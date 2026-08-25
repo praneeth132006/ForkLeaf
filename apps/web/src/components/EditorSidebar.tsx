@@ -6,6 +6,7 @@ import type { TreeNode, Workspace, SessionUser } from "@forkleaf/types";
 import { FileTree } from "./FileTree";
 import { ForkLeafMark } from "./Brand";
 import { useDismissable } from "@/hooks/useDismissable";
+import { collectFilePaths, collectFolders } from "@/lib/tree";
 
 export interface EditorSidebarProps {
   collapsed: boolean;
@@ -23,7 +24,7 @@ export interface EditorSidebarProps {
    * folder of the note being edited.
    *
    * Without this, "New note" always meant "new note at the repository root",
-   * so someone working inside `SOC 101/Phishing analysis` who pressed the
+   * so someone working inside `Fieldwork/Soil surveys` who pressed the
    * button got a file at the top of their repository. They then had to notice
    * it had happened and drag it back, which on GitHub had already been
    * committed to the wrong place.
@@ -37,6 +38,8 @@ export interface EditorSidebarProps {
   onDeleteFolder: (path: string) => void;
   /** Moves a note into another folder, from a drag within the tree. */
   onMoveNote: (path: string, toFolder: string) => void;
+  /** Moves a folder, and everything under it, from a drag within the tree. */
+  onMoveFolder: (path: string, toFolder: string) => void;
   /** Notes kept at the top, in the order they were put there. */
   pinnedPaths: readonly string[];
   /** Folders the reader had open last time, in the order they opened them. */
@@ -478,6 +481,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
           onCreateIn={props.onCreateNote}
           onCreateFolder={props.onCreateFolder}
           onMoveNote={props.onMoveNote}
+          onMoveFolder={props.onMoveFolder}
           onTogglePin={props.onTogglePin}
           pinnedPaths={props.pinnedPaths}
           onRenameFolder={props.onRenameFolder}
@@ -629,38 +633,7 @@ function DashboardGlyph({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
-/** Every folder path in the tree, depth-first, so nesting reads in order. */
-function collectFolders(nodes: TreeNode[]): string[] {
-  const paths: string[] = [];
-
-  const walk = (list: TreeNode[]) => {
-    for (const node of list) {
-      if (node.kind !== "folder") continue;
-      paths.push(node.path);
-      walk(node.children ?? []);
-    }
-  };
-
-  walk(nodes);
-  return paths;
-}
-
-/** Every note path in the tree, for checking a pinned path still exists. */
-function collectFilePaths(nodes: TreeNode[]): string[] {
-  const paths: string[] = [];
-
-  const walk = (list: TreeNode[]) => {
-    for (const node of list) {
-      if (node.kind === "file") paths.push(node.path);
-      walk(node.children ?? []);
-    }
-  };
-
-  walk(nodes);
-  return paths;
-}
-
-/** `SOC 101/intro.md` → `intro`, which is what the row is called. */
+/** `Fieldwork/intro.md` → `intro`, which is what the row is called. */
 function nameOf(path: string): string {
   return (path.split("/").pop() ?? path).replace(/\.mdx?$/i, "");
 }

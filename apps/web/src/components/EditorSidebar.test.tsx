@@ -31,18 +31,18 @@ const workspace: Workspace = {
 const tree: TreeNode[] = [
   {
     kind: "folder",
-    name: "SOC 101",
-    path: "SOC 101",
+    name: "Fieldwork",
+    path: "Fieldwork",
     children: [
       {
         kind: "folder",
         name: "Phishing analysis",
-        path: "SOC 101/Phishing analysis",
+        path: "Fieldwork/Soil surveys",
         children: [
           {
             kind: "file",
             name: "introduction.md",
-            path: "SOC 101/Phishing analysis/introduction.md",
+            path: "Fieldwork/Soil surveys/introduction.md",
           },
         ],
       },
@@ -63,7 +63,7 @@ function renderSidebar(currentFolder: string, overrides: Record<string, unknown>
       onSwitchWorkspace={() => {}}
       onConnectRepo={() => {}}
       tree={tree}
-      activePath="SOC 101/Phishing analysis/introduction.md"
+      activePath="Fieldwork/Soil surveys/introduction.md"
       currentFolder={currentFolder}
       onOpenNote={() => {}}
       onCreateNote={onCreateNote}
@@ -73,6 +73,7 @@ function renderSidebar(currentFolder: string, overrides: Record<string, unknown>
       onRenameFolder={() => {}}
       onDeleteFolder={() => {}}
       onMoveNote={() => {}}
+      onMoveFolder={() => {}}
       pinnedPaths={[]}
       onTogglePin={() => {}}
       onMovePin={() => {}}
@@ -91,19 +92,19 @@ function renderSidebar(currentFolder: string, overrides: Record<string, unknown>
 
 describe("EditorSidebar — where new things go", () => {
   it("creates a note in the folder you are working in", () => {
-    const { onCreateNote } = renderSidebar("SOC 101/Phishing analysis");
+    const { onCreateNote } = renderSidebar("Fieldwork/Soil surveys");
 
     fireEvent.click(screen.getByText("New Note"));
 
-    expect(onCreateNote).toHaveBeenCalledWith("SOC 101/Phishing analysis");
+    expect(onCreateNote).toHaveBeenCalledWith("Fieldwork/Soil surveys");
   });
 
   it("creates a folder inside the folder you are working in", () => {
-    const { onCreateFolder } = renderSidebar("SOC 101/Phishing analysis");
+    const { onCreateFolder } = renderSidebar("Fieldwork/Soil surveys");
 
     fireEvent.click(screen.getByLabelText("New folder"));
 
-    expect(onCreateFolder).toHaveBeenCalledWith("SOC 101/Phishing analysis");
+    expect(onCreateFolder).toHaveBeenCalledWith("Fieldwork/Soil surveys");
   });
 
   it("falls back to the repository root when no note is open", () => {
@@ -115,13 +116,13 @@ describe("EditorSidebar — where new things go", () => {
   });
 
   it("says where the note will be created, so it is not a surprise", () => {
-    renderSidebar("SOC 101/Phishing analysis");
+    renderSidebar("Fieldwork/Soil surveys");
 
-    expect(screen.getByTitle("New note in SOC 101/Phishing analysis (⌘⇧N)")).toBeTruthy();
+    expect(screen.getByTitle("New note in Fieldwork/Soil surveys (⌘⇧N)")).toBeTruthy();
   });
 
   it("still offers the repository root explicitly", () => {
-    const { onCreateNote } = renderSidebar("SOC 101/Phishing analysis");
+    const { onCreateNote } = renderSidebar("Fieldwork/Soil surveys");
 
     fireEvent.click(screen.getByLabelText("New note in a folder"));
     fireEvent.click(screen.getByRole("menuitem", { name: "notes" }));
@@ -131,7 +132,7 @@ describe("EditorSidebar — where new things go", () => {
 });
 
 describe("EditorSidebar — pinned notes", () => {
-  const pinned = ["SOC 101/Phishing analysis/introduction.md"];
+  const pinned = ["Fieldwork/Soil surveys/introduction.md"];
 
   it("shows a pinned note above the tree", () => {
     renderSidebar("", { pinnedPaths: pinned });
@@ -155,13 +156,13 @@ describe("EditorSidebar — pinned notes", () => {
   });
 
   it("drops a pin whose note no longer exists, rather than showing a dead row", () => {
-    renderSidebar("", { pinnedPaths: ["SOC 101/deleted.md"] });
+    renderSidebar("", { pinnedPaths: ["Fieldwork/deleted.md"] });
     expect(screen.queryByText("Pinned")).toBeNull();
   });
 
   it("can reorder the list, which is the only thing about it anybody chose", () => {
     const onMovePin = vi.fn();
-    const two = [...pinned, "SOC 101/Phishing analysis/second.md"];
+    const two = [...pinned, "Fieldwork/Soil surveys/second.md"];
 
     renderSidebar("", {
       pinnedPaths: two,
@@ -169,23 +170,23 @@ describe("EditorSidebar — pinned notes", () => {
       tree: [
         {
           kind: "folder",
-          name: "SOC 101",
-          path: "SOC 101",
+          name: "Fieldwork",
+          path: "Fieldwork",
           children: [
             {
               kind: "folder",
               name: "Phishing analysis",
-              path: "SOC 101/Phishing analysis",
+              path: "Fieldwork/Soil surveys",
               children: [
                 {
                   kind: "file",
                   name: "introduction.md",
-                  path: "SOC 101/Phishing analysis/introduction.md",
+                  path: "Fieldwork/Soil surveys/introduction.md",
                 },
                 {
                   kind: "file",
                   name: "second.md",
-                  path: "SOC 101/Phishing analysis/second.md",
+                  path: "Fieldwork/Soil surveys/second.md",
                 },
               ],
             },
@@ -198,7 +199,7 @@ describe("EditorSidebar — pinned notes", () => {
     expect(onMovePin).not.toHaveBeenCalled(); // already last, so the button is off
 
     fireEvent.click(screen.getByLabelText("Move second up"));
-    expect(onMovePin).toHaveBeenCalledWith("SOC 101/Phishing analysis/second.md", -1);
+    expect(onMovePin).toHaveBeenCalledWith("Fieldwork/Soil surveys/second.md", -1);
   });
 
   it("can unpin from the row itself", () => {
