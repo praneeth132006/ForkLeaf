@@ -364,8 +364,25 @@ export function EditorWorkspace() {
           ? `Saved as a file inside “${folder}”.`
           : "Saved at the top of your repository. Open a note first to create alongside it.",
         onConfirm: async (value) => {
-          await notebook.createNote(value || "Untitled note", folder);
+          const created = await notebook.createNote(value || "Untitled note", folder);
           track("note_created");
+          if (!created) return;
+
+          /**
+           * Where it went, said out loud and pointed at.
+           *
+           * The sidebar now opens the folders above a new note and scrolls to
+           * it, which answers "where is it" for anybody looking at the sidebar
+           * — but not for anybody who has it collapsed, or who is on a phone
+           * where the tree is a drawer over the note. So the path is stated
+           * too, and the sidebar is put back if it was folded away.
+           */
+          setSidebarCollapsed(false);
+          setNotice(
+            dirname(created.path)
+              ? `Created ${created.path}`
+              : `Created ${created.path}, at the top of the repository`,
+          );
         },
       });
     },

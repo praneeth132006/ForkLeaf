@@ -93,6 +93,28 @@ export function EditorSidebar(props: EditorSidebarProps) {
   useDismissable(accountRef, showAccount, () => setShowAccount(false));
   const searchRef = useRef<HTMLInputElement>(null);
 
+  /**
+   * Drops a filename filter that would hide the note just selected.
+   *
+   * The filter narrows the tree to matching filenames, so a note created while
+   * one was typed — or opened from ⌘K, which searches everything — landed
+   * somewhere the sidebar was refusing to draw. The tree said "Nothing matches
+   * ‘soil’" about a note that certainly existed.
+   *
+   * Only when the selection moves, and only when it does not match: clearing
+   * the field whenever the two disagreed would empty it as it was being typed,
+   * because a half-typed filter rarely matches the note already open.
+   */
+  const [filteredFor, setFilteredFor] = useState(props.activePath);
+
+  if (props.activePath !== filteredFor) {
+    setFilteredFor(props.activePath);
+    const path = props.activePath;
+    if (filter && path && !path.toLowerCase().includes(filter.toLowerCase())) {
+      setFilter("");
+    }
+  }
+
   // Every folder at every depth, so "new note" can mean "new note somewhere in
   // particular" without making the reader find the folder first. Listing only
   // the top level meant a note could never be put in a subfolder from here.

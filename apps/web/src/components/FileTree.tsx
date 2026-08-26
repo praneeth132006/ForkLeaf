@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useCallback, useMemo, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TreeNode } from "@forkleaf/types";
 import { ContextMenu, useContextMenu, type MenuItem } from "./ContextMenu";
 
@@ -97,11 +97,21 @@ export function FileTree({
     () => new Set(openFolders ?? rootFolders(nodes)),
   );
 
-  /** Reports the open set outwards, so it can be remembered for next time. */
+  /**
+   * Records a new open set and reports it outwards, so it can be remembered
+   * for next time.
+   *
+   * Both together, and never from inside a `setExpanded` updater: React is
+   * free to run an updater during a later render pass rather than where it was
+   * queued, and a parent's `setState` reached from there is an update to one
+   * component while another is rendering — which React refuses, and which it
+   * only started refusing out loud once anything else in here set state during
+   * render.
+   */
   const remember = useCallback(
     (next: Set<string>) => {
+      setExpanded(next);
       onOpenFoldersChange?.([...next]);
-      return next;
     },
     [onOpenFoldersChange],
   );
@@ -155,25 +165,63 @@ export function FileTree({
 
   const toggle = useCallback(
     (path: string) => {
-      setExpanded((current) => {
-        const next = new Set(current);
-        // Deleted and re-added rather than left in place, so the record keeps
-        // the order folders were opened in.
-        next.delete(path);
-        if (!current.has(path)) next.add(path);
-        return remember(next);
-      });
+      const next = new Set(expanded);
+      // Deleted and re-added rather than left in place, so the record keeps
+      // the order folders were opened in.
+      next.delete(path);
+      if (!expanded.has(path)) next.add(path);
+      remember(next);
     },
-    [remember],
+    [expanded, remember],
   );
 
   /** Opening a folder before creating something in it, so the result is visible. */
   const reveal = useCallback(
     (path: string) => {
-      setExpanded((current) => remember(new Set(current).add(path)));
+      remember(new Set(expanded).add(path));
     },
-    [remember],
+    [expanded, remember],
   );
+
+  /**
+   * Opens every folder above whichever note is selected.
+   *
+   * A note made from the "New note" button, the ⌘⇧N shortcut or the folder
+   * menu became the selected note and was then invisible: it had landed inside
+   * a folder that was shut, and nothing in the sidebar said so. People went
+   * looking for a file they had just watched the app claim to create. Only the
+   * right-click menu opened its folder first, and only the one folder it was
+   * aimed at.
+   *
+   * Selecting a note is the moment to show where it lives, whether it arrived
+   * by being created, opened from ⌘K, or followed through a link.
+   *
+   * Adjusted during render against the last path revealed, rather than in an
+   * effect, so the tree is drawn open on the first pass — an effect would draw
+   * the shut tree first and open it a frame later. It is deliberately not
+   * reported through `onOpenFoldersChange`: what is remembered for next time
+   * is the set of folders the reader chose to open, and this is the app
+   * pointing at something rather than the reader opening it. Closing a
+   * revealed folder therefore sticks, which it would not if the open state
+   * were simply derived from the selection.
+   */
+  const [revealedFor, setRevealedFor] = useState<string | null>(null);
+
+  if (activePath !== revealedFor) {
+    setRevealedFor(activePath);
+    const ancestors = ancestorsOf(activePath ?? "");
+
+    if (ancestors.some((folder) => !expanded.has(folder))) {
+      const next = new Set(expanded);
+      // Re-added rather than left where they were, so the set still reads as
+      // "most recently opened last".
+      for (const folder of ancestors) {
+        next.delete(folder);
+        next.add(folder);
+      }
+      setExpanded(next);
+    }
+  }
 
   const menuItems = useMemo((): MenuItem[] => {
     if (!menu) return [];
@@ -358,6 +406,22 @@ const TreeItem = memo(function TreeItem({
     dragging !== null && (dragging.path === node.path || node.path.startsWith(`${dragging.path}/`));
   const dropFolder = isFolder ? node.path : dirnameOf(node.path);
 
+  /**
+   * Brings the selected row into view.
+   *
+   * Opening its folders is only half of "show me where it is": in a repository
+   * of any size the row it just revealed is as likely as not below the fold,
+   * and a sidebar that has scrolled somewhere else entirely still looks like
+   * nothing happened. `nearest` leaves the scroll alone when the row is
+   * already on screen, so selecting a visible note does not jump the tree.
+   * The call itself is optional because jsdom, where the tests run, has no
+   * layout and so does not implement it.
+   */
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (active) rowRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [active]);
+
   // The whole row is one indent step deeper than its parent. Every row reserves
   // the triangle's width whether or not it has one, so names line up in a
   // column instead of stepping raggedly in and out.
@@ -370,6 +434,7 @@ const TreeItem = memo(function TreeItem({
   return (
     <li role="treeitem" aria-expanded={isFolder ? open : undefined} aria-selected={active}>
       <div
+        ref={rowRef}
         className={`relative flex items-center rounded-md pr-1.5 transition-colors ${
           lifted ? "opacity-40" : ""
         } ${
@@ -579,6 +644,13 @@ function FileGlyph() {
 function dirnameOf(path: string): string {
   const cut = path.lastIndexOf("/");
   return cut === -1 ? "" : path.slice(0, cut);
+}
+
+/** Every folder above a path, outermost first. `[]` for anything at the root. */
+function ancestorsOf(path: string): string[] {
+  const parts = path.split("/");
+  parts.pop();
+  return parts.map((_, index) => parts.slice(0, index + 1).join("/"));
 }
 
 /** Top-level folders, which start open so the tree is never a single closed row. */

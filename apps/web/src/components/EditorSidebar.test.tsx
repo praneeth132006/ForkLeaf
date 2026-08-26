@@ -54,7 +54,7 @@ function renderSidebar(currentFolder: string, overrides: Record<string, unknown>
   const onCreateNote = vi.fn();
   const onCreateFolder = vi.fn();
 
-  render(
+  const draw = (activePath: string | null = "Fieldwork/Soil surveys/introduction.md") => (
     <EditorSidebar
       collapsed={false}
       onToggle={() => {}}
@@ -64,7 +64,7 @@ function renderSidebar(currentFolder: string, overrides: Record<string, unknown>
       onConnectRepo={() => {}}
       onDisconnectRepo={() => {}}
       tree={tree}
-      activePath="Fieldwork/Soil surveys/introduction.md"
+      activePath={activePath}
       currentFolder={currentFolder}
       onOpenNote={() => {}}
       onCreateNote={onCreateNote}
@@ -85,11 +85,57 @@ function renderSidebar(currentFolder: string, overrides: Record<string, unknown>
       onOpenPalette={() => {}}
       githubAvailable
       {...overrides}
-    />,
+    />
   );
 
-  return { onCreateNote, onCreateFolder };
+  const view = render(draw());
+
+  return {
+    onCreateNote,
+    onCreateFolder,
+    /** Re-renders with a different note selected, as opening one would. */
+    rerender: (activePath: string | null) => view.rerender(draw(activePath)),
+  };
 }
+
+/**
+ * A filter that hides the note you just made.
+ *
+ * The field narrows the tree by filename, so a note created — or opened from
+ * ⌘K, which searches everything — while something was typed in it landed in a
+ * tree that refused to draw it, under the words "Nothing matches".
+ */
+describe("EditorSidebar — the filename filter", () => {
+  function filterFor(text: string) {
+    const field = screen.getByLabelText("Filter notes by filename") as HTMLInputElement;
+    fireEvent.change(field, { target: { value: text } });
+    return field;
+  }
+
+  it("stands down when the note that gets selected does not match it", () => {
+    const { rerender } = renderSidebar("");
+    const field = filterFor("zzz");
+    expect(screen.getByText(/Nothing matches/)).toBeTruthy();
+
+    rerender("Fieldwork/Soil surveys/second.md");
+
+    expect(field.value).toBe("");
+  });
+
+  it("stays put while it is being typed", () => {
+    renderSidebar("");
+    expect(filterFor("zzz").value).toBe("zzz");
+  });
+
+  it("stays put when the selected note matches it anyway", () => {
+    const { rerender } = renderSidebar("");
+    const field = filterFor("intro");
+
+    rerender("Fieldwork/Soil surveys/introduction.md");
+
+    expect(field.value).toBe("intro");
+  });
+});
 
 describe("EditorSidebar — where new things go", () => {
   it("creates a note in the folder you are working in", () => {
@@ -134,9 +180,12 @@ describe("EditorSidebar — where new things go", () => {
 
 describe("EditorSidebar — pinned notes", () => {
   const pinned = ["Fieldwork/Soil surveys/introduction.md"];
+  // Nothing selected, so the tree does not open the folders above a selected
+  // note and draw a second row carrying the same path as the pinned one.
+  const unselected = { activePath: null };
 
   it("shows a pinned note above the tree", () => {
-    renderSidebar("", { pinnedPaths: pinned });
+    renderSidebar("", { pinnedPaths: pinned, ...unselected });
 
     expect(screen.getByText("Pinned")).toBeTruthy();
     expect(screen.getByTitle(pinned[0]!)).toBeTruthy();
@@ -149,7 +198,7 @@ describe("EditorSidebar — pinned notes", () => {
 
   it("opens the note when the pinned row is clicked", () => {
     const onOpenNote = vi.fn();
-    renderSidebar("", { pinnedPaths: pinned, onOpenNote });
+    renderSidebar("", { pinnedPaths: pinned, onOpenNote, ...unselected });
 
     fireEvent.click(screen.getByTitle(pinned[0]!));
 
