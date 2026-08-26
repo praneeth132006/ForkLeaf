@@ -11,6 +11,7 @@ import { signOut } from "@/lib/gateway";
 import { usePalette, useTheme, type Theme } from "@/hooks/useTheme";
 import { PALETTES, normalizeHex } from "@/lib/palette";
 import { EVERYTHING } from "@/lib/plans";
+import { UnusedImages } from "@/components/UnusedImages";
 
 export interface ProfilePanelProps {
   user: SessionUser | null;
@@ -302,6 +303,10 @@ export function ProfilePanel({ user, githubAvailable }: ProfilePanelProps) {
                     <Pair label="Last edited" value={formatDate(summary.lastEditedAt)} />
                   )}
                 </dl>
+
+                {/* Only for a repository: a local workspace has no GitHub for
+                    anything to be left behind on. */}
+                {!workspace.isLocal && <UnusedImages workspace={workspace} />}
               </li>
             ))}
           </ul>

@@ -212,6 +212,9 @@ describe("deleting without being able to read", () => {
 
     const gateway: RemoteGateway = {
       listTree: async () => tree,
+      listAllPaths: async () => {
+        throw unauthorized;
+      },
       readFile: async () => {
         throw unauthorized;
       },
@@ -314,7 +317,9 @@ describe("deleting a folder", () => {
         throw new Error("offline");
       },
       readFile: async (_workspaceId, path) =>
-        files[path] === undefined ? null : { content: files[path]!, sha: `sha-${path}` },
+        (files as Record<string, string>)[path] === undefined
+          ? null
+          : { content: (files as Record<string, string>)[path]!, sha: `sha-${path}` },
       commit: async () => ({ sha: "c", blobShas: {}, squashed: false }),
     };
     const sync = new SyncEngine({ db, gateway });

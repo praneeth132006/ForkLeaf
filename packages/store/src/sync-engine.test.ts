@@ -22,6 +22,10 @@ class FakeGateway implements RemoteGateway {
     return [];
   }
 
+  async listAllPaths(): Promise<string[]> {
+    return [...this.files.keys()];
+  }
+
   async readFile(_workspaceId: string, path: string) {
     if (!this.online) throw new Error("offline");
     return this.files.get(path) ?? null;
