@@ -31,6 +31,8 @@ import { ProposeChangesDialog } from "@/components/ProposeChangesDialog";
 import { PublishDialog } from "@/components/PublishDialog";
 import { HelpDialog } from "@/components/HelpDialog";
 import { HistoryDialog } from "@/components/HistoryDialog";
+import { ReviewPanel } from "@/components/ReviewPanel";
+import { Dialog } from "@/components/Dialog";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
 import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { StorageBlocked } from "@/components/StorageBlocked";
@@ -97,7 +99,16 @@ export function EditorWorkspace() {
    */
   const [drawer, setDrawer] = useState<"files" | "document" | null>(null);
   const [dialog, setDialog] = useState<
-    "export" | "connect" | "help" | "history" | "replay" | "blame" | "propose" | "publish" | null
+    | "export"
+    | "connect"
+    | "help"
+    | "history"
+    | "replay"
+    | "blame"
+    | "review"
+    | "propose"
+    | "publish"
+    | null
   >(null);
   /**
    * Something worth saying that is not a failure.
@@ -916,6 +927,16 @@ export function EditorWorkspace() {
             "blame who wrote when written provenance attribution authorship age stale old paragraph line origin annotate",
           run: () => setDialog("blame"),
         });
+
+        list.push({
+          id: "review",
+          label: "Review this note as a pull request",
+          group: "Notes",
+          hint: "Read the comments on this branch, reply, and merge",
+          keywords:
+            "review pull request pr comments feedback merge approve changes requested critique reviewer discussion conversation",
+          run: () => setDialog("review"),
+        });
       }
     }
 
@@ -1386,6 +1407,14 @@ export function EditorWorkspace() {
                 setDrawer(null);
                 setDialog("blame");
               }}
+              onReview={
+                workspace && !workspace.isLocal
+                  ? () => {
+                      setDrawer(null);
+                      setDialog("review");
+                    }
+                  : undefined
+              }
               onPublish={
                 workspace && !workspace.isLocal
                   ? () => {
@@ -1462,6 +1491,30 @@ export function EditorWorkspace() {
             resolveImageSrc={images.resolve}
           />
         )}
+
+      {openDialog === "review" && note && workspace && !workspace.isLocal && (
+        <Dialog
+          title="Review &amp; merge"
+          subtitle={`${note.path} · ${workspace.repo.owner}/${workspace.repo.repo} · ${workspace.repo.branch}`}
+          onClose={() => setDialog(null)}
+          wide
+        >
+          <ReviewPanel
+            owner={workspace.repo.owner}
+            repo={workspace.repo.repo}
+            branch={workspace.repo.branch}
+            path={note.path}
+            content={note.content}
+            onMerged={(base) => {
+              // Back to the branch the work just landed on; staying on a
+              // merged branch is how the next edit opens a second request
+              // against a branch nobody is looking at any more.
+              setDialog(null);
+              void notebook.switchBranch(base);
+            }}
+          />
+        </Dialog>
+      )}
 
       {showConflicts && (
         <ConflictDialog

@@ -194,6 +194,12 @@ export function HelpDialog({
                   changed in the margin beside it.
                 </span>
                 <span className="mt-3 block">
+                  <strong>Review &amp; merge this note</strong> reads the pull request open on this
+                  branch: every comment shown against the paragraph it was written about, with a
+                  reply box on each, and a squash-merge once it is settled. Propose changes first to
+                  open one.
+                </span>
+                <span className="mt-3 block">
                   Code blocks in <Mono>bash</Mono>, <Mono>python</Mono> or <Mono>javascript</Mono>{" "}
                   have a <strong>Run</strong> button. The output is written into the note under the
                   block and committed with it, so a runbook keeps its own results. Blocks run in a

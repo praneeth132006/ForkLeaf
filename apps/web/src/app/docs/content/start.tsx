@@ -86,6 +86,12 @@ export function GettingStarted() {
           one sitting or was assembled over a year.
         </LI>
         <LI>
+          <strong>Review &amp; merge this note</strong> — properties panel. Propose a note as a pull
+          request, then read the review here instead of on github.com: each comment against the
+          paragraph it was written about, replies in place, and a squash-merge when it is settled.
+          Learning with code review, on your own notes.
+        </LI>
+        <LI>
           <strong>Notes that run</strong> — any <Code>bash</Code>, <Code>python</Code> or{" "}
           <Code>javascript</Code> block carries a <strong>Run</strong> button. The result lands in
           an <Code>```output</Code> block underneath, stamped with when it ran, and commits with the

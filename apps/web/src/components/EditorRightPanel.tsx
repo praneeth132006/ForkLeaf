@@ -32,6 +32,8 @@ export interface EditorRightPanelProps {
    * question — how this page grew, and which parts of it are old.
    */
   onBlame: () => void;
+  /** Absent for a local workspace, which has no pull requests to read. */
+  onReview?: () => void;
   /** Opens the publish dialog. Absent for a workspace with no repository. */
   onPublish?: (() => void) | undefined;
   /**
@@ -100,6 +102,7 @@ export function EditorRightPanel({
   onShowHistory,
   onReplay,
   onBlame,
+  onReview,
   onPublish,
   published,
   syncMode,
@@ -459,6 +462,15 @@ export function EditorRightPanel({
                     When each paragraph was written
                   </PanelButton>
                 )}
+                {/* Not gated on there being an open request: the panel's job
+                    is partly to say there is not one, and a button that
+                    appears only once you already know the answer is a button
+                    nobody finds. */}
+                {onReview && (
+                  <PanelButton onClick={onReview} icon={<ReviewGlyph />}>
+                    Review &amp; merge this note
+                  </PanelButton>
+                )}
                 <button
                   type="button"
                   onClick={onExport}
@@ -812,6 +824,16 @@ function LinkGlyph() {
     >
       <path d="M6.5 9.5a2.75 2.75 0 0 0 4 .25l2-2a2.75 2.75 0 0 0-3.9-3.9l-1.1 1.1" />
       <path d="M9.5 6.5a2.75 2.75 0 0 0-4-.25l-2 2a2.75 2.75 0 0 0 3.9 3.9l1.1-1.1" />
+    </svg>
+  );
+}
+
+/** Two lines of talk against a document — a review, in miniature. */
+function ReviewGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
+      <path d="M2 3.5h7M2 6h5" strokeLinecap="round" />
+      <path d="M6.5 9.5h7a1 1 0 0 1 1 1v2.5a1 1 0 0 1-1 1H9l-2 1.5V14h-.5a1 1 0 0 1-1-1v-2.5a1 1 0 0 1 1-1Z" />
     </svg>
   );
 }

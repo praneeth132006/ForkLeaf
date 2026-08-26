@@ -110,3 +110,14 @@ export {
   type RunResult,
   type Runner,
 } from "./runnable";
+
+export {
+  buildThreads,
+  summariseReviews,
+  type ReviewComment,
+  type ReviewThread,
+  type ReviewVerdict,
+  type SubmittedReview,
+  type ThreadOptions,
+  type Verdict,
+} from "./review";
