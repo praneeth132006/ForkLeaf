@@ -45,6 +45,17 @@ function caretAtEndOf(editor: Editor, text: string) {
   editor.commands.setTextSelection(found);
 }
 
+/** Selects exactly `text`, the way dragging across it with the mouse would. */
+function selectText(editor: Editor, text: string) {
+  let found = -1;
+  editor.state.doc.descendants((node, pos) => {
+    const index = node.isText ? (node.text ?? "").indexOf(text) : -1;
+    if (index !== -1 && found === -1) found = pos + index;
+  });
+  expect(found).toBeGreaterThan(-1);
+  editor.commands.setTextSelection({ from: found, to: found + text.length });
+}
+
 describe("isolateCurrentLine", () => {
   it("splits the last line of a multi-line paragraph out on its own", async () => {
     const editor = await mount("alpha\nbravo\ncharlie");
@@ -87,6 +98,40 @@ describe("isolateCurrentLine", () => {
     isolateCurrentLine(editor);
 
     expect(markdownOf(editor)).toBe("alpha\n\nbravo\n\ncharlie");
+  });
+
+  /**
+   * The same bug, reached through the toolbar rather than the slash menu: a
+   * line highlighted with the mouse and then given a heading took the line
+   * above it — a link, in the report where this was found — along with it.
+   */
+  it("isolates the lines a selection covers, not just the caret's line", async () => {
+    const editor = await mount("OneNote: https://onenote.example\nFor screen shots\nGreenShot");
+    selectText(editor, "For screen shots");
+
+    expect(isolateCurrentLine(editor)).toBe(true);
+    expect(editor.state.selection.$from.parent.textContent).toBe("For screen shots");
+    // And the selection still covers exactly the words that were highlighted.
+    const { from, to } = editor.state.selection;
+    expect(editor.state.doc.textBetween(from, to)).toBe("For screen shots");
+  });
+
+  it("makes a heading of the selected line alone", async () => {
+    const editor = await mount("OneNote: link\nFor screen shots\nGreenShot");
+    selectText(editor, "For screen shots");
+
+    isolateCurrentLine(editor);
+    editor.chain().focus().toggleHeading({ level: 3 }).run();
+
+    expect(markdownOf(editor)).toBe("OneNote: link\n\n### For screen shots\n\nGreenShot");
+  });
+
+  it("keeps a selection that already spans whole blocks working", async () => {
+    const editor = await mount("alpha\n\nbravo");
+    editor.commands.selectAll();
+
+    // Nothing to isolate: both blocks are already one line each.
+    expect(isolateCurrentLine(editor)).toBe(false);
   });
 
   it("leaves only the isolated line as a heading, not the lines above it", async () => {

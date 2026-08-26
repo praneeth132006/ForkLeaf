@@ -1,5 +1,6 @@
 import type { Editor } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
+import type { ResolvedPos } from "@tiptap/pm/model";
 
 /**
  * Make the line the cursor is on into a block of its own.
@@ -17,6 +18,12 @@ import { TextSelection } from "@tiptap/pm/state";
  * it become real block boundaries, and the command then has exactly the line
  * the writer was looking at to work on.
  *
+ * The same is true of a selection: highlighting one line of a paragraph and
+ * pressing Heading 3 made a heading of every line in that paragraph, including
+ * the link above it that nobody had selected. So the lines the selection
+ * covers are separated out too, and the selection is carried across the splits
+ * so the command lands on exactly what was highlighted.
+ *
  * Inline commands — bold, a link, an image — must not do this, or asking for
  * bold would silently break a paragraph in three.
  *
@@ -24,38 +31,27 @@ import { TextSelection } from "@tiptap/pm/state";
  */
 export function isolateCurrentLine(editor: Editor): boolean {
   const { state } = editor;
-  const { $from, empty } = state.selection;
+  const { $from, $to, empty } = state.selection;
 
-  if (!empty) return false;
+  if (!$from.parent.isTextblock || !$to.parent.isTextblock) return false;
 
-  const parent = $from.parent;
-  if (!parent.isTextblock) return false;
-
-  const blockStart = $from.start();
-  const cursor = $from.pos;
-
-  // Absolute positions of the hard breaks inside this block.
-  const breaks: number[] = [];
-  parent.forEach((child, offset) => {
-    if (child.type.name === "hardBreak") breaks.push(blockStart + offset);
-  });
-
-  if (breaks.length === 0) return false;
-
-  // The breaks that bound the line the cursor sits on. Either may be absent:
-  // the cursor can be on the first or the last line of the block.
-  const before = breaks.filter((position) => position < cursor).pop();
-  const after = breaks.find((position) => position >= cursor);
+  // The breaks bounding the lines the selection touches. Either may be absent:
+  // it can start on the first line of its block and end on the last of its own.
+  const before = breaksIn($from)
+    .filter((position) => position < $from.pos)
+    .pop();
+  const after = breaksIn($to).find((position) => position >= $to.pos);
 
   if (before === undefined && after === undefined) return false;
 
-  // Where the line begins and ends, and how far into it the caret sits. The
+  // Where the first line begins, and how far into it the caret sits. The
   // caret's own position is no use for restoring it: an empty line puts it
   // exactly on a split boundary, and a boundary belongs to both blocks — map it
   // forward and `/h1` styles the line below, map it back and it styles the line
   // above. Both of those were observed. The line's *start* is unambiguous.
-  const lineStart = before === undefined ? blockStart : before + 1;
-  const offsetInLine = cursor - lineStart;
+  const lineStart = before === undefined ? $from.start() : before + 1;
+  const offsetInLine = $from.pos - lineStart;
+  const { from, to } = state.selection;
 
   const tr = state.tr;
 
@@ -72,11 +68,32 @@ export function isolateCurrentLine(editor: Editor): boolean {
     tr.split(before);
   }
 
-  // Put the caret back where it was, measured from the start of the line it was
-  // on — which is now the start of a block of its own.
-  const restored = tr.mapping.map(lineStart, 1) + offsetInLine;
-  tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(restored, tr.doc.content.size))));
+  if (empty) {
+    // Put the caret back where it was, measured from the start of the line it
+    // was on — which is now the start of a block of its own.
+    const restored = tr.mapping.map(lineStart, 1) + offsetInLine;
+    tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(restored, tr.doc.content.size))));
+  } else {
+    // A range has two unambiguous ends, so they can simply be carried through
+    // the splits: forward at the start, backward at the end, so neither end
+    // slides onto a boundary that now belongs to the block next door.
+    const start = tr.mapping.map(from, 1);
+    const end = tr.mapping.map(to, -1);
+    tr.setSelection(TextSelection.create(tr.doc, start, Math.max(start, end)));
+  }
 
   editor.view.dispatch(tr);
   return true;
+}
+
+/** Absolute positions of the hard breaks in the block a position sits in. */
+function breaksIn($position: ResolvedPos): number[] {
+  const start = $position.start();
+  const breaks: number[] = [];
+
+  $position.parent.forEach((child, offset) => {
+    if (child.type.name === "hardBreak") breaks.push(start + offset);
+  });
+
+  return breaks;
 }

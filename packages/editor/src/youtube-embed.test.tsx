@@ -54,4 +54,37 @@ describe("YouTube videos in rich text", () => {
       expect(found).toEqual(["https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s"]);
     });
   });
+
+  /**
+   * Where the caret goes afterwards, which is the same question a pasted
+   * screenshot raises: a player is a block, and a selection left sitting on it
+   * means the next thing typed replaces the video.
+   */
+  it("leaves the caret on a line below the player", async () => {
+    const editor = await mount("");
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", {
+      value: {
+        files: [],
+        items: [],
+        types: ["text/plain"],
+        getData: (type: string) => (type === "text/plain" ? "https://youtu.be/dQw4w9WgXcQ" : ""),
+      },
+    });
+    editor.view.dom.dispatchEvent(event);
+
+    await waitFor(() => {
+      const { $from, empty } = editor.state.selection;
+      expect(empty).toBe(true);
+      expect($from.parent.type.name).toBe("paragraph");
+    });
+
+    editor.commands.insertContent("what a video");
+
+    let players = 0;
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === "youtubeEmbed") players += 1;
+    });
+    expect(players).toBe(1);
+  });
 });

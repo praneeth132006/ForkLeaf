@@ -14,6 +14,7 @@ import {
   type ToolbarSurface,
 } from "./EditorToolbar";
 import { insertActionsFor, runRichAction, runSourceAction } from "./insert-actions";
+import { isolateCurrentLine } from "./isolate-line";
 import { ImageDialog } from "./ui/ImageDialog";
 import { LinkDialog } from "./ui/LinkDialog";
 import type { ImageBridge } from "./images";
@@ -516,6 +517,12 @@ function richSurface(editor: Editor): ToolbarSurface {
     },
     blockStyle: richBlockStyle(editor),
     setBlockStyle: (style) => {
+      // The line, or the lines highlighted — not the whole paragraph they
+      // happen to share. Without this, choosing Heading 3 with one line
+      // selected made a heading of every line in the paragraph, the link
+      // above it included.
+      isolateCurrentLine(editor);
+
       const chain = editor.chain().focus();
       if (style === "paragraph") {
         // Blockquote and code block are wrappers rather than node types, so
@@ -535,6 +542,7 @@ function richSurface(editor: Editor): ToolbarSurface {
       editor.isActive(
         kind === "bullet" ? "bulletList" : kind === "ordered" ? "orderedList" : "taskList",
       ),
+    isLinkActive: () => editor.isActive("link"),
     undo: () => editor.chain().focus().undo().run(),
     redo: () => editor.chain().focus().redo().run(),
     canUndo: editor.can().undo(),
@@ -667,7 +675,10 @@ function sourceBlockStyle(line: string): BlockStyle {
  * showing the state of wherever the caret used to be.
  */
 function signatureOf(editor: Editor): string {
-  const marks = ["bold", "italic", "strike", "code", "highlight"]
+  // `link` is in here for the same reason as the rest: the toolbar reports
+  // what is applied to the text under the caret, and a link is applied to text
+  // as much as bold is.
+  const marks = ["bold", "italic", "strike", "code", "highlight", "link"]
     .map((mark) => (editor.isActive(mark) ? "1" : "0"))
     .join("");
   const lists = ["bulletList", "orderedList", "taskList"]

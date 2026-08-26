@@ -66,6 +66,58 @@ describe("a pasted image", () => {
     );
   });
 
+  /**
+   * Where the caret ends up afterwards.
+   *
+   * An image is a block, so inserting one left the selection on the node
+   * itself: the next keystroke replaced the screenshot that had just been
+   * uploaded. Pasting a picture into a note is almost always followed by
+   * writing about the picture.
+   */
+  it("leaves the caret on an empty line below the picture", async () => {
+    const bridge: ImageBridge = {
+      canUpload: true,
+      resolve: () => "blob:the-image",
+      upload: async (file) => `assets/${file.name}`,
+    };
+
+    let editor: Editor | null = null;
+    render(
+      <WysiwygEditor
+        value="hello"
+        onChange={vi.fn()}
+        images={bridge}
+        onReady={(instance) => {
+          editor = instance;
+        }}
+      />,
+    );
+    await waitFor(() => expect(editor).not.toBeNull(), { timeout: 4000 });
+
+    const view = editor!.view;
+    const file = new File([new Uint8Array([1])], "shot.png", { type: "image/png" });
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", {
+      value: { files: [file], items: [], types: ["Files"], getData: () => "" },
+    });
+    view.dom.dispatchEvent(event);
+
+    await waitFor(() => expect(view.dom.querySelector("img")).not.toBeNull(), { timeout: 4000 });
+
+    const { $from, empty } = editor!.state.selection;
+    expect(empty).toBe(true);
+    expect($from.parent.type.name).toBe("paragraph");
+    expect($from.parent.content.size).toBe(0);
+
+    // And typing goes into that paragraph rather than over the image.
+    editor!.commands.insertContent("about the shot");
+    let images = 0;
+    editor!.state.doc.descendants((node) => {
+      if (node.type.name === "image") images += 1;
+    });
+    expect(images).toBe(1);
+  });
+
   it("keeps the markdown pointing at the path, not the resolved URL", async () => {
     const bridge: ImageBridge = {
       canUpload: true,

@@ -5,6 +5,8 @@ import type { Editor } from "@tiptap/core";
 import type { InsertAction } from "./EditorToolbar";
 import type { SourceEditorHandle } from "./SourceEditor";
 import { isYoutubeUrl } from "@forkleaf/markdown-engine";
+import { detectLanguage } from "./paste";
+import { isolateCurrentLine } from "./isolate-line";
 
 /** Matches any ATX heading marker, so switching levels replaces rather than stacks. */
 const HEADING_PATTERN = /^#{1,6} /;
@@ -52,6 +54,53 @@ export interface InsertDefinition extends InsertAction {
    * menus filter by view instead of showing an item that half-works.
    */
   availableIn?: "both" | "rich" | "source";
+}
+
+/**
+ * Turns the selection into code — all of it, as one block.
+ *
+ * Tiptap's `toggleCodeBlock` works a block at a time, so a script pasted as
+ * twenty one-line paragraphs and then selected in full became twenty code
+ * blocks, each with its own header, its own language picker and one line of
+ * code in it. That is the opposite of what "make this code" means, and
+ * unpicking it by hand is worse than having pasted the thing again.
+ *
+ * So a selection that spans more than one block is collapsed into a single
+ * block whose text is those blocks joined by newlines — which is what they
+ * looked like on the clipboard before the editor got hold of them. A selection
+ * inside one block is left to Tiptap, which already does the right thing, and
+ * so is a code block being turned back into prose.
+ */
+function makeCodeBlock(editor: Editor): void {
+  const { state } = editor;
+  const { from, to, empty } = state.selection;
+
+  if (empty || editor.isActive("codeBlock")) {
+    editor.chain().focus().toggleCodeBlock().run();
+    return;
+  }
+
+  // The text of every block the selection touches, one per line. `blockSeparator`
+  // is what keeps the lines apart; without it ProseMirror runs them together
+  // exactly as the multi-block paste did.
+  const text = state.doc.textBetween(from, to, "\n", "\n");
+  if (!text.includes("\n")) {
+    editor.chain().focus().toggleCodeBlock().run();
+    return;
+  }
+
+  editor
+    .chain()
+    .focus()
+    .insertContentAt(
+      { from, to },
+      {
+        type: "codeBlock",
+        ...(detectLanguage(text) ? { attrs: { language: detectLanguage(text) } } : {}),
+        content: [{ type: "text", text }],
+      },
+    )
+    .run();
 }
 
 /**
@@ -194,7 +243,7 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     label: "Code block",
     hint: "Syntax-highlighted code",
     icon: <TextGlyph>{"</>"}</TextGlyph>,
-    rich: (editor) => editor.chain().focus().toggleCodeBlock().run(),
+    rich: (editor) => makeCodeBlock(editor),
     markdown: { text: "```\n\n```\n", cursor: 4 },
   },
   {
@@ -415,7 +464,17 @@ export function runRichAction(editor: Editor, id: string, context: ActionContext
   if (id === "image" && context.requestImage) return context.requestImage();
   if (id === "link" && context.requestLink) return context.requestLink();
 
-  INSERT_DEFINITIONS.find((definition) => definition.id === id)?.rich(editor);
+  const definition = INSERT_DEFINITIONS.find((candidate) => candidate.id === id);
+  if (!definition) return;
+
+  // Enter makes a line rather than a paragraph here, so one paragraph is
+  // usually several visible lines and a block command handed the paragraph
+  // takes every one of them. The slash menu has always done this; the toolbar
+  // did not, so pressing a list button on the third line of a paragraph turned
+  // the two above it into list items as well.
+  if (!definition.inline) isolateCurrentLine(editor);
+
+  definition.rich(editor);
 }
 
 /** Applies an action to a CodeMirror source editor, at the caret. */

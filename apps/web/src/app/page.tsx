@@ -7,6 +7,7 @@ import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Toolkit } from "@/components/landing/Toolkit";
 import { Features } from "@/components/landing/Features";
 import { Positioning } from "@/components/landing/Positioning";
+import { Comparison } from "@/components/landing/Comparison";
 import { Ownership } from "@/components/landing/Ownership";
 import { Faq } from "@/components/landing/Faq";
 import { Pricing } from "@/components/landing/Pricing";
@@ -73,6 +74,7 @@ export default async function Home({
         <Toolkit />
         <Features />
         <Positioning />
+        <Comparison />
         <Ownership />
         <Pricing />
         <Faq />

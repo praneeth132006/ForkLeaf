@@ -364,8 +364,25 @@ export function EditorWorkspace() {
           ? `Saved as a file inside “${folder}”.`
           : "Saved at the top of your repository. Open a note first to create alongside it.",
         onConfirm: async (value) => {
-          await notebook.createNote(value || "Untitled note", folder);
+          const created = await notebook.createNote(value || "Untitled note", folder);
           track("note_created");
+          if (!created) return;
+
+          /**
+           * Where it went, said out loud and pointed at.
+           *
+           * The sidebar now opens the folders above a new note and scrolls to
+           * it, which answers "where is it" for anybody looking at the sidebar
+           * — but not for anybody who has it collapsed, or who is on a phone
+           * where the tree is a drawer over the note. So the path is stated
+           * too, and the sidebar is put back if it was folded away.
+           */
+          setSidebarCollapsed(false);
+          setNotice(
+            dirname(created.path)
+              ? `Created ${created.path}`
+              : `Created ${created.path}, at the top of the repository`,
+          );
         },
       });
     },
@@ -691,6 +708,27 @@ export function EditorWorkspace() {
     return () => clearTimeout(timer);
   }, [notice]);
 
+  /**
+   * Says so when a note is updated from GitHub behind your back.
+   *
+   * Notes now refresh themselves when somebody else commits — but text that
+   * rewrites itself while you are reading it is unnerving unless something
+   * says why, and "which of my open notes just changed" is exactly what you
+   * need to know afterwards.
+   */
+  const remoteChange = notebook.remoteChange;
+  const [announcedPull, setAnnouncedPull] = useState<number | null>(null);
+
+  if (remoteChange && remoteChange.at !== announcedPull) {
+    setAnnouncedPull(remoteChange.at);
+    const names = remoteChange.paths.map((path) => path.split("/").pop() ?? path);
+    setNotice(
+      names.length === 1
+        ? `Updated ${names[0]} with a change from GitHub`
+        : `Updated ${names.length} notes with changes from GitHub: ${names.join(", ")}`,
+    );
+  }
+
   const handleSignOut = useCallback(async () => {
     await signOut();
     router.push("/");
@@ -737,6 +775,13 @@ export function EditorWorkspace() {
         hint: "⌘S",
         keywords: "commit save upload",
         run: () => void notebook.syncNow(),
+      },
+      {
+        id: "pull",
+        label: "Check GitHub for changes now",
+        group: "Sync",
+        keywords: "pull refresh fetch update remote",
+        run: () => void notebook.pullRemote(),
       },
       {
         id: "repair-images",

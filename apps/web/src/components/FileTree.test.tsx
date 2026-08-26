@@ -108,6 +108,72 @@ describe("which folders are open", () => {
 });
 
 /**
+ * Finding a note you just made.
+ *
+ * A note created into a shut folder was selected, opened in the editor, and
+ * nowhere to be seen in the sidebar — so people went looking through GitHub
+ * for a file the app had just told them it created.
+ */
+describe("showing where the selected note lives", () => {
+  it("opens every folder above it", () => {
+    draw({ openFolders: [], activePath: "OSINT/Sources/feeds.md" });
+
+    expect(screen.getByText("feeds")).toBeTruthy();
+  });
+
+  it("does not record them as folders the reader chose to open", () => {
+    const onOpenFoldersChange = vi.fn();
+    draw({ openFolders: [], activePath: "OSINT/Sources/feeds.md", onOpenFoldersChange });
+
+    expect(onOpenFoldersChange).not.toHaveBeenCalled();
+  });
+
+  it("lets a revealed folder be closed again, and leaves it closed", () => {
+    draw({ openFolders: [], activePath: "OSINT/Sources/feeds.md" });
+
+    fireEvent.click(screen.getByText("Sources"));
+
+    expect(screen.queryByText("feeds")).toBeNull();
+  });
+
+  it("opens them when the selection moves, not only on arrival", () => {
+    const { rerender } = draw({ openFolders: [], activePath: null });
+    expect(screen.queryByText("notes")).toBeNull();
+
+    rerender(
+      <FileTree
+        nodes={tree}
+        activePath="Fieldwork/notes.md"
+        onOpen={vi.fn()}
+        onDelete={vi.fn()}
+        onRename={vi.fn()}
+        onCreateIn={vi.fn()}
+        onCreateFolder={vi.fn()}
+        onRenameFolder={vi.fn()}
+        onDeleteFolder={vi.fn()}
+        openFolders={[]}
+        filter=""
+      />,
+    );
+
+    expect(screen.getByText("notes")).toBeTruthy();
+  });
+
+  it("leaves a closed tree closed for a note at the top level", () => {
+    const onOpenFoldersChange = vi.fn();
+    draw({
+      nodes: [...tree, { kind: "file", name: "readme", path: "readme.md" }],
+      openFolders: [],
+      activePath: "readme.md",
+      onOpenFoldersChange,
+    });
+
+    expect(screen.queryByText("osint")).toBeNull();
+    expect(onOpenFoldersChange).not.toHaveBeenCalled();
+  });
+});
+
+/**
  * Dragging things around the tree.
  *
  * Notes could always be dragged into a folder. Folders could not, so the one

@@ -2,6 +2,7 @@
 
 import { Node, mergeAttributes } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { caretBelow } from "../caret";
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { youtubeEmbedUrl, youtubeVideoFrom, youtubeWatchUrl } from "@forkleaf/markdown-engine";
 
@@ -156,6 +157,10 @@ export const YoutubeEmbed = Node.create({
             const node = type.create({ src: youtubeWatchUrl(video) });
             const tr = view.state.tr.replaceSelectionWith(node);
             view.dispatch(tr);
+            // On a line below the player, like a pasted image: a video is a
+            // block, and the selection would otherwise sit on the node itself
+            // with the next keystroke replacing it.
+            caretBelow(view, view.state.selection.to);
             return true;
           },
         },
