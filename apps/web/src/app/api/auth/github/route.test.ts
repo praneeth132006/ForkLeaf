@@ -15,20 +15,20 @@ import { describe, expect, it } from "vitest";
  */
 
 const SCOPES: Record<string, string> = {
-  all: "repo read:user",
-  public: "public_repo read:user",
+  all: "repo",
+  public: "public_repo",
 };
 
 const scopeFor = (access: string | null) => SCOPES[access ?? "all"] ?? SCOPES.all!;
 
 describe("the scope a sign-in asks for", () => {
   it("asks for private repositories by default, which is where notes go", () => {
-    expect(scopeFor(null)).toBe("repo read:user");
-    expect(scopeFor("all")).toBe("repo read:user");
+    expect(scopeFor(null)).toBe("repo");
+    expect(scopeFor("all")).toBe("repo");
   });
 
   it("can ask for public repositories only", () => {
-    expect(scopeFor("public")).toBe("public_repo read:user");
+    expect(scopeFor("public")).toBe("public_repo");
   });
 
   it("never includes the scope that reaches private repositories", () => {
@@ -38,9 +38,19 @@ describe("the scope a sign-in asks for", () => {
     expect(scopeFor("all").split(" ")).toContain("repo");
   });
 
+  it("asks for nothing beyond a repository scope", () => {
+    // Every extra scope is another paragraph on GitHub's consent screen. The
+    // name and avatar shown in the sidebar come from `GET /user`, which any
+    // authenticated token can call, so `read:user` bought a warning about
+    // private profile access and nothing else.
+    for (const scope of Object.values(SCOPES)) {
+      expect(scope.split(" ")).toHaveLength(1);
+    }
+  });
+
   it("falls back to the default rather than honouring an invented value", () => {
-    expect(scopeFor("admin:org")).toBe("repo read:user");
-    expect(scopeFor("delete_repo")).toBe("repo read:user");
-    expect(scopeFor("")).toBe("repo read:user");
+    expect(scopeFor("admin:org")).toBe("repo");
+    expect(scopeFor("delete_repo")).toBe("repo");
+    expect(scopeFor("")).toBe("repo");
   });
 });

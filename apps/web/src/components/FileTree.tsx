@@ -4,6 +4,12 @@ import React, { memo, useCallback, useMemo, useState } from "react";
 import type { TreeNode } from "@forkleaf/types";
 import { ContextMenu, useContextMenu, type MenuItem } from "./ContextMenu";
 
+/** What a drag in the tree is carrying. */
+export interface DragPayload {
+  kind: "file" | "folder";
+  path: string;
+}
+
 export interface FileTreeProps {
   nodes: TreeNode[];
   activePath: string | null;
@@ -17,6 +23,15 @@ export interface FileTreeProps {
   onDeleteFolder: (path: string) => void;
   /** Moves a note to another folder. Called by drag-and-drop within the tree. */
   onMoveNote?: (path: string, toFolder: string) => void;
+  /**
+   * Moves a folder, and everything under it, into another folder.
+   *
+   * Notes could be dragged from the start; folders could not, so the one
+   * reorganisation people actually want — "this whole subject belongs under
+   * that one" — meant making the destination by hand and dragging the notes
+   * across one at a time.
+   */
+  onMoveFolder?: (path: string, toFolder: string) => void;
   /** Pins a note to the top of the sidebar, or unpins one already there. */
   onTogglePin?: (path: string) => void;
   /** Paths currently pinned, so the menu can say which way it will go. */
@@ -58,6 +73,7 @@ export function FileTree({
   onRenameFolder,
   onDeleteFolder,
   onMoveNote,
+  onMoveFolder,
   onTogglePin,
   pinnedPaths,
   openFolders,
@@ -90,6 +106,46 @@ export function FileTree({
     [onOpenFoldersChange],
   );
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  /**
+   * What is currently being dragged.
+   *
+   * Held here rather than read from the drag event because `dataTransfer` is
+   * write-only during `dragover` — the browser will not let a page read the
+   * payload until the drop, precisely so a page cannot snoop on a drag from
+   * another application. Without it, a folder row cannot tell whether the
+   * thing hovering over it is one of its own descendants, and so cannot refuse
+   * a move that would rename a folder to a path inside itself.
+   */
+  const [dragging, setDragging] = useState<DragPayload | null>(null);
+
+  const canDropOn = useCallback(
+    (folder: string) => {
+      if (!dragging) return false;
+      if (dragging.kind === "file")
+        return Boolean(onMoveNote) && dirnameOf(dragging.path) !== folder;
+      if (!onMoveFolder) return false;
+      // Not into itself, not into its own descendant, not where it already is.
+      return (
+        folder !== dragging.path &&
+        !folder.startsWith(`${dragging.path}/`) &&
+        dirnameOf(dragging.path) !== folder
+      );
+    },
+    [dragging, onMoveNote, onMoveFolder],
+  );
+
+  const drop = useCallback(
+    (folder: string) => {
+      const payload = dragging;
+      setDragging(null);
+      setDropTarget(null);
+      if (!payload || !canDropOn(folder)) return;
+
+      if (payload.kind === "file") onMoveNote?.(payload.path, folder);
+      else onMoveFolder?.(payload.path, folder);
+    },
+    [dragging, canDropOn, onMoveNote, onMoveFolder],
+  );
   const { menu, open: openMenu, close: closeMenu } = useContextMenu<TreeNode>();
 
   const visible = useMemo(
@@ -190,20 +246,35 @@ export function FileTree({
       <ul
         role="tree"
         aria-label="Notes"
-        className="py-1"
-        // Dropping on the empty space below the tree moves a note to the root,
-        // which is otherwise only reachable by dragging onto a folder that
-        // happens to be at the top level.
-        onDragOver={onMoveNote ? (event) => event.preventDefault() : undefined}
-        onDrop={
-          onMoveNote
-            ? (event) => {
-                const path = event.dataTransfer.getData("text/plain");
-                setDropTarget(null);
-                if (path) onMoveNote(path, "");
-              }
-            : undefined
-        }
+        // Dropping on the empty space below the tree moves the dragged thing
+        // to the root, which is otherwise only reachable by dragging onto a
+        // folder that happens to be at the top level. It grows a ring while a
+        // drag is in flight, because an invisible drop target is one nobody
+        // finds — the space below the tree looks like padding, not a
+        // destination.
+        className={`min-h-full py-1 ${
+          dragging && dropTarget === "" && canDropOn("")
+            ? "rounded-lg bg-[var(--fl-elevated)]/40 ring-1 ring-inset ring-[var(--fl-accent)]"
+            : ""
+        }`}
+        // Only what was aimed at the empty space itself. Rows stop their own
+        // events, but a row that refuses a drop never calls `preventDefault`,
+        // so without the target check the browser would deliver that drop here
+        // instead and the tree's own refusal would be overturned by its parent.
+        onDragOver={(event) => {
+          if (event.target !== event.currentTarget || !canDropOn("")) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+          setDropTarget("");
+        }}
+        onDragLeave={(event) => {
+          if (event.target === event.currentTarget) setDropTarget(null);
+        }}
+        onDrop={(event) => {
+          if (event.target !== event.currentTarget) return;
+          event.preventDefault();
+          drop("");
+        }}
       >
         {visible.map((node) => (
           <TreeItem
@@ -215,7 +286,10 @@ export function FileTree({
             onToggle={toggle}
             onOpen={onOpen}
             onContextMenu={openMenu}
-            onMoveNote={onMoveNote}
+            dragging={dragging}
+            onDragging={setDragging}
+            canDropOn={canDropOn}
+            onDrop={drop}
             dropTarget={dropTarget}
             onDropTarget={setDropTarget}
             // A search should reveal matches inside collapsed folders.
@@ -242,7 +316,10 @@ interface TreeItemProps {
     event: { clientX: number; clientY: number; preventDefault: () => void },
     node: TreeNode,
   ) => void;
-  onMoveNote?: (path: string, toFolder: string) => void;
+  dragging: DragPayload | null;
+  onDragging: (payload: DragPayload | null) => void;
+  canDropOn: (folder: string) => boolean;
+  onDrop: (folder: string) => void;
   dropTarget: string | null;
   onDropTarget: (path: string | null) => void;
   forceOpen: boolean;
@@ -263,7 +340,10 @@ const TreeItem = memo(function TreeItem({
   onToggle,
   onOpen,
   onContextMenu,
-  onMoveNote,
+  dragging,
+  onDragging,
+  canDropOn,
+  onDrop,
   dropTarget,
   onDropTarget,
   forceOpen,
@@ -271,55 +351,77 @@ const TreeItem = memo(function TreeItem({
   const open = forceOpen || expanded.has(node.path);
   const isFolder = node.kind === "folder";
   const active = !isFolder && node.path === activePath;
-  const dropping = dropTarget === node.path;
+  const dropping = isFolder && dropTarget === node.path && canDropOn(node.path);
+  // Dimmed while it is the thing in flight, so a drag over a deep tree still
+  // says which row left. A folder dims along with everything inside it.
+  const lifted =
+    dragging !== null && (dragging.path === node.path || node.path.startsWith(`${dragging.path}/`));
+  const dropFolder = isFolder ? node.path : dirnameOf(node.path);
 
   // The whole row is one indent step deeper than its parent. Every row reserves
   // the triangle's width whether or not it has one, so names line up in a
   // column instead of stepping raggedly in and out.
-  const indent = 0.375 + depth * 0.75;
+  //
+  // The step grew along with the rows: at the old 0.75rem, a name set two
+  // levels deep sat almost under its grandparent, and the nesting had to be
+  // inferred from the chevrons rather than seen.
+  const indent = 0.375 + depth * 0.85;
 
   return (
     <li role="treeitem" aria-expanded={isFolder ? open : undefined} aria-selected={active}>
       <div
         className={`relative flex items-center rounded-md pr-1.5 transition-colors ${
-          active
-            ? "bg-[var(--fl-elevated)]"
-            : dropping
-              ? "bg-[var(--fl-elevated)] ring-1 ring-inset ring-[var(--fl-accent)]"
+          lifted ? "opacity-40" : ""
+        } ${
+          dropping
+            ? "bg-[var(--fl-elevated)] ring-1 ring-inset ring-[var(--fl-accent)]"
+            : active
+              ? "bg-[var(--fl-elevated)]"
               : "hover:bg-[var(--fl-elevated)]"
         }`}
         style={{ paddingLeft: `${indent}rem` }}
-        draggable={!isFolder && Boolean(onMoveNote)}
-        onDragStart={
-          !isFolder && onMoveNote
-            ? (event) => {
-                event.dataTransfer.setData("text/plain", node.path);
-                event.dataTransfer.effectAllowed = "move";
-              }
-            : undefined
-        }
-        onDragOver={
-          isFolder && onMoveNote
-            ? (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                event.dataTransfer.dropEffect = "move";
-                onDropTarget(node.path);
-              }
-            : undefined
-        }
-        onDragLeave={isFolder && onMoveNote ? () => onDropTarget(null) : undefined}
-        onDrop={
-          isFolder && onMoveNote
-            ? (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onDropTarget(null);
-                const path = event.dataTransfer.getData("text/plain");
-                if (path) onMoveNote(path, node.path);
-              }
-            : undefined
-        }
+        // Both kinds drag. `dataTransfer` still carries the path, because a
+        // drag that sets nothing is refused outright by some browsers and
+        // because it makes the payload legible to anything else listening.
+        draggable
+        onDragStart={(event) => {
+          event.stopPropagation();
+          event.dataTransfer.setData("text/plain", node.path);
+          event.dataTransfer.effectAllowed = "move";
+          onDragging({ kind: isFolder ? "folder" : "file", path: node.path });
+        }}
+        // Fires whether the drag ended in a drop, outside the window, or on
+        // Escape — without it, a cancelled drag leaves every row dimmed.
+        onDragEnd={() => {
+          onDragging(null);
+          onDropTarget(null);
+        }}
+        // Where a drop on this row lands. A folder takes things inside it; a
+        // note stands for the folder it is in, which is what dropping "next to
+        // this note" plainly means and what every file manager does.
+        //
+        // Both branches stop propagation whether or not the drop is allowed.
+        // Without that, a drop this row refuses keeps bubbling to the tree's
+        // root handler, which accepts everything — so dragging a note onto the
+        // folder it already lives in quietly moved it to the top of the
+        // repository instead of doing nothing.
+        onDragOver={(event) => {
+          event.stopPropagation();
+          if (!canDropOn(dropFolder)) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+          onDropTarget(dropFolder);
+        }}
+        onDragLeave={(event) => {
+          event.stopPropagation();
+          onDropTarget(null);
+        }}
+        onDrop={(event) => {
+          event.stopPropagation();
+          if (!canDropOn(dropFolder)) return;
+          event.preventDefault();
+          onDrop(dropFolder);
+        }}
       >
         {/* The selected note gets a bar rather than a fill alone: at sidebar
             width, a slightly lighter row is easy to lose track of. */}
@@ -338,7 +440,7 @@ const TreeItem = memo(function TreeItem({
             event.stopPropagation();
             if (isFolder) onToggle(node.path);
           }}
-          className={`flex h-[26px] w-4 shrink-0 items-center justify-center text-[var(--fl-muted)] ${
+          className={`flex h-[30px] w-[18px] shrink-0 items-center justify-center text-[var(--fl-muted)] ${
             isFolder ? "hover:text-[var(--fl-text)]" : "pointer-events-none opacity-0"
           }`}
         >
@@ -348,7 +450,7 @@ const TreeItem = memo(function TreeItem({
               thing in the row. */}
           <svg
             viewBox="0 0 12 12"
-            className={`h-[10px] w-[10px] transition-transform duration-150 ${open ? "rotate-90" : ""}`}
+            className={`h-[11px] w-[11px] transition-transform duration-150 ${open ? "rotate-90" : ""}`}
             fill="none"
             stroke="currentColor"
             strokeWidth="1.6"
@@ -365,7 +467,7 @@ const TreeItem = memo(function TreeItem({
           onClick={() => (isFolder ? onToggle(node.path) : onOpen(node.path))}
           onContextMenu={(event) => onContextMenu(event, node)}
           title={node.path}
-          className="flex min-w-0 flex-1 items-center gap-1.5 py-[3px] pl-0.5 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2 py-[5px] pl-0.5 text-left"
         >
           <span
             className={`shrink-0 ${active ? "text-[var(--fl-accent)]" : "text-[var(--fl-muted)]"}`}
@@ -373,7 +475,7 @@ const TreeItem = memo(function TreeItem({
             {isFolder ? <FolderGlyph open={open} /> : <FileGlyph />}
           </span>
           <span
-            className={`truncate text-[13px] ${
+            className={`truncate text-[14px] leading-[1.35] ${
               active
                 ? "font-medium text-[var(--fl-text)]"
                 : isFolder
@@ -388,8 +490,8 @@ const TreeItem = memo(function TreeItem({
 
       {isFolder && open && (node.children?.length ?? 0) === 0 && (
         <p
-          style={{ paddingLeft: `${indent + 1.4}rem` }}
-          className="py-[3px] text-[11.5px] italic text-[var(--fl-muted)]"
+          style={{ paddingLeft: `${indent + 1.5}rem` }}
+          className="py-[5px] text-[12.5px] italic text-[var(--fl-muted)]"
         >
           Empty
         </p>
@@ -407,7 +509,10 @@ const TreeItem = memo(function TreeItem({
               onToggle={onToggle}
               onOpen={onOpen}
               onContextMenu={onContextMenu}
-              onMoveNote={onMoveNote}
+              dragging={dragging}
+              onDragging={onDragging}
+              canDropOn={canDropOn}
+              onDrop={onDrop}
               dropTarget={dropTarget}
               onDropTarget={onDropTarget}
               forceOpen={forceOpen}
@@ -426,7 +531,7 @@ function FolderGlyph({ open }: { open: boolean }) {
     <svg
       viewBox="0 0 16 16"
       aria-hidden="true"
-      className="h-[15px] w-[15px]"
+      className="h-[17px] w-[17px]"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.3"
@@ -449,7 +554,7 @@ function FileGlyph() {
     <svg
       viewBox="0 0 16 16"
       aria-hidden="true"
-      className="h-[15px] w-[15px]"
+      className="h-[17px] w-[17px]"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.3"
@@ -469,6 +574,12 @@ function FileGlyph() {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+/** The folder a path sits in. `""` for anything at the repository root. */
+function dirnameOf(path: string): string {
+  const cut = path.lastIndexOf("/");
+  return cut === -1 ? "" : path.slice(0, cut);
+}
 
 /** Top-level folders, which start open so the tree is never a single closed row. */
 function rootFolders(nodes: TreeNode[]): string[] {

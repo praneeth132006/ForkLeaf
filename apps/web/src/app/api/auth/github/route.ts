@@ -17,6 +17,14 @@ import { createOAuthState, githubOAuthConfigured, setReturnPath } from "@/lib/se
  * public notes. It cannot touch a private repository at all, which is the
  * point — an app that cannot read your private code cannot leak it.
  *
+ * Nothing else is asked for, and in particular not `read:user`. It used to be
+ * in this list to get the name and avatar in the sidebar, but `GET /user`
+ * returns those to any authenticated token; the only thing the scope added was
+ * a second block on GitHub's consent screen saying the app can "read your
+ * private profile information", which it neither needs nor wants. A permission
+ * requested for a reason that does not survive being written down is a
+ * permission to drop.
+ *
  * What is genuinely not on offer is per-repository selection. Classic OAuth
  * scopes have no such thing; picking individual repositories requires
  * installing this as a GitHub App, which is a different install flow and is
@@ -27,9 +35,9 @@ import { createOAuthState, githubOAuthConfigured, setReturnPath } from "@/lib/se
 /** The scopes this route will ask for, by the name the UI uses. */
 const SCOPES: Record<string, string> = {
   // Everything, private repositories included.
-  all: "repo read:user",
+  all: "repo",
   // Public repositories only.
-  public: "public_repo read:user",
+  public: "public_repo",
 };
 export async function GET(request: NextRequest) {
   if (!githubOAuthConfigured()) {

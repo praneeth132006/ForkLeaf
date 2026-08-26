@@ -82,6 +82,16 @@ export default async function SignInPage({
           permission to read and write files there. Choose how much of your account that covers. You
           can change it later, and revoke it entirely, from GitHub.
         </p>
+        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-[var(--fl-muted)]">
+          That repository permission is the <em>only</em> thing asked for. Nothing about your
+          profile, your email address, your organisations, your gists or your notifications is
+          requested — your name and avatar arrive with the token itself, so there is no second
+          permission to grant for them.{" "}
+          <Link href="/docs/signing-in#not-asked" className="fl-link">
+            What is not asked for, and why
+          </Link>
+          .
+        </p>
 
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           <Choice
@@ -95,6 +105,11 @@ export default async function SignInPage({
               "Commit on your behalf, with your name on the commit",
               "List your repositories, so you can pick one",
             ]}
+            excludes={[
+              "Read your email address, your private profile, or your organisation membership",
+              "Create webhooks, deploy keys, or change any repository setting",
+              "Delete a repository, or touch your gists or notifications",
+            ]}
             caveat="GitHub's classic scopes have no per-repository option, so this grant technically covers every repository your account can reach. ForkLeaf only ever reads or writes the one you connect."
           />
 
@@ -106,6 +121,11 @@ export default async function SignInPage({
             covers={[
               "Read and write files in your public repositories",
               "Commit on your behalf, with your name on the commit",
+            ]}
+            excludes={[
+              "Open, read or list any private repository — GitHub refuses the token",
+              "Read your email address or your private profile",
+              "Create webhooks, deploy keys, or change any repository setting",
             ]}
             caveat="If you later want a private notes repository, you will be asked to sign in again with the wider permission."
           />
@@ -156,6 +176,7 @@ function Choice({
   need,
   covers,
   caveat,
+  excludes,
   recommended,
 }: {
   href: string;
@@ -164,6 +185,9 @@ function Choice({
   need: string;
   covers: string[];
   caveat: string;
+  /** Things this grant conspicuously does not cover, named so nobody has to
+      infer them from a scope name on GitHub's screen. */
+  excludes: string[];
   recommended?: boolean;
 }) {
   return (
@@ -185,6 +209,18 @@ function Choice({
       </p>
       <ul className="mt-2 space-y-1.5">
         {covers.map((line) => (
+          <li key={line} className="flex gap-2 text-[13.5px] text-[var(--fl-muted)]">
+            <span aria-hidden="true">·</span>
+            <span>{line}</span>
+          </li>
+        ))}
+      </ul>
+
+      <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
+        What it never does
+      </p>
+      <ul className="mt-2 space-y-1.5">
+        {excludes.map((line) => (
           <li key={line} className="flex gap-2 text-[13.5px] text-[var(--fl-muted)]">
             <span aria-hidden="true">·</span>
             <span>{line}</span>

@@ -37,6 +37,7 @@ import { BootScreen } from "@/components/BootScreen";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { signOut } from "@/lib/gateway";
 import { assetPathFor, relativeSrc, resolveImageSrc } from "@/lib/assets";
+import { collectFolders } from "@/lib/tree";
 import { hasRelativeImages, repairNoteLinks } from "@/lib/repair-links";
 import { flattenTree, isMarkdown } from "@/lib/library";
 import { track } from "@/lib/firebase/analytics";
@@ -421,22 +422,65 @@ export function EditorWorkspace() {
     [notebook],
   );
 
+  /**
+   * Makes a folder, somewhere you choose.
+   *
+   * `parent` is where the dialog was opened from — the right-click target, or
+   * the folder of the note being edited — and it is a starting point rather
+   * than a verdict. The picker lists every folder in the tree, so making a
+   * subfolder under one you are not currently in no longer means closing this,
+   * navigating there, and opening it again.
+   */
   const handleCreateFolder = useCallback(
     (parent: string) => {
+      const folders = collectFolders(notebook.tree);
+
       setPrompt({
-        title: parent ? `New folder in ${parent}` : "New folder",
+        title: "New folder",
         label: "Folder name",
         initialValue: "",
         confirmLabel: "Create",
-        body:
-          "Folders are made of the notes inside them, so this one appears in your repository as soon as it holds its first note. " +
-          "Use slashes to make several at once, as in “SOC 101/Phishing analysis”.",
-        onConfirm: async (value) => {
-          const name = value.trim();
+        body: "Folders are made of the notes inside them, so this one appears in your repository as soon as it holds its first note.",
+        parent: {
+          label: "Inside",
+          // The root first, then every existing folder, so "somewhere else"
+          // is a choice from a list rather than a path you have to spell.
+          options: ["", ...folders],
+          initial: folders.includes(parent) ? parent : "",
+          rootLabel: notebook.activeWorkspace?.name ?? "Repository root",
+        },
+        onConfirm: async (value, chosenParent) => {
+          const name = value.trim().replace(/^\/+|\/+$/g, "");
           if (!name) return;
-          await notebook.createFolder(parent ? `${parent}/${name}` : name);
+          await notebook.createFolder(chosenParent ? `${chosenParent}/${name}` : name);
         },
       });
+    },
+    [notebook],
+  );
+
+  /**
+   * Moves a folder under another one, from a drag in the tree.
+   *
+   * A folder move is a rename in a repository — git tracks files, so every note
+   * beneath it moves and the old directory stops existing. `renameFolder`
+   * already does exactly that, so this only has to work out the new path and
+   * refuse the moves that would destroy the tree.
+   */
+  const handleMoveFolder = useCallback(
+    async (path: string, toFolder: string) => {
+      const name = path.split("/").pop();
+      if (!name) return;
+
+      // Into itself, into its own descendant, or back where it already is.
+      // The first two would rename a folder to a path inside itself and lose
+      // every note under it; the third is a no-op worth skipping before it
+      // becomes a commit.
+      if (toFolder === path || toFolder.startsWith(`${path}/`)) return;
+      const target = toFolder ? `${toFolder}/${name}` : name;
+      if (target === path) return;
+
+      await notebook.renameFolder(path, target);
     },
     [notebook],
   );
@@ -923,6 +967,7 @@ export function EditorWorkspace() {
             onRenameFolder={handleRenameFolder}
             onDeleteFolder={handleDeleteFolder}
             onMoveNote={handleMoveNote}
+            onMoveFolder={handleMoveFolder}
             pinnedPaths={notebook.pinnedPaths}
             {...(notebook.expandedFolders ? { openFolders: notebook.expandedFolders } : {})}
             onOpenFoldersChange={notebook.setExpandedFolders}

@@ -16,13 +16,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      # 22, not 20: GitHub is retiring the Node 20 runtime, and every action
+      # pinned to it now runs on 24 with a deprecation warning regardless of
+      # what this says. 22 is the current LTS and satisfies the `engines`
+      # floor in package.json, so what CI runs is a version somebody could
+      # actually be developing on.
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies

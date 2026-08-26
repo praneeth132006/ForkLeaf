@@ -16,6 +16,28 @@ import { imageTypeFor } from "@/lib/media";
  * letting it return arbitrary file types would turn it into a way to render
  * repository content as HTML on our own origin.
  */
+/**
+ * Headers that must match on a 200 and a 304 alike, or the browser will not
+ * reuse what it has.
+ *
+ * `max-age` is an hour rather than five minutes because the thing being cached
+ * barely changes: an image in a note is written once under a name with a date
+ * and a random tail, and is then read for as long as the note lives. An hour of
+ * instant redraws costs at worst an hour of staleness on the rare occasion
+ * somebody overwrites a file in place, and `stale-while-revalidate` keeps even
+ * that from being a blank space — the old bytes are shown while the new ones
+ * are fetched behind them.
+ *
+ * `private` because the response was authorised by one person's session and
+ * must never sit in a shared cache.
+ */
+function cacheHeaders(etag: string): Record<string, string> {
+  return {
+    "Cache-Control": "private, max-age=3600, stale-while-revalidate=86400",
+    ETag: etag,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { client } = await requireClient();
@@ -28,21 +50,38 @@ export async function GET(request: NextRequest) {
     const type = imageTypeFor(path);
     if (!type) throw new ApiError(400, "validation", "That file is not a supported image.");
 
-    const file = await client.readFileBase64(repo, path);
+    /**
+     * The browser's own copy, offered back to GitHub before any bytes move.
+     *
+     * This route used to send an `ETag` and then ignore the `If-None-Match`
+     * that came back with the next request, so the tag was decoration: every
+     * image was fetched from GitHub in full, base64-decoded and sent down the
+     * wire again, on every note open once the five-minute cache had lapsed. A
+     * note with six screenshots was six API calls and several megabytes to
+     * show something the browser already had.
+     *
+     * GitHub answers a conditional request with a bare 304, which is fast and
+     * — the part that matters for a notebook full of images — does not count
+     * against the hourly rate limit.
+     */
+    const known = request.headers.get("if-none-match");
+
+    const file = await client.readFileBase64(repo, path, known ? { etag: known } : {});
     if (!file) return new Response("Not found", { status: 404 });
+
+    if (file.notModified) {
+      return new Response(null, { status: 304, headers: cacheHeaders(known!) });
+    }
 
     const bytes = Buffer.from(file.base64, "base64");
 
     return new Response(new Uint8Array(bytes), {
       headers: {
+        ...cacheHeaders(`"${file.sha}"`),
         "Content-Type": type,
         "Content-Length": String(bytes.length),
-        // Private to the browser that asked: the response was authorised by
-        // that user's session and must never be held in a shared cache.
-        "Cache-Control": "private, max-age=300",
         "Content-Security-Policy": "default-src 'none'; sandbox",
         "X-Content-Type-Options": "nosniff",
-        ETag: `"${file.sha}"`,
       },
     });
   } catch (error) {

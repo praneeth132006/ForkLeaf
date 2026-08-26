@@ -170,6 +170,7 @@ export function ProposeChangesDialog({
           directory: workspace.repo.directory,
           message: title.trim(),
           changes: pending.map((change) => ({
+            // A move is a rename the commit builder resolves without content.
             op: change.op,
             path: change.path,
             ...(change.toPath ? { toPath: change.toPath } : {}),

@@ -380,6 +380,106 @@ export class NoteRepository {
   }
 
   /**
+   * Every file under a folder, notes and images alike.
+   *
+   * The sidebar's tree is Markdown only, which is right for a sidebar and
+   * wrong for acting on a folder as a whole: the pictures a folder's notes use
+   * live in an `assets` directory inside it, and that directory is invisible
+   * to a tree that lists nothing but `.md`.
+   *
+   * The consequence was that deleting a folder deleted its notes and left its
+   * images behind, in a directory nothing pointed at any more — so a folder
+   * "deleted" in the app was still sitting on github.com, holding files, and
+   * unreachable from the app that made it. Renaming had the same shape: the
+   * notes moved, the images stayed.
+   *
+   * Falls back to the notes it already knows about when the repository cannot
+   * be listed. A folder that cannot be enumerated is still a folder somebody
+   * asked to delete, and removing the notes is better than removing nothing.
+   */
+  private async pathsUnder(
+    workspaceId: string,
+    folder: string,
+    known: string[],
+  ): Promise<string[]> {
+    const prefix = `${folder}/`;
+    try {
+      const all = await this.gateway.listAllPaths(workspaceId);
+      const under = all.filter((path) => path.startsWith(prefix));
+
+      // Union, not replacement: a note created moments ago is in `known` and
+      // not yet in anything GitHub would list back.
+      return [...new Set([...under, ...known.filter((path) => path.startsWith(prefix))])];
+    } catch {
+      return known.filter((path) => path.startsWith(prefix));
+    }
+  }
+
+  /**
+   * Deletes a folder: every note in it, and every file beside them.
+   *
+   * `known` is what the sidebar believes is in there, which is the Markdown.
+   * Anything else under the folder — images, and any other file a repository
+   * may hold — is found by listing the repository and removed by path.
+   */
+  async deleteFolderContents(workspaceId: string, folder: string, known: string[]): Promise<void> {
+    const markdown = (path: string) => path.toLowerCase().endsWith(".md");
+
+    for (const path of await this.pathsUnder(workspaceId, folder, known)) {
+      if (markdown(path)) {
+        // By path: a folder is deleted as a whole, and one note inside it that
+        // cannot be read is not a reason to abandon the rest halfway through.
+        await this.deletePath(workspaceId, path);
+      } else {
+        await this.sync.recordAssetDelete(workspaceId, path);
+        await this.db.deleteAsset(`${workspaceId}::${path}`);
+      }
+    }
+  }
+
+  /**
+   * Moves every file under a folder to a new prefix.
+   *
+   * Notes go through `renameNote`, so their relative links are rewritten as
+   * part of the move. Everything else is moved as bytes, which is why the
+   * images have to move at all: leaving them behind worked — `renameNote`
+   * repoints the links at wherever the file still is — but it left a stray
+   * `assets` directory at the old path for every folder anybody ever
+   * reorganised, and made "move this folder" quietly not move most of it.
+   */
+  async moveFolderContents(
+    workspaceId: string,
+    from: string,
+    to: string,
+    known: string[],
+  ): Promise<void> {
+    const markdown = (path: string) => path.toLowerCase().endsWith(".md");
+
+    for (const path of await this.pathsUnder(workspaceId, from, known)) {
+      const target = `${to}${path.slice(from.length)}`;
+
+      if (markdown(path)) {
+        let note: Note | null = (await this.db.getNote(noteId(workspaceId, path))) ?? null;
+        if (!note) {
+          try {
+            note = await this.openNote(workspaceId, path);
+          } catch {
+            // Unreadable: move it as bytes rather than not at all. Its links
+            // are relative to a folder that moved wholesale, so they still
+            // resolve to the same files.
+            note = null;
+          }
+        }
+
+        if (note) await this.renameNote(note, target);
+        else await this.sync.recordAssetMove(workspaceId, path, target);
+      } else {
+        await this.sync.recordAssetMove(workspaceId, path, target);
+      }
+    }
+  }
+
+  /**
    * Moves or renames a note, and takes its images with it.
    *
    * The links inside the note are relative to where the note sits — that is

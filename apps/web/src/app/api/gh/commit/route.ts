@@ -80,6 +80,16 @@ export async function POST(request: NextRequest) {
           return { op: "rename", path, toPath, content };
         }
 
+        // A move sends no bytes: the commit reuses the blob already at `path`.
+        // `normalize` on both ends is the whole validation there is to do, and
+        // it is the validation that matters — these are the only two strings
+        // that reach the git tree.
+        case "move": {
+          const toPath = normalize(change.toPath ?? "");
+          if (!toPath) throw new ApiError(400, "validation", "A move needs a destination.");
+          return { op: "move", path, toPath };
+        }
+
         default:
           throw new ApiError(400, "validation", `Unsupported operation: ${change.op}`);
       }

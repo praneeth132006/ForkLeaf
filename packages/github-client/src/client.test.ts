@@ -688,3 +688,159 @@ describe("deletions of paths that are not in the repository", () => {
     expect(body.tree.map((entry) => entry.path)).toEqual(["gone.md"]);
   });
 });
+
+/**
+ * Moving a file without re-uploading it.
+ *
+ * A note is renamed by writing its text at the new path, because the text
+ * changes — its relative links are rewritten to suit where it now sits. An
+ * image has nothing to rewrite, and re-uploading a megabyte of screenshot to
+ * change its name is absurd, so a `move` carries the path pair alone and the
+ * commit reuses the blob already in the tree. Which is what a rename is in git.
+ */
+describe("commitChanges: move", () => {
+  const withTree = (entries: { path: string; sha: string }[]) => ({
+    "GET /repos/octo/notes/git/trees/head-tree?recursive=1": {
+      tree: entries.map((entry) => ({ ...entry, type: "blob" })),
+    },
+  });
+
+  it("reuses the existing blob rather than uploading one", async () => {
+    const { calls, fetchImpl } = fakeGitHub(
+      withTree([{ path: "Intro/assets/a.png", sha: "png-blob" }]),
+    );
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    await client.commitChanges(
+      repo,
+      [{ op: "move", path: "Intro/assets/a.png", toPath: "Python/Intro/assets/a.png" }],
+      { message: "move" },
+    );
+
+    // The point of the whole op: no bytes went up.
+    expect(calls.filter((c) => c.url.endsWith("/git/blobs"))).toHaveLength(0);
+
+    const tree = calls.find((c) => c.url.endsWith("/git/trees") && c.method === "POST")?.body as {
+      tree: { path: string; sha: string | null }[];
+    };
+    expect(tree.tree).toContainEqual({
+      path: "Python/Intro/assets/a.png",
+      mode: "100644",
+      type: "blob",
+      sha: "png-blob",
+    });
+    expect(tree.tree).toContainEqual({
+      path: "Intro/assets/a.png",
+      mode: "100644",
+      type: "blob",
+      sha: null,
+    });
+  });
+
+  it("skips a file the repository does not have", async () => {
+    // Already moved from another device, or never pushed. Asking git to delete
+    // a path that is not in the tree fails the entire commit, taking down
+    // everything batched with it.
+    const { calls, fetchImpl } = fakeGitHub(withTree([{ path: "somewhere/else.png", sha: "x" }]));
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    const result = await client.commitChanges(
+      repo,
+      [{ op: "move", path: "Intro/assets/gone.png", toPath: "Python/Intro/assets/gone.png" }],
+      { message: "move" },
+    );
+
+    // Nothing to write, so nothing is written and HEAD is reported back.
+    expect(result.sha).toBe("head-sha");
+    expect(calls.filter((c) => c.method === "POST" && c.url.endsWith("/git/commits"))).toHaveLength(
+      0,
+    );
+  });
+
+  it("moves the image in the same commit as the note beside it", async () => {
+    const { calls, fetchImpl } = fakeGitHub(
+      withTree([
+        { path: "Intro/assets/a.png", sha: "png-blob" },
+        { path: "Intro/note.md", sha: "md-blob" },
+      ]),
+    );
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    await client.commitChanges(
+      repo,
+      [
+        { op: "rename", path: "Intro/note.md", toPath: "Python/Intro/note.md", content: "# hi" },
+        { op: "move", path: "Intro/assets/a.png", toPath: "Python/Intro/assets/a.png" },
+      ],
+      { message: "move folder" },
+    );
+
+    // One commit, so a reader of the repository never sees the note moved and
+    // its picture left behind.
+    expect(calls.filter((c) => c.method === "POST" && c.url.endsWith("/git/commits"))).toHaveLength(
+      1,
+    );
+    // Only the note's text was uploaded.
+    expect(calls.filter((c) => c.url.endsWith("/git/blobs"))).toHaveLength(1);
+  });
+});
+
+/**
+ * Reading an image the browser may already have.
+ *
+ * The image proxy sends an `ETag` and gets an `If-None-Match` back on the next
+ * request. It used to ignore it and fetch every image from GitHub in full on
+ * every note open — several megabytes, and one rate-limited API call each, to
+ * send back bytes the browser was already holding.
+ */
+describe("readFileBase64", () => {
+  it("passes the caller's etag through as a conditional request", async () => {
+    const { calls, fetchImpl } = fakeGitHub({
+      "GET /repos/octo/notes/contents/a.png?ref=main": {
+        type: "file",
+        content: "aGk=",
+        sha: "png-sha",
+        size: 2,
+      },
+    });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    await client.readFileBase64(repo, "a.png", { etag: '"png-sha"' });
+
+    const call = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const headers = new Headers((call[1] as RequestInit).headers);
+    expect(headers.get("if-none-match")).toBe('"png-sha"');
+    expect(calls).toHaveLength(1);
+  });
+
+  it("reports an unchanged file without a body to decode", async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 304 }));
+    const client = new GitHubClient({
+      token: "t",
+      fetch: fetchImpl as unknown as typeof globalThis.fetch,
+    });
+
+    const file = await client.readFileBase64(repo, "a.png", { etag: '"png-sha"' });
+
+    expect(file?.notModified).toBe(true);
+    expect(file?.base64).toBe("");
+  });
+
+  it("reads normally when no etag is offered", async () => {
+    const { fetchImpl } = fakeGitHub({
+      "GET /repos/octo/notes/contents/a.png?ref=main": {
+        type: "file",
+        content: "aGk=",
+        sha: "png-sha",
+        size: 2,
+      },
+    });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    const file = await client.readFileBase64(repo, "a.png");
+
+    expect(file?.notModified).toBeUndefined();
+    expect(file?.base64).toBe("aGk=");
+    expect(file?.sha).toBe("png-sha");
+  });
+});

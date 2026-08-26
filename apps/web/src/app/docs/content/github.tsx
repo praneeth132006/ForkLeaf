@@ -35,21 +35,66 @@ export function SigningIn() {
       </Note>
 
       <H2 id="scopes">The permissions it asks for</H2>
+      <P>
+        One scope, and it is the one that lets ForkLeaf write your notes. There is no second
+        permission bundled alongside it, so the consent screen has exactly one thing on it for you
+        to weigh.
+      </P>
       <Table
-        head={["Scope", "What it allows", "Why ForkLeaf needs it"]}
+        head={["Scope", "What GitHub grants", "Why ForkLeaf asks for it", "What it does not do"]}
         rows={[
           [
             <Code key="a">repo</Code>,
             "Read and write access to your repositories, public and private",
-            "Notes are files it has to create, update and delete — including in a private repo",
+            "A note is a file. Opening one is a read, saving one is a commit, renaming one is a commit that deletes and adds — none of that is possible without write access, and private repositories need this scope specifically",
+            "It is never used to enumerate, read or modify anything but the repository you connect and the list of repository names the picker shows",
           ],
           [
-            <Code key="b">read:user</Code>,
-            "Your public profile",
-            "Your name and avatar in the sidebar, so you can tell which account you are in",
+            <Code key="b">public_repo</Code>,
+            "The same, restricted to your public repositories",
+            "The alternative offered on the sign-in page, for notes that are going to be public anyway",
+            "It cannot open a private repository. GitHub refuses the request; ForkLeaf does not get the choice",
           ],
         ]}
       />
+
+      <H3 id="not-asked">What it deliberately does not ask for</H3>
+      <P>
+        The consent screen used to carry a second block — <strong>Personal user data</strong>,
+        &ldquo;this application will be able to read your private profile information&rdquo; —
+        because the request included <Code>read:user</Code>. That was there to put your name and
+        avatar in the sidebar, which turns out not to need it: <Code>GET /user</Code> returns your
+        login, name and avatar to any authenticated token. The scope bought a warning about private
+        profile access and nothing else, so it is gone.
+      </P>
+      <UL>
+        <LI>
+          <Code>read:user</Code> — not asked for. Your name and avatar come back with the token
+          regardless; ForkLeaf never sees a private profile field, and does not read your email
+          address at all.
+        </LI>
+        <LI>
+          <Code>user:email</Code> — not asked for. Commits are attributed by GitHub from your own
+          account settings, so ForkLeaf never needs your address.
+        </LI>
+        <LI>
+          <Code>admin:org</Code>, <Code>delete_repo</Code>, <Code>workflow</Code>,{" "}
+          <Code>admin:repo_hook</Code> — not asked for. ForkLeaf never creates a webhook, edits a
+          workflow file, changes a repository setting or deletes a repository.
+        </LI>
+        <LI>
+          <Code>gist</Code>, <Code>notifications</Code> — not asked for. It does not touch either.
+        </LI>
+      </UL>
+      <Note>
+        The <Code>repo</Code> scope&rsquo;s own description on GitHub&rsquo;s screen lists settings,
+        webhooks and deploy keys among the things it <em>could</em> reach. That is GitHub describing
+        the scope, not ForkLeaf describing itself: the scope is a single coarse grant and cannot be
+        narrowed further as a classic OAuth app. Every request ForkLeaf makes goes through its own{" "}
+        <Code>/api/gh/*</Code> routes, which are contents, tree, commit, branch and pull request
+        endpoints — you can read the list in the source.
+      </Note>
+
       <Note kind="warn">
         <strong>
           <Code>repo</Code> is broader than anyone would like.

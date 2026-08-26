@@ -199,7 +199,16 @@ export type ContentEncoding = "utf8" | "base64";
 export type FileChange =
   | { op: "upsert"; path: string; content: string; encoding?: ContentEncoding }
   | { op: "delete"; path: string }
-  | { op: "rename"; path: string; toPath: string; content: string; encoding?: ContentEncoding };
+  | { op: "rename"; path: string; toPath: string; content: string; encoding?: ContentEncoding }
+  /**
+   * A rename that sends no bytes.
+   *
+   * Git renames by writing the same blob under a new path, so a file whose
+   * content is not changing does not need uploading again — which for an image
+   * being carried along with the folder it lives in is the difference between
+   * a commit and a re-upload of every screenshot in the folder.
+   */
+  | { op: "move"; path: string; toPath: string };
 
 export interface CommitOptions {
   message: string;
@@ -661,16 +670,33 @@ export class GitHubClient {
    * a note and destroys an image. The caller turns these bytes into whatever
    * it needs — for the app that is an HTTP response the browser can render.
    */
+  /**
+   * A file's bytes, base64 as GitHub hands them over.
+   *
+   * `options.etag` makes it a conditional request. GitHub answers an unchanged
+   * file with a bare 304 — no body, and no charge against the hourly rate
+   * limit — which is what lets the image proxy revalidate a note full of
+   * screenshots without re-downloading any of them.
+   */
   async readFileBase64(
     repo: RepoRef,
     path: string,
-  ): Promise<{ base64: string; sha: string; size: number } | null> {
+    options: { etag?: string } = {},
+  ): Promise<{ base64: string; sha: string; size: number; notModified?: boolean } | null> {
     const url =
       `/repos/${repo.owner}/${repo.repo}/contents/${encodePath(path)}` +
       `?ref=${encodeURIComponent(repo.branch)}`;
 
     try {
-      const { data } = await this.transport.request<ApiContent>(url);
+      const { data, status } = await this.transport.request<ApiContent>(
+        url,
+        options.etag ? { etag: options.etag } : {},
+      );
+
+      // Unchanged since the caller last saw it. There is no body to read and
+      // none is wanted — that is the entire point of having asked.
+      if (status === 304) return { base64: "", sha: "", size: 0, notModified: true };
+
       if (!data) throw new GitHubError("unknown", "Empty file response");
 
       if (data.type !== "file" || data.content === undefined) {
@@ -795,8 +821,27 @@ export class GitHubClient {
       sha: string | null;
     }[] = [];
 
+    // Only read for a move, and only once: the source blobs have to be looked
+    // up somewhere, and every other kind of change carries its own content.
+    const sourceBlobs = changes.some((change) => change.op === "move")
+      ? await this.blobShas(repo, baseTreeSha)
+      : null;
+
     for (const change of changes) {
       if (change.op === "delete") {
+        treeEntries.push({ path: change.path, mode: FILE_MODE, type: "blob", sha: null });
+        continue;
+      }
+
+      if (change.op === "move") {
+        const sha = sourceBlobs?.get(change.path);
+        // Nothing there to move: already moved from another device, or never
+        // reached the repository. Asking git to delete a path it does not have
+        // fails the whole commit, so the safe answer is to do nothing.
+        if (!sha || change.path === change.toPath) continue;
+
+        blobShas[change.toPath] = sha;
+        treeEntries.push({ path: change.toPath, mode: FILE_MODE, type: "blob", sha });
         treeEntries.push({ path: change.path, mode: FILE_MODE, type: "blob", sha: null });
         continue;
       }
@@ -937,15 +982,23 @@ export class GitHubClient {
    * the commit to fail.
    */
   private async blobPaths(repo: RepoRef, treeSha: string): Promise<Set<string> | null> {
+    const blobs = await this.blobShas(repo, treeSha);
+    return blobs && new Set(blobs.keys());
+  }
+
+  /** The same read, keeping the shas, which is what a move needs. */
+  private async blobShas(repo: RepoRef, treeSha: string): Promise<Map<string, string> | null> {
     try {
       const { data } = await this.transport.request<{
-        tree: { path: string; type: string }[];
+        tree: { path: string; type: string; sha: string }[];
         truncated?: boolean;
       }>(`/repos/${repo.owner}/${repo.repo}/git/trees/${treeSha}?recursive=1`);
 
       if (!data || data.truncated) return null;
 
-      return new Set(data.tree.filter((entry) => entry.type === "blob").map((entry) => entry.path));
+      return new Map(
+        data.tree.filter((entry) => entry.type === "blob").map((entry) => [entry.path, entry.sha]),
+      );
     } catch {
       return null;
     }
