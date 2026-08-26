@@ -1427,6 +1427,7 @@ export function EditorWorkspace() {
           workspace={workspace}
           onClose={() => setDialog(null)}
           onRestore={notebook.saveNote}
+          resolveImageSrc={images.resolve}
         />
       )}
 
