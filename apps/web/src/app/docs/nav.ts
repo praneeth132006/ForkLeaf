@@ -79,7 +79,7 @@ export const DOC_SECTIONS: DocSection[] = [
         slug: "repositories",
         title: "Repositories & workspaces",
         summary:
-          "The notes repo, connecting your own repositories, branches, subdirectories and switching between them.",
+          "The notes repo, connecting and disconnecting repositories, publishing a note as a page, branches, subdirectories and switching between them.",
       },
       {
         slug: "sync",

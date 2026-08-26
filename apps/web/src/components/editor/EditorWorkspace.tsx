@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import type { CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
-import type { EditorViewMode } from "@forkleaf/types";
+import type { EditorViewMode, Workspace } from "@forkleaf/types";
 import {
   deriveTitle,
   dirname,
@@ -15,6 +15,7 @@ import {
   stripExtension,
 } from "@forkleaf/markdown-engine";
 import { useNotebook } from "@/hooks/useNotebook";
+import { usePublishedPages } from "@/hooks/usePublishedPages";
 import { useLinks } from "@/hooks/useLinks";
 import { useLocalFiles } from "@/hooks/useLocalFiles";
 import type { LocalFile } from "@/lib/local-files";
@@ -523,6 +524,59 @@ export function EditorWorkspace() {
     [notebook],
   );
 
+  /**
+   * Disconnects a repository from this device.
+   *
+   * Worth spelling out in the dialog what this is not: no commit is made, and
+   * nothing on GitHub is touched. What goes is this device's copy — the notes
+   * cached here, the cached tree, and any queued change that never made it
+   * out, which is the one part that is not recoverable and so is counted in
+   * the warning rather than left as a surprise.
+   */
+  /**
+   * What this repository has published, and whether the open note is one.
+   *
+   * Read once per workspace and shared by the panel and the dialog, so both
+   * agree — and so publishing leaves a mark somewhere other than the dialog
+   * that did it.
+   */
+  const publishedPages = usePublishedPages(workspace);
+
+  const publishedNote = useMemo(() => {
+    if (!note) return undefined;
+
+    const slug = slugifyFilename(stripExtension(note.path.split("/").pop() ?? "note"));
+    const page = publishedPages.pages.get(slug);
+
+    return page ? { url: page.url } : undefined;
+  }, [note, publishedPages.pages]);
+
+  const handleDisconnectRepo = useCallback(
+    (workspace: Workspace) => {
+      const unpushed = notebook.sync.pendingCount;
+      const isOpen = workspace.id === notebook.activeWorkspace?.id;
+
+      setPrompt({
+        title: "Disconnect repository",
+        label: "",
+        destructive: true,
+        confirmLabel: "Disconnect",
+        body:
+          `“${workspace.name}” will be removed from this device. The repository on GitHub is not touched — ` +
+          `everything pushed to it stays there, and connecting it again brings it all back.` +
+          (isOpen && unpushed > 0
+            ? ` ${unpushed} change${unpushed === 1 ? "" : "s"} here ${
+                unpushed === 1 ? "has" : "have"
+              } not been pushed yet, and will be lost.`
+            : ""),
+        onConfirm: async () => {
+          await notebook.removeWorkspace(workspace.id);
+        },
+      });
+    },
+    [notebook],
+  );
+
   const handleDelete = useCallback(
     (path: string) => {
       setPrompt({
@@ -952,6 +1006,7 @@ export function EditorWorkspace() {
             activeWorkspace={workspace}
             onSwitchWorkspace={notebook.switchWorkspace}
             onConnectRepo={() => setDialog("connect")}
+            onDisconnectRepo={handleDisconnectRepo}
             tree={notebook.tree}
             activePath={note?.path ?? null}
             onOpenNote={(path) => {
@@ -1266,6 +1321,7 @@ export function EditorWorkspace() {
                     }
                   : undefined
               }
+              published={publishedNote}
               syncMode={notebook.syncPreference.mode}
               onSyncNow={() => void saveEverything()}
               assetUrls={notebook.assetUrls}
@@ -1351,7 +1407,16 @@ export function EditorWorkspace() {
       )}
 
       {openDialog === "publish" && workspace && !workspace.isLocal && note && (
-        <PublishDialog workspace={workspace} note={note} onClose={() => setDialog(null)} />
+        <PublishDialog
+          // A fresh dialog per note: switching notes underneath it must not
+          // leave the last one's address on screen as this one's.
+          key={note.id}
+          workspace={workspace}
+          note={note}
+          published={publishedNote}
+          onChanged={publishedPages.refresh}
+          onClose={() => setDialog(null)}
+        />
       )}
 
       {openDialog === "propose" && workspace && !workspace.isLocal && user && (

@@ -1,6 +1,12 @@
 import { type NextRequest } from "next/server";
-import { handle, requireClient, readRepoRefFromBody, ApiError } from "@/lib/api-helpers";
-import { PUBLISH_DIR, pagePath, pageUrl } from "@/lib/publish";
+import {
+  handle,
+  requireClient,
+  readRepoRef,
+  readRepoRefFromBody,
+  ApiError,
+} from "@/lib/api-helpers";
+import { PUBLISH_DIR, pagePath, pageUrl, slugOfPage } from "@/lib/publish";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
@@ -42,6 +48,53 @@ interface PublishBody {
   html?: string;
   /** The note's title, for the commit message. */
   title?: string;
+}
+
+/**
+ * What this repository currently has published.
+ *
+ * Publishing used to be something that happened once and was then forgotten:
+ * the URL lived in the dialog's own state, and closing it was the end of any
+ * record that a note was public at all. Reopening the dialog offered to
+ * publish, as though it never had been — so there was no way to find the
+ * address again, and no way to reach Unpublish.
+ *
+ * The answer is not stored here, because it does not need to be: what is
+ * published is exactly what is in `docs/`, in the user's own repository. One
+ * listing answers it for every note at once, which is what lets the editor
+ * mark the open note and the dashboard show the whole set.
+ */
+export async function GET(request: NextRequest) {
+  return handle(async () => {
+    const { client } = await requireClient();
+    const params = new URL(request.url).searchParams;
+    const repo = readRepoRef(params);
+
+    const [entries, site] = await Promise.all([
+      client.listDirectory(repo.owner, repo.repo, repo.branch, PUBLISH_DIR),
+      // Pages being off is not an error. The pages are still committed and
+      // still listed; they just have no address yet, which the caller says.
+      client.getPages(repo.owner, repo.repo).catch(() => null),
+    ]);
+
+    const pages = entries
+      .map((entry) => ({ entry, slug: slugOfPage(entry.name) }))
+      .filter(
+        (item): item is { entry: (typeof entries)[number]; slug: string } => item.slug !== null,
+      )
+      .map(({ entry, slug }) => ({
+        slug,
+        path: entry.path,
+        size: entry.size,
+        sha: entry.sha,
+        url: site ? pageUrl(site.url, slug) : null,
+      }));
+
+    return {
+      pages,
+      site: site ? { url: site.url, status: site.status, isPublic: site.isPublic } : null,
+    };
+  });
 }
 
 export async function POST(request: NextRequest) {

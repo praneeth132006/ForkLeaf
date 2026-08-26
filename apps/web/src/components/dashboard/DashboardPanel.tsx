@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { SessionUser, Workspace } from "@forkleaf/types";
@@ -21,6 +21,8 @@ import { FolderNav } from "./FolderNav";
 import { NoteList, formatWhen } from "./NoteList";
 import { NoteTree } from "./NoteTree";
 import { NoteGrid } from "./NoteGrid";
+import { PublishedPages } from "./PublishedPages";
+import { usePublishedPages } from "@/hooks/usePublishedPages";
 
 /**
  * The dashboard.
@@ -59,6 +61,15 @@ export function DashboardPanel({
   const router = useRouter();
   const [theme, , toggleTheme] = useTheme();
 
+  /**
+   * The index section, so choosing a repository can bring you to it.
+   *
+   * Clicking a repository card did select it, and the list below did change —
+   * three screens further down, past the stats, the other repositories and the
+   * recent notes. From where the card is, nothing appeared to happen at all.
+   */
+  const indexRef = useRef<HTMLElement | null>(null);
+
   const [activeId, setActiveId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [folder, setFolder] = useState<string | null>(null);
@@ -83,6 +94,11 @@ export function DashboardPanel({
   // Memoised so the derived indexes below do not recompute on every render:
   // `active?.entries ?? []` is a fresh array each time.
   const entries = useMemo(() => active?.entries ?? [], [active]);
+
+  // Which of this repository's notes are public. Read here rather than in the
+  // editor alone: "which of my notes have I published" is a question about the
+  // library, and the dashboard is where the library is.
+  const published = usePublishedPages(active?.workspace ?? null);
 
   /**
    * Full-text hits for the current query.
@@ -145,12 +161,18 @@ export function DashboardPanel({
     [],
   );
 
-  const selectWorkspace = useCallback((workspace: Workspace) => {
+  const selectWorkspace = useCallback((workspace: Workspace, reveal = false) => {
     setActiveId(workspace.id);
     setFolder(null);
     setTag(null);
     setQuery("");
     setVisible(PAGE_SIZE);
+
+    // Only when a person picked it. Connecting a repository already moves the
+    // page around enough without also throwing it down to the bottom.
+    if (reveal) {
+      indexRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }, []);
 
   const browseFolder = useCallback((next: string | null) => {
@@ -170,6 +192,34 @@ export function DashboardPanel({
       setAddingRepo(false);
     },
     [library, selectWorkspace],
+  );
+
+  const disconnect = useCallback(
+    (slice: (typeof library.workspaces)[number]) => {
+      const unpushed = slice.pending;
+
+      setPrompt({
+        title: "Disconnect repository",
+        label: "",
+        destructive: true,
+        confirmLabel: "Disconnect",
+        body:
+          `“${slice.workspace.name}” will be removed from this device. The repository on GitHub is ` +
+          `not touched — everything pushed to it stays there, and connecting it again brings it all back.` +
+          (unpushed > 0
+            ? ` ${unpushed} change${unpushed === 1 ? "" : "s"} here ${
+                unpushed === 1 ? "has" : "have"
+              } not been pushed yet, and will be lost.`
+            : ""),
+        onConfirm: async () => {
+          await library.removeWorkspace(slice.workspace.id);
+          // The card that was selected is gone; fall back to whatever is left
+          // rather than leaving the index pointed at nothing.
+          setActiveId((current) => (current === slice.workspace.id ? null : current));
+        },
+      });
+    },
+    [library],
   );
 
   const newNote = useCallback(() => {
@@ -292,48 +342,79 @@ export function DashboardPanel({
               const words = slice.entries.reduce((total, entry) => total + entry.words, 0);
 
               return (
-                <button
+                /* The card is a group, not one big button: it holds the
+                   disconnect control, and a button cannot contain a button. */
+                <div
                   key={slice.workspace.id}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => selectWorkspace(slice.workspace)}
-                  className={`rounded-xl border p-4 text-left transition ${
+                  className={`relative rounded-xl border transition ${
                     selected
                       ? "border-[var(--fl-accent)] bg-[var(--fl-accent-soft)]"
                       : "border-[var(--fl-border)] bg-[var(--fl-surface)] hover:border-[var(--fl-border-strong)]"
                   }`}
                 >
-                  <span className="mb-1 flex items-center gap-2">
-                    <span className="truncate font-semibold text-[var(--fl-text)]">
-                      {slice.workspace.name}
+                  <button
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => selectWorkspace(slice.workspace, true)}
+                    className="block w-full rounded-xl p-4 pr-11 text-left"
+                  >
+                    <span className="mb-1 flex items-center gap-2">
+                      <span className="truncate font-semibold text-[var(--fl-text)]">
+                        {slice.workspace.name}
+                      </span>
+                      {slice.workspace.isLocal && (
+                        <span className="shrink-0 rounded bg-[var(--fl-elevated)] px-1.5 py-0.5 text-[10.5px] uppercase tracking-wide text-[var(--fl-muted)]">
+                          this device
+                        </span>
+                      )}
                     </span>
-                    {slice.workspace.isLocal && (
-                      <span className="shrink-0 rounded bg-[var(--fl-elevated)] px-1.5 py-0.5 text-[10.5px] uppercase tracking-wide text-[var(--fl-muted)]">
-                        this device
+
+                    <span className="block truncate font-mono text-[11.5px] text-[var(--fl-muted)]">
+                      {slice.workspace.isLocal
+                        ? "Not backed by a repository"
+                        : `${slice.workspace.repo.owner}/${slice.workspace.repo.repo}@${slice.workspace.repo.branch}${
+                            slice.workspace.repo.directory
+                              ? `/${slice.workspace.repo.directory}`
+                              : ""
+                          }`}
+                    </span>
+
+                    <span className="mt-2 block text-[12.5px] text-[var(--fl-muted)]">
+                      {slice.entries.length} note{slice.entries.length === 1 ? "" : "s"} ·{" "}
+                      {words.toLocaleString()} words
+                      {slice.pending > 0 && ` · ${slice.pending} waiting`}
+                    </span>
+
+                    {slice.error && (
+                      <span className="mt-1.5 block text-[12px] text-[var(--fl-danger)]">
+                        {slice.error}
                       </span>
                     )}
-                  </span>
+                  </button>
 
-                  <span className="block truncate font-mono text-[11.5px] text-[var(--fl-muted)]">
-                    {slice.workspace.isLocal
-                      ? "Not backed by a repository"
-                      : `${slice.workspace.repo.owner}/${slice.workspace.repo.repo}@${slice.workspace.repo.branch}${
-                          slice.workspace.repo.directory ? `/${slice.workspace.repo.directory}` : ""
-                        }`}
-                  </span>
-
-                  <span className="mt-2 block text-[12.5px] text-[var(--fl-muted)]">
-                    {slice.entries.length} note{slice.entries.length === 1 ? "" : "s"} ·{" "}
-                    {words.toLocaleString()} words
-                    {slice.pending > 0 && ` · ${slice.pending} waiting`}
-                  </span>
-
-                  {slice.error && (
-                    <span className="mt-1.5 block text-[12px] text-[var(--fl-danger)]">
-                      {slice.error}
-                    </span>
+                  {/* The on-device workspace has no repository to disconnect
+                      from, and is where notes go when there is nowhere else. */}
+                  {!slice.workspace.isLocal && (
+                    <button
+                      type="button"
+                      aria-label={`Disconnect ${slice.workspace.name}`}
+                      title={`Disconnect ${slice.workspace.name} from this device`}
+                      onClick={() => disconnect(slice)}
+                      className="absolute right-2 top-2 rounded-lg p-1.5 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-danger)]"
+                    >
+                      <svg
+                        viewBox="0 0 16 16"
+                        className="h-3.5 w-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                      >
+                        <path d="M4 4l8 8M12 4l-8 8" />
+                      </svg>
+                    </button>
                   )}
-                </button>
+                </div>
               );
             })}
 
@@ -359,6 +440,24 @@ export function DashboardPanel({
             </div>
           )}
         </section>
+
+        {/* ── Published pages ──────────────────────────────────────────── */}
+        {active && !active.workspace.isLocal && (
+          <PublishedPages
+            workspace={active.workspace}
+            state={published}
+            confirm={(request) =>
+              setPrompt({
+                title: request.title,
+                label: "",
+                destructive: true,
+                confirmLabel: "Unpublish",
+                body: request.body,
+                onConfirm: request.onConfirm,
+              })
+            }
+          />
+        )}
 
         {/* ── Recent ───────────────────────────────────────────────────── */}
         {recent.length > 0 && (
@@ -389,7 +488,7 @@ export function DashboardPanel({
         )}
 
         {/* ── The index ────────────────────────────────────────────────── */}
-        <section>
+        <section ref={indexRef} className="scroll-mt-20">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <SectionLabel className="!mb-0">
               {/* The on-device workspace is already named as a place, so

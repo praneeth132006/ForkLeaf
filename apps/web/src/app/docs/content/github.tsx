@@ -237,6 +237,33 @@ export function Repositories() {
         be worse than saying so.
       </Note>
 
+      <H2 id="publishing">Publishing a note as a page</H2>
+      <P>
+        <strong>Publish as a page</strong> in the right-hand panel renders the open note to one
+        self-contained HTML file, commits it to <Code>docs/</Code> in the same repository, and
+        switches GitHub Pages on. Nothing is uploaded to ForkLeaf — the page is a file in your
+        repository, served by GitHub, and it outlives this app entirely.
+      </P>
+      <P>
+        A published note is marked as such wherever you look at it afterwards. The right-hand panel
+        gains a <strong>Published</strong> section with the address, and the dashboard lists every
+        page the repository is serving under <strong>Published pages</strong>, each with its link
+        and an <strong>Unpublish</strong> button. That list is read back from <Code>docs/</Code>
+        rather than remembered here, so deleting a page on GitHub directly unpublishes it as
+        completely as the button does.
+      </P>
+      <P>
+        Unpublishing deletes the file — one commit, recoverable from your git history — and leaves
+        the note alone. GitHub Pages stays switched on, because it is a repository-wide setting you
+        may have had before ForkLeaf ever touched it.
+      </P>
+      <Note kind="warn">
+        Anyone with the link can read a published page, whether or not the repository is private.
+        Publishing from a private repository needs a paid GitHub plan; GitHub says so if that
+        applies to yours, and the page is committed either way, so turning Pages on later publishes
+        it as it stands.
+      </Note>
+
       <H2 id="branches">Branches and protection rules</H2>
       <P>
         ForkLeaf commits directly to the configured branch. If that branch has protection rules

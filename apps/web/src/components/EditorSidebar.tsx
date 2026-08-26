@@ -15,6 +15,14 @@ export interface EditorSidebarProps {
   activeWorkspace: Workspace | null;
   onSwitchWorkspace: (workspace: Workspace) => void;
   onConnectRepo: () => void;
+  /**
+   * Disconnects a repository from this device.
+   *
+   * The list only ever grew. Every repository ever opened stayed in this menu
+   * — a fork tried once, a colleague's repo read for an afternoon — with no
+   * way to say "not that one" short of clearing the browser's site data.
+   */
+  onDisconnectRepo: (workspace: Workspace) => void;
   tree: TreeNode[];
   activePath: string | null;
   onOpenNote: (path: string) => void;
@@ -193,7 +201,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
             type="button"
             onClick={() => setShowWorkspaces((value) => !value)}
             aria-expanded={showWorkspaces}
-            aria-haspopup="listbox"
+            aria-haspopup="true"
             className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--fl-elevated)]"
           >
             <span className="min-w-0 flex-1">
@@ -226,32 +234,62 @@ export function EditorSidebar(props: EditorSidebarProps) {
 
         {showWorkspaces && (
           <div
-            role="listbox"
+            aria-label="Connected repositories"
             className="absolute left-2 right-2 top-full z-30 mt-1 overflow-hidden rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1 shadow-[var(--fl-shadow-lg)]"
           >
             {props.workspaces.map((workspace) => (
-              <button
-                key={workspace.id}
-                type="button"
-                role="option"
-                aria-selected={workspace.id === props.activeWorkspace?.id}
-                onClick={() => {
-                  props.onSwitchWorkspace(workspace);
-                  setShowWorkspaces(false);
-                }}
-                className={`block w-full rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-[var(--fl-elevated)] ${
-                  workspace.id === props.activeWorkspace?.id
-                    ? "text-[var(--fl-accent)]"
-                    : "text-[var(--fl-text)]"
-                }`}
-              >
-                <span className="block truncate text-[13px] font-medium">{workspace.name}</span>
-                <span className="block truncate text-[11px] text-[var(--fl-muted)]">
-                  {workspace.isLocal
-                    ? "This device only"
-                    : `${workspace.repo.owner}/${workspace.repo.repo} · ${workspace.repo.branch}`}
-                </span>
-              </button>
+              /* Two buttons, so the row is a group rather than an option: a
+                 listbox option cannot contain a control of its own, and
+                 disconnecting is not a way of choosing. */
+              <div key={workspace.id} className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  aria-current={workspace.id === props.activeWorkspace?.id}
+                  onClick={() => {
+                    props.onSwitchWorkspace(workspace);
+                    setShowWorkspaces(false);
+                  }}
+                  className={`block min-w-0 flex-1 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-[var(--fl-elevated)] ${
+                    workspace.id === props.activeWorkspace?.id
+                      ? "text-[var(--fl-accent)]"
+                      : "text-[var(--fl-text)]"
+                  }`}
+                >
+                  <span className="block truncate text-[13px] font-medium">{workspace.name}</span>
+                  <span className="block truncate text-[11px] text-[var(--fl-muted)]">
+                    {workspace.isLocal
+                      ? "This device only"
+                      : `${workspace.repo.owner}/${workspace.repo.repo} · ${workspace.repo.branch}`}
+                  </span>
+                </button>
+
+                {/* Not offered for the on-device workspace: it is where notes
+                    go when there is nowhere else, and there would be nothing
+                    left to disconnect it to. */}
+                {!workspace.isLocal && (
+                  <button
+                    type="button"
+                    aria-label={`Disconnect ${workspace.name}`}
+                    title={`Disconnect ${workspace.name} from this device`}
+                    onClick={() => {
+                      props.onDisconnectRepo(workspace);
+                      setShowWorkspaces(false);
+                    }}
+                    className="shrink-0 rounded-lg p-1.5 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-danger)]"
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      className="h-3.5 w-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                    >
+                      <path d="M4 4l8 8M12 4l-8 8" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             ))}
 
             {props.user ? (

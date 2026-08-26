@@ -4,6 +4,14 @@ import { GitHubError } from "./errors";
 import { encodeBase64, decodeBase64 } from "./base64";
 
 /** A repository's GitHub Pages site, as the publish flow needs it. */
+/** One file in a directory listing — name and size, never the bytes. */
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+  sha: string;
+  size: number;
+}
+
 export interface PagesSite {
   /** Where the site is served from, e.g. `https://you.github.io/notes/`. */
   url: string;
@@ -101,6 +109,15 @@ interface ApiCommitListEntry {
 interface ApiContent {
   content?: string;
   encoding?: string;
+  sha: string;
+  size: number;
+  type: string;
+}
+
+/** One row of a directory listing. The contents API omits bodies for these. */
+interface ApiDirectoryEntry {
+  name: string;
+  path: string;
   sha: string;
   size: number;
   type: string;
@@ -636,6 +653,46 @@ export class GitHubClient {
     });
 
     return buildTree(flat);
+  }
+
+  /**
+   * The files directly inside one directory, without their contents.
+   *
+   * The contents API answers a directory with a list of names, sizes and
+   * SHAs and no bodies, which is what makes this the right way to ask "what
+   * is in here" — `readFile` on each would download every byte, and
+   * `listTree` answers for the whole repository and is scoped to the
+   * workspace's own subfolder, which published pages are not in.
+   *
+   * A directory that does not exist is an empty list, not an error: "nothing
+   * has been published yet" and "the folder is missing" are the same answer
+   * to the only question being asked.
+   */
+  async listDirectory(
+    owner: string,
+    repo: string,
+    branch: string,
+    path: string,
+  ): Promise<DirectoryEntry[]> {
+    const url =
+      `/repos/${owner}/${repo}/contents/${encodePath(path)}` + `?ref=${encodeURIComponent(branch)}`;
+
+    try {
+      const { data } = await this.transport.request<ApiDirectoryEntry[]>(url);
+      if (!Array.isArray(data)) return [];
+
+      return data
+        .filter((entry) => entry.type === "file")
+        .map((entry) => ({
+          name: entry.name,
+          path: entry.path,
+          sha: entry.sha,
+          size: entry.size,
+        }));
+    } catch (error) {
+      if (error instanceof GitHubError && error.code === "not-found") return [];
+      throw error;
+    }
   }
 
   /** Reads one file's decoded text plus its blob SHA. */

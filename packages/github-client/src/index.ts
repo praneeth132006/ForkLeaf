@@ -8,6 +8,7 @@ export {
   type ContentEncoding,
   type CommitOptions,
   type CommitResult,
+  type DirectoryEntry,
   type PagesSite,
   type PullRequestSummary,
   type PullRequestDetail,
