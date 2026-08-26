@@ -597,7 +597,7 @@ function HighlightPicker({ editor }: { editor: Editor }) {
                 ? "border-[var(--fl-inverse-text)] ring-2 ring-[var(--fl-inverse-text)]/40"
                 : "border-[var(--fl-inverse-text)]/25 hover:border-[var(--fl-inverse-text)]/60"
             }`}
-            style={{ background: `var(--fl-hl-${colour.name})` }}
+            style={{ backgroundColor: `var(--fl-hl-${colour.name})` }}
           />
         );
       })}

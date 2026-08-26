@@ -555,12 +555,24 @@ function AccentPicker({ mode, accents }: { mode: Theme; accents: ReturnType<type
   );
 }
 
-/** A colour chip. Bordered, so a swatch near the background is still a shape. */
+/**
+ * A colour chip. Bordered, so a swatch near the background is still a shape.
+ *
+ * `backgroundColor`, not the `background` shorthand. The shorthand is a
+ * hydration hazard: React writes `style="background:#2467db"` on the server,
+ * the browser parses that into all eight longhands — `background-image`,
+ * `background-position-x` and the rest, each reset to `initial` — and the
+ * client tree, which only ever set the one property, does not match. React
+ * reports a hydration mismatch and gives up on patching that subtree.
+ *
+ * The longhand maps one-to-one onto what is actually meant here, which is a
+ * solid colour, so there is nothing to reconcile.
+ */
 function Swatch({ color }: { color: string }) {
   return (
     <span
       aria-hidden="true"
-      style={{ background: color }}
+      style={{ backgroundColor: color }}
       className="block h-8 w-8 shrink-0 rounded-lg border border-[var(--fl-border-strong)]"
     />
   );
