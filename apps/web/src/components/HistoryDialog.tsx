@@ -5,12 +5,23 @@ import type { Note, Workspace } from "@forkleaf/types";
 import { Dialog } from "./Dialog";
 import { DiffView } from "./DiffView";
 import { TimeTravelPanel } from "./TimeTravelPanel";
+import { BlameView } from "./BlameView";
 import { useRevisionTexts } from "@/hooks/useRevisionTexts";
 import { relativeTime } from "@/lib/relative-time";
 import { listNoteHistory, type NoteCommitDto } from "@/lib/gateway";
 
-/** Which of the two ways of looking at history is on screen. */
-export type Tab = "changes" | "replay";
+/**
+ * How far back to read.
+ *
+ * The commit list alone was happy with GitHub's default page of 30. Blame is
+ * not: every revision it cannot see becomes a line it has to hedge as "at or
+ * before", and the replay likewise just stops early. 100 is the most GitHub
+ * will serve in one page, and it is still one request.
+ */
+const HISTORY_LIMIT = 100;
+
+/** Which of the three ways of looking at history is on screen. */
+export type Tab = "changes" | "replay" | "blame";
 
 export interface HistoryDialogProps {
   note: Note;
@@ -68,7 +79,7 @@ export function HistoryDialog({
   useEffect(() => {
     let cancelled = false;
 
-    void listNoteHistory(workspace.repo, note.path)
+    void listNoteHistory(workspace.repo, note.path, HISTORY_LIMIT)
       .then((result) => {
         if (cancelled) return;
         setCommits(result);
@@ -144,7 +155,13 @@ export function HistoryDialog({
 
   return (
     <Dialog
-      title={tab === "replay" ? "Replay this note" : "Version history"}
+      title={
+        tab === "replay"
+          ? "Replay this note"
+          : tab === "blame"
+            ? "When each paragraph was written"
+            : "Version history"
+      }
       subtitle={`${note.path} · ${workspace.repo.owner}/${workspace.repo.repo}`}
       onClose={onClose}
       wide
@@ -179,6 +196,7 @@ export function HistoryDialog({
             [
               ["changes", "Changes", "One commit at a time, as a diff"],
               ["replay", "Replay", "Watch the note being written"],
+              ["blame", "Who wrote what", "The date each paragraph was last touched"],
             ] as const
           ).map(([value, label, hint]) => (
             <button
@@ -211,6 +229,10 @@ export function HistoryDialog({
             onClose();
           }}
         />
+      )}
+
+      {commits && commits.length > 0 && tab === "blame" && (
+        <BlameView commits={commits} revisions={revisions} repo={workspace.repo} path={note.path} />
       )}
 
       {commits && commits.length > 0 && tab === "changes" && (

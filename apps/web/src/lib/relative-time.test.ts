@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { relativeTime, durationLabel } from "./relative-time";
+import { relativeTime, relativeAge, durationLabel } from "./relative-time";
 
 const NOW = Date.UTC(2026, 5, 15, 12, 0, 0);
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -39,6 +39,28 @@ describe("relativeTime", () => {
     const result = relativeTime(ago(40 * DAY), NOW);
     expect(result).not.toMatch(/ago/);
     expect(result).toBe(new Date(NOW - 40 * DAY).toLocaleDateString());
+  });
+});
+
+describe("relativeAge", () => {
+  it("agrees with relativeTime while there is something relative to say", () => {
+    expect(relativeAge(ago(5 * MINUTE), NOW)).toBe("5m ago");
+    expect(relativeAge(ago(3 * HOUR), NOW)).toBe("3h ago");
+    expect(relativeAge(ago(29 * DAY), NOW)).toBe("29d ago");
+  });
+
+  it("gives up rather than repeating a date the caller already printed", () => {
+    // "3/12/2026 (3/12/2026)" reads as a bug, so the parenthetical is dropped.
+    expect(relativeAge(ago(40 * DAY), NOW)).toBeNull();
+  });
+
+  it("switches to null exactly where relativeTime stops counting", () => {
+    expect(relativeAge(ago(2592000 * SECOND - SECOND), NOW)).toBe("29d ago");
+    expect(relativeAge(ago(2592000 * SECOND), NOW)).toBeNull();
+  });
+
+  it("returns null for an unparseable date", () => {
+    expect(relativeAge("not a date", NOW)).toBeNull();
   });
 });
 

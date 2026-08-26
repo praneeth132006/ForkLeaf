@@ -23,6 +23,7 @@ const LOCAL = { isLocal: true } as Workspace;
 function panel(workspace: Workspace | null = CONNECTED) {
   const onShowHistory = vi.fn();
   const onReplay = vi.fn();
+  const onBlame = vi.fn();
 
   render(
     <EditorRightPanel
@@ -34,6 +35,7 @@ function panel(workspace: Workspace | null = CONNECTED) {
       onExport={vi.fn()}
       onShowHistory={onShowHistory}
       onReplay={onReplay}
+      onBlame={onBlame}
       syncMode="auto"
       onSyncNow={vi.fn()}
       links={{
@@ -48,7 +50,7 @@ function panel(workspace: Workspace | null = CONNECTED) {
     />,
   );
 
-  return { onShowHistory, onReplay };
+  return { onShowHistory, onReplay, onBlame };
 }
 
 /**
@@ -75,9 +77,26 @@ describe("EditorRightPanel actions", () => {
     expect(onShowHistory).not.toHaveBeenCalled();
   });
 
-  it("hides both when there is no repository to read history from", () => {
+  it("offers the blame view by name, beside the replay", () => {
+    panel();
+    const blame = screen.getByRole("button", { name: /when each paragraph was written/i });
+    const replay = screen.getByRole("button", { name: /replay how this was written/i });
+    expect(blame).toBeTruthy();
+    expect(replay.compareDocumentPosition(blame) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("opens the blame view when that button is pressed", () => {
+    const { onBlame, onReplay, onShowHistory } = panel();
+    fireEvent.click(screen.getByRole("button", { name: /when each paragraph was written/i }));
+    expect(onBlame).toHaveBeenCalledTimes(1);
+    expect(onReplay).not.toHaveBeenCalled();
+    expect(onShowHistory).not.toHaveBeenCalled();
+  });
+
+  it("hides all three when there is no repository to read history from", () => {
     panel(LOCAL);
     expect(screen.queryByRole("button", { name: /replay how this was written/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /when each paragraph was written/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /history & commits/i })).toBeNull();
   });
 });

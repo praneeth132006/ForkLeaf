@@ -336,11 +336,41 @@ export async function unpublishNote(repo: RepoRef, slug: string): Promise<{ path
   });
 }
 
-export async function listNoteHistory(repo: RepoRef, path: string): Promise<NoteCommitDto[]> {
+export async function listNoteHistory(
+  repo: RepoRef,
+  path: string,
+  limit?: number,
+): Promise<NoteCommitDto[]> {
   const { commits } = await call<{ commits: NoteCommitDto[] }>(
-    `/api/gh/history?${repoParams(repo)}&path=${encodeURIComponent(path)}`,
+    `/api/gh/history?${repoParams(repo)}&path=${encodeURIComponent(path)}` +
+      (limit ? `&limit=${limit}` : ""),
   );
   return commits;
+}
+
+/** One file a commit touched, beside the note being looked at. */
+export interface CommitFileDto {
+  path: string;
+  status: string;
+  previousPath: string | null;
+}
+
+/**
+ * What else one commit changed.
+ *
+ * Fetched separately from the commit list, and only for the commit somebody is
+ * actually looking at: asking this of every commit in a history would be one
+ * request per revision for a detail almost none of them will be asked about.
+ */
+export async function readCommitFiles(
+  repo: RepoRef,
+  path: string,
+  sha: string,
+): Promise<{ files: CommitFileDto[]; truncated: boolean }> {
+  return await call<{ files: CommitFileDto[]; truncated: boolean }>(
+    `/api/gh/history?${repoParams(repo)}&path=${encodeURIComponent(path)}` +
+      `&sha=${encodeURIComponent(sha)}&files=1`,
+  );
 }
 
 /** The content of a note as of one commit, for previewing an old revision. */

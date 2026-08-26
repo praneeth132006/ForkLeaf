@@ -88,3 +88,13 @@ export {
   type TimelineRevision,
   type SparklineGeometry,
 } from "./timeline";
+
+export {
+  buildBlame,
+  toBlocks,
+  ageRatio,
+  type Blame,
+  type BlameBlock,
+  type BlameLine,
+  type BlameRevision,
+} from "./blame";

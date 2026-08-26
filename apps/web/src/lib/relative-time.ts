@@ -19,6 +19,21 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
   return new Date(then).toLocaleDateString();
 }
 
+/**
+ * The same, but null once it would just repeat a date.
+ *
+ * `relativeTime` falls back to an absolute date past a month, which is right
+ * where it stands alone and wrong beside one: "3/12/2026 (3/12/2026)" reads as
+ * a bug. Callers showing both ask for this and drop the parenthetical when
+ * there is nothing left in it.
+ */
+export function relativeAge(iso: string, now: number = Date.now()): string | null {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return null;
+  if (Math.round((now - then) / 1000) >= 2592000) return null;
+  return relativeTime(iso, now);
+}
+
 /** "4 days", "6 weeks" — how long a stretch of time lasted. */
 export function durationLabel(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) return "a moment";

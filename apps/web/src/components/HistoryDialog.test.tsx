@@ -9,9 +9,12 @@ import type { NoteCommitDto } from "@/lib/gateway";
 const listNoteHistory = vi.fn();
 const readNoteAtCommit = vi.fn();
 
+const readCommitFiles = vi.fn();
+
 vi.mock("@/lib/gateway", () => ({
   listNoteHistory: (...args: unknown[]) => listNoteHistory(...args),
   readNoteAtCommit: (...args: unknown[]) => readNoteAtCommit(...args),
+  readCommitFiles: (...args: unknown[]) => readCommitFiles(...args),
 }));
 
 vi.mock("@forkleaf/editor", () => ({
@@ -51,11 +54,12 @@ const WORKSPACE = {
   repo: { owner: "me", repo: "notes", branch: "main", directory: "" },
 } as Workspace;
 
-function open(commits: NoteCommitDto[] = COMMITS, initialTab?: "changes" | "replay") {
+function open(commits: NoteCommitDto[] = COMMITS, initialTab?: "changes" | "replay" | "blame") {
   listNoteHistory.mockResolvedValue(commits);
   readNoteAtCommit.mockImplementation((_repo: unknown, _path: string, sha: string) =>
     Promise.resolve(TEXT[sha] ?? null),
   );
+  readCommitFiles.mockResolvedValue({ files: [], truncated: false });
 
   const onRestore = vi.fn();
   const onClose = vi.fn();
@@ -101,6 +105,39 @@ describe("HistoryDialog", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
     expect(screen.getByRole("dialog", { name: "Version history" })).toBeTruthy();
+  });
+
+  it("opens straight onto the blame view when sent there", async () => {
+    open(COMMITS, "blame");
+    await screen.findByText(/still visible on this page/i);
+
+    expect(screen.getByRole("tab", { name: "Who wrote what" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+    expect(screen.getByRole("dialog", { name: "When each paragraph was written" })).toBeTruthy();
+  });
+
+  it("reads far enough back for blame to attribute anything", async () => {
+    open();
+    // GitHub's default page is 30 commits. Every revision blame cannot see is
+    // a line it has to hedge as "at or before", so it asks for the deepest
+    // window a single page will serve.
+    await waitFor(() =>
+      expect(listNoteHistory).toHaveBeenCalledWith(expect.anything(), NOTE.path, 100),
+    );
+  });
+
+  it("shares its revision cache across all three tabs", async () => {
+    open();
+    await waitFor(() => expect(readNoteAtCommit).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getByRole("tab", { name: "Replay" }));
+    await screen.findByRole("slider");
+    fireEvent.click(screen.getByRole("tab", { name: "Who wrote what" }));
+    await screen.findByText(/still visible on this page/i);
+
+    // Two commits, fetched once between them, however many tabs ask.
+    expect(readNoteAtCommit).toHaveBeenCalledTimes(2);
   });
 
   it("switches to the replay and back", async () => {
