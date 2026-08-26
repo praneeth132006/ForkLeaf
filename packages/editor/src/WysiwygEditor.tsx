@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, useEditorState, EditorContent } from "@tiptap/react";
 import type { EditorView } from "@tiptap/pm/view";
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
@@ -74,9 +74,13 @@ import { MermaidBlock } from "./extensions/MermaidBlock";
 import { Wikilink } from "./extensions/Wikilink";
 import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 import { ShortcutsAfterLineBreak } from "./extensions/ShortcutsAfterLineBreak";
+import { SmartPaste } from "./extensions/SmartPaste";
+import { LeaveInlineMark } from "./extensions/LeaveInlineMark";
+import { RoomToWrite } from "./extensions/RoomToWrite";
 import type { LinkBridge } from "./links";
 import { readSlashState } from "./extensions/SlashCommands";
 import { isolateCurrentLine } from "./isolate-line";
+import { caretBelow } from "./caret";
 import { filterInsertActions, type ActionContext, type InsertDefinition } from "./insert-actions";
 
 export interface WysiwygEditorProps {
@@ -233,6 +237,18 @@ export function WysiwygEditor({
       // After it, because it exists to repair what that one changes: a line
       // that begins after a hard break rather than at the start of a block.
       ShortcutsAfterLineBreak,
+      // Reshapes what the clipboard hands over — code into a code block, lines
+      // into lines. Registered before the markdown extension because it
+      // borrows that one's text parser and has to be able to stand aside for
+      // it, not the other way round.
+      SmartPaste,
+      // Before the marks' own `exitable` handling, which only fires at the end
+      // of a whole paragraph — which, with Enter making lines, is rarely where
+      // anybody is standing.
+      LeaveInlineMark,
+      // Last of the keyboard extensions: its Enter and ↓ only do anything in
+      // the places every other handler has already declined.
+      RoomToWrite,
       Markdown.configure({
         html: false,
         transformPastedText: true,
@@ -288,6 +304,17 @@ export function WysiwygEditor({
         // Anything after the first lands below the one before it.
         position = target + node.nodeSize;
       }
+      /**
+       * The caret goes below the picture, on a line of its own.
+       *
+       * An image is a block, so after inserting one the selection sat on the
+       * node itself: the next thing typed replaced the image that had just
+       * been uploaded, and the way to avoid that was to know to click below it
+       * first. Pasting a screenshot into a note is nearly always followed by
+       * writing about the screenshot.
+       */
+      if (position !== undefined) caretBelow(view, position);
+
       // The upload stored the image locally and called setAssetUrls(), which
       // is a React state update. That update was processed while `await`
       // yielded — *before* the node was created and its view registered a
@@ -508,7 +535,21 @@ function FormatButton({
   glyph: string;
   className?: string;
 }) {
-  const active = editor.isActive(mark);
+  /**
+   * Read live, not at render time.
+   *
+   * The bubble's buttons used to compute this while `WysiwygEditor` rendered,
+   * which happens when the note changes and almost never when the *selection*
+   * does. So selecting a bold, highlighted phrase popped up a toolbar with
+   * nothing pressed on it: the buttons were reporting the formatting of
+   * wherever the caret had been at the last render. There was no way to tell
+   * from the toolbar what was already applied to the words in front of you,
+   * which is most of what a toolbar is for.
+   */
+  const active = useEditorState({
+    editor,
+    selector: ({ editor: instance }) => instance.isActive(mark),
+  });
 
   return (
     <button
@@ -567,7 +608,19 @@ function FormatButton({
  * should not be two clicks deep.
  */
 function HighlightPicker({ editor }: { editor: Editor }) {
-  const active = editor.isActive("highlight");
+  // Live, for the same reason as the buttons above: which colour is on has to
+  // be read when the selection moves, not when the document does.
+  const state = useEditorState({
+    editor,
+    selector: ({ editor: instance }) => ({
+      active: instance.isActive("highlight"),
+      colour:
+        HIGHLIGHT_COLOURS.find((candidate) =>
+          instance.isActive("highlight", { color: candidate.name }),
+        )?.name ?? null,
+    }),
+  });
+  const active = state.active;
 
   return (
     <span className="flex items-center gap-0.5">
@@ -576,7 +629,7 @@ function HighlightPicker({ editor }: { editor: Editor }) {
       <span className="mx-0.5 h-4 w-px bg-[var(--fl-inverse-text)]/20" aria-hidden="true" />
 
       {HIGHLIGHT_COLOURS.filter((colour) => colour.name !== DEFAULT_HIGHLIGHT).map((colour) => {
-        const on = active && editor.isActive("highlight", { color: colour.name });
+        const on = active && state.colour === colour.name;
 
         return (
           <button

@@ -54,6 +54,40 @@ describe("coloured highlights in rich text", () => {
     expect(markdownOf(editor)).toContain('<mark class="fl-hl-pink">pink</mark>');
   });
 
+  /**
+   * The default colour, which is written as `==text==` and was the one that
+   * did not come back: the serialiser wrote it, the preview rendered it, and
+   * the rich editor showed the equals signs as text the next time the note was
+   * opened.
+   */
+  it("reads a plain ==highlight== back as a highlight", async () => {
+    const editor = await mount("a ==yellow== word");
+
+    let found = false;
+    editor.state.doc.descendants((node) => {
+      for (const mark of node.marks) {
+        if (mark.type.name === "highlight" && node.textContent === "yellow") found = true;
+      }
+    });
+
+    expect(found).toBe(true);
+    // And writes it back the way it was written, so opening a note is not an
+    // edit to it.
+    expect(markdownOf(editor).trim()).toBe("a ==yellow== word");
+  });
+
+  it("leaves == inside code exactly as typed, where it is an operator", async () => {
+    const editor = await mount("check `a ==b== c` here\n\n```js\nif (a ==b== c) {}\n```");
+
+    let highlights = 0;
+    editor.state.doc.descendants((node) => {
+      for (const mark of node.marks) if (mark.type.name === "highlight") highlights += 1;
+    });
+
+    expect(highlights).toBe(0);
+    expect(markdownOf(editor)).toContain("`a ==b== c`");
+  });
+
   it("leaves a colour it does not know as the text it was written as", async () => {
     const editor = await mount('a <mark class="fl-hl-chartreuse">odd</mark> word');
 

@@ -708,6 +708,27 @@ export function EditorWorkspace() {
     return () => clearTimeout(timer);
   }, [notice]);
 
+  /**
+   * Says so when a note is updated from GitHub behind your back.
+   *
+   * Notes now refresh themselves when somebody else commits — but text that
+   * rewrites itself while you are reading it is unnerving unless something
+   * says why, and "which of my open notes just changed" is exactly what you
+   * need to know afterwards.
+   */
+  const remoteChange = notebook.remoteChange;
+  const [announcedPull, setAnnouncedPull] = useState<number | null>(null);
+
+  if (remoteChange && remoteChange.at !== announcedPull) {
+    setAnnouncedPull(remoteChange.at);
+    const names = remoteChange.paths.map((path) => path.split("/").pop() ?? path);
+    setNotice(
+      names.length === 1
+        ? `Updated ${names[0]} with a change from GitHub`
+        : `Updated ${names.length} notes with changes from GitHub: ${names.join(", ")}`,
+    );
+  }
+
   const handleSignOut = useCallback(async () => {
     await signOut();
     router.push("/");
@@ -754,6 +775,13 @@ export function EditorWorkspace() {
         hint: "⌘S",
         keywords: "commit save upload",
         run: () => void notebook.syncNow(),
+      },
+      {
+        id: "pull",
+        label: "Check GitHub for changes now",
+        group: "Sync",
+        keywords: "pull refresh fetch update remote",
+        run: () => void notebook.pullRemote(),
       },
       {
         id: "repair-images",

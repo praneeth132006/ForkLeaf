@@ -54,6 +54,14 @@ export interface ToolbarSurface {
   blockStyle: BlockStyle | null;
   setBlockStyle: (style: BlockStyle) => void;
   isListActive: (kind: "bullet" | "ordered" | "task") => boolean;
+  /**
+   * Whether the text under the caret is a link.
+   *
+   * Optional because raw markdown has no reliable answer: `[a](b)` is text
+   * there, and the button would have to guess at the caret's relationship to a
+   * pair of brackets.
+   */
+  isLinkActive?: () => boolean;
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
@@ -104,7 +112,9 @@ const MARKS: { mark: FormatMark; label: string; hint: string; render: React.Reac
   {
     mark: "code",
     label: "Inline code",
-    hint: "⌘E",
+    // How to get back out again, which is the part nobody could find: a code
+    // span at the end of a line swallowed everything typed after it.
+    hint: "⌘E · → to leave",
     render: <span className="font-mono text-[11px]">{"</>"}</span>,
   },
   {
@@ -282,7 +292,8 @@ export function EditorToolbar({
         {has("link") && (
           <Button
             label="Link"
-            hint="⌘K in the document"
+            hint="⌘K in the document · → to leave"
+            pressed={surface?.isLinkActive?.() ?? false}
             disabled={disabled}
             onClick={() => onRun("link")}
           >

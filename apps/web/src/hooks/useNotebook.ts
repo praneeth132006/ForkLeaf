@@ -96,6 +96,14 @@ export interface NotebookState {
    * first-run repository chooser.
    */
   needsRepoChoice: boolean;
+  /**
+   * The last set of notes a background refresh brought down from GitHub.
+   *
+   * Held in state, rather than applied silently, so the editor can say what
+   * changed: a note rewriting itself under the caret with no explanation is
+   * alarming even when it is exactly what was asked for.
+   */
+  remoteChange: { paths: string[]; at: number } | null;
 }
 
 /** Keys the open set is remembered under, so a reload reopens the same tabs. */
@@ -136,6 +144,16 @@ const STORAGE_UNAVAILABLE =
 
 /** How many notes may be open at once, to bound memory and tab-strip width. */
 const MAX_OPEN_NOTES = 12;
+
+/**
+ * How often to look for changes made somewhere else.
+ *
+ * A minute is short enough that a note edited on a phone is on the laptop
+ * before anybody goes looking for it, and long enough to be nothing next to
+ * GitHub's rate limit — 60 requests an hour per open tab, against a budget of
+ * 5,000. Tabs in the background ask for nothing at all.
+ */
+const REMOTE_POLL_MS = 60_000;
 
 /** What the URL asked for: a specific workspace, and a note inside it. */
 export interface NotebookRequest {
@@ -183,6 +201,7 @@ export function useNotebook(request: NotebookRequest = {}) {
     pinnedPaths: [],
     expandedFolders: null,
     needsRepoChoice: false,
+    remoteChange: null,
   });
 
   // Long-lived singletons. Refs rather than state: replacing the sync engine
@@ -193,6 +212,15 @@ export function useNotebook(request: NotebookRequest = {}) {
   const repoRef = useRef<NoteRepository | null>(null);
   /** A URL-requested note is opened once, not on every workspace switch. */
   const openedRequestRef = useRef(false);
+  /**
+   * The current `pullRemote`, for the polling effect to call.
+   *
+   * That function closes over the open notes, so it is a different function on
+   * every keystroke; listing it as a dependency of the interval would tear the
+   * interval down and build a new one just as often, and a one-minute timer
+   * that is replaced every second never fires.
+   */
+  const pullRef = useRef<(() => Promise<void>) | null>(null);
 
   const patch = useCallback((updates: Partial<NotebookState>) => {
     setState((current) => ({ ...current, ...updates }));
@@ -438,6 +466,44 @@ export function useNotebook(request: NotebookRequest = {}) {
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
   }, []);
+
+  // ── Bring down what other people changed ────────────────────────────────
+  /**
+   * On a timer, and whenever the tab comes back to the front.
+   *
+   * The timer catches a colleague committing while you read; coming back to
+   * the tab is the moment somebody has most likely been editing the same
+   * notebook somewhere else — on their phone, on github.com, in another
+   * window — and it is also the cheapest possible trigger, because a tab
+   * nobody is looking at asks GitHub for nothing at all.
+   *
+   * Manual sync means manual: somebody who has turned off automatic pushing
+   * has said they want the network left alone, and quietly polling it every
+   * minute would be a strange reading of that.
+   */
+  useEffect(() => {
+    const workspace = state.activeWorkspace;
+    if (!workspace || workspace.isLocal) return;
+    if (state.syncPreference.mode === "manual") return;
+
+    const pull = () => {
+      if (document.visibilityState !== "visible") return;
+      void pullRef.current?.();
+    };
+
+    const timer = window.setInterval(pull, REMOTE_POLL_MS);
+    window.addEventListener("visibilitychange", pull);
+    window.addEventListener("focus", pull);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("visibilitychange", pull);
+      window.removeEventListener("focus", pull);
+    };
+    // Deliberately not depending on `pullRemote` itself, which changes
+    // whenever an open note does: rebuilding the interval on every keystroke
+    // would mean it never fired.
+  }, [state.activeWorkspace, state.syncPreference.mode]);
 
   // ── Warn before closing with unsaved work ───────────────────────────────
   useEffect(() => {
@@ -977,6 +1043,63 @@ export function useNotebook(request: NotebookRequest = {}) {
   const syncNow = useCallback(() => syncRef.current?.flushNow(), []);
 
   /**
+   * Brings down anything that changed on GitHub since the last look.
+   *
+   * Sync used to be one-directional: edits were pushed, and anything that
+   * arrived from anywhere else — a colleague's commit, the same notebook on a
+   * phone, an edit made on github.com — was invisible until the page was
+   * reloaded by hand. Which meant the reload had to be guessed at, and
+   * anybody who did not guess was writing against a stale copy.
+   *
+   * Two rules keep this safe. Notes with unpushed local edits are never
+   * touched, so a background refresh cannot overwrite something half-written;
+   * their divergence is the push's problem, and the conflict machinery already
+   * handles it. And the notes that *are* replaced are reported back, so the
+   * editor can say so rather than letting the text change by itself.
+   */
+  const pullRemote = useCallback(async () => {
+    const workspace = state.activeWorkspace;
+    const notes = repoRef.current;
+    if (!workspace || !notes || workspace.isLocal) return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+
+    // The tree first: it is one request, and it is what the sidebar shows.
+    // `getTree` answers from the cache and refreshes behind it, so the
+    // callback is where a real change arrives.
+    await notes.getTree(workspace.id, (tree) => patch({ tree }));
+
+    const changed: string[] = [];
+    const refreshed = await Promise.all(
+      state.openNotes.map(async (note) => {
+        if (note.dirty) return note;
+
+        try {
+          const latest = await notes.openNote(workspace.id, note.path);
+          if (latest.content === note.content) return note;
+          changed.push(note.path);
+          return latest;
+        } catch {
+          // Deleted on the remote, or unreachable. Neither is this function's
+          // business: closing the tab is the reader's call, and the sidebar
+          // has already been told the file is gone.
+          return note;
+        }
+      }),
+    );
+
+    if (changed.length > 0) {
+      patch({ openNotes: refreshed, remoteChange: { paths: changed, at: Date.now() } });
+    }
+  }, [state.activeWorkspace, state.openNotes, patch]);
+
+  // Written in an effect rather than during render: a ref is an external
+  // system as far as React is concerned, and touching one mid-render is how
+  // you get two different answers out of the same pass.
+  useEffect(() => {
+    pullRef.current = pullRemote;
+  }, [pullRemote]);
+
+  /**
    * The unpushed changes for the workspace currently open.
    *
    * Read by the propose-changes flow, which has to write them onto a new
@@ -1180,6 +1303,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       addWorkspace,
       removeWorkspace,
       syncNow,
+      pullRemote,
       pendingChanges,
       discardPending,
       setSyncMode,
@@ -1231,6 +1355,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       addWorkspace,
       removeWorkspace,
       syncNow,
+      pullRemote,
       pendingChanges,
       discardPending,
       setSyncMode,

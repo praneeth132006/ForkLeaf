@@ -109,9 +109,62 @@ export const ColouredHighlight = Highlight.extend({
 
             const next = rewrite(element.innerHTML);
             if (next !== element.innerHTML) element.innerHTML = next;
+
+            markPlainHighlights(element);
           },
         },
       },
     };
   },
 });
+
+/**
+ * `==text==` → a highlight, on the way into the rich editor.
+ *
+ * The serialiser has always written the plain yellow highlight as `==text==`,
+ * and the preview has always rendered it — but nothing turned it back into a
+ * mark when the note was opened. So highlighting a phrase, closing the note
+ * and opening it again showed `==the phrase==`, equals signs and all, in an
+ * editor that had written them itself. The colours round-tripped, because they
+ * are written as `<mark>`; only the default one did not.
+ *
+ * Done over text nodes rather than by rewriting the HTML as a string, so `==`
+ * inside a code span or a code block is left exactly as typed — which is the
+ * whole reason to be careful here, since `==` is an operator in most languages.
+ */
+const PLAIN_HIGHLIGHT = /==(?!\s)([^=\n]+?)(?<!\s)==/g;
+
+function markPlainHighlights(root: HTMLElement): void {
+  const document = root.ownerDocument;
+  if (!document) return;
+
+  const walker = document.createTreeWalker(root, 4 /* SHOW_TEXT */);
+  const targets: Text[] = [];
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    if (!node.data.includes("==")) continue;
+    if (node.parentElement?.closest("code, pre, mark")) continue;
+    targets.push(node);
+  }
+
+  for (const node of targets) {
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    let match: RegExpExecArray | null;
+
+    PLAIN_HIGHLIGHT.lastIndex = 0;
+    while ((match = PLAIN_HIGHLIGHT.exec(node.data)) !== null) {
+      if (match.index > cursor) fragment.append(node.data.slice(cursor, match.index));
+
+      const mark = document.createElement("mark");
+      mark.textContent = match[1] ?? "";
+      fragment.append(mark);
+      cursor = match.index + match[0].length;
+    }
+
+    if (cursor === 0) continue;
+    if (cursor < node.data.length) fragment.append(node.data.slice(cursor));
+    node.replaceWith(fragment);
+  }
+}

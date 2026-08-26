@@ -20,6 +20,7 @@ const SECTIONS = [
   { hash: "#how", label: "How it works" },
   { hash: "#toolkit", label: "What it does" },
   { hash: "#features", label: "Features" },
+  { hash: "#compare", label: "Compare" },
   { hash: "#pricing", label: "Pricing" },
 ] as const;
 

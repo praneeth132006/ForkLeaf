@@ -60,9 +60,8 @@ function isKnown(language: string): boolean {
 /**
  * The languages worth putting at the top of the list.
  *
- * Everything lowlight supports is still in the dropdown underneath; this is
- * only about not making someone scroll past `abnf` and `arcade` to reach
- * TypeScript.
+ * The rest of the list follows underneath; this is about not making someone
+ * scroll past a dozen things to reach TypeScript.
  */
 const POPULAR = [
   "javascript",
@@ -89,6 +88,75 @@ const POPULAR = [
   "diff",
 ];
 
+/**
+ * Everything else the picker offers.
+ *
+ * lowlight ships 192 grammars and the dropdown used to list all of them, in
+ * alphabetical order, which meant the first thing anyone saw under "All
+ * languages" was `1c`, `abnf`, `accesslog`, `angelscript`, `arcade`, `avrasm`
+ * and `axapta` — a wall of things almost nobody has written a line of, sitting
+ * between them and Scala. Access logs and Asciidoc are not even languages.
+ *
+ * So this is the long tail, curated: languages people actually write, and the
+ * few formats worth tagging. A block that arrives from a repository tagged
+ * with something outside the list is still highlighted — lowlight keeps every
+ * grammar — and still shows its own tag in the picker, so nothing is lost by
+ * not listing it. If something belongs here and is missing, it is one line.
+ */
+const MORE = [
+  "ada",
+  "arduino",
+  "clojure",
+  "cmake",
+  "coffeescript",
+  "crystal",
+  "d",
+  "dart",
+  "delphi",
+  "dockerfile",
+  "elixir",
+  "elm",
+  "erlang",
+  "fortran",
+  "fsharp",
+  "gradle",
+  "graphql",
+  "groovy",
+  "haskell",
+  "haxe",
+  "ini",
+  "julia",
+  "latex",
+  "less",
+  "lisp",
+  "lua",
+  "makefile",
+  "matlab",
+  "nim",
+  "nix",
+  "objectivec",
+  "ocaml",
+  "perl",
+  "powershell",
+  "prolog",
+  "protobuf",
+  "r",
+  "scala",
+  "scheme",
+  "scss",
+  "smalltalk",
+  "tcl",
+  "vala",
+  "vbnet",
+  "verilog",
+  "vhdl",
+  "vim",
+  "wasm",
+  "x86asm",
+  "xml",
+  "xquery",
+];
+
 /** Names lowlight knows the language by, but nobody types. */
 const DISPLAY_NAMES: Record<string, string> = {
   cpp: "C++",
@@ -104,27 +172,47 @@ const DISPLAY_NAMES: Record<string, string> = {
   html: "HTML",
   css: "CSS",
   bash: "Shell",
+  cmake: "CMake",
+  d: "D",
+  fsharp: "F#",
+  graphql: "GraphQL",
+  ini: "INI / TOML",
+  latex: "LaTeX",
+  less: "Less",
+  matlab: "MATLAB",
+  objectivec: "Objective-C",
+  ocaml: "OCaml",
+  protobuf: "Protocol Buffers",
+  r: "R",
+  scss: "SCSS",
+  vbnet: "VB.NET",
+  vhdl: "VHDL",
+  wasm: "WebAssembly",
+  x86asm: "Assembly",
+  xquery: "XQuery",
 };
 
 function displayName(language: string): string {
   return DISPLAY_NAMES[language] ?? language.charAt(0).toUpperCase() + language.slice(1);
 }
 
-function CodeBlockView({ node, updateAttributes, extension, editor, getPos }: NodeViewProps) {
+function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
   const language = (node.attrs.language as string) ?? "";
   const [copied, setCopied] = useState(false);
 
   const languages = useMemo(() => {
-    const listed: string[] = extension.options.lowlight.listLanguages();
     const popular = POPULAR.filter(isKnown);
-    const rest = listed.filter((name) => !popular.includes(name)).sort();
-    // A block that arrived from a repository may be tagged with something no
-    // grammar covers. Keeping that tag in the list means opening the dropdown
-    // cannot silently retag the block.
+    const rest = MORE.filter((name) => isKnown(name) && !popular.includes(name)).sort((a, b) =>
+      displayName(a).localeCompare(displayName(b)),
+    );
+    // A block that arrived from a repository may be tagged with a language
+    // this list leaves out, or with something no grammar covers at all.
+    // Keeping that tag in the picker means opening it cannot silently retag
+    // the block.
     const unlisted =
       language && !popular.includes(language) && !rest.includes(language) ? [language] : [];
     return { popular, rest, unlisted };
-  }, [extension.options.lowlight, language]);
+  }, [language]);
 
   /**
    * Puts the caret in the code when the click lands on the block's padding

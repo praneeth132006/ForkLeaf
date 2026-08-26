@@ -530,11 +530,20 @@ select:focus-visible {
   color: var(--fl-muted);
 }
 
+/* Inline code, which has to be visible at a glance.
+   It used to be `--fl-elevated` on `--fl-surface` with a `--fl-border` outline
+   — in the dark theme, #131313 on #0a0a0a inside a #1f1f1f border. Three
+   near-blacks: a word marked as code looked exactly like a word that was not,
+   and the only way to find out was to put the caret in it and read the
+   toolbar. The accent tint carries in both themes, and the letters take the
+   accent colour so the span reads as code even where a background is hard to
+   see (inside a selection, or on a coloured highlight). */
 .fl-prose code {
   font-family: var(--font-mono);
   font-size: 0.85em;
-  background: var(--fl-elevated);
-  border: 1px solid var(--fl-border);
+  background: var(--fl-accent-soft);
+  color: var(--fl-accent);
+  border: 1px solid var(--fl-border-strong);
   padding: 0.1em 0.35em;
   border-radius: 5px;
 }
@@ -555,6 +564,50 @@ select:focus-visible {
   border: none;
   padding: 0;
   color: inherit;
+}
+
+/* A link inside inline code keeps the code colour: two colours fighting over
+   the same three characters reads as neither. */
+.fl-prose a code {
+  color: inherit;
+}
+
+/* The gap cursor: where the caret goes between two blocks that are not text —
+   a code block above a rule, an image above a diagram. ProseMirror puts one
+   there already, and shipped it invisible, so the one place in the document
+   where people could not tell whether they had a caret was the one place they
+   needed to know. Typing or pressing Enter here makes a paragraph. */
+.ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+}
+
+.ProseMirror-gapcursor::after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 100%;
+  border-top: 2px solid var(--fl-accent);
+  animation: fl-gapcursor 1.1s steps(2, start) infinite;
+}
+
+.ProseMirror-focused .ProseMirror-gapcursor,
+.ProseMirror-gapcursor:focus {
+  display: block;
+}
+
+@keyframes fl-gapcursor {
+  to {
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ProseMirror-gapcursor::after {
+    animation: none;
+  }
 }
 
 /* ── Syntax highlighting ──────────────────────────────────────────────────
