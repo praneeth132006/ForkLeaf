@@ -9,6 +9,9 @@ import { useRevisionTexts } from "@/hooks/useRevisionTexts";
 import { relativeTime } from "@/lib/relative-time";
 import { listNoteHistory, type NoteCommitDto } from "@/lib/gateway";
 
+/** Which of the two ways of looking at history is on screen. */
+export type Tab = "changes" | "replay";
+
 export interface HistoryDialogProps {
   note: Note;
   workspace: Workspace;
@@ -17,10 +20,16 @@ export interface HistoryDialogProps {
   onRestore: (content: string) => void | Promise<void>;
   /** Maps an image `src` in the note to something the browser can load. */
   resolveImageSrc?: (src: string) => string;
+  /**
+   * Which view to open on.
+   *
+   * The replay is worth having its own way in — a tab inside a dialog reached
+   * from a panel is three steps deep, and a feature nobody finds is a feature
+   * that does not exist. Opening straight onto it lets the panel and the
+   * command palette point at the thing itself rather than at its container.
+   */
+  initialTab?: Tab;
 }
-
-/** Which of the two ways of looking at history is on screen. */
-type Tab = "changes" | "replay";
 
 /** What a selected revision is being compared against. */
 type Baseline = "previous" | "current" | "pinned";
@@ -40,8 +49,9 @@ export function HistoryDialog({
   onClose,
   onRestore,
   resolveImageSrc,
+  initialTab = "changes",
 }: HistoryDialogProps) {
-  const [tab, setTab] = useState<Tab>("changes");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [commits, setCommits] = useState<NoteCommitDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<NoteCommitDto | null>(null);
@@ -134,7 +144,7 @@ export function HistoryDialog({
 
   return (
     <Dialog
-      title="Version history"
+      title={tab === "replay" ? "Replay this note" : "Version history"}
       subtitle={`${note.path} · ${workspace.repo.owner}/${workspace.repo.repo}`}
       onClose={onClose}
       wide

@@ -97,7 +97,7 @@ export function EditorWorkspace() {
    */
   const [drawer, setDrawer] = useState<"files" | "document" | null>(null);
   const [dialog, setDialog] = useState<
-    "export" | "connect" | "help" | "history" | "propose" | "publish" | null
+    "export" | "connect" | "help" | "history" | "replay" | "propose" | "publish" | null
   >(null);
   /**
    * Something worth saying that is not a failure.
@@ -896,6 +896,16 @@ export function EditorWorkspace() {
           keywords: "git commits versions diff revisions",
           run: () => setDialog("history"),
         });
+
+        list.push({
+          id: "replay",
+          label: "Replay how this note was written",
+          group: "Notes",
+          hint: "Scrub through every revision and watch it grow",
+          keywords:
+            "replay time travel timeline scrubber watch animate playback evolution growth shape history revisions",
+          run: () => setDialog("replay"),
+        });
       }
     }
 
@@ -1358,6 +1368,10 @@ export function EditorWorkspace() {
                 setDrawer(null);
                 setDialog("history");
               }}
+              onReplay={() => {
+                setDrawer(null);
+                setDialog("replay");
+              }}
               onPublish={
                 workspace && !workspace.isLocal
                   ? () => {
@@ -1421,15 +1435,19 @@ export function EditorWorkspace() {
         />
       )}
 
-      {openDialog === "history" && note && workspace && !workspace.isLocal && (
-        <HistoryDialog
-          note={note}
-          workspace={workspace}
-          onClose={() => setDialog(null)}
-          onRestore={notebook.saveNote}
-          resolveImageSrc={images.resolve}
-        />
-      )}
+      {(openDialog === "history" || openDialog === "replay") &&
+        note &&
+        workspace &&
+        !workspace.isLocal && (
+          <HistoryDialog
+            note={note}
+            workspace={workspace}
+            initialTab={openDialog === "replay" ? "replay" : "changes"}
+            onClose={() => setDialog(null)}
+            onRestore={notebook.saveNote}
+            resolveImageSrc={images.resolve}
+          />
+        )}
 
       {showConflicts && (
         <ConflictDialog

@@ -51,7 +51,7 @@ const WORKSPACE = {
   repo: { owner: "me", repo: "notes", branch: "main", directory: "" },
 } as Workspace;
 
-function open(commits: NoteCommitDto[] = COMMITS) {
+function open(commits: NoteCommitDto[] = COMMITS, initialTab?: "changes" | "replay") {
   listNoteHistory.mockResolvedValue(commits);
   readNoteAtCommit.mockImplementation((_repo: unknown, _path: string, sha: string) =>
     Promise.resolve(TEXT[sha] ?? null),
@@ -60,7 +60,13 @@ function open(commits: NoteCommitDto[] = COMMITS) {
   const onRestore = vi.fn();
   const onClose = vi.fn();
   render(
-    <HistoryDialog note={NOTE} workspace={WORKSPACE} onClose={onClose} onRestore={onRestore} />,
+    <HistoryDialog
+      note={NOTE}
+      workspace={WORKSPACE}
+      onClose={onClose}
+      onRestore={onRestore}
+      initialTab={initialTab}
+    />,
   );
   return { onRestore, onClose };
 }
@@ -75,6 +81,26 @@ describe("HistoryDialog", () => {
     // The diff view's own controls, not the replay's.
     expect(screen.getByLabelText(/compare with/i)).toBeTruthy();
     expect(screen.queryByRole("slider")).toBeNull();
+  });
+
+  it("opens straight onto the replay when sent there", async () => {
+    // The panel and the command palette both point at the replay directly.
+    // Landing on the diff view first and making people find a tab is exactly
+    // the burial this prop exists to undo.
+    open(COMMITS, "replay");
+    await screen.findByRole("slider");
+
+    expect(screen.getByRole("tab", { name: "Replay" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.queryByLabelText(/compare with/i)).toBeNull();
+  });
+
+  it("names what you are looking at in the title", async () => {
+    open(COMMITS, "replay");
+    await screen.findByRole("slider");
+    expect(screen.getByRole("dialog", { name: "Replay this note" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
+    expect(screen.getByRole("dialog", { name: "Version history" })).toBeTruthy();
   });
 
   it("switches to the replay and back", async () => {

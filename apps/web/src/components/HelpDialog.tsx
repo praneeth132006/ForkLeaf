@@ -188,7 +188,8 @@ export function HelpDialog({
                 <span className="mt-3 block">
                   To see how a note has changed, open <strong>Version history</strong> in the
                   properties panel on the right — the whole commit log, and any earlier version,
-                  without leaving ForkLeaf.
+                  without leaving ForkLeaf. <strong>Replay how this was written</strong>, just below
+                  it, plays through those revisions instead of listing them.
                 </span>
                 <span className="mt-3 block">
                   You can also clone it. <Mono>git clone</Mono> the repository and every note is
