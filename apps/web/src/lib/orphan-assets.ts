@@ -1,4 +1,14 @@
-import { isRelativeLink, resolveFromNote } from "@forkleaf/markdown-engine";
+import { referencedPaths } from "@forkleaf/markdown-engine";
+
+/**
+ * Re-exported rather than defined here.
+ *
+ * It moved into the markdown engine when `deleteNote` needed the same answer:
+ * both are deciding whether a file is safe to remove, and two implementations
+ * of "what does this note point at" is two chances to delete somebody's
+ * screenshots.
+ */
+export { referencedPaths };
 import { imageTypeFor } from "@/lib/media";
 
 /**
@@ -28,38 +38,6 @@ export interface OrphanAsset {
   path: string;
   /** Bytes, when the tree reported a size. */
   size: number | null;
-}
-
-/**
- * Every repository path a note's markdown points at.
- *
- * Both image syntaxes, because a screenshot pasted into a note is written as
- * `![](…)` while one someone linked by hand may be `<img src="…">` — and a
- * plain `[text](…)` link to a picture counts too. Missing one of those is how
- * a scan deletes a file that is genuinely in use.
- */
-export function referencedPaths(notePath: string, content: string): string[] {
-  const found = new Set<string>();
-
-  const add = (src: string | undefined) => {
-    if (!src) return;
-    const trimmed = src.trim().replace(/^<|>$/g, "").split(/\s+/)[0];
-    if (!trimmed || !isRelativeLink(trimmed)) return;
-    found.add(resolveFromNote(notePath, trimmed));
-  };
-
-  // ![alt](path "title") and [text](path), the markdown forms.
-  for (const match of content.matchAll(/!?\[[^\]]*\]\(([^)]+)\)/g)) add(match[1]);
-
-  // <img src="path">, which markdown permits and some notes arrive with.
-  for (const match of content.matchAll(/<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi)) {
-    add(match[1]);
-  }
-
-  // Reference definitions: [label]: path
-  for (const match of content.matchAll(/^\s*\[[^\]]+\]:\s*(\S+)/gm)) add(match[1]);
-
-  return [...found];
 }
 
 /**

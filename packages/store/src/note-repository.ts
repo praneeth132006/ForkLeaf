@@ -7,8 +7,7 @@ import {
   slugifyFilename,
   uniquePath,
   rewriteRelativeLinks,
-  isRelativeLink,
-  resolveFromNote,
+  referencedPaths,
 } from "@forkleaf/markdown-engine";
 import type { LocalDatabase, RemoteGateway } from "./ports";
 import type { SyncEngine } from "./sync-engine";
@@ -347,13 +346,41 @@ export class NoteRepository {
     const target = current ?? note;
     await this.sync.recordDelete(target);
 
-    // Clean up assets referenced by this note so they don't linger on GitHub.
-    const matches = Array.from(target.content.matchAll(/!\[.*?\]\(([^)]+)\)/g));
-    for (const match of matches) {
-      const src = match[1];
-      if (!src || !isRelativeLink(src)) continue;
+    /**
+     * Clean up the pictures this note used — the ones nothing else is using.
+     *
+     * The "nothing else" is the whole of it, and it was missing. Reported from
+     * a real repository: a note was renamed, a copy of it appeared at the old
+     * path, the copy was deleted for being a copy — and every screenshot in
+     * the note that was *kept* turned into a broken link on GitHub. The copy
+     * pointed at the same files, so deleting it deleted them.
+     *
+     * That is the worst failure this app can have. A note is recoverable from
+     * git history; a picture deleted out from under a note that still links to
+     * it leaves a document nobody can repair from inside the app, and the
+     * person who deleted a duplicate had every reason to think they were
+     * removing nothing.
+     *
+     * So an asset goes only when no other note this device knows about points
+     * at it. Local knowledge is a floor rather than a guarantee — a note on
+     * another machine could hold the only other reference — which is the
+     * second reason to be conservative here: leaving an unused image behind
+     * costs a few kilobytes and is found later by the unused-images scan.
+     * Removing one in use costs somebody their notes.
+     */
+    const others = (await this.db.listNotes(target.workspaceId)).filter(
+      (candidate) => candidate.id !== target.id && candidate.path !== target.path,
+    );
+    const stillUsed = new Set<string>();
+    for (const candidate of others) {
+      for (const path of referencedPaths(candidate.path, candidate.content)) {
+        stillUsed.add(path);
+      }
+    }
 
-      const assetPath = resolveFromNote(target.path, src);
+    for (const assetPath of referencedPaths(target.path, target.content)) {
+      if (stillUsed.has(assetPath)) continue;
+
       const id = `${target.workspaceId}::${assetPath}`;
       const stored = await this.db.getAsset(id);
 
@@ -374,7 +401,8 @@ export class NoteRepository {
         await this.sync.recordAssetDelete(target.workspaceId, assetPath);
       }
 
-      // Local copy goes either way: the note that used it is gone.
+      // Local copy goes with it: the note that used it is gone, and nothing
+      // else on this device points at it.
       await this.db.deleteAsset(id);
     }
   }
