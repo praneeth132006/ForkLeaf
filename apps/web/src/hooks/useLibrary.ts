@@ -13,7 +13,7 @@ import {
 } from "@forkleaf/store";
 import { workspaceId, type Note, type PendingChange, type Workspace } from "@forkleaf/types";
 import { GitHubGateway, LocalGateway, fetchSession, type SessionResponse } from "@/lib/gateway";
-import { buildIndex, flattenTree, isMarkdown, type IndexEntry } from "@/lib/library";
+import { buildIndex, flattenTree, isMarkdown, orphanedNotes, type IndexEntry } from "@/lib/library";
 import { deriveTitle, extractTags } from "@forkleaf/markdown-engine";
 import { LOCAL_WORKSPACE } from "@/lib/workspaces";
 
@@ -144,6 +144,26 @@ export function useLibrary() {
     }));
   }, []);
 
+  /**
+   * Drops notes from the full-text index.
+   *
+   * The counterpart to `indexNotes`, and needed for the same reason: the index
+   * is a ref, so nothing else would ever take a deleted note back out of it.
+   * Without this, a note deleted on GitHub kept answering searches for the
+   * rest of the session, from the pass that indexed it before the tree said it
+   * was gone.
+   */
+  const forgetNotes = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    for (const id of ids) searchRef.current.remove(id);
+
+    setState((current) => ({
+      ...current,
+      searchVersion: current.searchVersion + 1,
+      searchable: searchRef.current.size,
+    }));
+  }, []);
+
   /** Replaces one workspace's slice of the state, leaving the others alone. */
   const patchWorkspace = useCallback((id: string, updates: Partial<LibraryWorkspace>) => {
     setState((current) => ({
@@ -239,6 +259,7 @@ export function useLibrary() {
             const fresh = await refreshWorkspace(db, gateway, slice);
             if (cancelled) return slice;
 
+            forgetNotes(fresh.dropped);
             const merged = { ...slice, entries: fresh.entries, error: fresh.error };
             patchWorkspace(slice.workspace.id, {
               entries: fresh.entries,
@@ -313,7 +334,7 @@ export function useLibrary() {
     return () => {
       cancelled = true;
     };
-  }, [patch, patchWorkspace, indexNotes]);
+  }, [patch, patchWorkspace, indexNotes, forgetNotes]);
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
@@ -343,23 +364,41 @@ export function useLibrary() {
       // A repository just connected has nothing cached, so the network pass is
       // the only one that will put anything in it.
       const fresh = await refreshWorkspace(db, gateway, slice);
+      forgetNotes(fresh.dropped);
       patchWorkspace(workspace.id, { entries: fresh.entries, error: fresh.error });
     },
-    [patchWorkspace],
+    [patchWorkspace, forgetNotes],
   );
 
-  const removeWorkspace = useCallback(async (id: string) => {
-    const notes = repoRef.current;
-    if (!notes) return;
+  /**
+   * Disconnects a repository from this device.
+   *
+   * Local only, always: the notes, the queued changes and the cached tree go,
+   * and the repository on GitHub is untouched. Everything that was pushed is
+   * still in it, and connecting it again brings the lot back.
+   */
+  const removeWorkspace = useCallback(
+    async (id: string) => {
+      const db = dbRef.current;
+      const notes = repoRef.current;
+      if (!db || !notes) return;
 
-    await notes.removeWorkspace(id);
-    if (gatewayRef.current instanceof GitHubGateway) gatewayRef.current.unregister(id);
+      // Read before the delete: `removeWorkspace` takes the notes with it, and
+      // afterwards there is no way left to know what to unindex.
+      const stored = await db.listNotes(id).catch((): Note[] => []);
 
-    setState((current) => ({
-      ...current,
-      workspaces: current.workspaces.filter((entry) => entry.workspace.id !== id),
-    }));
-  }, []);
+      await notes.removeWorkspace(id);
+      if (gatewayRef.current instanceof GitHubGateway) gatewayRef.current.unregister(id);
+
+      forgetNotes(stored.map((note) => note.id));
+
+      setState((current) => ({
+        ...current,
+        workspaces: current.workspaces.filter((entry) => entry.workspace.id !== id),
+      }));
+    },
+    [forgetNotes],
+  );
 
   /**
    * Creates a note and hands back where it lives, so the dashboard can send
@@ -459,12 +498,24 @@ async function readWorkspace(
 
   const cached = await db.getTreeCache(workspace.id);
 
+  // A cached tree is a real listing, so it is authoritative here too: last
+  // visit's deletions must not reappear for as long as it takes GitHub to
+  // answer. No cache at all is not a listing, and everything stored is shown.
+  const entries = buildIndex(workspace, markdownOnly(flattenTree(cached ?? [])), notes, {
+    treeKnown: cached != null,
+  });
+
+  // Only what the index kept is handed on to be searched. A note the cached
+  // tree has already ruled out would otherwise be missing from the list and
+  // findable by searching for it, which is a worse state than either.
+  const listed = new Set(entries.map((entry) => entry.path));
+
   return {
     workspace,
-    entries: buildIndex(workspace, markdownOnly(flattenTree(cached ?? [])), notes),
+    entries,
     pending,
     error: null,
-    notes,
+    notes: notes.filter((note) => listed.has(note.path)),
   };
 }
 
@@ -479,20 +530,38 @@ async function refreshWorkspace(
   db: LocalDatabase,
   gateway: GitHubGateway | LocalGateway,
   slice: LibraryWorkspace,
-): Promise<{ entries: IndexEntry[]; error: string | null }> {
+): Promise<{ entries: IndexEntry[]; error: string | null; dropped: string[] }> {
   try {
     const tree = await gateway.listTree(slice.workspace.id);
     await db.putTreeCache(slice.workspace.id, tree);
 
-    const notes = await db.listNotes(slice.workspace.id);
+    const paths = markdownOnly(flattenTree(tree));
+    const stored = await db.listNotes(slice.workspace.id);
+
+    /**
+     * The copies of notes that no longer exist, forgotten.
+     *
+     * Leaving them in IndexedDB is not harmless. Dropping them from the index
+     * fixes what is on screen, but the next visit would read them back out of
+     * storage and the full-text index would go on answering searches with
+     * notes the repository does not have — findable, and opening nothing.
+     */
+    const orphans = orphanedNotes(paths, stored);
+    for (const orphan of orphans) await db.deleteNote(orphan.id);
+
+    const gone = new Set(orphans.map((orphan) => orphan.id));
+    const notes = stored.filter((note) => !gone.has(note.id));
+
     return {
-      entries: buildIndex(slice.workspace, markdownOnly(flattenTree(tree)), notes),
+      entries: buildIndex(slice.workspace, paths, notes, { treeKnown: true }),
       error: null,
+      dropped: [...gone],
     };
   } catch (error) {
     return {
       entries: slice.entries,
       error: error instanceof Error ? error.message : "Could not reach this repository.",
+      dropped: [],
     };
   }
 }

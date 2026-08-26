@@ -62,6 +62,7 @@ function renderSidebar(currentFolder: string, overrides: Record<string, unknown>
       activeWorkspace={workspace}
       onSwitchWorkspace={() => {}}
       onConnectRepo={() => {}}
+      onDisconnectRepo={() => {}}
       tree={tree}
       activePath="Fieldwork/Soil surveys/introduction.md"
       currentFolder={currentFolder}
@@ -261,5 +262,54 @@ describe("the account card", () => {
 
     fireEvent.pointerDown(document.body);
     expect(screen.queryByText("Sign out")).toBeNull();
+  });
+});
+
+/**
+ * Getting a repository back out of the list.
+ *
+ * The switcher only ever grew. Anything opened once stayed in it forever — a
+ * fork tried and abandoned, someone else's repo read for an afternoon — and
+ * the only way to be rid of it was to clear the browser's site data.
+ */
+describe("EditorSidebar — disconnecting a repository", () => {
+  const local: Workspace = {
+    ...workspace,
+    id: "local",
+    name: "On this device",
+    isLocal: true,
+  };
+
+  it("offers to disconnect a connected repository", () => {
+    const onDisconnectRepo = vi.fn();
+    renderSidebar("", { onDisconnectRepo });
+
+    fireEvent.click(screen.getByText("notes"));
+    fireEvent.click(screen.getByLabelText("Disconnect notes"));
+
+    expect(onDisconnectRepo).toHaveBeenCalledWith(workspace);
+  });
+
+  it("leaves the on-device workspace alone", () => {
+    // There is nothing to disconnect it from, and it is where notes go when
+    // there is nowhere else.
+    renderSidebar("", {
+      workspaces: [workspace, local],
+      onDisconnectRepo: () => {},
+    });
+
+    fireEvent.click(screen.getByText("notes"));
+
+    expect(screen.queryByLabelText("Disconnect On this device")).toBeNull();
+    expect(screen.getByLabelText("Disconnect notes")).toBeTruthy();
+  });
+
+  it("closes the menu once a repository has been sent for disconnection", () => {
+    renderSidebar("", { onDisconnectRepo: () => {} });
+
+    fireEvent.click(screen.getByText("notes"));
+    fireEvent.click(screen.getByLabelText("Disconnect notes"));
+
+    expect(screen.queryByLabelText("Disconnect notes")).toBeNull();
   });
 });

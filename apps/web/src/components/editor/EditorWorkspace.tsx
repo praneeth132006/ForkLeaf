@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import type { CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
-import type { EditorViewMode } from "@forkleaf/types";
+import type { EditorViewMode, Workspace } from "@forkleaf/types";
 import {
   deriveTitle,
   dirname,
@@ -523,6 +523,41 @@ export function EditorWorkspace() {
     [notebook],
   );
 
+  /**
+   * Disconnects a repository from this device.
+   *
+   * Worth spelling out in the dialog what this is not: no commit is made, and
+   * nothing on GitHub is touched. What goes is this device's copy — the notes
+   * cached here, the cached tree, and any queued change that never made it
+   * out, which is the one part that is not recoverable and so is counted in
+   * the warning rather than left as a surprise.
+   */
+  const handleDisconnectRepo = useCallback(
+    (workspace: Workspace) => {
+      const unpushed = notebook.sync.pendingCount;
+      const isOpen = workspace.id === notebook.activeWorkspace?.id;
+
+      setPrompt({
+        title: "Disconnect repository",
+        label: "",
+        destructive: true,
+        confirmLabel: "Disconnect",
+        body:
+          `“${workspace.name}” will be removed from this device. The repository on GitHub is not touched — ` +
+          `everything pushed to it stays there, and connecting it again brings it all back.` +
+          (isOpen && unpushed > 0
+            ? ` ${unpushed} change${unpushed === 1 ? "" : "s"} here ${
+                unpushed === 1 ? "has" : "have"
+              } not been pushed yet, and will be lost.`
+            : ""),
+        onConfirm: async () => {
+          await notebook.removeWorkspace(workspace.id);
+        },
+      });
+    },
+    [notebook],
+  );
+
   const handleDelete = useCallback(
     (path: string) => {
       setPrompt({
@@ -952,6 +987,7 @@ export function EditorWorkspace() {
             activeWorkspace={workspace}
             onSwitchWorkspace={notebook.switchWorkspace}
             onConnectRepo={() => setDialog("connect")}
+            onDisconnectRepo={handleDisconnectRepo}
             tree={notebook.tree}
             activePath={note?.path ?? null}
             onOpenNote={(path) => {

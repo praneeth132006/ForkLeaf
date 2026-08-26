@@ -171,14 +171,65 @@ export function entryFromNote(workspace: Workspace, note: Note): IndexEntry {
 }
 
 /**
+ * True for a stored note that GitHub has never been told about.
+ *
+ * The two halves matter for different reasons. `baseSha === null` is a note
+ * that was written here and has never been pushed, so no tree could possibly
+ * list it. `dirty` is a note that *was* pushed and has since been edited here,
+ * which is unpushed work regardless of what the tree says. Either way the
+ * local copy is the only copy of something, and dropping it would be losing
+ * it.
+ */
+export function isUnpushed(note: Note): boolean {
+  return note.baseSha === null || note.dirty;
+}
+
+/**
+ * The stored notes a fresh tree says no longer exist.
+ *
+ * These are the notes deleted from the repository somewhere else — on GitHub
+ * itself, or from another device — whose copy in IndexedDB has outlived them.
+ * Notes carrying unpushed work are never orphans: they are absent from the
+ * tree because they have not been pushed yet, not because they are gone.
+ */
+export function orphanedNotes(paths: string[], notes: Note[]): Note[] {
+  const live = new Set(paths);
+  return notes.filter((note) => !live.has(note.path) && !isUnpushed(note));
+}
+
+export interface BuildIndexOptions {
+  /**
+   * Whether `paths` is a real listing of the repository.
+   *
+   * False means "nobody has asked GitHub yet" — a workspace with no cached
+   * tree, or the on-device workspace, which has no tree at all. An empty list
+   * then means *unknown*, not *empty*, and the stored notes are all there is
+   * to show. True means the listing is authoritative and a stored note missing
+   * from it has been deleted.
+   */
+  treeKnown?: boolean;
+}
+
+/**
  * Merges the tree's paths with the notes already read.
  *
  * The tree is authoritative about which notes exist — a note deleted on GitHub
  * should leave the index even if a stale copy is still in IndexedDB — while the
  * stored notes are authoritative about what is in them. Locally created notes
  * that have not been pushed yet are not in the tree, so they are added.
+ *
+ * That first sentence had been the intent all along, and was not what the code
+ * did: every stored note absent from the tree was added back, so deleting a
+ * folder on GitHub left it on the dashboard for as long as the device held a
+ * copy of anything that used to be in it. The editor's sidebar reads the tree
+ * alone and so had always been right, which is what made the two disagree.
  */
-export function buildIndex(workspace: Workspace, paths: string[], notes: Note[]): IndexEntry[] {
+export function buildIndex(
+  workspace: Workspace,
+  paths: string[],
+  notes: Note[],
+  options: BuildIndexOptions = {},
+): IndexEntry[] {
   const byPath = new Map(notes.map((note) => [note.path, note] as const));
   const seen = new Set<string>();
   const entries: IndexEntry[] = [];
@@ -190,7 +241,9 @@ export function buildIndex(workspace: Workspace, paths: string[], notes: Note[])
   }
 
   for (const note of notes) {
-    if (!seen.has(note.path)) entries.push(entryFromNote(workspace, note));
+    if (seen.has(note.path)) continue;
+    if (options.treeKnown && !isUnpushed(note)) continue;
+    entries.push(entryFromNote(workspace, note));
   }
 
   return entries;

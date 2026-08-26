@@ -10,6 +10,7 @@ import {
   folderCounts,
   folderTrail,
   humanise,
+  orphanedNotes,
   queryIndex,
   subfolders,
   tagCounts,
@@ -36,6 +37,16 @@ function note(path: string, content: string, updatedAt: string, tags: string[] =
     updatedAt,
     dirty: false,
   };
+}
+
+/** A note written here and never pushed, so no tree could list it. */
+function unpushed(path: string, content: string, updatedAt: string): Note {
+  return { ...note(path, content, updatedAt), baseSha: null, dirty: true };
+}
+
+/** A note that was pushed, and has been edited here since. */
+function edited(path: string, content: string, updatedAt: string): Note {
+  return { ...note(path, content, updatedAt), dirty: true };
 }
 
 describe("flattenTree", () => {
@@ -94,17 +105,78 @@ describe("buildIndex", () => {
     const entries = buildIndex(
       workspace,
       ["welcome.md"],
-      [note("drafts/new.md", "# New", "2026-02-02T00:00:00.000Z")],
+      [unpushed("drafts/new.md", "# New", "2026-02-02T00:00:00.000Z")],
+      { treeKnown: true },
     );
 
     expect(entries.map((entry) => entry.path).sort()).toEqual(["drafts/new.md", "welcome.md"]);
   });
 
+  it("keeps a pushed note with unpushed edits, however the tree reads", () => {
+    // Absent from the tree and carrying work that exists nowhere else. This is
+    // the one case where the local copy has to win.
+    const entries = buildIndex(
+      workspace,
+      ["welcome.md"],
+      [edited("notes/roadmap.md", "# Roadmap", "2026-02-02T00:00:00.000Z")],
+      { treeKnown: true },
+    );
+
+    expect(entries.map((entry) => entry.path).sort()).toEqual(["notes/roadmap.md", "welcome.md"]);
+  });
+
   it("drops stored notes that the tree no longer lists", () => {
     // The tree is authoritative about what exists, so a note deleted on GitHub
     // must not linger in the index because a stale copy is still on the device.
-    const entries = buildIndex(workspace, ["welcome.md"], []);
-    expect(entries).toHaveLength(1);
+    // This is what had the dashboard showing folders the repository no longer
+    // had, while the editor — which reads the tree alone — showed the truth.
+    const entries = buildIndex(
+      workspace,
+      ["welcome.md"],
+      [note("deleted/gone.md", "# Gone", "2026-02-02T00:00:00.000Z")],
+      { treeKnown: true },
+    );
+
+    expect(entries.map((entry) => entry.path)).toEqual(["welcome.md"]);
+  });
+
+  it("shows everything stored when no tree has been read yet", () => {
+    // An empty list of paths means "nobody has asked GitHub" here, not "the
+    // repository is empty" — emptying the dashboard while offline would be a
+    // worse lie than showing a note that has since been deleted.
+    const entries = buildIndex(
+      workspace,
+      [],
+      [note("notes/roadmap.md", "# Roadmap", "2026-02-02T00:00:00.000Z")],
+    );
+
+    expect(entries.map((entry) => entry.path)).toEqual(["notes/roadmap.md"]);
+  });
+});
+
+describe("orphanedNotes", () => {
+  it("names the stored copies of notes the repository no longer has", () => {
+    const orphans = orphanedNotes(
+      ["welcome.md"],
+      [
+        note("welcome.md", "# Welcome", "2026-02-01T00:00:00.000Z"),
+        note("deleted/gone.md", "# Gone", "2026-02-01T00:00:00.000Z"),
+      ],
+    );
+
+    expect(orphans.map((orphan) => orphan.path)).toEqual(["deleted/gone.md"]);
+  });
+
+  it("never names a note holding work that has not been pushed", () => {
+    const orphans = orphanedNotes(
+      ["welcome.md"],
+      [
+        unpushed("drafts/new.md", "# New", "2026-02-01T00:00:00.000Z"),
+        edited("notes/roadmap.md", "# Roadmap", "2026-02-01T00:00:00.000Z"),
+      ],
+    );
+
+    expect(orphans).toEqual([]);
   });
 });
 
