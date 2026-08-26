@@ -132,9 +132,20 @@ function rename(
   const prior = existing[0];
   const toPath = input.toPath ?? input.path;
 
-  // Renaming a note that was created offline is just an upsert at the new path:
-  // there is nothing at the old path on GitHub to move.
-  if (prior && prior.baseSha === null) {
+  /**
+   * Renaming a note that was created offline is just an upsert at the new
+   * path: there is nothing at the old path on GitHub to move.
+   *
+   * Both shas have to be absent for that to be true. The queued change having
+   * none is not enough on its own — a note pushed once and edited since can
+   * carry a queued change with no sha of its own while the note itself knows
+   * exactly what it is based on. Taking the shortcut there wrote a second copy
+   * at the new path and left the original sitting in the repository, which is
+   * the duplicate that appears after a rename. A real rename deletes the old
+   * path, and a delete of a path the repository does not have is dropped
+   * before the commit rather than failing it.
+   */
+  if (prior && prior.baseSha === null && input.baseSha === null) {
     return [
       ...others,
       {

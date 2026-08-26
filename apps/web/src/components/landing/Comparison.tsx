@@ -5,23 +5,25 @@ import { SectionHeading } from "./SectionHeading";
  * ForkLeaf against the apps people actually have open.
  *
  * The section above this one compares *categories* — a hosted app, a local
- * folder, editing on github.com — which is the honest way to describe a
+ * folder, editing on github.com — which is an honest way to describe a
  * decision but not the way anybody asks the question. They ask "why not
  * Notion", and an answer that never says the word Notion reads like an answer
  * that cannot be given.
  *
- * So the products are named, and the table is written to be checkable: every
- * cell is something a reader can verify in an afternoon, and the row that
- * matters most — where the file ends up — is the first one. Their strengths
- * are in the table too, and the paragraph underneath says plainly what
- * ForkLeaf is worse at, because a comparison that finds no fault with itself
- * is an advertisement and gets read as one.
+ * So the products are named and the table is written to be checked: every cell
+ * is something a reader can verify in an afternoon, which is the only kind of
+ * claim worth making about a competitor. The row that matters most — where the
+ * file ends up — is first, because every other row follows from it, and the
+ * four points underneath say what the rows add up to rather than leaving the
+ * reader to work it out.
  *
- * Facts current as of writing; anything a vendor can change tomorrow (exact
- * prices, plan names) is deliberately not quoted, so this cannot quietly rot
+ * Accurate about the alternatives, and unapologetic about the conclusion.
+ * Nothing here is a dig at a good product; the argument is that a note you own
+ * outright beats a note you have excellent access to, and the table is how
+ * that gets shown rather than asserted. Anything a vendor can change tomorrow
+ * — exact prices, plan names — is deliberately not quoted, so this cannot rot
  * into something untrue.
  */
-
 const APPS = ["ForkLeaf", "Notion", "OneNote", "Obsidian", "Evernote"] as const;
 
 type App = (typeof APPS)[number];
@@ -81,7 +83,7 @@ const ROWS: { criterion: string; note?: string; cells: Record<App, string> }[] =
   {
     criterion: "Diagrams",
     cells: {
-      ForkLeaf: "A Mermaid studio, and the output renders on GitHub too",
+      ForkLeaf: "A Mermaid studio; the diagram renders on GitHub as well",
       Notion: "Mermaid in code blocks",
       OneNote: "Freehand drawing and shapes",
       Obsidian: "Mermaid, plus plugins",
@@ -91,7 +93,7 @@ const ROWS: { criterion: string; note?: string; cells: Record<App, string> }[] =
   {
     criterion: "Collaboration",
     cells: {
-      ForkLeaf: "Pull requests and review, the way code is collaborated on",
+      ForkLeaf: "Pull requests and review — proposed, discussed, then merged",
       Notion: "Live multiplayer editing — genuinely excellent",
       OneNote: "Shared notebooks",
       Obsidian: "A paid add-on, or none",
@@ -101,7 +103,7 @@ const ROWS: { criterion: string; note?: string; cells: Record<App, string> }[] =
   {
     criterion: "If the company disappears",
     cells: {
-      ForkLeaf: "You still have a repository full of Markdown",
+      ForkLeaf: "Nothing happens. The notes were never here",
       Notion: "You have whatever you exported before it happened",
       OneNote: "Files in OneDrive, in a format only OneNote reads",
       Obsidian: "You still have your folder — same answer, and a good one",
@@ -111,7 +113,7 @@ const ROWS: { criterion: string; note?: string; cells: Record<App, string> }[] =
   {
     criterion: "Price",
     cells: {
-      ForkLeaf: "Free and open source; bring your own repository",
+      ForkLeaf: "Free, open source, and no account to close",
       Notion: "Free tier, then per person per month",
       OneNote: "Free with a Microsoft account",
       Obsidian: "Free for personal use; sync and publish cost extra",
@@ -120,27 +122,30 @@ const ROWS: { criterion: string; note?: string; cells: Record<App, string> }[] =
   },
 ];
 
-/** What each of them is best at, said without qualification. */
-const CREDIT: { app: Exclude<App, "ForkLeaf">; strength: string }[] = [
+/**
+ * What the table adds up to.
+ *
+ * Four claims rather than a shrug, because the table's whole job is to lead
+ * somewhere: a reader who has just compared nine rows is asking "so what", and
+ * "it depends on your needs" is the answer that loses them. Each one is a
+ * statement the row above it can be checked against.
+ */
+const ARGUMENTS: { title: string; body: string }[] = [
   {
-    app: "Notion",
-    strength:
-      "Databases, templates and real-time collaboration. If a team runs on a wiki with views and permissions, this is still the answer.",
+    title: "The file is the product",
+    body: "Everywhere else the file is an export — a lossy copy you make when you are already leaving. Here it is the original, written the moment you stop typing, readable by every tool that has ever opened a text file.",
   },
   {
-    app: "OneNote",
-    strength:
-      "Handwriting, a stylus and free-form pages. Nothing here comes close for taking notes on a tablet in a lecture.",
+    title: "History you did not have to buy",
+    body: "Not a version panel with a retention window. Real commits: what changed, when, why, and the ability to bring back a paragraph you deleted in March. That is a feature nobody else can sell you, because it is git.",
   },
   {
-    app: "Obsidian",
-    strength:
-      "The plugin ecosystem, the graph, and a decade of thought about linking. Your files stay yours there too — it is the closest neighbour on this page.",
+    title: "Nothing to migrate, ever again",
+    body: "The last migration you do is the one into a repository. Change your mind about ForkLeaf and your notes do not move — you just open the same folder in something else. That is what makes trying this cheap.",
   },
   {
-    app: "Evernote",
-    strength:
-      "Web clipping and search over scanned documents, which it has been refining for years.",
+    title: "Your notes go where your work already lives",
+    body: "Beside the code, in the review flow your team already runs, published to GitHub Pages when you want them read. No integration, no connector, no export step: the same repository, the same pull request, the same history.",
   },
 ];
 
@@ -149,8 +154,8 @@ export function Comparison() {
     <section id="compare" className="fl-anchor mx-auto w-full max-w-6xl px-6 py-24">
       <SectionHeading
         eyebrow="Side by side"
-        title="ForkLeaf, Notion, OneNote, Obsidian and Evernote"
-        body="Nine questions worth asking before you move a decade of notes into anything. Their answers as well as ours."
+        title="Every other notes app is a rented room. This one is a deed."
+        body="Nine questions to ask before you put a decade of thinking somewhere. Notion, OneNote, Obsidian and Evernote answer them too — these are their answers, not ours about them."
       />
 
       {/* Wide tables scroll inside themselves; the page must never scroll
@@ -207,32 +212,31 @@ export function Comparison() {
         </table>
       </div>
 
-      {/* ── Credit where it is due ─────────────────────────────────────── */}
-      <div className="mt-14 grid gap-x-10 gap-y-8 sm:grid-cols-2">
-        {CREDIT.map((entry) => (
-          <div key={entry.app} className="flex gap-3.5">
+      {/* ── The argument the table is making ───────────────────────────── */}
+      <div className="mt-16 grid gap-x-10 gap-y-8 sm:grid-cols-2">
+        {ARGUMENTS.map((point) => (
+          <div key={point.title} className="flex gap-3.5">
             <span
               aria-hidden="true"
               className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fl-accent)]"
             />
             <div>
               <p className="text-[15.5px] font-semibold tracking-tight text-[var(--fl-text)]">
-                What {entry.app} does better
+                {point.title}
               </p>
               <p className="mt-1.5 max-w-md text-[14.5px] leading-relaxed text-[var(--fl-muted)]">
-                {entry.strength}
+                {point.body}
               </p>
             </div>
           </div>
         ))}
       </div>
 
-      <p className="mt-12 max-w-3xl text-[14.5px] leading-relaxed text-[var(--fl-muted)]">
-        And what ForkLeaf is worse at, so you hear it here rather than a week in: there is no
-        real-time multiplayer cursor, no mobile app beyond the browser, no handwriting, and setting
-        it up means having a GitHub account and picking a repository. It is a writing tool for
-        people who want their notes to be files — if what you need is a shared workspace with
-        permissions and databases, the row above is telling you to use Notion.
+      <p className="mt-14 max-w-3xl text-[16px] leading-relaxed text-[var(--fl-text)]">
+        Every app in that table can hold your notes today. One of them still can in ten years
+        without your permission, your payment or your password — because it is not an app holding
+        them at all. It is a folder of Markdown in a repository with your name on it, and ForkLeaf
+        is the window you happen to be reading it through.
       </p>
     </section>
   );

@@ -51,6 +51,8 @@ export {
   type WikilinkResolver,
 } from "./wikilinks";
 
+export { referencedPaths } from "./references";
+
 export {
   normalizePath,
   joinPath,

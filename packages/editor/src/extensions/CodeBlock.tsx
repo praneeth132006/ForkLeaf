@@ -89,72 +89,60 @@ const POPULAR = [
 ];
 
 /**
- * Everything else the picker offers.
+ * Everything else the picker offers: languages, and only languages.
  *
  * lowlight ships 192 grammars and the dropdown used to list all of them, in
- * alphabetical order, which meant the first thing anyone saw under "All
- * languages" was `1c`, `abnf`, `accesslog`, `angelscript`, `arcade`, `avrasm`
- * and `axapta` — a wall of things almost nobody has written a line of, sitting
- * between them and Scala. Access logs and Asciidoc are not even languages.
+ * alphabetical order, so the first things under "All languages" were `1c`,
+ * `abnf`, `accesslog`, `angelscript`, `arcade`, `avrasm` and `axapta` — a wall
+ * of things almost nobody has written a line of, and some of them not
+ * languages at all. Access logs are not a language. Neither is Asciidoc.
  *
- * So this is the long tail, curated: languages people actually write, and the
- * few formats worth tagging. A block that arrives from a repository tagged
- * with something outside the list is still highlighted — lowlight keeps every
- * grammar — and still shows its own tag in the picker, so nothing is lost by
- * not listing it. If something belongs here and is missing, it is one line.
+ * So this is the long tail cut down to programming languages: things you write
+ * programs in, nothing else. Build files, config formats, stylesheets, query
+ * languages and markup are not here — the handful anybody actually fences in a
+ * note (JSON, YAML, HTML, CSS, SQL, Markdown, diff) are already in Common
+ * above, where they are reached in one scroll rather than twenty.
+ *
+ * A block that arrives from a repository tagged with something outside both
+ * lists is still highlighted — lowlight keeps every grammar — and still shows
+ * its own tag in the picker, so nothing is lost by not listing it. Adding one
+ * back is one line.
  */
 const MORE = [
-  "ada",
-  "arduino",
   "clojure",
-  "cmake",
   "coffeescript",
   "crystal",
   "d",
   "dart",
   "delphi",
-  "dockerfile",
   "elixir",
   "elm",
   "erlang",
   "fortran",
   "fsharp",
-  "gradle",
-  "graphql",
   "groovy",
   "haskell",
   "haxe",
-  "ini",
   "julia",
-  "latex",
-  "less",
   "lisp",
   "lua",
-  "makefile",
   "matlab",
   "nim",
-  "nix",
   "objectivec",
   "ocaml",
   "perl",
   "powershell",
   "prolog",
-  "protobuf",
   "r",
   "scala",
   "scheme",
-  "scss",
   "smalltalk",
   "tcl",
   "vala",
   "vbnet",
   "verilog",
   "vhdl",
-  "vim",
-  "wasm",
   "x86asm",
-  "xml",
-  "xquery",
 ];
 
 /** Names lowlight knows the language by, but nobody types. */
@@ -172,24 +160,15 @@ const DISPLAY_NAMES: Record<string, string> = {
   html: "HTML",
   css: "CSS",
   bash: "Shell",
-  cmake: "CMake",
   d: "D",
   fsharp: "F#",
-  graphql: "GraphQL",
-  ini: "INI / TOML",
-  latex: "LaTeX",
-  less: "Less",
   matlab: "MATLAB",
   objectivec: "Objective-C",
   ocaml: "OCaml",
-  protobuf: "Protocol Buffers",
   r: "R",
-  scss: "SCSS",
   vbnet: "VB.NET",
   vhdl: "VHDL",
-  wasm: "WebAssembly",
   x86asm: "Assembly",
-  xquery: "XQuery",
 };
 
 function displayName(language: string): string {

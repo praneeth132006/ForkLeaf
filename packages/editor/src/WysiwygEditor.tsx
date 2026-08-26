@@ -297,12 +297,39 @@ export function WysiwygEditor({
         if (!node) continue;
 
         const tr = view.state.tr;
-        // A drop knows where it landed; a paste goes wherever the caret is.
-        const target = position ?? tr.selection.to;
-        tr.insert(target, node);
+
+        /**
+         * A paste replaces the selection, which is what puts the picture *in*
+         * an empty paragraph rather than leaving a blank line above it. A drop
+         * knows the position it landed on and inserts there.
+         */
+        if (position === undefined) tr.replaceSelectionWith(node, false);
+        else tr.insert(position, node);
         view.dispatch(tr);
+
+        /**
+         * Where the image actually ended up, read off the document.
+         *
+         * Two more obvious answers are both wrong, and both were tried. Adding
+         * the node's size to the insertion point assumes a plain insertion,
+         * and inserting a block where the caret is inside a paragraph splits
+         * that paragraph — so the sum came out two tokens short. Mapping the
+         * caret position through the transaction is worse: when the caret is
+         * at the *end* of a paragraph the image goes in after that block
+         * entirely, the insertion is past the position being mapped, and the
+         * mapping quite correctly returns the caret exactly where it was —
+         * above the picture, which is where people found it.
+         *
+         * The src carries a random tail precisely so no two uploads collide,
+         * which makes this lookup unambiguous.
+         */
+        let end: number | null = null;
+        view.state.doc.descendants((child, pos) => {
+          if (child.type.name === "image" && child.attrs.src === src) end = pos + child.nodeSize;
+        });
+
         // Anything after the first lands below the one before it.
-        position = target + node.nodeSize;
+        position = end ?? position;
       }
       /**
        * The caret goes below the picture, on a line of its own.

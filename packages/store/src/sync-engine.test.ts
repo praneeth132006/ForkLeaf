@@ -175,6 +175,61 @@ describe("queue coalescing", () => {
     expect(queue[0]!.baseSha).toBe("old");
   });
 
+  /**
+   * The duplicate that appears after a rename.
+   *
+   * "Created offline" was read off the queued change alone, and a note pushed
+   * once and edited since carries a queued change with no sha of its own. The
+   * rename was then recorded as a fresh file at the new path, with nothing
+   * removing the old one — so the repository ended up holding the note twice,
+   * and deleting the copy took the pictures both of them pointed at.
+   */
+  it("moves a note that exists remotely, rather than copying it", () => {
+    let queue = coalesce([], {
+      ...base,
+      path: "a.md",
+      op: "upsert",
+      content: "v1",
+      baseSha: null,
+    });
+    queue = coalesce(queue, {
+      ...base,
+      path: "a.md",
+      op: "rename",
+      toPath: "b.md",
+      content: "v1",
+      // The note itself knows what it is based on, whatever the queued edit says.
+      baseSha: "sha-a",
+    });
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0]!.op).toBe("rename");
+    expect(queue[0]!.path).toBe("a.md");
+    expect(queue[0]!.toPath).toBe("b.md");
+  });
+
+  it("still writes a note that has never been pushed straight to its new path", () => {
+    let queue = coalesce([], {
+      ...base,
+      path: "draft.md",
+      op: "upsert",
+      content: "v1",
+      baseSha: null,
+    });
+    queue = coalesce(queue, {
+      ...base,
+      path: "draft.md",
+      op: "rename",
+      toPath: "named.md",
+      content: "v1",
+      baseSha: null,
+    });
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0]!.op).toBe("upsert");
+    expect(queue[0]!.path).toBe("named.md");
+  });
+
   it("keeps edits to different notes separate", () => {
     let queue = coalesce([], { ...base, path: "a.md", op: "upsert", content: "a", baseSha: "s" });
     queue = coalesce(queue, { ...base, path: "b.md", op: "upsert", content: "b", baseSha: "s" });

@@ -104,10 +104,18 @@ describe("a pasted image", () => {
 
     await waitFor(() => expect(view.dom.querySelector("img")).not.toBeNull(), { timeout: 4000 });
 
+    // In a paragraph, and below the picture rather than above it — which is
+    // where node-size arithmetic used to leave it when the insertion split the
+    // paragraph the caret was in.
+    let imageEnd = -1;
+    editor!.state.doc.descendants((node, pos) => {
+      if (node.type.name === "image") imageEnd = pos + node.nodeSize;
+    });
+
     const { $from, empty } = editor!.state.selection;
     expect(empty).toBe(true);
     expect($from.parent.type.name).toBe("paragraph");
-    expect($from.parent.content.size).toBe(0);
+    expect($from.pos).toBeGreaterThanOrEqual(imageEnd);
 
     // And typing goes into that paragraph rather than over the image.
     editor!.commands.insertContent("about the shot");
@@ -116,6 +124,58 @@ describe("a pasted image", () => {
       if (node.type.name === "image") images += 1;
     });
     expect(images).toBe(1);
+  });
+
+  /**
+   * The case the first attempt at this got wrong.
+   *
+   * With the caret at the *end* of a line the picture goes in after that whole
+   * block, so anything derived from the caret's own position — including
+   * mapping it through the transaction, which correctly reports it unmoved —
+   * leaves the caret above the picture. Which is where people found it, and
+   * typing then continued the sentence they had just illustrated.
+   */
+  it("goes below the picture even when the caret was at the end of a line", async () => {
+    const bridge: ImageBridge = {
+      canUpload: true,
+      resolve: () => "blob:the-image",
+      upload: async (file) => `assets/${file.name}`,
+    };
+
+    let editor: Editor | null = null;
+    render(
+      <WysiwygEditor
+        value="Here is the screenshot:"
+        onChange={vi.fn()}
+        images={bridge}
+        onReady={(instance) => {
+          editor = instance;
+        }}
+      />,
+    );
+    await waitFor(() => expect(editor).not.toBeNull(), { timeout: 4000 });
+
+    // The end of the only line, which is where somebody writing is.
+    editor!.commands.setTextSelection(editor!.state.doc.content.size - 1);
+
+    const view = editor!.view;
+    const file = new File([new Uint8Array([1])], "shot.png", { type: "image/png" });
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", {
+      value: { files: [file], items: [], types: ["Files"], getData: () => "" },
+    });
+    view.dom.dispatchEvent(event);
+
+    await waitFor(() => expect(view.dom.querySelector("img")).not.toBeNull(), { timeout: 4000 });
+
+    editor!.commands.insertContent("and this is what it shows");
+
+    // The picture between the two lines, rather than the second sentence
+    // running on from the first above it.
+    const blocks = editor!.state.doc.content.content.map((node) =>
+      node.type.name === "image" ? "[image]" : node.textContent,
+    );
+    expect(blocks).toEqual(["Here is the screenshot:", "[image]", "and this is what it shows"]);
   });
 
   it("keeps the markdown pointing at the path, not the resolved URL", async () => {
