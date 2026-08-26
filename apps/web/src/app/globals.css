@@ -956,6 +956,69 @@ mark.fl-hl-orange {
   color: var(--fl-text);
 }
 
-.fl-code-copy {
+/* Both trailing actions travel together, so adding Run does not leave Copy
+   fighting the language picker for the middle of the strip. */
+.fl-code-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
   margin-left: auto;
+}
+
+/* Run is the one control here that does something to the world rather than to
+   the document, so it is the one that gets any colour at all. */
+.fl-code-run {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  padding: 0.125rem 0.5rem;
+  border-radius: 6px;
+  color: var(--fl-inverse-text);
+  background: color-mix(in srgb, var(--fl-inverse-text) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fl-inverse-text) 20%, transparent);
+  transition:
+    color 0.12s,
+    background 0.12s,
+    border-color 0.12s;
+}
+
+.fl-code-run:hover:not(:disabled),
+.fl-code-run:focus-visible {
+  background: color-mix(in srgb, var(--fl-inverse-text) 20%, transparent);
+  border-color: color-mix(in srgb, var(--fl-inverse-text) 32%, transparent);
+  outline: none;
+}
+
+/* Not greyed to the point of vanishing: the block is mid-run, and the button
+   is the only thing on screen saying so. */
+.fl-code-run:disabled {
+  opacity: 0.75;
+  cursor: progress;
+}
+
+/* Why a run could not be attempted. Sits inside the block's frame, under the
+   header, so it is unmistakably about this block and not about the page. */
+.fl-code-problem {
+  padding: 0.5rem 0.75rem;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  color: var(--fl-inverse-text);
+  background: color-mix(in srgb, #f87171 22%, var(--fl-inverse-bg));
+  border-bottom: 1px solid color-mix(in srgb, var(--fl-inverse-text) 12%, transparent);
+}
+
+/* A run's result. Distinguished from the script above it by a quieter type
+   colour and a marked edge, so a glance separates what you wrote from what
+   came back without having to read either.
+
+   The edge is mixed toward the inverse text rather than used neat: the block
+   sits on the near-black inverse surface in both themes, and `--fl-accent` is
+   tuned for the page background, where it is a dark blue. Straight off the
+   token it was a dark blue on near-black — applied, measurable, and invisible
+   to anyone actually looking at it. */
+.fl-prose .fl-code-node:has(> pre > code.language-output) {
+  border-left: 3px solid color-mix(in srgb, var(--fl-accent) 45%, var(--fl-inverse-text));
+}
+
+.fl-prose code.language-output {
+  color: color-mix(in srgb, var(--fl-inverse-text) 82%, transparent);
 }

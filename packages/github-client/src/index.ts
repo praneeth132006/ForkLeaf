@@ -12,6 +12,9 @@ export {
   type PagesSite,
   type PullRequestSummary,
   type PullRequestDetail,
+  type ReviewCommentDto,
+  type SubmittedReviewDto,
+  type IssueCommentDto,
   type PullRequestFile,
   type CommitFile,
 } from "./client";

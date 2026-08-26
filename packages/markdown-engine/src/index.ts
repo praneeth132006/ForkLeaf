@@ -98,3 +98,26 @@ export {
   type BlameLine,
   type BlameRevision,
 } from "./blame";
+
+export {
+  MAX_OUTPUT,
+  OUTPUT_LANGUAGE,
+  durationOf,
+  formatOutput,
+  isOutput,
+  isRunnable,
+  runnerFor,
+  type RunResult,
+  type Runner,
+} from "./runnable";
+
+export {
+  buildThreads,
+  summariseReviews,
+  type ReviewComment,
+  type ReviewThread,
+  type ReviewVerdict,
+  type SubmittedReview,
+  type ThreadOptions,
+  type Verdict,
+} from "./review";

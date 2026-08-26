@@ -66,10 +66,44 @@ interface ApiPullRequest {
   base: { ref: string; sha?: string };
   user?: { login: string } | null;
   merged?: boolean;
+  mergeable?: boolean | null;
+  mergeable_state?: string | null;
 }
 
 interface ApiCommitDetail {
   files?: { filename: string; status: string; previous_filename?: string }[];
+}
+
+interface ApiReviewComment {
+  id: number;
+  path: string;
+  /** Null once the diff has moved past the line this was written against. */
+  line?: number | null;
+  body: string;
+  created_at: string;
+  user?: { login: string } | null;
+  in_reply_to_id?: number | null;
+}
+
+interface ApiReview {
+  id: number;
+  state: string;
+  body?: string | null;
+  submitted_at?: string | null;
+  user?: { login: string } | null;
+}
+
+interface ApiIssueComment {
+  id: number;
+  body: string;
+  created_at: string;
+  user?: { login: string } | null;
+}
+
+interface ApiMergeResult {
+  merged?: boolean;
+  message?: string;
+  sha?: string;
 }
 
 interface ApiPullRequestFile {
@@ -174,6 +208,42 @@ export interface PullRequestDetail extends PullRequestSummary {
   baseSha: string;
   author: string | null;
   merged: boolean;
+  /**
+   * Whether GitHub will accept a merge, or null while it is still working it
+   * out — it computes this in the background and reports null on the first
+   * read of a request nobody has looked at recently.
+   */
+  mergeable: boolean | null;
+  /** GitHub's word for why: clean, blocked, dirty, behind, unstable, unknown. */
+  mergeableState: string | null;
+}
+
+/** One inline comment on a pull request, flattened for the review panel. */
+export interface ReviewCommentDto {
+  id: number;
+  author: string | null;
+  body: string;
+  createdAt: string;
+  path: string;
+  line: number | null;
+  inReplyTo: number | null;
+}
+
+/** One submitted review: an approval, a rejection, or a remark. */
+export interface SubmittedReviewDto {
+  id: number;
+  author: string | null;
+  state: string;
+  body: string;
+  submittedAt: string;
+}
+
+/** A comment on the request itself rather than on a line of it. */
+export interface IssueCommentDto {
+  id: number;
+  author: string | null;
+  body: string;
+  createdAt: string;
 }
 
 /** A file a pull request touches. */
@@ -571,6 +641,27 @@ export class GitHubClient {
   }
 
   /**
+   * The open pull request a branch is the head of, whatever it targets.
+   *
+   * `findOpenPullRequest` filters on the base too, because opening a request
+   * needs to know whether *this* one already exists. Reviewing does not: the
+   * question is "is the branch I am on under review", and the answer must not
+   * depend on guessing which branch it was opened against.
+   */
+  async findOpenPullRequestForBranch(
+    owner: string,
+    repo: string,
+    head: string,
+  ): Promise<PullRequestSummary | null> {
+    const qualified = head.includes(":") ? head : `${owner}:${head}`;
+    const pulls = await this.transport.paginate<ApiPullRequest>(
+      `/repos/${owner}/${repo}/pulls?state=open&head=${encodeURIComponent(qualified)}&per_page=10`,
+    );
+
+    return pulls[0] ? toPullRequest(pulls[0]) : null;
+  }
+
+  /**
    * Reads one pull request, including the commits it is actually about.
    *
    * The base SHA GitHub reports here is the tip of the base branch, which is
@@ -590,6 +681,8 @@ export class GitHubClient {
       baseSha: data.base.sha ?? data.base.ref,
       author: data.user?.login ?? null,
       merged: data.merged === true,
+      mergeable: data.mergeable ?? null,
+      mergeableState: data.mergeable_state ?? null,
     };
   }
 
@@ -614,6 +707,142 @@ export class GitHubClient {
       status: file.status,
       previousPath: file.previous_filename ?? null,
     }));
+  }
+
+  /**
+   * Every inline comment left on a pull request.
+   *
+   * Paginated: a review of a long note is exactly where the comments run past
+   * one page, and a review missing its last few remarks is worse than no
+   * review at all.
+   */
+  async listReviewComments(
+    owner: string,
+    repo: string,
+    number: number,
+  ): Promise<ReviewCommentDto[]> {
+    const comments = await this.transport.paginate<ApiReviewComment>(
+      `/repos/${owner}/${repo}/pulls/${number}/comments?per_page=100`,
+    );
+
+    return comments.map((comment) => ({
+      id: comment.id,
+      author: comment.user?.login ?? null,
+      body: comment.body,
+      createdAt: comment.created_at,
+      path: comment.path,
+      line: comment.line ?? null,
+      inReplyTo: comment.in_reply_to_id ?? null,
+    }));
+  }
+
+  /** Every submitted review — the approvals, rejections and plain remarks. */
+  async listReviews(owner: string, repo: string, number: number): Promise<SubmittedReviewDto[]> {
+    const reviews = await this.transport.paginate<ApiReview>(
+      `/repos/${owner}/${repo}/pulls/${number}/reviews?per_page=100`,
+    );
+
+    return reviews.map((review) => ({
+      id: review.id,
+      author: review.user?.login ?? null,
+      state: review.state,
+      body: review.body ?? "",
+      // A pending review has never been submitted; sorting needs a string.
+      submittedAt: review.submitted_at ?? "",
+    }));
+  }
+
+  /** The pull request's general conversation, which is not tied to a line. */
+  async listConversation(owner: string, repo: string, number: number): Promise<IssueCommentDto[]> {
+    const comments = await this.transport.paginate<ApiIssueComment>(
+      `/repos/${owner}/${repo}/issues/${number}/comments?per_page=100`,
+    );
+
+    return comments.map((comment) => ({
+      id: comment.id,
+      author: comment.user?.login ?? null,
+      body: comment.body,
+      createdAt: comment.created_at,
+    }));
+  }
+
+  /** Answers one inline comment, in its own thread. */
+  async replyToReviewComment(
+    owner: string,
+    repo: string,
+    number: number,
+    commentId: number,
+    body: string,
+  ): Promise<ReviewCommentDto> {
+    const { data } = await this.transport.request<ApiReviewComment>(
+      `/repos/${owner}/${repo}/pulls/${number}/comments/${commentId}/replies`,
+      { method: "POST", body: { body } },
+    );
+
+    if (!data) throw new GitHubError("unknown", "Empty reply response");
+
+    return {
+      id: data.id,
+      author: data.user?.login ?? null,
+      body: data.body,
+      createdAt: data.created_at,
+      path: data.path,
+      line: data.line ?? null,
+      inReplyTo: data.in_reply_to_id ?? commentId,
+    };
+  }
+
+  /** Adds to the general conversation rather than to a line. */
+  async addConversationComment(
+    owner: string,
+    repo: string,
+    number: number,
+    body: string,
+  ): Promise<IssueCommentDto> {
+    const { data } = await this.transport.request<ApiIssueComment>(
+      `/repos/${owner}/${repo}/issues/${number}/comments`,
+      { method: "POST", body: { body } },
+    );
+
+    if (!data) throw new GitHubError("unknown", "Empty comment response");
+
+    return {
+      id: data.id,
+      author: data.user?.login ?? null,
+      body: data.body,
+      createdAt: data.created_at,
+    };
+  }
+
+  /**
+   * Merges a pull request.
+   *
+   * Squash by default: a note revised eight times during a review should reach
+   * the main branch as the one change it is, not as eight commits of somebody
+   * arguing about a paragraph. The argument is preserved on the request.
+   */
+  async mergePullRequest(
+    owner: string,
+    repo: string,
+    number: number,
+    options: { method?: "merge" | "squash" | "rebase"; title?: string } = {},
+  ): Promise<{ merged: boolean; message: string; sha: string | null }> {
+    const { data } = await this.transport.request<ApiMergeResult>(
+      `/repos/${owner}/${repo}/pulls/${number}/merge`,
+      {
+        method: "PUT",
+        body: {
+          merge_method: options.method ?? "squash",
+          ...(options.title ? { commit_title: options.title } : {}),
+        },
+      },
+    );
+
+    return {
+      merged: data?.merged === true,
+      message: data?.message ?? "",
+      sha: data?.sha ?? null,
+    };
   }
 
   // ─── Reading ──────────────────────────────────────────────────────────────
