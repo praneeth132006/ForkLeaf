@@ -98,3 +98,15 @@ export {
   type BlameLine,
   type BlameRevision,
 } from "./blame";
+
+export {
+  MAX_OUTPUT,
+  OUTPUT_LANGUAGE,
+  durationOf,
+  formatOutput,
+  isOutput,
+  isRunnable,
+  runnerFor,
+  type RunResult,
+  type Runner,
+} from "./runnable";

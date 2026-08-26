@@ -194,6 +194,13 @@ export function HelpDialog({
                   changed in the margin beside it.
                 </span>
                 <span className="mt-3 block">
+                  Code blocks in <Mono>bash</Mono>, <Mono>python</Mono> or <Mono>javascript</Mono>{" "}
+                  have a <strong>Run</strong> button. The output is written into the note under the
+                  block and committed with it, so a runbook keeps its own results. Blocks run in a
+                  throwaway virtual machine — never on your computer — which is destroyed as soon as
+                  the run finishes.
+                </span>
+                <span className="mt-3 block">
                   You can also clone it. <Mono>git clone</Mono> the repository and every note is
                   there as plain Markdown.
                 </span>

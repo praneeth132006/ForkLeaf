@@ -9,6 +9,7 @@ import {
   type NodeViewProps,
 } from "@tiptap/react";
 import { all, createLowlight } from "lowlight";
+import { OUTPUT_LANGUAGE, formatOutput, isOutput, runnerFor } from "@forkleaf/markdown-engine";
 
 /**
  * Code blocks in the rich editor: syntax-highlighted, with the language on the
@@ -22,6 +23,11 @@ import { all, createLowlight } from "lowlight";
  * The language lives in the `language` attribute, which is exactly what
  * tiptap-markdown writes after the ``` fence, so a block labelled here is
  * labelled on GitHub too.
+ *
+ * Blocks in a language something can interpret also carry a Run button. What
+ * comes back is written into a plain fenced block underneath — see
+ * `runnable.ts` for why the result is ordinary markdown rather than a node of
+ * its own.
  */
 
 // The full language set, matching what the preview renders with. `common` is
@@ -178,6 +184,18 @@ function displayName(language: string): string {
 function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
   const language = (node.attrs.language as string) ?? "";
   const [copied, setCopied] = useState(false);
+  const [running, setRunning] = useState(false);
+
+  /**
+   * Why a run could not be attempted — rate limited, signed out, no sandbox.
+   *
+   * Kept out of the note on purpose. A block that ran and failed is a result
+   * worth recording; the app declining to run it is not something the reader
+   * should find committed in their notes a year later.
+   */
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const runner = runnerFor(language);
 
   const languages = useMemo(() => {
     const popular = POPULAR.filter(isKnown);
@@ -217,6 +235,68 @@ function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps
       .focus()
       .setTextSelection(pos + node.nodeSize - 1)
       .run();
+  };
+
+  /**
+   * Puts a run's result in a fenced block directly under this one.
+   *
+   * Replaces the previous result rather than stacking a new block under it:
+   * a runbook re-run five times should read as what it does now, not as an
+   * archive of every time somebody pressed the button. The history of those
+   * runs is in the commits, which is where history belongs.
+   */
+  const writeOutput = (text: string) => {
+    const pos = typeof getPos === "function" ? getPos() : null;
+    if (typeof pos !== "number") return;
+
+    const { state, view } = editor;
+    const after = pos + node.nodeSize;
+    // Read fresh rather than from a closure: the document may have been
+    // edited while the sandbox was working.
+    const next = after <= state.doc.content.size ? state.doc.resolve(after).nodeAfter : null;
+
+    const block = node.type.create(
+      { language: OUTPUT_LANGUAGE },
+      text ? state.schema.text(text) : null,
+    );
+
+    const replacing = next && next.type === node.type && isOutput(next.attrs.language as string);
+
+    view.dispatch(
+      replacing
+        ? state.tr.replaceWith(after, after + next.nodeSize, block)
+        : state.tr.insert(after, block),
+    );
+  };
+
+  const run = async () => {
+    if (!runner || running) return;
+
+    setRunning(true);
+    setProblem(null);
+
+    try {
+      const response = await fetch("/api/run", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ language, code: node.textContent }),
+      });
+
+      const body = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setProblem(body?.error?.message ?? "That block could not be run.");
+        return;
+      }
+
+      writeOutput(formatOutput(body));
+    } catch {
+      // Offline, or the request never arrived. Nothing ran, so nothing is
+      // written down.
+      setProblem("Could not reach the server. Nothing was run.");
+    } finally {
+      setRunning(false);
+    }
   };
 
   const copy = async () => {
@@ -261,10 +341,30 @@ function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps
           </optgroup>
         </select>
 
-        <button type="button" onClick={copy} className="fl-code-copy">
-          {copied ? "Copied" : "Copy"}
-        </button>
+        <div className="fl-code-actions">
+          {runner && (
+            <button
+              type="button"
+              onClick={run}
+              disabled={running}
+              className="fl-code-run"
+              title={`Run this ${runner.label} block in a throwaway virtual machine — not on your own computer. It has internet access, and is destroyed when the run finishes.`}
+            >
+              {running ? "Running…" : "Run"}
+            </button>
+          )}
+
+          <button type="button" onClick={copy} className="fl-code-copy">
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
       </div>
+
+      {problem && (
+        <div contentEditable={false} className="fl-code-problem" role="status">
+          {problem}
+        </div>
+      )}
 
       <pre spellCheck={false} onMouseDown={focusCode}>
         <NodeViewContent<"code">
