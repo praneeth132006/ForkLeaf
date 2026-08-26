@@ -93,10 +93,22 @@ const TASK_RE = /^[ \t]*[-*+] \[( |x|X)\]/gm;
  */
 const HIGHLIGHT_TAG_RE = /<\/?mark(?: class="fl-hl-[a-z]+")?>/g;
 
+/**
+ * Words in a document, ignoring highlight markup.
+ *
+ * Split out of `documentStats` because the history timeline needs this one
+ * number for every revision of a note and nothing else it computes: parsing
+ * thirty revisions to markdown ASTs to count words would be thirty parses
+ * spent on a figure a regular expression already has.
+ */
+export function countWords(markdown: string): number {
+  return markdown.replace(HIGHLIGHT_TAG_RE, "").match(WORD_RE)?.length ?? 0;
+}
+
 /** Cheap document statistics for the properties panel. */
 export function documentStats(markdown: string): DocumentStats {
   const prose = markdown.replace(HIGHLIGHT_TAG_RE, "");
-  const words = prose.match(WORD_RE)?.length ?? 0;
+  const words = countWords(markdown);
 
   let total = 0;
   let done = 0;

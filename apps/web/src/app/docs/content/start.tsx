@@ -73,6 +73,18 @@ export function GettingStarted() {
           <strong>Version history</strong> — properties panel. Every commit that has ever touched
           this note.
         </LI>
+        <LI>
+          <strong>When each paragraph was written</strong> — properties panel. Every paragraph with
+          its date in the margin, shaded by age, and the commit behind whichever one you point at —
+          including what else you changed that day. <Code>git blame</Code>, for prose: the answer to
+          &ldquo;when did I learn this, and do I still believe it?&rdquo;
+        </LI>
+        <LI>
+          <strong>Replay how this was written</strong> — properties panel, right below it. A chart
+          of the note&rsquo;s word count across every revision, and a scrubber that plays through
+          them. Useful for the question a commit list cannot answer: whether this page arrived in
+          one sitting or was assembled over a year.
+        </LI>
       </UL>
       <P>You can also just clone it. Nothing about a ForkLeaf repository is special:</P>
       <Pre label="terminal">{`git clone https://github.com/you/forkleaf-notes.git

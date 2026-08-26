@@ -13,6 +13,7 @@ export {
   type PullRequestSummary,
   type PullRequestDetail,
   type PullRequestFile,
+  type CommitFile,
 } from "./client";
 
 export { Transport, type RateLimit, type TransportConfig, type HttpResponse } from "./http";

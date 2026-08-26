@@ -1,10 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Note, Workspace } from "@forkleaf/types";
 import { Dialog } from "./Dialog";
 import { DiffView } from "./DiffView";
-import { listNoteHistory, readNoteAtCommit, type NoteCommitDto } from "@/lib/gateway";
+import { TimeTravelPanel } from "./TimeTravelPanel";
+import { BlameView } from "./BlameView";
+import { useRevisionTexts } from "@/hooks/useRevisionTexts";
+import { relativeTime } from "@/lib/relative-time";
+import { listNoteHistory, type NoteCommitDto } from "@/lib/gateway";
+
+/**
+ * How far back to read.
+ *
+ * The commit list alone was happy with GitHub's default page of 30. Blame is
+ * not: every revision it cannot see becomes a line it has to hedge as "at or
+ * before", and the replay likewise just stops early. 100 is the most GitHub
+ * will serve in one page, and it is still one request.
+ */
+const HISTORY_LIMIT = 100;
+
+/** Which of the three ways of looking at history is on screen. */
+export type Tab = "changes" | "replay" | "blame";
 
 export interface HistoryDialogProps {
   note: Note;
@@ -12,6 +29,17 @@ export interface HistoryDialogProps {
   onClose: () => void;
   /** Replaces the note's content with an older revision. */
   onRestore: (content: string) => void | Promise<void>;
+  /** Maps an image `src` in the note to something the browser can load. */
+  resolveImageSrc?: (src: string) => string;
+  /**
+   * Which view to open on.
+   *
+   * The replay is worth having its own way in — a tab inside a dialog reached
+   * from a panel is three steps deep, and a feature nobody finds is a feature
+   * that does not exist. Opening straight onto it lets the panel and the
+   * command palette point at the thing itself rather than at its container.
+   */
+  initialTab?: Tab;
 }
 
 /** What a selected revision is being compared against. */
@@ -26,7 +54,15 @@ type Baseline = "previous" | "current" | "pinned";
  * body is now a diff, and what it is measured against is the reader's choice:
  * the commit before it, the working copy, or any other revision they pin.
  */
-export function HistoryDialog({ note, workspace, onClose, onRestore }: HistoryDialogProps) {
+export function HistoryDialog({
+  note,
+  workspace,
+  onClose,
+  onRestore,
+  resolveImageSrc,
+  initialTab = "changes",
+}: HistoryDialogProps) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [commits, setCommits] = useState<NoteCommitDto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<NoteCommitDto | null>(null);
@@ -35,17 +71,15 @@ export function HistoryDialog({ note, workspace, onClose, onRestore }: HistoryDi
   const [mode, setMode] = useState<"unified" | "split">("split");
   const [restoring, setRestoring] = useState(false);
 
-  // Revisions are fetched once each and kept, so flipping between versions or
-  // baselines does not re-hit the API for text already on screen.
-  const [texts, setTexts] = useState<Record<string, string | null>>({});
-  // Tracks what has been requested, so a second render while a fetch is in
-  // flight does not start the same request again.
-  const requested = useRef<Set<string>>(new Set());
+  // Revisions are fetched once each and kept — shared with the replay tab, so
+  // switching between the two re-uses everything already on screen.
+  const revisions = useRevisionTexts(workspace.repo, note.path);
+  const { texts, request } = revisions;
 
   useEffect(() => {
     let cancelled = false;
 
-    void listNoteHistory(workspace.repo, note.path)
+    void listNoteHistory(workspace.repo, note.path, HISTORY_LIMIT)
       .then((result) => {
         if (cancelled) return;
         setCommits(result);
@@ -87,29 +121,8 @@ export function HistoryDialog({ note, workspace, onClose, onRestore }: HistoryDi
   const loading = needed.some((sha) => !(sha in texts));
 
   useEffect(() => {
-    const missing = needed.filter((sha) => !requested.current.has(sha));
-    if (missing.length === 0) return;
-
-    for (const sha of missing) requested.current.add(sha);
-    let cancelled = false;
-
-    void Promise.all(
-      missing.map(async (sha) => {
-        try {
-          return [sha, await readNoteAtCommit(workspace.repo, note.path, sha)] as const;
-        } catch {
-          return [sha, null] as const;
-        }
-      }),
-    ).then((entries) => {
-      if (cancelled) return;
-      setTexts((current) => ({ ...current, ...Object.fromEntries(entries) }));
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [needed, workspace.repo, note.path]);
+    request(needed);
+  }, [needed, request]);
 
   const selectedText = selected ? texts[selected.sha] : null;
   const baselineText =
@@ -142,7 +155,13 @@ export function HistoryDialog({ note, workspace, onClose, onRestore }: HistoryDi
 
   return (
     <Dialog
-      title="Version history"
+      title={
+        tab === "replay"
+          ? "Replay this note"
+          : tab === "blame"
+            ? "When each paragraph was written"
+            : "Version history"
+      }
       subtitle={`${note.path} · ${workspace.repo.owner}/${workspace.repo.repo}`}
       onClose={onClose}
       wide
@@ -168,6 +187,55 @@ export function HistoryDialog({ note, workspace, onClose, onRestore }: HistoryDi
       )}
 
       {commits && commits.length > 0 && (
+        <div
+          role="tablist"
+          aria-label="History view"
+          className="mb-4 flex rounded-lg border border-[var(--fl-border)] p-0.5"
+        >
+          {(
+            [
+              ["changes", "Changes", "One commit at a time, as a diff"],
+              ["replay", "Replay", "Watch the note being written"],
+              ["blame", "Who wrote what", "The date each paragraph was last touched"],
+            ] as const
+          ).map(([value, label, hint]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={tab === value}
+              title={hint}
+              onClick={() => setTab(value)}
+              className={`flex-1 rounded-[6px] px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
+                tab === value
+                  ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
+                  : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {commits && commits.length > 0 && tab === "replay" && (
+        <TimeTravelPanel
+          commits={commits}
+          revisions={revisions}
+          workingCopy={note.content}
+          resolveImageSrc={resolveImageSrc}
+          onRestore={async (content) => {
+            await onRestore(content);
+            onClose();
+          }}
+        />
+      )}
+
+      {commits && commits.length > 0 && tab === "blame" && (
+        <BlameView commits={commits} revisions={revisions} repo={workspace.repo} path={note.path} />
+      )}
+
+      {commits && commits.length > 0 && tab === "changes" && (
         <div className="grid gap-4 md:grid-cols-[minmax(0,290px)_minmax(0,1fr)]">
           <ol className="max-h-[56vh] space-y-1 overflow-y-auto pr-1">
             {commits.map((commit, index) => (
@@ -344,7 +412,7 @@ function CommitRow({
 
         <span className="mt-0.5 flex items-center gap-2 text-[11px] text-[var(--fl-muted)]">
           <time dateTime={commit.date} title={new Date(commit.date).toLocaleString()}>
-            {relative(commit.date)}
+            {relativeTime(commit.date)}
           </time>
           <span aria-hidden="true">·</span>
           <span className="font-mono text-[10.5px]">{commit.sha.slice(0, 7)}</span>
@@ -372,14 +440,4 @@ function CommitRow({
       </div>
     </div>
   );
-}
-
-function relative(iso: string): string {
-  const seconds = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
-  if (!Number.isFinite(seconds)) return "";
-  if (seconds < 60) return "just now";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  if (seconds < 2592000) return `${Math.floor(seconds / 86400)}d ago`;
-  return new Date(iso).toLocaleDateString();
 }

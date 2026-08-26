@@ -17,6 +17,21 @@ export interface EditorRightPanelProps {
   /** Opens the full export dialog, for the formats and options not shortcut here. */
   onExport: () => void;
   onShowHistory: () => void;
+  /**
+   * Opens the replay of how this note was written.
+   *
+   * Its own button rather than a tab you have to know about: the replay was
+   * only reachable by opening history and noticing a second tab, which is a
+   * place nobody looks for something they have never heard of.
+   */
+  onReplay: () => void;
+  /**
+   * Opens the per-paragraph attribution view.
+   *
+   * Beside the replay, because they answer the two halves of the same
+   * question — how this page grew, and which parts of it are old.
+   */
+  onBlame: () => void;
   /** Opens the publish dialog. Absent for a workspace with no repository. */
   onPublish?: (() => void) | undefined;
   /**
@@ -83,6 +98,8 @@ export function EditorRightPanel({
   onFrontmatterChange,
   onExport,
   onShowHistory,
+  onReplay,
+  onBlame,
   onPublish,
   published,
   syncMode,
@@ -430,6 +447,16 @@ export function EditorRightPanel({
                 {hasHistory && (
                   <PanelButton onClick={onShowHistory} icon={<HistoryGlyph />}>
                     History &amp; commits
+                  </PanelButton>
+                )}
+                {hasHistory && (
+                  <PanelButton onClick={onReplay} icon={<ReplayGlyph />}>
+                    Replay how this was written
+                  </PanelButton>
+                )}
+                {hasHistory && (
+                  <PanelButton onClick={onBlame} icon={<BlameGlyph />}>
+                    When each paragraph was written
                   </PanelButton>
                 )}
                 <button
@@ -785,6 +812,44 @@ function LinkGlyph() {
     >
       <path d="M6.5 9.5a2.75 2.75 0 0 0 4 .25l2-2a2.75 2.75 0 0 0-3.9-3.9l-1.1 1.1" />
       <path d="M9.5 6.5a2.75 2.75 0 0 0-4-.25l-2 2a2.75 2.75 0 0 0 3.9 3.9l1.1-1.1" />
+    </svg>
+  );
+}
+
+/** Lines of text with a marked margin — the blame gutter, in miniature. */
+function BlameGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    >
+      <path d="M2.25 3.5v9" strokeWidth="2" />
+      <path d="M5.5 4h8.25M5.5 7h8.25M5.5 10h5.5M5.5 13h7" />
+    </svg>
+  );
+}
+
+/** A play head over a rising line — the replay's own chart, in miniature. */
+function ReplayGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M1.75 11.5 5 8l2.5 2 4.75-5.5" />
+      <path d="M1.75 14.25h12.5" />
+      <circle cx="12.25" cy="4.5" r="1.4" fill="currentColor" stroke="none" />
     </svg>
   );
 }

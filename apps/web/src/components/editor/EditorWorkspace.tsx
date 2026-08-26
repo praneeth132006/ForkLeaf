@@ -97,7 +97,7 @@ export function EditorWorkspace() {
    */
   const [drawer, setDrawer] = useState<"files" | "document" | null>(null);
   const [dialog, setDialog] = useState<
-    "export" | "connect" | "help" | "history" | "propose" | "publish" | null
+    "export" | "connect" | "help" | "history" | "replay" | "blame" | "propose" | "publish" | null
   >(null);
   /**
    * Something worth saying that is not a failure.
@@ -896,6 +896,26 @@ export function EditorWorkspace() {
           keywords: "git commits versions diff revisions",
           run: () => setDialog("history"),
         });
+
+        list.push({
+          id: "replay",
+          label: "Replay how this note was written",
+          group: "Notes",
+          hint: "Scrub through every revision and watch it grow",
+          keywords:
+            "replay time travel timeline scrubber watch animate playback evolution growth shape history revisions",
+          run: () => setDialog("replay"),
+        });
+
+        list.push({
+          id: "blame",
+          label: "See when each paragraph was written",
+          group: "Notes",
+          hint: "Dates in the margin, and what else you changed that day",
+          keywords:
+            "blame who wrote when written provenance attribution authorship age stale old paragraph line origin annotate",
+          run: () => setDialog("blame"),
+        });
       }
     }
 
@@ -1358,6 +1378,14 @@ export function EditorWorkspace() {
                 setDrawer(null);
                 setDialog("history");
               }}
+              onReplay={() => {
+                setDrawer(null);
+                setDialog("replay");
+              }}
+              onBlame={() => {
+                setDrawer(null);
+                setDialog("blame");
+              }}
               onPublish={
                 workspace && !workspace.isLocal
                   ? () => {
@@ -1421,14 +1449,19 @@ export function EditorWorkspace() {
         />
       )}
 
-      {openDialog === "history" && note && workspace && !workspace.isLocal && (
-        <HistoryDialog
-          note={note}
-          workspace={workspace}
-          onClose={() => setDialog(null)}
-          onRestore={notebook.saveNote}
-        />
-      )}
+      {(openDialog === "history" || openDialog === "replay" || openDialog === "blame") &&
+        note &&
+        workspace &&
+        !workspace.isLocal && (
+          <HistoryDialog
+            note={note}
+            workspace={workspace}
+            initialTab={openDialog === "history" ? "changes" : openDialog}
+            onClose={() => setDialog(null)}
+            onRestore={notebook.saveNote}
+            resolveImageSrc={images.resolve}
+          />
+        )}
 
       {showConflicts && (
         <ConflictDialog

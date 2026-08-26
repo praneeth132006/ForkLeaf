@@ -68,6 +68,10 @@ interface ApiPullRequest {
   merged?: boolean;
 }
 
+interface ApiCommitDetail {
+  files?: { filename: string; status: string; previous_filename?: string }[];
+}
+
 interface ApiPullRequestFile {
   filename: string;
   status: string;
@@ -182,6 +186,20 @@ export interface PullRequestFile {
 }
 
 /** One entry in a note's history, flattened for display. */
+/**
+ * One file a commit touched, beyond the note being blamed.
+ *
+ * The interesting half of "when did I write this?" is what else you were doing
+ * at the time: a paragraph committed alongside four other notes from the same
+ * engagement carries a context the date alone does not.
+ */
+export interface CommitFile {
+  path: string;
+  /** GitHub's own word: added, modified, removed, renamed. */
+  status: string;
+  previousPath: string | null;
+}
+
 export interface NoteCommit {
   sha: string;
   /** The commit subject line only. */
@@ -801,6 +819,33 @@ export class GitHubClient {
       // autosave from an edit someone made elsewhere.
       byForkLeaf: (entry.commit.message ?? "").startsWith(COMMIT_MARKER),
     }));
+  }
+
+  /**
+   * The other files one commit touched.
+   *
+   * Capped, because a commit can legitimately touch a thousand files — an
+   * import, a bulk rename — and the caller wants the flavour of what else was
+   * going on, not a directory listing. `truncated` says when there was more.
+   */
+  async getCommitFiles(
+    repo: RepoRef,
+    sha: string,
+    limit = 20,
+  ): Promise<{ files: CommitFile[]; truncated: boolean }> {
+    const { data } = await this.transport.request<ApiCommitDetail>(
+      `/repos/${repo.owner}/${repo.repo}/commits/${encodeURIComponent(sha)}`,
+    );
+
+    const all = data?.files ?? [];
+    return {
+      files: all.slice(0, limit).map((file) => ({
+        path: file.filename,
+        status: file.status,
+        previousPath: file.previous_filename ?? null,
+      })),
+      truncated: all.length > limit,
+    };
   }
 
   /** The content of one file at one commit, for previewing an old version. */

@@ -10,6 +10,7 @@ export {
   extractOutline,
   extractMermaidBlocks,
   documentStats,
+  countWords,
   deriveTitle,
   extractTags,
   type OutlineEntry,
@@ -78,3 +79,22 @@ export {
   type DiffStats,
   type WordSpan,
 } from "./diff";
+
+export {
+  buildTimeline,
+  sparkline,
+  type RevisionInput,
+  type Timeline,
+  type TimelineRevision,
+  type SparklineGeometry,
+} from "./timeline";
+
+export {
+  buildBlame,
+  toBlocks,
+  ageRatio,
+  type Blame,
+  type BlameBlock,
+  type BlameLine,
+  type BlameRevision,
+} from "./blame";
