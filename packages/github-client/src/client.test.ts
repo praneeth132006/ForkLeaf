@@ -844,3 +844,54 @@ describe("readFileBase64", () => {
     expect(file?.sha).toBe("png-sha");
   });
 });
+
+/**
+ * Reading a directory without reading its files.
+ *
+ * This is what tells the app which notes are published: the contents API
+ * answers a directory with names and sizes and no bodies, so asking "what is
+ * in docs/" costs one request rather than downloading every page in it.
+ */
+describe("listDirectory", () => {
+  it("returns the files in a directory, without their contents", async () => {
+    const { fetchImpl, calls } = fakeGitHub({
+      "GET /repos/octo/notes/contents/docs?ref=main": [
+        { name: "roadmap.html", path: "docs/roadmap.html", sha: "a", size: 2048, type: "file" },
+        { name: "assets", path: "docs/assets", sha: "b", size: 0, type: "dir" },
+      ],
+    });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    expect(await client.listDirectory("octo", "notes", "main", "docs")).toEqual([
+      { name: "roadmap.html", path: "docs/roadmap.html", sha: "a", size: 2048 },
+    ]);
+
+    // One request, and not one per file.
+    expect(calls).toHaveLength(1);
+  });
+
+  it("answers a missing directory with nothing rather than an error", async () => {
+    // "Nothing has been published yet" and "the folder does not exist" are the
+    // same answer to the only question being asked of it.
+    const { fetchImpl } = fakeGitHub();
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    expect(await client.listDirectory("octo", "notes", "main", "docs")).toEqual([]);
+  });
+
+  it("answers a path that is a file rather than a directory with nothing", async () => {
+    const { fetchImpl } = fakeGitHub({
+      "GET /repos/octo/notes/contents/docs?ref=main": {
+        name: "docs",
+        path: "docs",
+        sha: "a",
+        size: 12,
+        type: "file",
+        content: "",
+      },
+    });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    expect(await client.listDirectory("octo", "notes", "main", "docs")).toEqual([]);
+  });
+});

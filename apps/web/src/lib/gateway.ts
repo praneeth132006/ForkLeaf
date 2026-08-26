@@ -295,6 +295,33 @@ export async function publishNote(options: {
   });
 }
 
+/** One page published from a repository's `docs/` folder. */
+export interface PublishedPage {
+  slug: string;
+  path: string;
+  size: number;
+  sha: string;
+  /** The public address, or null while Pages is switched off. */
+  url: string | null;
+}
+
+export interface PublishedPages {
+  pages: PublishedPage[];
+  site: { url: string; status: string | null; isPublic: boolean } | null;
+}
+
+/**
+ * Everything this repository currently has published.
+ *
+ * Asked for rather than remembered: what is published is exactly what is in
+ * `docs/`, and the repository is the only copy of that fact worth trusting.
+ * Somebody who deletes a page from GitHub directly has unpublished it, and
+ * a record kept here would go on claiming otherwise.
+ */
+export async function listPublishedPages(repo: RepoRef): Promise<PublishedPages> {
+  return call(`/api/gh/publish?${repoParams(repo)}`);
+}
+
 /** Deletes a published page. The note itself is left alone. */
 export async function unpublishNote(repo: RepoRef, slug: string): Promise<{ path: string }> {
   return call("/api/gh/publish", {

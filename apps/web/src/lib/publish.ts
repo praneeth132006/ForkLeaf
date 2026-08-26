@@ -40,3 +40,17 @@ export function pagePath(slug: string | undefined): string {
 export function pageUrl(siteUrl: string, slug: string): string {
   return `${siteUrl.replace(/\/$/, "")}/${slug.toLowerCase()}.html`;
 }
+
+/**
+ * The slug behind a published page's filename, or null if it is not one.
+ *
+ * `docs/` is an ordinary folder that people put ordinary things in — a README,
+ * a stylesheet, a hand-written site. Only the `.html` files whose stem is a
+ * slug this app would itself have produced are reported as published pages, so
+ * listing what ForkLeaf published can never offer to unpublish something it
+ * did not write.
+ */
+export function slugOfPage(filename: string): string | null {
+  const match = /^([a-z0-9][a-z0-9._-]{0,80})\.html$/.exec(filename.toLowerCase());
+  return match ? match[1]! : null;
+}

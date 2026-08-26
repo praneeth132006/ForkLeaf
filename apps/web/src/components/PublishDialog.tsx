@@ -10,10 +10,27 @@ import { Dialog } from "./Dialog";
 export interface PublishDialogProps {
   note: Note;
   workspace: Workspace;
+  /**
+   * Where this note is already published, if it is.
+   *
+   * Passed in rather than discovered here. The dialog used to know only what
+   * it had done itself in the current session, so a note published last week
+   * opened on the "Publish" screen as though it were not public at all — no
+   * address to copy, and Unpublish behind a screen there was no way to reach.
+   *
+   * Mount this dialog with `key={note.id}` — switching notes underneath it
+   * must not leave the last note's address on screen as though it were this
+   * one's, and a fresh mount is a cleaner reset than an effect that fights
+   * whatever the reader is in the middle of.
+   */
+  published?: { url: string | null } | undefined;
+  /** Re-reads the published listing, so the rest of the app agrees. */
+  onChanged?: (() => void | Promise<void>) | undefined;
   onClose: () => void;
 }
 
-type Stage = "form" | "working" | "done";
+/** The dialog is either waiting for the reader, or waiting on GitHub. */
+type Stage = "idle" | "working";
 
 /**
  * Share this note as a public web page.
@@ -29,18 +46,42 @@ type Stage = "form" | "working" | "done";
  * two names drift apart is how a note quietly stops being reachable at the
  * address it was shared under.
  */
-export function PublishDialog({ note, workspace, onClose }: PublishDialogProps) {
+export function PublishDialog({
+  note,
+  workspace,
+  published,
+  onChanged,
+  onClose,
+}: PublishDialogProps) {
   const title = useMemo(() => deriveTitle(note.content, note.frontmatter.title, note.path), [note]);
   const slug = useMemo(
     () => slugifyFilename(stripExtension(note.path.split("/").pop() ?? "note")),
     [note.path],
   );
 
-  const [stage, setStage] = useState<Stage>("form");
+  const [stage, setStage] = useState<Stage>("idle");
   const [step, setStep] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ url: string; status: string | null } | null>(null);
+  const [result, setResult] = useState<{ url: string | null; status: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
+
+  /**
+   * What to show: what this dialog just did, else what was already true.
+   *
+   * Derived rather than copied into state on open. `published` is rebuilt by
+   * the parent on every render, so mirroring it in an effect would reset this
+   * dialog underneath whatever the reader was doing — including wiping the
+   * address it had just handed them, in the moment between publishing and the
+   * listing catching up.
+   *
+   * A page that is already published is `built` by definition: it has been
+   * sitting in the repository since some earlier commit, so there is no build
+   * in progress to warn about.
+   */
+  const page = useMemo(
+    () => result ?? (published ? { url: published.url, status: "built" as string | null } : null),
+    [result, published],
+  );
 
   const publish = useCallback(async () => {
     setStage("working");
@@ -57,15 +98,16 @@ export function PublishDialog({ note, workspace, onClose }: PublishDialogProps) 
       });
 
       setStep("Committing it to your repository…");
-      const published = await publishNote({ repo: workspace.repo, slug, html, title });
+      const result = await publishNote({ repo: workspace.repo, slug, html, title });
 
-      setResult({ url: published.url, status: published.status });
-      setStage("done");
+      setResult({ url: result.url, status: result.status });
+      setStage("idle");
+      await onChanged?.();
     } catch (problem) {
       setError(messageFor(problem));
-      setStage("form");
+      setStage("idle");
     }
-  }, [note, title, slug, workspace.repo]);
+  }, [note, title, slug, workspace.repo, onChanged]);
 
   const unpublish = useCallback(async () => {
     setStage("working");
@@ -74,42 +116,55 @@ export function PublishDialog({ note, workspace, onClose }: PublishDialogProps) 
 
     try {
       await unpublishNote(workspace.repo, slug);
+      await onChanged?.();
       onClose();
     } catch (problem) {
       setError(messageFor(problem));
-      setStage("done");
+      setStage("idle");
     }
-  }, [workspace.repo, slug, onClose]);
+  }, [workspace.repo, slug, onChanged, onClose]);
 
   const copy = useCallback(async () => {
-    if (!result) return;
-    await navigator.clipboard.writeText(result.url);
+    if (!page?.url) return;
+    await navigator.clipboard.writeText(page.url);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
-  }, [result]);
+  }, [page]);
 
   // ── Published ───────────────────────────────────────────────────────────
 
-  if (stage === "done" && result) {
+  if (page) {
     return (
-      <Dialog title="Published" onClose={onClose}>
+      <Dialog title="Published" subtitle={`${title} is a public page`} onClose={onClose}>
         <div className="space-y-4">
-          <div className="rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-3">
-            <a
-              href={result.url}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="block break-all font-mono text-[12.5px] text-[var(--fl-accent)] underline underline-offset-2"
-            >
-              {result.url}
-            </a>
-          </div>
+          {page.url ? (
+            <div className="rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-3">
+              <a
+                href={page.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="block break-all font-mono text-[12.5px] text-[var(--fl-accent)] underline underline-offset-2"
+              >
+                {page.url}
+              </a>
+            </div>
+          ) : (
+            /* Committed, but the repository is not being served. There is a
+               file and no address, and which of the two is missing is what
+               separates a fixable state from a broken one. */
+            <p className="text-[13px] leading-relaxed text-[var(--fl-muted)]">
+              The page is committed to{" "}
+              <code className="font-mono text-[12px]">docs/{slug}.html</code>, but GitHub Pages is
+              switched off for this repository, so it has no public address yet. Turning Pages on in
+              the repository&rsquo;s settings publishes it as it stands.
+            </p>
+          )}
 
           {/* GitHub takes up to a minute to build a site for the first time.
               Handing over a link and saying nothing means the first person to
               click it — usually the author, immediately — gets a 404 and
               concludes it did not work. */}
-          {result.status !== "built" && (
+          {page.url && page.status !== "built" && (
             <p className="text-[13px] leading-relaxed text-[var(--fl-muted)]">
               GitHub is building the site now. The first publish of a repository can take a minute
               or so before the address answers; every one after that is quick.
@@ -118,18 +173,41 @@ export function PublishDialog({ note, workspace, onClose }: PublishDialogProps) 
 
           <p className="text-[13px] leading-relaxed text-[var(--fl-muted)]">
             The page is a file in {workspace.repo.owner}/{workspace.repo.repo}, served by GitHub
-            Pages. Publishing again updates it. Anyone with the link can read it.
+            Pages. Anyone with the link can read it.
           </p>
+
+          {error && (
+            <p role="alert" className="text-[13px] leading-relaxed text-[var(--fl-danger)]">
+              {error}
+            </p>
+          )}
 
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
               onClick={() => void unpublish()}
-              className="fl-btn fl-btn-ghost !text-[var(--fl-danger)]"
+              disabled={stage === "working"}
+              className="fl-btn fl-btn-ghost !text-[var(--fl-danger)] disabled:opacity-50"
             >
               Unpublish
             </button>
-            <button type="button" onClick={() => void copy()} className="fl-btn fl-btn-ghost">
+            {/* Re-publishing is what pushes the note's current text to the
+                page. It was only ever reachable by closing the dialog and
+                opening it again, which showed no sign the note was public. */}
+            <button
+              type="button"
+              onClick={() => void publish()}
+              disabled={stage === "working"}
+              className="fl-btn fl-btn-ghost disabled:opacity-50"
+            >
+              {stage === "working" ? step || "Working…" : "Update page"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void copy()}
+              disabled={!page.url || stage === "working"}
+              className="fl-btn fl-btn-ghost disabled:opacity-40"
+            >
               {copied ? "Copied" : "Copy link"}
             </button>
             <button type="button" onClick={onClose} className="fl-btn fl-btn-primary">

@@ -19,6 +19,15 @@ export interface EditorRightPanelProps {
   onShowHistory: () => void;
   /** Opens the publish dialog. Absent for a workspace with no repository. */
   onPublish?: (() => void) | undefined;
+  /**
+   * Where this note is published, or null if it is not.
+   *
+   * The panel is where somebody looks to find out what is true about the note
+   * they have open, and "this one is public, at this address" belongs in that
+   * list. Before this, publishing left no trace anywhere in the app once the
+   * dialog was closed.
+   */
+  published?: { url: string | null } | undefined;
   /** Drives the auto-save indicator in the panel header. */
   syncMode: SyncMode;
   onSyncNow: () => void;
@@ -75,6 +84,7 @@ export function EditorRightPanel({
   onExport,
   onShowHistory,
   onPublish,
+  published,
   syncMode,
   onSyncNow,
   links,
@@ -346,6 +356,49 @@ export function EditorRightPanel({
               </Section>
             )}
 
+            {/* ── Published ─────────────────────────────────────────────── */}
+            {/* Only when the note is public. A row saying "not published" on
+                every one of a thousand private notes would be noise about
+                nothing; this section appearing at all is the signal. */}
+            {published && (
+              <Section title="Published">
+                <div className="space-y-2">
+                  <p className="flex items-center gap-1.5 text-[12.5px] text-[var(--fl-text)]">
+                    <span
+                      aria-hidden="true"
+                      className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fl-accent)]"
+                    />
+                    This note is a public page.
+                  </p>
+
+                  {published.url ? (
+                    <a
+                      href={published.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="block break-all font-mono text-[11.5px] text-[var(--fl-accent)] underline underline-offset-2"
+                    >
+                      {published.url}
+                    </a>
+                  ) : (
+                    /* The page is committed, and GitHub Pages is not serving
+                       the repository — so there is a file and no address.
+                       Saying which of the two is missing is the difference
+                       between a fixable state and a broken one. */
+                    <p className="text-[12px] leading-relaxed text-[var(--fl-muted)]">
+                      The page is committed, but GitHub Pages is switched off for this repository,
+                      so it has no address yet.
+                    </p>
+                  )}
+
+                  <p className="text-[12px] leading-relaxed text-[var(--fl-muted)]">
+                    Publishing again updates it. Unpublishing deletes the page and leaves the note
+                    alone.
+                  </p>
+                </div>
+              </Section>
+            )}
+
             {/* ── Actions ───────────────────────────────────────────────── */}
             <Section title="Actions">
               <div className="space-y-1.5">
@@ -368,7 +421,7 @@ export function EditorRightPanel({
                 </PanelButton>
                 {hasHistory && onPublish && (
                   <PanelButton onClick={onPublish} icon={<ShareGlyph />}>
-                    Publish as a page
+                    {published ? "Published as a page" : "Publish as a page"}
                   </PanelButton>
                 )}
                 {/* Named for the thing it shows. "Version history" is accurate

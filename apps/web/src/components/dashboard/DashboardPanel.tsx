@@ -21,6 +21,8 @@ import { FolderNav } from "./FolderNav";
 import { NoteList, formatWhen } from "./NoteList";
 import { NoteTree } from "./NoteTree";
 import { NoteGrid } from "./NoteGrid";
+import { PublishedPages } from "./PublishedPages";
+import { usePublishedPages } from "@/hooks/usePublishedPages";
 
 /**
  * The dashboard.
@@ -92,6 +94,11 @@ export function DashboardPanel({
   // Memoised so the derived indexes below do not recompute on every render:
   // `active?.entries ?? []` is a fresh array each time.
   const entries = useMemo(() => active?.entries ?? [], [active]);
+
+  // Which of this repository's notes are public. Read here rather than in the
+  // editor alone: "which of my notes have I published" is a question about the
+  // library, and the dashboard is where the library is.
+  const published = usePublishedPages(active?.workspace ?? null);
 
   /**
    * Full-text hits for the current query.
@@ -433,6 +440,24 @@ export function DashboardPanel({
             </div>
           )}
         </section>
+
+        {/* ── Published pages ──────────────────────────────────────────── */}
+        {active && !active.workspace.isLocal && (
+          <PublishedPages
+            workspace={active.workspace}
+            state={published}
+            confirm={(request) =>
+              setPrompt({
+                title: request.title,
+                label: "",
+                destructive: true,
+                confirmLabel: "Unpublish",
+                body: request.body,
+                onConfirm: request.onConfirm,
+              })
+            }
+          />
+        )}
 
         {/* ── Recent ───────────────────────────────────────────────────── */}
         {recent.length > 0 && (
