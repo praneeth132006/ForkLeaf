@@ -100,7 +100,10 @@ describe("POST /api/run — what it refuses", () => {
     const { status, body } = await post({ language: "bash", code: "echo hi" });
 
     expect(status).toBe(503);
-    expect(body.error.message).toMatch(/not configured/i);
+    // Naming the variables, because whoever sees this can usually set them.
+    expect(body.error.message).toMatch(/VERCEL_TOKEN/);
+    expect(body.error.message).toMatch(/VERCEL_TEAM_ID/);
+    expect(body.error.message).toMatch(/VERCEL_PROJECT_ID/);
   });
 
   it("accepts OIDC alone, which is how it authenticates on Vercel", async () => {

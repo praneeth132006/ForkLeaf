@@ -105,10 +105,13 @@ export async function POST(request: NextRequest) {
 
     const credentials = sandboxCredentials();
     if (!credentials) {
+      // Naming the variables matters: this is a deployment-configuration
+      // problem, and the person who hits it is usually the person who can fix
+      // it. A message that only says "not configured" sends them to the source.
       throw new ApiError(
         503,
         "unavailable",
-        "Running blocks needs a sandbox, which this deployment is not configured for.",
+        "Running blocks needs a Vercel Sandbox. Set VERCEL_TOKEN, VERCEL_TEAM_ID and VERCEL_PROJECT_ID for local development — on Vercel it authenticates itself.",
       );
     }
 

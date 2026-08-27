@@ -185,6 +185,66 @@ export function PublishDialog({
     window.setTimeout(() => setCopied(false), 1600);
   }, [page]);
 
+  /**
+   * Where pages go, and how to change it.
+   *
+   * Rendered in both states of this dialog on purpose. It first lived only in
+   * the published view, which put it exactly out of reach of the person who
+   * needs it most: a private notebook cannot publish at all on a free plan, so
+   * the one control that fixes that sat behind a publish that could never
+   * succeed.
+   */
+  const targetChooser = (
+    <div className="space-y-1.5 rounded-lg border border-[var(--fl-border)] px-3 py-2.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-[12px] text-[var(--fl-muted)]">Pages go to</span>
+        {onSetTarget && !editingTarget && (
+          <button
+            type="button"
+            onClick={() => setEditingTarget(true)}
+            className="text-[12px] text-[var(--fl-muted)] underline-offset-2 hover:text-[var(--fl-text)] hover:underline"
+          >
+            {split ? "Change" : "Use another repository"}
+          </button>
+        )}
+      </div>
+
+      {editingTarget ? (
+        <div className="space-y-1.5">
+          <div className="flex gap-2">
+            <input
+              value={targetDraft}
+              onChange={(event) => setTargetDraft(event.target.value)}
+              placeholder={`${workspace.repo.owner}/my-public-site`}
+              aria-label="Repository to publish into"
+              className="min-w-0 flex-1 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2.5 py-1.5 font-mono text-[12.5px] text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
+            />
+            <button type="button" onClick={() => void saveTarget()} className="fl-btn">
+              Save
+            </button>
+          </div>
+          {/* Says what clearing it does, because an empty box that means
+                  "go back to the default" is otherwise a guess. */}
+          <p className="text-[11.5px] text-[var(--fl-muted)]">
+            Leave it empty to publish into {describeTarget(workspace.repo)} alongside your notes.
+          </p>
+          {targetError && <p className="text-[12px] text-[var(--fl-danger)]">{targetError}</p>}
+        </div>
+      ) : (
+        <p className="font-mono text-[12.5px] text-[var(--fl-text)]">
+          {describeTarget(target)}
+          {split && (
+            <span className="ml-2 font-sans text-[11.5px] text-[var(--fl-muted)]">
+              not the repository your notes are in
+            </span>
+          )}
+        </p>
+      )}
+
+      {warning && <p className="text-[11.5px] leading-snug text-[var(--fl-muted)]">{warning}</p>}
+    </div>
+  );
+
   // ── Published ───────────────────────────────────────────────────────────
 
   if (page) {
@@ -225,59 +285,7 @@ export function PublishDialog({
             </p>
           )}
 
-          <div className="space-y-1.5 rounded-lg border border-[var(--fl-border)] px-3 py-2.5">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <span className="text-[12px] text-[var(--fl-muted)]">Pages go to</span>
-              {onSetTarget && !editingTarget && (
-                <button
-                  type="button"
-                  onClick={() => setEditingTarget(true)}
-                  className="text-[12px] text-[var(--fl-muted)] underline-offset-2 hover:text-[var(--fl-text)] hover:underline"
-                >
-                  {split ? "Change" : "Use another repository"}
-                </button>
-              )}
-            </div>
-
-            {editingTarget ? (
-              <div className="space-y-1.5">
-                <div className="flex gap-2">
-                  <input
-                    value={targetDraft}
-                    onChange={(event) => setTargetDraft(event.target.value)}
-                    placeholder={`${workspace.repo.owner}/my-public-site`}
-                    aria-label="Repository to publish into"
-                    className="min-w-0 flex-1 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2.5 py-1.5 font-mono text-[12.5px] text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
-                  />
-                  <button type="button" onClick={() => void saveTarget()} className="fl-btn">
-                    Save
-                  </button>
-                </div>
-                {/* Says what clearing it does, because an empty box that means
-                    "go back to the default" is otherwise a guess. */}
-                <p className="text-[11.5px] text-[var(--fl-muted)]">
-                  Leave it empty to publish into {describeTarget(workspace.repo)} alongside your
-                  notes.
-                </p>
-                {targetError && (
-                  <p className="text-[12px] text-[var(--fl-danger)]">{targetError}</p>
-                )}
-              </div>
-            ) : (
-              <p className="font-mono text-[12.5px] text-[var(--fl-text)]">
-                {describeTarget(target)}
-                {split && (
-                  <span className="ml-2 font-sans text-[11.5px] text-[var(--fl-muted)]">
-                    not the repository your notes are in
-                  </span>
-                )}
-              </p>
-            )}
-
-            {warning && (
-              <p className="text-[11.5px] leading-snug text-[var(--fl-muted)]">{warning}</p>
-            )}
-          </div>
+          {targetChooser}
 
           {error && (
             <p role="alert" className="text-[13px] leading-relaxed text-[var(--fl-danger)]">
@@ -339,15 +347,28 @@ export function PublishDialog({
           unpublishing deletes the file.
         </p>
 
+        {targetChooser}
+
         <div className="rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-2.5 text-[12.5px] text-[var(--fl-muted)]">
           Anyone with the link will be able to read this note. Publishing from a private repository
-          needs a paid GitHub plan; GitHub will say so if that applies to yours.
+          needs a paid GitHub plan — point this at a public repository above and your notes stay
+          private.
         </div>
 
         {error && (
-          <p role="alert" className="text-[13px] leading-relaxed text-[var(--fl-danger)]">
-            {error}
-          </p>
+          <div role="alert" className="space-y-1">
+            <p className="text-[13px] leading-relaxed text-[var(--fl-danger)]">{error}</p>
+            {/* GitHub's refusal is accurate and says nothing about what to do
+                next. The fix is one control above this message, so it is worth
+                naming rather than leaving to be discovered. */}
+            {/pages|plan/i.test(error) && !split && (
+              <p className="text-[12.5px] leading-relaxed text-[var(--fl-muted)]">
+                Pages needs a paid plan for a private repository. Choose a public repository under
+                &ldquo;Pages go to&rdquo; above and this note is published there instead — the notes
+                themselves stay where they are.
+              </p>
+            )}
+          </div>
         )}
 
         <div className="flex items-center justify-end gap-2">
