@@ -2,6 +2,7 @@
 
 import { getAnalytics, isSupported, logEvent, type Analytics } from "firebase/analytics";
 import { firebaseApp } from "./client";
+import { postHogCapture } from "@/lib/posthog";
 
 /**
  * Firebase Analytics, wrapped so that call sites never have to care whether it
@@ -49,6 +50,11 @@ export type ForkLeafEvent =
  * action, so this swallows its own errors.
  */
 export function track(event: ForkLeafEvent, params?: Record<string, unknown>): void {
+  // Both sinks from the one call. A second analytics system with its own call
+  // sites would drift from this one within a month, and half the events would
+  // end up in only one of them.
+  postHogCapture(event, params);
+
   void analytics()
     .then((instance) => {
       // Widened to `string`: `logEvent` is overloaded per reserved event name

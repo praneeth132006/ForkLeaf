@@ -41,6 +41,7 @@ import { StorageBlocked } from "@/components/StorageBlocked";
 import { BootScreen } from "@/components/BootScreen";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { signOut } from "@/lib/gateway";
+import { postHogReset } from "@/lib/posthog";
 import { assetPathFor, relativeSrc, resolveImageSrc } from "@/lib/assets";
 import { collectFolders } from "@/lib/tree";
 import { hasRelativeImages, repairNoteLinks } from "@/lib/repair-links";
@@ -746,6 +747,9 @@ export function EditorWorkspace() {
   }
 
   const handleSignOut = useCallback(async () => {
+    // Forgotten before the session goes, so the next person on this
+    // browser is not attributed to the one who just left.
+    postHogReset();
     await signOut();
     router.push("/");
     // The session cookie is gone, so anything the server rendered from it is

@@ -3,6 +3,7 @@
 import { Suspense, useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { track } from "@/lib/firebase/analytics";
+import { postHogIdentify, startPostHog } from "@/lib/posthog";
 
 /**
  * Reports page views to Firebase Analytics.
@@ -15,6 +16,24 @@ import { track } from "@/lib/firebase/analytics";
 function PageViews() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  // Started here rather than in the layout: this component is already the one
+  // client boundary analytics lives behind, and starting it twice is a no-op.
+  useEffect(() => {
+    startPostHog();
+
+    // Attributed to the GitHub login, which is already public on github.com.
+    // Nothing else — no email, no repository names, nothing from the notes.
+    void fetch("/api/session")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((session) => {
+        const login = session?.user?.login;
+        if (typeof login === "string") postHogIdentify(login);
+      })
+      .catch(() => {
+        /* Analytics is best-effort; a failed read is not worth a retry. */
+      });
+  }, []);
 
   useEffect(() => {
     track("page_view", {

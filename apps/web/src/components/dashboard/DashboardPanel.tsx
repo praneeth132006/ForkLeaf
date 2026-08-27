@@ -7,6 +7,7 @@ import type { SessionUser, Workspace } from "@forkleaf/types";
 import { useLibrary } from "@/hooks/useLibrary";
 import { queryIndex, tagCounts, type IndexEntry, type SortKey } from "@/lib/library";
 import { signOut } from "@/lib/gateway";
+import { postHogReset } from "@/lib/posthog";
 import { useTheme } from "@/hooks/useTheme";
 import { useIndexView, type IndexView } from "@/hooks/useIndexView";
 import { StorageBlocked } from "@/components/StorageBlocked";
@@ -247,6 +248,9 @@ export function DashboardPanel({
   }, [active, folder, library, router]);
 
   const handleSignOut = useCallback(async () => {
+    // Forgotten before the session goes, so the next person on this
+    // browser is not attributed to the one who just left.
+    postHogReset();
     await signOut();
     router.push("/");
     router.refresh();
