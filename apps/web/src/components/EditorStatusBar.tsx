@@ -7,6 +7,15 @@ import { SyncModeMenu } from "./SyncModeMenu";
 
 export interface EditorStatusBarProps {
   sync: SyncState;
+  /**
+   * True when GitHub has refused the session token.
+   *
+   * Separate from `sync.lastErrorCode`, which only knows about pushes: a
+   * notebook with nothing queued to push has a clean sync state and a dead
+   * sign-in at the same time, and this bar was reporting the first while the
+   * second was the thing worth knowing.
+   */
+  sessionExpired?: boolean;
   workspace: Workspace | null;
   notePath: string | null;
   /**
@@ -72,12 +81,13 @@ export function EditorStatusBar({
   onSwitchBranch,
   onPropose,
   onSignIn,
+  sessionExpired = false,
 }: EditorStatusBarProps) {
   /**
    * An expired sign-in is the one failure retrying cannot fix, so it takes
    * over the whole status control rather than sitting behind it.
    */
-  const expired = sync.lastErrorCode === "unauthorized";
+  const expired = sync.lastErrorCode === "unauthorized" || sessionExpired;
   const status = describe(sync, expired);
 
   return (

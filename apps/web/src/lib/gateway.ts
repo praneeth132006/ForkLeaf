@@ -27,6 +27,54 @@ export class ApiGatewayError extends Error {
   }
 }
 
+/**
+ * Told when the server stops recognising this browser's sign-in.
+ *
+ * Every call in this file goes through `call`, so this is the one place that
+ * sees a 401 whatever asked for it — a tree read, a commit, an image. The
+ * alternative was what used to happen: each dialog checked `needsAuth` for its
+ * own errand and the parts of the app that never open a dialog — the editor
+ * with a note full of pictures in it — carried on as though nothing had
+ * changed, because nothing had told them.
+ *
+ * The server has already dropped the cookie by the time this fires. This is
+ * only the news reaching the page that is still showing an avatar.
+ */
+const expiryListeners = new Set<() => void>();
+
+/**
+ * Whether there is a GitHub sign-in here that could expire in the first place.
+ *
+ * Not every 401 is a session ending. Somebody who never signed in gets one
+ * from any route that needs a token, and announcing "your GitHub sign-in has
+ * expired" to a person who has never had one would be a scarier and less true
+ * statement than the silence it replaced. Only a session that was live and
+ * stopped being live is worth interrupting anybody over — so this is set from
+ * what the server said about the session, and cleared the moment the news goes
+ * out, which also keeps a page full of failing image requests from announcing
+ * the same thing forty times.
+ */
+let signedInToGitHub = false;
+
+/** Subscribes to the sign-in ending. Returns an unsubscribe function. */
+export function onSessionExpired(listener: () => void): () => void {
+  expiryListeners.add(listener);
+  return () => expiryListeners.delete(listener);
+}
+
+function announceExpiry(): void {
+  for (const listener of expiryListeners) {
+    // One listener throwing must not stop the rest being told: this is the
+    // notification that the app is signed out, and a page that misses it goes
+    // back to failing silently, which is the bug this exists to close.
+    try {
+      listener();
+    } catch (error) {
+      console.error("[forkleaf] Session-expiry listener failed:", error);
+    }
+  }
+}
+
 async function call<T>(url: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
   let response: Response;
   const { timeoutMs, ...rest } = init ?? {};
@@ -53,11 +101,18 @@ async function call<T>(url: string, init?: RequestInit & { timeoutMs?: number })
       error?: { code?: string; message?: string };
     } | null;
 
-    throw new ApiGatewayError(
+    const error = new ApiGatewayError(
       body?.error?.code ?? "unknown",
       body?.error?.message ?? `Request failed (${response.status})`,
       response.status,
     );
+
+    if (error.needsAuth && signedInToGitHub) {
+      signedInToGitHub = false;
+      announceExpiry();
+    }
+
+    throw error;
   }
 
   return (await response.json()) as T;
@@ -200,8 +255,13 @@ export interface SessionResponse {
  * no way out. The callers already treat a failure as "local mode", which is
  * the right answer when the server cannot be reached anyway.
  */
-export function fetchSession(): Promise<SessionResponse> {
-  return call<SessionResponse>("/api/session", { timeoutMs: SESSION_TIMEOUT_MS });
+export async function fetchSession(): Promise<SessionResponse> {
+  const session = await call<SessionResponse>("/api/session", { timeoutMs: SESSION_TIMEOUT_MS });
+  // The server is the only authority on this, and it is asked on every boot
+  // and after every sign-in, so this stays true to what the cookie actually
+  // holds rather than to what the page last rendered.
+  signedInToGitHub = session.mode === "github";
+  return session;
 }
 
 /** Generous — this is a guard against never, not a latency budget. */

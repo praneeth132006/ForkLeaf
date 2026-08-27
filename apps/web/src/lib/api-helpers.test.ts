@@ -1,4 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/session", () => ({
+  clearSessionCookie: vi.fn(async () => {}),
+  getSession: vi.fn(async () => null),
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 import {
   ApiError,
   assertName,
@@ -151,5 +160,36 @@ describe("withRateLimitAdvice", () => {
 
     await expect(withRateLimitAdvice(notFound, false)).rejects.toBeInstanceOf(GitHubError);
     await expect(withRateLimitAdvice(notFound, false)).rejects.toMatchObject({ code: "not-found" });
+  });
+});
+
+/**
+ * A session cookie can outlive the GitHub token inside it by up to thirty
+ * days, and nothing announces the moment it does. These cover the rule that
+ * closes that gap: a token GitHub refuses ends the session immediately, so the
+ * app cannot go on presenting itself as signed in while every call behind it
+ * fails.
+ */
+describe("forgetDeadSession", () => {
+  it("clears the session when GitHub refuses the token", async () => {
+    const { forgetDeadSession } = await import("./api-helpers");
+    const { clearSessionCookie } = await import("./session");
+
+    expect(await forgetDeadSession(new GitHubError("unauthorized", "Bad credentials"))).toBe(true);
+    expect(clearSessionCookie).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the session alone for every other failure", async () => {
+    const { forgetDeadSession } = await import("./api-helpers");
+    const { clearSessionCookie } = await import("./session");
+
+    // A rate limit, a private repository, a genuine 404: all recoverable, and
+    // signing the user out over any of them would be its own bug.
+    for (const code of ["rate-limited", "forbidden", "not-found", "conflict"] as const) {
+      expect(await forgetDeadSession(new GitHubError(code, "nope"))).toBe(false);
+    }
+    // Not every failure is even a GitHubError.
+    expect(await forgetDeadSession(new Error("socket hang up"))).toBe(false);
+    expect(clearSessionCookie).not.toHaveBeenCalled();
   });
 });

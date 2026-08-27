@@ -24,7 +24,13 @@ import {
   type EditorViewMode,
 } from "@forkleaf/types";
 import { dirname, serializeDocument } from "@forkleaf/markdown-engine";
-import { GitHubGateway, LocalGateway, fetchSession, type SessionResponse } from "@/lib/gateway";
+import {
+  GitHubGateway,
+  LocalGateway,
+  fetchSession,
+  onSessionExpired,
+  type SessionResponse,
+} from "@/lib/gateway";
 import { LOCAL_WORKSPACE, collapseBranchDuplicates } from "@/lib/workspaces";
 import { forgetLock, isPathLocked, lockedKey, renameLock, toggleLock } from "@/lib/locks";
 import { assetFrom, assetObjectUrl } from "@/lib/assets";
@@ -40,6 +46,16 @@ import { assetFrom, assetObjectUrl } from "@/lib/assets";
 export interface NotebookState {
   ready: boolean;
   session: SessionResponse | null;
+  /**
+   * True once GitHub has refused this session's token.
+   *
+   * Distinct from `session.mode === "local"`, which it also causes: somebody
+   * who never signed in is in local mode on purpose and should be offered a
+   * sign-in, while somebody whose token died was signed in a moment ago, has a
+   * repository connected, and needs telling what happened to it. The same
+   * "local" session with two different things worth saying about it.
+   */
+  sessionExpired: boolean;
   workspaces: Workspace[];
   activeWorkspace: Workspace | null;
   tree: TreeNode[];
@@ -195,6 +211,7 @@ export function useNotebook(request: NotebookRequest = {}) {
   const [state, setState] = useState<NotebookState>({
     ready: false,
     session: null,
+    sessionExpired: false,
     workspaces: [],
     activeWorkspace: null,
     tree: [],
@@ -385,6 +402,46 @@ export function useNotebook(request: NotebookRequest = {}) {
     };
     // `requested` is frozen at mount, so this still runs exactly once.
   }, [patch, requested.workspaceId]);
+
+  // ── The sign-in ending underneath us ────────────────────────────────────
+  /**
+   * A session cookie outlives the GitHub token inside it, and nothing says so.
+   *
+   * The token can be refused at any moment — the authorisation revoked, the
+   * same OAuth app signed into again elsewhere at a different access level,
+   * GitHub retiring it. The cookie is good for thirty days regardless, so the
+   * app went on showing an avatar, a repository and a sync indicator while
+   * every single call behind them came back 401. What the reader saw was a
+   * note whose nine screenshots had all turned into broken boxes, and nothing
+   * anywhere to say why. It read as the app having eaten their images.
+   *
+   * The server drops the cookie the moment GitHub refuses it. This is that
+   * fact arriving on the page: stop claiming to be signed in, and say so once,
+   * in words. Notes and unpushed changes are untouched — they are on this
+   * device, they stay on this device, and signing in again resumes pushing
+   * them.
+   */
+  useEffect(
+    () =>
+      onSessionExpired(() => {
+        const signedOut: SessionResponse = {
+          mode: "local",
+          user: null,
+          githubAvailable: true,
+          scopes: [],
+        };
+        // The note repository reads this ref for the login to stamp on a save.
+        // We no longer know who that is, and guessing would credit somebody's
+        // notes to a session GitHub has already thrown away.
+        sessionRef.current = signedOut;
+        setState((current) =>
+          current.sessionExpired
+            ? current
+            : { ...current, session: signedOut, sessionExpired: true },
+        );
+      }),
+    [],
+  );
 
   // ── Load the tree whenever the workspace changes ────────────────────────
   useEffect(() => {
