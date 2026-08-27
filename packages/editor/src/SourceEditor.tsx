@@ -71,6 +71,17 @@ export interface SourceEditorProps {
    * kind of difference that makes one of the two views feel broken.
    */
   slashActions?: ActionContext;
+  /**
+   * Makes the document readable but not writable.
+   *
+   * Both halves are needed and they are not the same thing: `EditorState.
+   * readOnly` stops the commands and the input handlers, and
+   * `EditorView.editable` takes the surface out of the tab order and tells the
+   * browser not to put a caret in it. With only the first, a stray keystroke
+   * does nothing but the editor still looks and behaves like something you are
+   * typing into, which is its own kind of lie.
+   */
+  readOnly?: boolean;
 }
 
 /** Caret location, in the terms a status bar uses. */
@@ -142,6 +153,7 @@ export function SourceEditor({
   onCursorChange,
   onImageFiles,
   slashActions,
+  readOnly = false,
 }: SourceEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -171,6 +183,10 @@ export function SourceEditor({
   // Extensions supplied by the caller can change (the mermaid linter closes
   // over the current error), so they live in a compartment we can reconfigure.
   const dynamicCompartment = useMemo(() => new Compartment(), []);
+  // Read-only gets its own compartment, so locking and unlocking a note is a
+  // reconfigure rather than a rebuild — a rebuild would drop the undo history
+  // and the scroll position every time somebody toggled the lock.
+  const readOnlyCompartment = useMemo(() => new Compartment(), []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -239,6 +255,11 @@ export function SourceEditor({
         editorTheme(),
         EditorView.domEventHandlers({
           paste: (event, view) => {
+            // Checked here as well as by `EditorState.readOnly`: this handler
+            // does not type anything, it uploads a file and dispatches the
+            // markdown itself, so the read-only state would never see it.
+            if (view.state.readOnly) return false;
+
             const files = imagesFrom(event.clipboardData);
             if (files.length === 0 || !onImageFilesRef.current) return false;
 
@@ -247,6 +268,8 @@ export function SourceEditor({
             return true;
           },
           drop: (event, view) => {
+            if (view.state.readOnly) return false;
+
             const files = imagesFrom(event.dataTransfer);
             if (files.length === 0 || !onImageFilesRef.current) return false;
 
@@ -280,6 +303,10 @@ export function SourceEditor({
           }
         }),
         dynamicCompartment.of(extensions ?? []),
+        readOnlyCompartment.of([
+          EditorState.readOnly.of(readOnly),
+          EditorView.editable.of(!readOnly),
+        ]),
       ],
     });
 
@@ -324,11 +351,26 @@ export function SourceEditor({
     emitted.current = [];
   }, [value]);
 
+  /**
+   * The live view, but only when it may be written to.
+   *
+   * Every method below that changes the document goes through this rather than
+   * through `viewRef` directly. `EditorState.readOnly` stops typing and the
+   * keymap; it does *not* stop a `view.dispatch` — so a toolbar button, which
+   * is exactly that, would edit a locked note happily. The toolbar is hidden
+   * when a note is locked, and this is what makes that a guarantee rather than
+   * a habit.
+   */
+  const writableView = () => {
+    const view = viewRef.current;
+    return view && !view.state.readOnly ? view : null;
+  };
+
   useImperativeHandle(
     handleRef,
     (): SourceEditorHandle => ({
       insertAtCursor: (text, cursorOffset) => {
-        const view = viewRef.current;
+        const view = writableView();
         if (!view) return;
 
         const { from, to } = view.state.selection.main;
@@ -343,7 +385,7 @@ export function SourceEditor({
       focus: () => viewRef.current?.focus(),
 
       wrapSelection: (before, after = before) => {
-        const view = viewRef.current;
+        const view = writableView();
         if (!view) return;
 
         const { from, to } = view.state.selection.main;
@@ -388,7 +430,7 @@ export function SourceEditor({
       },
 
       toggleLinePrefix: (prefix, pattern) => {
-        const view = viewRef.current;
+        const view = writableView();
         if (!view) return;
 
         const { from, to } = view.state.selection.main;
@@ -421,7 +463,7 @@ export function SourceEditor({
       },
 
       indent: (direction) => {
-        const view = viewRef.current;
+        const view = writableView();
         if (!view) return;
 
         const { from, to } = view.state.selection.main;
@@ -444,14 +486,14 @@ export function SourceEditor({
       },
 
       undo: () => {
-        const view = viewRef.current;
+        const view = writableView();
         if (!view) return;
         cmUndo(view);
         view.focus();
       },
 
       redo: () => {
-        const view = viewRef.current;
+        const view = writableView();
         if (!view) return;
         cmRedo(view);
         view.focus();
@@ -489,6 +531,16 @@ export function SourceEditor({
       effects: dynamicCompartment.reconfigure(extensions ?? []),
     });
   }, [extensions, dynamicCompartment]);
+
+  // Lock and unlock in place, for the same reason.
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: readOnlyCompartment.reconfigure([
+        EditorState.readOnly.of(readOnly),
+        EditorView.editable.of(!readOnly),
+      ]),
+    });
+  }, [readOnly, readOnlyCompartment]);
 
   return (
     <div

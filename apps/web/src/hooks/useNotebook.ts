@@ -26,6 +26,7 @@ import {
 import { dirname, serializeDocument } from "@forkleaf/markdown-engine";
 import { GitHubGateway, LocalGateway, fetchSession, type SessionResponse } from "@/lib/gateway";
 import { LOCAL_WORKSPACE, collapseBranchDuplicates } from "@/lib/workspaces";
+import { forgetLock, isPathLocked, lockedKey, renameLock, toggleLock } from "@/lib/locks";
 import { assetFrom, assetObjectUrl } from "@/lib/assets";
 
 /**
@@ -83,6 +84,22 @@ export interface NotebookState {
    * they chose, kept alongside the other per-device preferences.
    */
   pinnedPaths: string[];
+  /**
+   * Notes locked against editing on this device.
+   *
+   * A reference note is a note you read far more often than you write, and
+   * reading one means clicking around in it — at which point the caret is
+   * somewhere in the text and any stray keystroke is an edit that saves
+   * itself, commits itself, and is discovered later as a stray character in
+   * the middle of a paragraph.
+   *
+   * Kept per device, beside the other per-device preferences, rather than in
+   * the note's frontmatter. Locking is about protecting your own hands, not a
+   * property of the document — and writing it into the file would mean a
+   * commit every time somebody locked or unlocked a note, which is history
+   * nobody wants and a change the app made without being asked to write one.
+   */
+  lockedPaths: string[];
   /**
    * Folders the reader has open, in the order they were opened.
    *
@@ -200,6 +217,7 @@ export function useNotebook(request: NotebookRequest = {}) {
     busy: null,
     emptyFolders: [],
     pinnedPaths: [],
+    lockedPaths: [],
     expandedFolders: null,
     needsRepoChoice: false,
     remoteChange: null,
@@ -415,6 +433,9 @@ export function useNotebook(request: NotebookRequest = {}) {
 
       const pinned = (await dbRef.current?.getMeta<string[]>(pinnedKey(workspace.id))) ?? [];
       if (!cancelled) patch({ pinnedPaths: pinned });
+
+      const locked = (await dbRef.current?.getMeta<string[]>(lockedKey(workspace.id))) ?? [];
+      if (!cancelled) patch({ lockedPaths: locked });
 
       const expanded = await dbRef.current?.getMeta<string[]>(expandedKey(workspace.id));
       // No record at all is a first visit, not a deliberate "all closed" — the
@@ -640,16 +661,46 @@ export function useNotebook(request: NotebookRequest = {}) {
     }));
   }, []);
 
+  /**
+   * The last line of defence for a locked note.
+   *
+   * The editing surfaces are made read-only when a note is locked, which is
+   * what stops the keystrokes. This is here because "read-only" is a property
+   * of four different surfaces plus a paste handler plus a drop handler plus a
+   * toolbar, and a lock that holds only as long as every one of them remembers
+   * to check is not a lock. Everything that writes a note's content goes
+   * through here.
+   */
+  const isLocked = useCallback(
+    (path: string | null | undefined) => isPathLocked(state.lockedPaths, path),
+    [state.lockedPaths],
+  );
+
+  const putLocked = useCallback(
+    (next: string[]) => {
+      const workspace = state.activeWorkspace;
+      patch({ lockedPaths: next });
+      if (workspace) void dbRef.current?.putMeta(lockedKey(workspace.id), next);
+    },
+    [state.activeWorkspace, patch],
+  );
+
+  const toggleLocked = useCallback(
+    (path: string) => putLocked(toggleLock(state.lockedPaths, path)),
+    [state.lockedPaths, putLocked],
+  );
+
   const saveNote = useCallback(
     async (content: string) => {
       const notes = repoRef.current;
       if (!notes || !activeNote) return;
+      if (isLocked(activeNote.path)) return;
 
       // Optimistic: show the new content immediately, persist in the background.
       patchOpenNote(activeNote.path, { content, dirty: true });
       await notes.saveNote(activeNote, content);
     },
-    [activeNote, patchOpenNote],
+    [activeNote, patchOpenNote, isLocked],
   );
 
   /**
@@ -665,22 +716,26 @@ export function useNotebook(request: NotebookRequest = {}) {
       const notes = repoRef.current;
       const target = state.openNotes.find((note) => note.path === path);
       if (!notes || !target || target.content === content) return;
+      if (isLocked(path)) return;
 
       patchOpenNote(path, { content, dirty: true });
       await notes.saveNote(target, content);
     },
-    [state.openNotes, patchOpenNote],
+    [state.openNotes, patchOpenNote, isLocked],
   );
 
   const updateFrontmatter = useCallback(
     async (frontmatter: Note["frontmatter"]) => {
       const notes = repoRef.current;
       if (!notes || !activeNote) return;
+      // The properties panel is a text field like any other, and a title
+      // half-retyped by accident is exactly what locking exists to prevent.
+      if (isLocked(activeNote.path)) return;
 
       patchOpenNote(activeNote.path, { frontmatter, dirty: true });
       await notes.saveNote(activeNote, activeNote.content, frontmatter);
     },
-    [activeNote, patchOpenNote],
+    [activeNote, patchOpenNote, isLocked],
   );
 
   const createNote = useCallback(
@@ -738,13 +793,27 @@ export function useNotebook(request: NotebookRequest = {}) {
 
       await notes.deletePath(workspace.id, path, shaFor(state.tree, path));
 
+      // A path left in the locked list would lock the next note created at it,
+      // which is a haunting rather than a feature.
+      const remaining = forgetLock(state.lockedPaths, path);
+      if (remaining.length !== state.lockedPaths.length) putLocked(remaining);
+
       const open = state.openNotes.filter((candidate) => candidate.path !== path);
       const activePath = state.activePath === path ? (open[0]?.path ?? null) : state.activePath;
 
       patch({ tree: removeFromTree(state.tree, path), openNotes: open, activePath });
       rememberTabs(workspace.id, open, activePath);
     },
-    [state.tree, state.openNotes, state.activePath, state.activeWorkspace, patch, rememberTabs],
+    [
+      state.tree,
+      state.openNotes,
+      state.activePath,
+      state.activeWorkspace,
+      state.lockedPaths,
+      putLocked,
+      patch,
+      rememberTabs,
+    ],
   );
 
   const deleteNote = useCallback(async (note: Note) => deleteNoteAt(note.path), [deleteNoteAt]);
@@ -755,6 +824,12 @@ export function useNotebook(request: NotebookRequest = {}) {
       if (!notes) return;
 
       const renamed = await notes.renameNote(note, toPath);
+
+      // Renaming a note is not unlocking it. Without this the lock falls off
+      // silently, and the reader finds out by typing into a note they had
+      // every reason to believe was protected.
+      const carried = renameLock(state.lockedPaths, note.path, renamed.path);
+      if (state.lockedPaths.includes(note.path)) putLocked(carried);
 
       const open = state.openNotes.map((candidate) =>
         candidate.path === note.path ? renamed : candidate,
@@ -769,7 +844,16 @@ export function useNotebook(request: NotebookRequest = {}) {
       if (state.activeWorkspace) rememberTabs(state.activeWorkspace.id, open, activePath);
       return renamed;
     },
-    [state.tree, state.openNotes, state.activePath, state.activeWorkspace, patch, rememberTabs],
+    [
+      state.tree,
+      state.openNotes,
+      state.activePath,
+      state.activeWorkspace,
+      state.lockedPaths,
+      putLocked,
+      patch,
+      rememberTabs,
+    ],
   );
 
   /**
@@ -811,6 +895,14 @@ export function useNotebook(request: NotebookRequest = {}) {
     [state.pinnedPaths, putPinned],
   );
 
+  /**
+   * Locks a note against editing, or unlocks one already locked.
+   *
+   * Per note rather than per workspace: the point is a handful of references
+   * you keep open and keep reading, not a mode you have to remember you are
+   * in. A path that is not in the list is editable, which is what every note
+   * is until somebody says otherwise.
+   */
   /**
    * Moves a pinned note up or down the list.
    *
@@ -1371,6 +1463,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       renameNote,
       createFolder,
       togglePinned,
+      toggleLocked,
+      isLocked,
       movePinned,
       renameFolder,
       deleteFolder,
@@ -1423,6 +1517,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       renameNote,
       createFolder,
       togglePinned,
+      toggleLocked,
+      isLocked,
       movePinned,
       renameFolder,
       deleteFolder,

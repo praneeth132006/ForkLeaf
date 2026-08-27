@@ -14,10 +14,15 @@ import { assertPublicUrl, UnsafeUrlError } from "@/lib/safe-fetch";
  *
  * Deliberately narrower than `/api/capture`, which this is not a second copy
  * of: no archiving, no snapshot lookup, a shorter timeout and a much smaller
- * read, because this fires on hover and has to be cheap. It also returns text
- * only — never an image URL. A remote image in a card would mean the reader's
- * browser fetching from whatever host a note links to, which is a tracking
- * pixel with extra steps, and our own CSP would refuse to load it anyway.
+ * read, because this fires on hover and has to be cheap.
+ *
+ * The picture a page offers of itself comes back as a link to `/api/link-image`
+ * rather than as the address it actually lives at. The CSP would allow the
+ * direct address — notes embed images from anywhere — so this is a deliberate
+ * choice, not a workaround: an `<img>` pointing at the linked site would mean
+ * the reader's browser connecting to it, with a referrer and an IP address,
+ * merely because the pointer crossed a word in a note. Hovering a link should
+ * not tell the other end that you did.
  *
  * Signed in only, and rate limited: it fetches an address the caller chose, so
  * it is exactly the shape of thing that gets pointed at somebody else's server
@@ -146,6 +151,36 @@ export interface LinkPreview {
   description: string | null;
   /** Where it lives, which is the part that is always known. */
   host: string;
+  /**
+   * A same-origin URL for the page's own picture of itself, when it offers one.
+   *
+   * Always one of ours — never the address the image actually lives at. See
+   * the note above: that distinction is the whole point.
+   */
+  image: string | null;
+}
+
+/**
+ * Turns a page's advertised image into a URL of ours, or into nothing.
+ *
+ * Relative addresses are resolved against the page, because plenty of sites
+ * write `og:image` as `/og/cover.png`. Anything that will not parse, or is not
+ * http(s), is dropped here rather than sent to a route that would only refuse
+ * it a moment later.
+ */
+function proxied(candidate: string | null, base: URL): string | null {
+  if (!candidate) return null;
+
+  let absolute: URL;
+  try {
+    absolute = new URL(candidate, base);
+  } catch {
+    return null;
+  }
+
+  if (absolute.protocol !== "http:" && absolute.protocol !== "https:") return null;
+
+  return `/api/link-image?url=${encodeURIComponent(absolute.toString())}`;
 }
 
 export async function GET(request: NextRequest) {
@@ -194,6 +229,7 @@ export async function GET(request: NextRequest) {
           ? metaContent(head, ["description", "og:description", "twitter:description"])
           : null,
         host: url.host,
+        image: head ? proxied(metaContent(head, ["og:image", "twitter:image"]), url) : null,
       };
 
       return preview;

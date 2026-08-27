@@ -148,6 +148,15 @@ export function EditorWorkspace() {
   const [cursor, setCursor] = useState<CursorPosition | null>(null);
   const [theme, , toggleTheme] = useTheme();
 
+  /**
+   * Whether the note on screen is locked against editing.
+   *
+   * Read here rather than passed down piecemeal because four things depend on
+   * it: the editing surfaces, the formatting bar, the properties panel, and
+   * the button that says so.
+   */
+  const noteLocked = notebook.isLocked(notebook.activePath);
+
   // Signed in with nothing connected: ask where the notes should live rather
   // than creating a repository on the user's account without being asked. The
   // dashboard asks the same question with more room; this is the answer for
@@ -705,6 +714,9 @@ export function EditorWorkspace() {
 
         // Typed since it was read: their version is the one that counts.
         if (notebook.note?.path !== path || notebook.note.content !== opened) return;
+        // Repairing image links rewrites the note, which is exactly the kind
+        // of well-meaning automatic change a locked note is locked against.
+        if (notebook.isLocked(path)) return;
 
         await notebook.saveNote(result.content);
         setNotice(
@@ -932,6 +944,14 @@ export function EditorWorkspace() {
           run: () => setDialog("export"),
         },
         {
+          id: "lock",
+          label: noteLocked ? "Unlock this note" : "Lock this note against editing",
+          group: "Notes",
+          hint: "⌘⇧L",
+          keywords: "lock unlock read only readonly protect freeze",
+          run: () => notebook.toggleLocked(note.path),
+        },
+        {
           id: "rename",
           label: "Rename this note",
           group: "Notes",
@@ -1054,6 +1074,9 @@ export function EditorWorkspace() {
     // Signing in adds the capture command; without this the list would keep
     // its signed-out shape until something else happened to invalidate it.
     user,
+    // The lock command's label is the state, so it has to be rebuilt when the
+    // state changes or the palette offers to lock a note that already is.
+    noteLocked,
     theme,
     sidebarCollapsed,
     panelCollapsed,
@@ -1124,6 +1147,16 @@ export function EditorWorkspace() {
           if (event.shiftKey) {
             event.preventDefault();
             router.push("/dashboard");
+          }
+          break;
+
+        case "l":
+          // ⌘⇧L, not ⌘L: the browser's own ⌘L is the address bar, and taking
+          // that away from somebody who meant it would be worse than the
+          // shortcut not existing.
+          if (event.shiftKey && note) {
+            event.preventDefault();
+            notebook.toggleLocked(note.path);
           }
           break;
 
@@ -1307,6 +1340,28 @@ export function EditorWorkspace() {
                 </kbd>
               </button>
 
+              {/* Beside the note it applies to, not in a menu: the whole
+                  point is to be able to see at a glance whether the thing you
+                  are about to type into will accept it. Absent with no note
+                  open, since there would be nothing to lock. */}
+              {note && (
+                <IconButton
+                  onClick={() => notebook.toggleLocked(note.path)}
+                  label={
+                    noteLocked
+                      ? "Unlock this note so it can be edited (⌘⇧L)"
+                      : "Lock this note against editing (⌘⇧L)"
+                  }
+                  className={
+                    noteLocked
+                      ? "inline-flex bg-[var(--fl-accent-soft)] text-[var(--fl-accent)]"
+                      : ""
+                  }
+                >
+                  {noteLocked ? <LockedGlyph /> : <UnlockedGlyph />}
+                </IconButton>
+              )}
+
               <IconButton onClick={() => setDialog("help")} label="Help (⌘⇧?)">
                 <svg
                   viewBox="0 0 16 16"
@@ -1449,6 +1504,7 @@ export function EditorWorkspace() {
             {note ? (
               <MarkdownEditor
                 key={note.id}
+                readOnly={noteLocked}
                 extraActions={editorExtras}
                 onExtraAction={(id) => setDialog(id === "link-file" ? "link-file" : "capture")}
                 value={note.content}
@@ -1490,6 +1546,7 @@ export function EditorWorkspace() {
               onToggle={() => (drawer === "document" ? setDrawer(null) : setPanelCollapsed(true))}
               note={note}
               workspace={workspace}
+              locked={noteLocked}
               onFrontmatterChange={notebook.updateFrontmatter}
               onRewrite={notebook.saveNote}
               onExport={() => {
@@ -1558,6 +1615,7 @@ export function EditorWorkspace() {
       </div>
 
       <EditorStatusBar
+        locked={noteLocked}
         onSwitchBranch={notebook.switchBranch}
         onPropose={() => setDialog("propose")}
         sync={notebook.sync}
@@ -1655,6 +1713,12 @@ export function EditorWorkspace() {
           onInsert={(link) => {
             const current = notebook.note;
             if (!current) return;
+            // The write would be refused upstream anyway; saying so is the
+            // difference between a lock and a button that does nothing.
+            if (noteLocked) {
+              setNotice("This note is locked. Unlock it — ⌘⇧L — to add to it.");
+              return;
+            }
             // Appended rather than inserted at the caret: the editor owns the
             // selection and this dialog has taken focus away from it.
             const separator = current.content.endsWith("\n") ? "" : "\n";
@@ -1670,6 +1734,10 @@ export function EditorWorkspace() {
           onInsert={async (markdown) => {
             const current = notebook.note;
             if (!current) return;
+            if (noteLocked) {
+              setNotice("This note is locked. Unlock it — ⌘⇧L — to add a source to it.");
+              return;
+            }
             const separator = current.content.endsWith("\n") ? "" : "\n";
             await notebook.saveNote(`${current.content}${separator}\n${markdown}\n`);
             setNotice("Source added to the end of this note.");
@@ -1849,6 +1917,52 @@ function ExtraGlyph({ d }: { d: string }) {
       strokeLinejoin="round"
     >
       <path d={d} />
+    </svg>
+  );
+}
+
+/**
+ * A closed padlock — this note will not take a keystroke.
+ *
+ * Two glyphs rather than one drawn in two colours: colour alone is not a
+ * state, and the shackle sitting up off the body is the part that reads as
+ * "open" at a glance and at any contrast.
+ */
+function LockedGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3.25" y="7" width="9.5" height="7" rx="1.5" />
+      <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+      <path d="M8 9.75v1.5" />
+    </svg>
+  );
+}
+
+/** The same padlock, open. */
+function UnlockedGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3.25" y="7" width="9.5" height="7" rx="1.5" />
+      <path d="M5.5 7V5a2.5 2.5 0 0 1 4.9-.6" />
+      <path d="M8 9.75v1.5" />
     </svg>
   );
 }

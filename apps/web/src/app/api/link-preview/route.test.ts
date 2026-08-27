@@ -129,11 +129,37 @@ describe("GET /api/link-preview — reading the page", () => {
     expect((await get("https://example.com/a.pdf")).body.title).toBeNull();
   });
 
-  it("never returns an image, so nothing in a card fetches from the page's host", async () => {
-    serve(() => page(`<head><meta property="og:image" content="https://tracker.example/px.png">`));
+  it("returns the page's picture as one of our own addresses, never the site's", async () => {
+    // An <img> pointing at the linked host would tell that host the pointer
+    // passed over a word in somebody's private note.
+    serve(() => page(`<head><meta property="og:image" content="https://cdn.example/cover.png">`));
 
     const { body } = await get("https://example.com/a");
-    expect(JSON.stringify(body)).not.toContain("tracker.example");
+
+    expect(body.image).toBe(
+      `/api/link-image?url=${encodeURIComponent("https://cdn.example/cover.png")}`,
+    );
+    expect(body.image.startsWith("/api/")).toBe(true);
+  });
+
+  it("resolves a picture written as a path against the page it was found on", async () => {
+    serve(() => page(`<head><meta property="og:image" content="/og/cover.png">`));
+
+    expect((await get("https://example.com/deep/page")).body.image).toBe(
+      `/api/link-image?url=${encodeURIComponent("https://example.com/og/cover.png")}`,
+    );
+  });
+
+  it("drops a picture that is not an http address", async () => {
+    serve(() => page(`<head><meta property="og:image" content="data:image/png;base64,AAAA">`));
+
+    expect((await get("https://example.com/a")).body.image).toBeNull();
+  });
+
+  it("has no picture when the page offers none", async () => {
+    serve(() => page("<head><title>Plain</title></head>"));
+
+    expect((await get("https://example.com/plain")).body.image).toBeNull();
   });
 });
 

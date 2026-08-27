@@ -438,6 +438,13 @@ select:focus-visible {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
+  /*
+   * A link looks like a link and behaves like one, so the pointer has to say
+   * so. In the rich-text editor the surrounding text is editable, which means
+   * the browser draws an I-beam over everything including the links in it —
+   * and a link that gives no sign of being clickable is one nobody clicks.
+   */
+  cursor: pointer;
 }
 
 /*

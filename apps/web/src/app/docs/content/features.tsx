@@ -183,19 +183,29 @@ hello world
         A note that cites a page has a hole in it waiting to open: the page moves, the site is sold,
         the post is deleted, and the citation becomes a dead link that still looks sourced.
       </P>
+      <P>
+        There are three ways in, and they all open the same dialog: the properties panel →{" "}
+        <strong>Capture a web page as a source</strong>; the <Code>/</Code> menu in the editor →{" "}
+        <strong>Web source</strong>; or <Code>⌘K</Code> → <strong>Capture a web page</strong>.
+      </P>
       <OL>
         <LI>
-          Properties panel → <strong>Capture a web page as a source</strong>.
+          Paste the address — the <strong>Paste</strong> button fills it from your clipboard — and
+          press <strong>Capture</strong>, or just press Enter.
         </LI>
         <LI>
-          Paste the address and press <strong>Capture</strong>.
+          Two things are looked for, and each is reported as it arrives. The page&rsquo;s title
+          comes back in about a second. The archived copy can take up to a minute, because a page
+          the Wayback Machine has never seen has to be archived before it can be linked, and the
+          dialog says so while it waits rather than showing a bare spinner.
         </LI>
         <LI>
-          It shows what it found — the page title, and whether the Wayback Machine has an archived
-          copy and how old it is.
+          The citation is shown exactly as it will be written into the note, before it is written.
         </LI>
         <LI>
-          Press <strong>Add to this note</strong>.
+          Press <strong>Add to this note</strong>. You can press it while the archive lookup is
+          still running — the citation is worth having either way, and it says for itself whether an
+          archived copy exists.
         </LI>
       </OL>
       <P>The citation is written at the end of the note as an ordinary blockquote:</P>
@@ -219,10 +229,15 @@ hello world
         hovering a link never tells that site you did.
       </P>
       <Note>
-        Capturing needs you to be signed in, because the fetch happens on the server. It refuses
-        addresses that resolve inside a private network, which is why it cannot capture a page on
-        your own machine or an intranet.
+        Capturing needs you to be signed in, because the fetch happens on the server — your browser
+        never contacts the page being cited. It refuses addresses that resolve inside a private
+        network, which is why it cannot capture a page on your own machine or an intranet, and it is
+        rate limited at twenty captures every five minutes.
       </Note>
+      <P>
+        Nothing is inserted into a note that is <strong>locked</strong>; the dialog says so rather
+        than appearing to work. See <strong>Reading a note</strong> for what locking does.
+      </P>
     </>
   );
 }

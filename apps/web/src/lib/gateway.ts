@@ -485,8 +485,26 @@ export interface CaptureResult {
  * The address is resolved and checked server-side before anything is fetched —
  * see `lib/safe-fetch` for why that cannot be done in the browser.
  */
-export async function capturePage(url: string): Promise<CaptureResult> {
-  return call("/api/capture", { method: "POST", body: JSON.stringify({ url }) });
+export async function capturePage(
+  url: string,
+  /**
+   * Which half of the work to wait for.
+   *
+   * `page` is the fast one — a title, in about a second. `archive` is the slow
+   * one, because a page the Wayback Machine has never seen has to be archived
+   * before it can be linked, and Save Page Now takes as long as it takes. The
+   * capture dialog asks for both at once and shows each as it lands, rather
+   * than making the reader watch a spinner for the length of the slower one.
+   */
+  want: "page" | "archive" | "both" = "both",
+): Promise<CaptureResult> {
+  return call("/api/capture", {
+    method: "POST",
+    body: JSON.stringify({ url, want }),
+    // Longer than the server's own ceiling for the archive step, so a slow
+    // snapshot is reported by the server rather than cut off here.
+    timeoutMs: want === "page" ? 15_000 : 70_000,
+  });
 }
 
 /**
@@ -523,6 +541,8 @@ export interface LinkPreviewResult {
   title: string | null;
   description: string | null;
   host: string;
+  /** A same-origin URL for the page's own picture of itself, or null. */
+  image: string | null;
 }
 
 /**

@@ -22,6 +22,14 @@ export interface EditorStatusBarProps {
   cursor: CursorPosition | null;
   /** Word count of the open note. */
   words: number;
+  /**
+   * True when the open note is locked against editing.
+   *
+   * Stated here as well as in the header because this is the bar people read
+   * to answer "is my writing safe" — and "why is nothing I type appearing" is
+   * the same kind of question.
+   */
+  locked?: boolean;
   /** How this workspace is configured to push, and how to change it. */
   syncPreference: SyncPreference;
   onSyncModeChange: (mode: SyncMode, intervalMinutes?: number) => void | Promise<void>;
@@ -56,6 +64,7 @@ export function EditorStatusBar({
   localFile,
   cursor,
   words,
+  locked = false,
   syncPreference,
   onSyncModeChange,
   onSyncNow,
@@ -149,6 +158,28 @@ export function EditorStatusBar({
           <span className="hidden truncate font-mono lg:inline" title={notePath}>
             {notePath}
           </span>
+
+          {locked && (
+            <span
+              title="This note is locked against editing. Unlock it from the header, or with ⌘⇧L."
+              className="flex shrink-0 items-center gap-1 rounded-full bg-[var(--fl-accent-soft)] px-2 py-0.5 text-[var(--fl-accent)]"
+            >
+              <svg
+                viewBox="0 0 16 16"
+                className="h-3 w-3"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3.5" y="7" width="9" height="6.5" rx="1.4" />
+                <path d="M5.75 7V5.2a2.25 2.25 0 0 1 4.5 0V7" />
+              </svg>
+              Locked
+            </span>
+          )}
 
           {localFile && (
             <span
