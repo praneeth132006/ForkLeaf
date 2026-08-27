@@ -488,3 +488,32 @@ export interface CaptureResult {
 export async function capturePage(url: string): Promise<CaptureResult> {
   return call("/api/capture", { method: "POST", body: JSON.stringify({ url }) });
 }
+
+/**
+ * One file out of a repository, at the revision a `[[repo:…]]` link named.
+ *
+ * Separate from the gateway class, which answers for workspaces: a repository
+ * link can name a file in a repository nobody has connected as a workspace,
+ * and in a directory the workspace does not file its notes in. `ref` is passed
+ * as the branch parameter because to the contents API a commit and a branch
+ * are the same kind of thing — which is what makes a pinned link show the file
+ * as it was when it was described, rather than as it is now.
+ */
+export async function readRepoFile(options: {
+  owner: string;
+  repo: string;
+  ref: string;
+  path: string;
+}): Promise<{ content: string; sha: string; size?: number } | null> {
+  const params = new URLSearchParams({
+    owner: options.owner,
+    repo: options.repo,
+    branch: options.ref,
+    path: options.path,
+  });
+
+  const { file } = await call<{ file: { content: string; sha: string; size?: number } | null }>(
+    `/api/gh/file?${params.toString()}`,
+  );
+  return file;
+}

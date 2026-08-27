@@ -131,6 +131,12 @@ hello world
         Afterwards, the <strong>Freshness</strong> section of the properties panel lists the files
         this note links to and whether each has changed since.
       </P>
+      <P>
+        Click the link — or the file&rsquo;s name in the Freshness list — to read it without leaving
+        the note. It opens at the revision the link pinned, not at whatever the branch holds now,
+        which is what lets you see what the note was actually written about. Markdown is rendered;
+        anything else is shown as highlighted source, with a way through to github.com.
+      </P>
 
       <H2 id="freshness">7. Finding notes that have gone off</H2>
       <P>

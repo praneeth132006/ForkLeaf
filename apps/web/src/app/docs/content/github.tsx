@@ -274,6 +274,14 @@ export function Repositories() {
         Opening a pull request instead of committing directly is not currently supported. It is a
         commonly requested feature and it is tracked in the repository&rsquo;s issues.
       </P>
+      <P>
+        Switching branch from the status bar moves the workspace across: open notes are closed,
+        because their content and base revisions belong to the branch you left, and the file tree
+        and every note are re-read from the branch you moved to. The repository is still listed once
+        in the switcher — a branch is not a second connection to the same repository. The one
+        exception is a branch you left with edits that never reached GitHub: that stays listed on
+        its own, because the writing only exists on this device and closing it away would lose it.
+      </P>
 
       <H2 id="layout">What the repository looks like</H2>
       <Pre label="forkleaf-notes/">{`README.md

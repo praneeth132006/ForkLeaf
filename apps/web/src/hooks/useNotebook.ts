@@ -25,7 +25,7 @@ import {
 } from "@forkleaf/types";
 import { dirname, serializeDocument } from "@forkleaf/markdown-engine";
 import { GitHubGateway, LocalGateway, fetchSession, type SessionResponse } from "@/lib/gateway";
-import { LOCAL_WORKSPACE } from "@/lib/workspaces";
+import { LOCAL_WORKSPACE, collapseBranchDuplicates } from "@/lib/workspaces";
 import { assetFrom, assetObjectUrl } from "@/lib/assets";
 
 /**
@@ -316,9 +316,33 @@ export function useNotebook(request: NotebookRequest = {}) {
           workspaces[0] ??
           null;
 
+        /**
+         * The rows earlier versions left behind, one per branch ever opened.
+         *
+         * Switching branches used to add a workspace and keep the old one, so
+         * a repository read on three branches is listed three times under one
+         * name on this device right now. Collapsed on the way in, against the
+         * workspace being opened — and only where the branch being retired has
+         * nothing waiting to be pushed.
+         */
+        const listed =
+          active && !active.isLocal
+            ? await collapseBranchDuplicates({
+                workspaces,
+                keep: active,
+                notes,
+                db,
+                unregister: (id) => {
+                  if (gateway instanceof GitHubGateway) gateway.unregister(id);
+                },
+              }).catch(() => workspaces)
+            : workspaces;
+
+        if (cancelled) return;
+
         patch({
           session,
-          workspaces,
+          workspaces: listed,
           activeWorkspace: active,
           needsRepoChoice,
           ready: true,
@@ -959,9 +983,16 @@ export function useNotebook(request: NotebookRequest = {}) {
    * Moves the current workspace onto another branch, or onto a fork.
    *
    * A branch is not a different workspace as far as the user is concerned — it
-   * is the same notes, one revision sideways — so this edits the workspace in
-   * place rather than creating a second entry for every branch. Open notes are
-   * cleared because their content and base SHAs belong to the old branch.
+   * is the same notes, one revision sideways. The stored row is still per
+   * branch, because notes, queued commits and the cached tree are filed under
+   * the workspace id and a note on `main` is not the note at that path on a
+   * draft branch — but the row for the branch being left is retired, so the
+   * switcher stays a list of repositories rather than growing a duplicate of
+   * the same repository for every branch ever opened.
+   *
+   * A branch left with unpushed edits is kept; see `collapseBranchDuplicates`.
+   * Open notes are cleared because their content and base SHAs belong to the
+   * old branch.
    */
   const switchBranch = useCallback(
     async (branch: string, repo?: { owner: string; repo: string }) => {
@@ -983,13 +1014,32 @@ export function useNotebook(request: NotebookRequest = {}) {
         lastOpenedAt: new Date().toISOString(),
       };
 
+      // Nothing to do when the branch is already the one being asked for:
+      // re-adding it would clear the open notes and re-read the tree for a
+      // move that never happened.
+      if (next.id === current.id) return;
+
       await notes.addWorkspace(next);
-      if (gatewayRef.current instanceof GitHubGateway) {
-        gatewayRef.current.register(next);
-      }
+      const gateway = gatewayRef.current;
+      if (gateway instanceof GitHubGateway) gateway.register(next);
+
+      const listed = [...state.workspaces.filter((w) => w.id !== next.id), next];
+      const db = dbRef.current;
+
+      const workspaces = db
+        ? await collapseBranchDuplicates({
+            workspaces: listed,
+            keep: next,
+            notes,
+            db,
+            unregister: (id) => {
+              if (gateway instanceof GitHubGateway) gateway.unregister(id);
+            },
+          })
+        : listed;
 
       patch({
-        workspaces: [...state.workspaces.filter((w) => w.id !== next.id), next],
+        workspaces,
         activeWorkspace: next,
         openNotes: [],
         activePath: null,

@@ -217,6 +217,11 @@ export function WysiwygEditor({
       Link.configure({
         openOnClick: false,
         autolink: true,
+        // Carried on the mark so a link survives into exported HTML pointing
+        // outward rather than replacing the page it was exported from. In the
+        // editor itself the click is handled below, since an editable document
+        // does not follow hrefs.
+        HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" },
         // Anything outside this list is dropped, which closes the
         // javascript:-URL XSS vector on pasted links.
         protocols: ["http", "https", "mailto"],
@@ -370,6 +375,28 @@ export function WysiwygEditor({
       attributes: {
         class: "fl-prose focus:outline-none min-h-[50vh]",
         "aria-label": "Note content",
+      },
+      /**
+       * ⌘/Ctrl-click opens an ordinary link, in a tab of its own.
+       *
+       * `openOnClick` is off — a plain click has to keep placing the caret,
+       * because this is text being written and a link you cannot put the
+       * cursor inside is a link you cannot edit. That left links in rich text
+       * with no way to follow them at all: a captured web source rendered its
+       * address and its archived copy, and clicking either did nothing.
+       *
+       * The same modifier the wikilink extension uses, for the same reason.
+       */
+      handleClick: (_view, _pos, event) => {
+        if (!event.metaKey && !event.ctrlKey) return false;
+
+        const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>("a[href]");
+        const href = anchor?.getAttribute("href") ?? "";
+        if (!/^(https?:\/\/|mailto:)/i.test(href)) return false;
+
+        event.preventDefault();
+        window.open(href, "_blank", "noopener,noreferrer");
+        return true;
       },
       handlePaste: (view, event) => {
         const files = imagesFrom(event.clipboardData);

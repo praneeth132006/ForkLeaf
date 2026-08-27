@@ -2,7 +2,7 @@
 
 import React, { useCallback, useMemo, useState } from "react";
 import type { Note, NoteFrontmatter, SyncMode, Workspace } from "@forkleaf/types";
-import type { LinkRef } from "@forkleaf/markdown-engine";
+import type { LinkRef, RepoTarget } from "@forkleaf/markdown-engine";
 import { extractOutline, documentStats, serializeDocument } from "@forkleaf/markdown-engine";
 import { exportNote, printToPdf, downloadResult } from "@forkleaf/exporter";
 import { exportImageResolver } from "@/lib/export-images";
@@ -37,6 +37,8 @@ export interface EditorRightPanelProps {
   onReview?: () => void;
   /** Opens the file picker; absent for a workspace with no repository. */
   onLinkFile?: () => void;
+  /** Reads a linked file in place, rather than sending the reader to github.com. */
+  onOpenFile?: (target: RepoTarget) => void;
   /** Opens the capture dialog; absent when signed out. */
   onCapture?: () => void;
   /** Opens the publish dialog. Absent for a workspace with no repository. */
@@ -107,6 +109,7 @@ export function EditorRightPanel({
   onShowHistory,
   onReview,
   onLinkFile,
+  onOpenFile,
   onCapture,
   onRewrite,
   onPublish,
@@ -517,6 +520,7 @@ export function EditorRightPanel({
                   updatedAt={note.updatedAt ?? null}
                   repo={workspace && !workspace.isLocal ? workspace.repo : null}
                   onChange={onRewrite}
+                  {...(onOpenFile ? { onOpenFile } : {})}
                 />
               </Section>
             )}
@@ -863,16 +867,31 @@ function LinkGlyph() {
   );
 }
 
-/** A page with a link on it — a file, pointed at. */
+/**
+ * A page with a link on it — a file, pointed at.
+ *
+ * Drawn on `FileGlyph`'s outline, deliberately: these two sit in the same
+ * column of the same menu, and the file icon that meant "export a file" and
+ * the one that meant "link a file" used to be different sizes, different
+ * stroke weights and different shapes. The chain link is the only thing that
+ * distinguishes them, which is the only thing that differs.
+ */
 function FileLinkGlyph() {
   return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
-      <path d="M9 1.5H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5.5Z" />
-      <path d="M9 1.5v4h4" />
-      <path
-        d="M6.5 10.5a1.5 1.5 0 0 1 1.5-1.5h.5M9.5 10.5A1.5 1.5 0 0 1 8 12h-.5"
-        strokeLinecap="round"
-      />
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9 1.75H4.5A1.75 1.75 0 0 0 2.75 3.5v9c0 .97.78 1.75 1.75 1.75h7a1.75 1.75 0 0 0 1.75-1.75V6z" />
+      <path d="M9 1.75V6h4.25" />
+      <path d="M7.1 11.4a1.2 1.2 0 0 0 1.7.1l.9-.9a1.2 1.2 0 0 0-1.7-1.7l-.4.4" />
+      <path d="M8.4 10.1a1.2 1.2 0 0 0-1.7-.1l-.9.9a1.2 1.2 0 0 0 1.7 1.7l.4-.4" />
     </svg>
   );
 }
@@ -880,11 +899,20 @@ function FileLinkGlyph() {
 /** A bookmark with a clock — a page, kept at a moment. */
 function CaptureGlyph() {
   return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
-      <path d="M4 2h6a1 1 0 0 1 1 1v5.5" />
-      <path d="M4 2v11l3-2.2" strokeLinecap="round" />
-      <circle cx="11" cy="11" r="3.2" />
-      <path d="M11 9.6V11l1 .8" strokeLinecap="round" />
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3.75 2.75h6.5a1 1 0 0 1 1 1V7" />
+      <path d="M3.75 2.75v10.5L6.5 11.2" />
+      <circle cx="11" cy="11" r="3" />
+      <path d="M11 9.6v1.5l1 .7" />
     </svg>
   );
 }

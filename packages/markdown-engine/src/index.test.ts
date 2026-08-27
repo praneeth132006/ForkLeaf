@@ -195,6 +195,20 @@ describe("rendering", () => {
     const html = markdownToHtml('<img src="x" onerror="alert(1)">');
     expect(html).not.toContain("onerror");
   });
+
+  it("opens a link out of the notebook in a tab of its own", () => {
+    // Following one in place replaced the editor — and any unsaved paragraph
+    // in it — with the page being cited.
+    const html = markdownToHtml("[the source](https://example.com/article)");
+    expect(html).toContain('target="_blank"');
+    // Without `noopener` the opened page gets a live handle on this one.
+    expect(html).toContain('rel="noopener noreferrer"');
+  });
+
+  it("leaves in-page and in-app links alone", () => {
+    const html = markdownToHtml("[a heading](#somewhere) and [a note](/notes/roadmap)");
+    expect(html).not.toContain("target=");
+  });
 });
 
 describe("paths", () => {
