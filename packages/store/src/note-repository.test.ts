@@ -399,3 +399,58 @@ describe("moving a folder", () => {
     expect(note?.toPath).toBe("Python 101/Introduction/what-is-python.md");
   });
 });
+
+describe("setPublishTarget", () => {
+  const NOTES = { owner: "octo", repo: "notes", branch: "main", directory: "" };
+  const SITE = { owner: "octo", repo: "site", branch: "main", directory: "" };
+
+  function workspace() {
+    return {
+      id: WS,
+      name: "notes",
+      repo: NOTES,
+      isDefault: false,
+      isLocal: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      lastOpenedAt: "2026-01-01T00:00:00.000Z",
+    };
+  }
+
+  it("points a workspace's pages at another repository", async () => {
+    const { notes, db } = repository({});
+    await notes.addWorkspace(workspace());
+
+    const updated = await notes.setPublishTarget(WS, SITE);
+
+    expect(updated?.publishRepo).toEqual(SITE);
+    expect((await db.getWorkspace(WS))?.publishRepo).toEqual(SITE);
+  });
+
+  it("clears the field entirely rather than storing a null", async () => {
+    // A workspace never split and one un-split should be the same shape.
+    const { notes, db } = repository({});
+    await notes.addWorkspace({ ...workspace(), publishRepo: SITE });
+
+    await notes.setPublishTarget(WS, null);
+    const stored = await db.getWorkspace(WS);
+
+    expect(stored).not.toBeUndefined();
+    expect("publishRepo" in stored!).toBe(false);
+  });
+
+  it("leaves everything else about the workspace alone", async () => {
+    const { notes } = repository({});
+    await notes.addWorkspace(workspace());
+
+    const updated = await notes.setPublishTarget(WS, SITE);
+
+    expect(updated?.id).toBe(WS);
+    expect(updated?.repo).toEqual(NOTES);
+    expect(updated?.createdAt).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("does nothing for a workspace that is not there", async () => {
+    const { notes } = repository({});
+    await expect(notes.setPublishTarget("nope", SITE)).resolves.toBeNull();
+  });
+});

@@ -1,4 +1,4 @@
-import type { Note, NoteFrontmatter, TreeNode, Workspace } from "@forkleaf/types";
+import type { Note, NoteFrontmatter, RepoRef, TreeNode, Workspace } from "@forkleaf/types";
 import {
   parseDocument,
   serializeDocument,
@@ -111,6 +111,27 @@ export class NoteRepository {
     // Only disconnects locally. The GitHub repository is never touched —
     // deleting somebody's repo is not a thing this app should ever do.
     await this.db.deleteWorkspace(id);
+  }
+
+  /**
+   * Points a workspace's published pages at another repository, or back at its
+   * own.
+   *
+   * Stored on the workspace rather than derived, because it is a choice and
+   * nothing else records it. Passing null clears the field entirely instead of
+   * writing a null into it, so a workspace that has never been split and one
+   * that has been un-split are the same shape.
+   */
+  async setPublishTarget(id: string, target: RepoRef | null): Promise<Workspace | null> {
+    const workspace = await this.db.getWorkspace(id);
+    if (!workspace) return null;
+
+    const next: Workspace = { ...workspace };
+    if (target) next.publishRepo = target;
+    else delete next.publishRepo;
+
+    await this.db.putWorkspace(next);
+    return next;
   }
 
   async touchWorkspace(id: string): Promise<void> {
