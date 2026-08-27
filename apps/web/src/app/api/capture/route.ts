@@ -28,6 +28,14 @@ const MAX_REDIRECTS = 5;
 const RATE_LIMIT = { name: "capture", limit: 20, windowMs: 5 * 60_000 };
 
 /**
+ * Room for the archive request, which is the slow half.
+ *
+ * The default ceiling is shorter than Save Page Now takes, which would kill
+ * the request mid-archive and report it to the reader as a network error.
+ */
+export const maxDuration = 60;
+
+/**
  * Fetches a URL, re-checking the address at every redirect.
  *
  * `redirect: "manual"` rather than letting fetch follow them: a public URL
@@ -102,13 +110,48 @@ interface Snapshot {
   archivedAt: string | null;
 }
 
+/** How long to wait on Save Page Now before giving up on it. */
+const ARCHIVE_TIMEOUT_MS = 25_000;
+
+/**
+ * Asks archive.org to take a snapshot now, and waits for it.
+ *
+ * Only reached when no snapshot exists, because that is the case where the
+ * citation is worth nothing: an address, a timestamp, and a link that dies
+ * with the page. Save Page Now is slow and rate limited, which is why it is
+ * not the first thing tried — but a capture that ends with "no archived copy"
+ * has not done the one job the feature exists for.
+ *
+ * Failure here is not an error. The capture still returns, and the citation
+ * says plainly that nothing was archived.
+ */
+async function requestSnapshot(url: string): Promise<Snapshot> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ARCHIVE_TIMEOUT_MS);
+
+  try {
+    await fetch(`https://web.archive.org/save/${url}`, {
+      method: "GET",
+      signal: controller.signal,
+      headers: { "user-agent": "ForkLeaf/1.0 (+https://github.com/praneeth132006/ForkLeaf)" },
+      redirect: "follow",
+    });
+
+    // Asked and answered separately: Save Page Now's own response body is not
+    // a stable contract, while the availability API is.
+    return await findSnapshot(url, controller.signal);
+  } catch {
+    return { archiveUrl: null, archivedAt: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * The nearest snapshot archive.org already holds.
  *
- * Only asks — it does not request that a new one be taken. Save Page Now is
- * slow, heavily rate limited, and would make every capture wait on a third
- * party's queue. What comes back is honest either way: a snapshot from three
- * years ago is labelled with its date, and no snapshot says so.
+ * Asked first because it is fast and usually enough. When it comes back empty
+ * the caller asks for one to be made.
  */
 async function findSnapshot(url: string, signal: AbortSignal): Promise<Snapshot> {
   try {
@@ -170,12 +213,17 @@ export async function POST(request: NextRequest) {
 
     try {
       // Together: neither is worth failing the other over.
-      const [page, snapshot] = await Promise.all([
+      const [page, existing] = await Promise.all([
         fetchChecked(url, controller.signal)
           .then((response) => (response && response.ok ? readTitle(response) : null))
           .catch(() => null),
         findSnapshot(url.toString(), controller.signal),
       ]);
+
+      // A citation whose archived copy does not exist is an address and a
+      // timestamp — which is what the feature was supposed to improve on. So
+      // when there is no snapshot, ask for one before giving up.
+      const snapshot = existing.archiveUrl ? existing : await requestSnapshot(url.toString());
 
       return {
         url: url.toString(),
