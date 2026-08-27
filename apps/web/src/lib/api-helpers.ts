@@ -2,7 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { GitHubClient, GitHubError } from "@forkleaf/github-client";
 import type { RepoRef } from "@forkleaf/types";
-import { getSession } from "@/lib/session";
+import { clearSessionCookie, getSession } from "@/lib/session";
 
 /**
  * Shared plumbing for the GitHub proxy routes.
@@ -159,6 +159,34 @@ export async function withRateLimitAdvice<T>(run: () => Promise<T>, signedIn: bo
   }
 }
 
+/**
+ * Throws away a session GitHub has stopped honouring.
+ *
+ * A session cookie and a working GitHub token are two different things, and
+ * only the first of them is ours. The cookie lasts thirty days; the token
+ * inside it can die at any moment — the authorisation is revoked, the same
+ * OAuth app is signed into again somewhere else with a different access level,
+ * GitHub retires the token. Nothing tells us when that happens. The first we
+ * hear of it is a 401 on a call we expected to work.
+ *
+ * Until this existed, that 401 was all that happened: the cookie stayed, so
+ * every page still showed you signed in, every note still said it was syncing,
+ * and every image in every note quietly failed to load with no explanation
+ * anywhere — because the proxy that fetches them needs the same dead token.
+ * The app looked signed in and behaved as though it were signed out.
+ *
+ * So a token GitHub refuses ends the session on the spot. The next request
+ * says "local mode" and the reader gets one banner and one button, instead of
+ * a screen full of broken pictures.
+ */
+export async function forgetDeadSession(error: unknown): Promise<boolean> {
+  if (!(error instanceof GitHubError) || error.code !== "unauthorized") return false;
+
+  console.warn("[forkleaf] GitHub rejected the session token; signing out.");
+  await clearSessionCookie();
+  return true;
+}
+
 /** Runs a handler, converting known failures into a consistent JSON error. */
 export async function handle<T>(fn: () => Promise<T>): Promise<NextResponse> {
   try {
@@ -175,6 +203,21 @@ export async function handle<T>(fn: () => Promise<T>): Promise<NextResponse> {
     if (error instanceof GitHubError) {
       // Log server-side with full detail; return only the safe projection.
       console.error("[forkleaf] GitHub API error:", error.code, error.message);
+
+      // A refused token is not this route's problem to report and the next
+      // route's problem to hit again — it ends the session for all of them.
+      if (await forgetDeadSession(error)) {
+        return NextResponse.json(
+          {
+            error: {
+              code: "unauthorized",
+              message: "Your GitHub sign-in has expired. Sign in again to reconnect.",
+            },
+          },
+          { status: 401, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+
       return NextResponse.json(
         { error: error.toJSON() },
         { status: statusFor(error), headers: { "Cache-Control": "no-store" } },

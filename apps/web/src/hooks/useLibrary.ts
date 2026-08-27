@@ -12,7 +12,13 @@ import {
   type SearchHit,
 } from "@forkleaf/store";
 import { workspaceId, type Note, type PendingChange, type Workspace } from "@forkleaf/types";
-import { GitHubGateway, LocalGateway, fetchSession, type SessionResponse } from "@/lib/gateway";
+import {
+  GitHubGateway,
+  LocalGateway,
+  fetchSession,
+  onSessionExpired,
+  type SessionResponse,
+} from "@/lib/gateway";
 import { buildIndex, flattenTree, isMarkdown, orphanedNotes, type IndexEntry } from "@/lib/library";
 import { deriveTitle, extractTags } from "@forkleaf/markdown-engine";
 import { LOCAL_WORKSPACE } from "@/lib/workspaces";
@@ -39,6 +45,8 @@ export interface LibraryWorkspace {
 export interface LibraryState {
   ready: boolean;
   session: SessionResponse | null;
+  /** True once GitHub has refused this session's token. See `useNotebook`. */
+  sessionExpired: boolean;
   workspaces: LibraryWorkspace[];
   /**
    * True when the user is signed in to GitHub but has not chosen where their
@@ -105,6 +113,7 @@ export function useLibrary() {
   const [state, setState] = useState<LibraryState>({
     ready: false,
     session: null,
+    sessionExpired: false,
     workspaces: [],
     needsRepoChoice: false,
     indexing: false,
@@ -165,6 +174,30 @@ export function useLibrary() {
   }, []);
 
   /** Replaces one workspace's slice of the state, leaving the others alone. */
+  /**
+   * The sign-in ending while the dashboard is open.
+   *
+   * The same fact the editor listens for, and it matters here too: this page
+   * lists every connected repository, and once the token is refused none of
+   * them can be reached. Saying "signed out" once beats one unreachable-repo
+   * error per row.
+   */
+  useEffect(
+    () =>
+      onSessionExpired(() => {
+        setState((current) =>
+          current.sessionExpired
+            ? current
+            : {
+                ...current,
+                sessionExpired: true,
+                session: { mode: "local", user: null, githubAvailable: true, scopes: [] },
+              },
+        );
+      }),
+    [],
+  );
+
   const patchWorkspace = useCallback((id: string, updates: Partial<LibraryWorkspace>) => {
     setState((current) => ({
       ...current,

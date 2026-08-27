@@ -1,6 +1,12 @@
 import { type NextRequest } from "next/server";
 import { GitHubError } from "@forkleaf/github-client";
-import { requireClient, readRepoRef, normalize, ApiError } from "@/lib/api-helpers";
+import {
+  requireClient,
+  readRepoRef,
+  normalize,
+  ApiError,
+  forgetDeadSession,
+} from "@/lib/api-helpers";
 import { imageTypeFor } from "@/lib/media";
 
 /**
@@ -89,6 +95,25 @@ export async function GET(request: NextRequest) {
       return new Response(error.message, { status: error.status });
     }
     if (error instanceof GitHubError) {
+      /**
+       * A dead token is not a broken image.
+       *
+       * This route is the one place a refused token shows up dozens of times
+       * over — a note with nine screenshots is nine of these — and it used to
+       * answer all nine with a 502, which the browser draws as the broken-image
+       * icon and reports nowhere else. The note looked corrupted. It was not:
+       * the sign-in behind it had ended.
+       *
+       * Ending the session here means the *next* thing the page asks for gets
+       * "local mode" and the app can say so once, in words, rather than nine
+       * times in pictures.
+       */
+      if (await forgetDeadSession(error)) {
+        return new Response("Your GitHub sign-in has expired.", {
+          status: 401,
+          headers: { "Cache-Control": "no-store" },
+        });
+      }
       return new Response("Could not read that image.", { status: 502 });
     }
     console.error("[forkleaf] Raw asset error:", error);

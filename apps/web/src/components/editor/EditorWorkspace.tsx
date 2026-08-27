@@ -1467,7 +1467,12 @@ export function EditorWorkspace() {
               status bar. It stops every push until it is dealt with, and the
               fix is one button — so the button is where the reader is looking,
               not eight point type at the bottom of the window. */}
-          {notebook.sync.lastErrorCode === "unauthorized" && (
+          {/* Either half of the same fact: a push GitHub refused, or a read
+              that came back 401 and ended the session. The second is the more
+              common one by far — reading a note full of images is dozens of
+              calls, pushing one is a handful — and it used to produce no
+              banner at all. */}
+          {(notebook.sync.lastErrorCode === "unauthorized" || notebook.sessionExpired) && (
             <div
               role="alert"
               className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/8 px-4 py-2.5 text-[13px]"
@@ -1477,7 +1482,7 @@ export function EditorWorkspace() {
                 <span className="text-[var(--fl-muted)]">
                   {notebook.sync.pendingCount > 0
                     ? `${notebook.sync.pendingCount} change${notebook.sync.pendingCount === 1 ? "" : "s"} are saved on this device and will push as soon as you are back in.`
-                    : "Your notes are saved on this device. Signing in again resumes pushing to GitHub."}
+                    : "Your notes are safe on this device. Images in them are served from GitHub, so they will not load until you sign in again."}
                 </span>
               </p>
 
@@ -1491,7 +1496,10 @@ export function EditorWorkspace() {
             </div>
           )}
 
-          {!user && (
+          {/* Not while the sign-in has just expired: "you are working locally"
+              is true but is the wrong sentence to lead with, and the banner
+              above it already says the useful half. */}
+          {!user && !notebook.sessionExpired && (
             <LocalOnlyBanner
               githubAvailable={notebook.session?.githubAvailable ?? false}
               onSignIn={signIn}
@@ -1619,6 +1627,7 @@ export function EditorWorkspace() {
         onSwitchBranch={notebook.switchBranch}
         onPropose={() => setDialog("propose")}
         sync={notebook.sync}
+        sessionExpired={notebook.sessionExpired}
         workspace={workspace}
         notePath={note?.path ?? null}
         localFile={note ? localFiles.fileFor(note.path) : null}
