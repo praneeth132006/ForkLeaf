@@ -121,3 +121,18 @@ export {
   type ThreadOptions,
   type Verdict,
 } from "./review";
+
+export {
+  REPO_SCHEME,
+  formatRepoTarget,
+  freshnessOf,
+  isRepoTarget,
+  parseRepoTarget,
+  pinRepoLink,
+  repoTargetLabel,
+  repoTargetUrl,
+  repoTargetsIn,
+  type LinkFreshness,
+  type LinkedFile,
+  type RepoTarget,
+} from "./repolinks";
