@@ -8,6 +8,7 @@ import { DEFAULT_SYNC_PREFERENCE } from "@forkleaf/types";
 import { openLocalDatabase, type LocalDatabase } from "@forkleaf/store";
 import { documentStats } from "@forkleaf/markdown-engine";
 import { signOut } from "@/lib/gateway";
+import { postHogReset } from "@/lib/posthog";
 import { usePalette, useTheme, type Theme } from "@/hooks/useTheme";
 import { PALETTES, normalizeHex } from "@/lib/palette";
 import { EVERYTHING } from "@/lib/plans";
@@ -143,6 +144,9 @@ export function ProfilePanel({ user, githubAvailable }: ProfilePanelProps) {
   }, []);
 
   const handleSignOut = useCallback(async () => {
+    // Forgotten before the session goes, so the next person on this
+    // browser is not attributed to the one who just left.
+    postHogReset();
     await signOut();
     router.push("/");
     // The session cookie is gone, so anything rendered from it is now stale.

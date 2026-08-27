@@ -92,6 +92,16 @@ pnpm dev`}</Pre>
             "Optional",
             "Analytics and billing. See the Firebase page.",
           ],
+          [
+            <Code key="f">NEXT_PUBLIC_POSTHOG_KEY</Code>,
+            "Optional",
+            "Product analytics through PostHog. Without it, nothing is sent and nothing warns.",
+          ],
+          [
+            <Code key="g">NEXT_PUBLIC_POSTHOG_HOST</Code>,
+            "Optional",
+            "Only if your PostHog project is not on the US cloud — for the EU cloud, https://eu.i.posthog.com.",
+          ],
         ]}
       />
       <Pre label="generate a session secret">{`openssl rand -base64 32`}</Pre>
@@ -263,6 +273,52 @@ service cloud.firestore {
       <P>
         None of these carry note content, note titles, filenames or repository names. Analytics is
         fire-and-forget and swallows its own errors: a metrics call must never break a user action.
+      </P>
+
+      <H2 id="posthog">PostHog</H2>
+      <P>
+        The same events go to PostHog as well, if you want funnels, retention and session-level
+        analysis that Firebase does not give you. Set two environment variables:
+      </P>
+      <Pre label=".env.local">{`NEXT_PUBLIC_POSTHOG_KEY=phc_xxxxxxxxxxxxxxxxxxxx
+# Only if your project is on the EU cloud:
+# NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com`}</Pre>
+      <P>
+        Find the key in PostHog under <strong>Settings → Project → Project API Key</strong>. Set the
+        same variables in your hosting project so the deployed site reports too. With no key, every
+        PostHog call is a no-op — no warnings, no network requests, nothing to configure for a fork
+        or a local checkout.
+      </P>
+      <P>
+        Both sinks are fed from the one <Code>track()</Code> call, so the event list above is the
+        complete list for PostHog too. A second set of call sites would have drifted from the first
+        within a month.
+      </P>
+
+      <H3 id="posthog-privacy">What is deliberately switched off</H3>
+      <P>
+        PostHog&rsquo;s defaults are built for marketing sites. This is a text editor holding
+        people&rsquo;s private notes, so three of them are turned off:
+      </P>
+      <UL>
+        <LI>
+          <strong>Autocapture</strong> — records every click and the text of what was clicked, which
+          here would be the contents of somebody&rsquo;s notes.
+        </LI>
+        <LI>
+          <strong>Session recording</strong> — replays the screen, which is worse.
+        </LI>
+        <LI>
+          <strong>Automatic page views</strong> — ForkLeaf reports its own on route change, so
+          leaving this on would double-count every navigation.
+        </LI>
+      </UL>
+      <P>
+        Text and element attributes are masked as well, so a future PostHog default cannot start
+        collecting note content without somebody here deciding to allow it. People are identified by
+        their GitHub login only — already public on github.com — and <Code>posthog.reset()</Code>{" "}
+        runs on sign-out so a shared browser does not attribute the next session to whoever just
+        left.
       </P>
 
       <H2 id="payments">Adding payments later</H2>
