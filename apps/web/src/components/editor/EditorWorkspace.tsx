@@ -1431,14 +1431,6 @@ export function EditorWorkspace() {
                 setDrawer(null);
                 setDialog("history");
               }}
-              onReplay={() => {
-                setDrawer(null);
-                setDialog("replay");
-              }}
-              onBlame={() => {
-                setDrawer(null);
-                setDialog("blame");
-              }}
               onReview={
                 workspace && !workspace.isLocal
                   ? () => {

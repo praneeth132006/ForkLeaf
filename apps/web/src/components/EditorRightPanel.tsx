@@ -25,14 +25,12 @@ export interface EditorRightPanelProps {
    * only reachable by opening history and noticing a second tab, which is a
    * place nobody looks for something they have never heard of.
    */
-  onReplay: () => void;
   /**
    * Opens the per-paragraph attribution view.
    *
    * Beside the replay, because they answer the two halves of the same
    * question — how this page grew, and which parts of it are old.
    */
-  onBlame: () => void;
   /** Rewrites the note, for re-pinning a repository link. */
   onRewrite?: (content: string) => void;
   /** Absent for a local workspace, which has no pull requests to read. */
@@ -107,8 +105,6 @@ export function EditorRightPanel({
   onFrontmatterChange,
   onExport,
   onShowHistory,
-  onReplay,
-  onBlame,
   onReview,
   onLinkFile,
   onCapture,
@@ -454,22 +450,18 @@ export function EditorRightPanel({
                     {published ? "Published as a page" : "Publish as a page"}
                   </PanelButton>
                 )}
-                {/* Named for the thing it shows. "Version history" is accurate
-                    and is not what anybody searches for — every save here is a
-                    git commit, and people go looking for the word "commits". */}
+                {/* One way in, not three.
+                    Replay and blame each got their own button when they were
+                    built, because each had been buried in a tab nobody opened.
+                    Three buttons opening three tabs of the same window is the
+                    opposite mistake: the panel repeats what the window already
+                    shows, and the reader has to decide before they can look.
+                    The tabs are labelled and visible, so the choice belongs
+                    there — the panel just opens it. The command palette still
+                    reaches each tab directly, which costs no space here. */}
                 {hasHistory && (
                   <PanelButton onClick={onShowHistory} icon={<HistoryGlyph />}>
-                    History &amp; commits
-                  </PanelButton>
-                )}
-                {hasHistory && (
-                  <PanelButton onClick={onReplay} icon={<ReplayGlyph />}>
-                    Replay how this was written
-                  </PanelButton>
-                )}
-                {hasHistory && (
-                  <PanelButton onClick={onBlame} icon={<BlameGlyph />}>
-                    When each paragraph was written
+                    History, replay &amp; who wrote what
                   </PanelButton>
                 )}
                 {/* Not gated on there being an open request: the panel's job
@@ -903,44 +895,6 @@ function ReviewGlyph() {
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
       <path d="M2 3.5h7M2 6h5" strokeLinecap="round" />
       <path d="M6.5 9.5h7a1 1 0 0 1 1 1v2.5a1 1 0 0 1-1 1H9l-2 1.5V14h-.5a1 1 0 0 1-1-1v-2.5a1 1 0 0 1 1-1Z" />
-    </svg>
-  );
-}
-
-/** Lines of text with a marked margin — the blame gutter, in miniature. */
-function BlameGlyph() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-      className="h-3.5 w-3.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-    >
-      <path d="M2.25 3.5v9" strokeWidth="2" />
-      <path d="M5.5 4h8.25M5.5 7h8.25M5.5 10h5.5M5.5 13h7" />
-    </svg>
-  );
-}
-
-/** A play head over a rising line — the replay's own chart, in miniature. */
-function ReplayGlyph() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-      className="h-3.5 w-3.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M1.75 11.5 5 8l2.5 2 4.75-5.5" />
-      <path d="M1.75 14.25h12.5" />
-      <circle cx="12.25" cy="4.5" r="1.4" fill="currentColor" stroke="none" />
     </svg>
   );
 }

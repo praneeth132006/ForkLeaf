@@ -7,6 +7,15 @@ export interface DialogProps {
   onClose: () => void;
   children: React.ReactNode;
   wide?: boolean;
+  /**
+   * Holds the window at a fixed height instead of fitting its contents.
+   *
+   * For dialogs whose tabs differ wildly in size. A window that resizes as you
+   * switch between them moves the tabs out from under the cursor and makes the
+   * whole page jump, which reads as the app breaking rather than as the
+   * content changing.
+   */
+  steady?: boolean;
   /** Optional line under the title, for orientation. */
   subtitle?: string;
 }
@@ -16,7 +25,14 @@ export interface DialogProps {
  * Escape closes it, focus is trapped inside while it is open, and focus returns
  * to whatever opened it on close.
  */
-export function Dialog({ title, subtitle, onClose, children, wide = false }: DialogProps) {
+export function Dialog({
+  title,
+  subtitle,
+  onClose,
+  children,
+  wide = false,
+  steady = false,
+}: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
@@ -101,7 +117,7 @@ export function Dialog({ title, subtitle, onClose, children, wide = false }: Dia
         tabIndex={-1}
         className={`flex max-h-[85vh] w-full flex-col overflow-hidden rounded-2xl border border-[var(--fl-border)] bg-[var(--fl-surface)] shadow-[var(--fl-shadow-lg)] ${
           wide ? "max-w-3xl" : "max-w-md"
-        }`}
+        } ${steady ? "h-[85vh]" : ""}`}
       >
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--fl-border)] px-5 py-3.5">
           <div className="min-w-0">

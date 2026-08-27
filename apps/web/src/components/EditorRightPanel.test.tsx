@@ -22,8 +22,6 @@ const LOCAL = { isLocal: true } as Workspace;
 
 function panel(workspace: Workspace | null = CONNECTED) {
   const onShowHistory = vi.fn();
-  const onReplay = vi.fn();
-  const onBlame = vi.fn();
 
   render(
     <EditorRightPanel
@@ -34,8 +32,6 @@ function panel(workspace: Workspace | null = CONNECTED) {
       onFrontmatterChange={vi.fn()}
       onExport={vi.fn()}
       onShowHistory={onShowHistory}
-      onReplay={onReplay}
-      onBlame={onBlame}
       syncMode="auto"
       onSyncNow={vi.fn()}
       links={{
@@ -50,53 +46,43 @@ function panel(workspace: Workspace | null = CONNECTED) {
     />,
   );
 
-  return { onShowHistory, onReplay, onBlame };
+  return { onShowHistory };
 }
 
 /**
  * The properties panel is where somebody goes looking for what they can do
- * with the note in front of them, which makes it the one place the replay has
- * to be named. It shipped reachable only as a tab inside the history dialog —
- * two steps past anywhere its name appears — so these guard the way in, not
- * just the thing at the end of it.
+ * with the note in front of them, which makes it the one place history has to
+ * be named.
+ *
+ * Replay and blame each had their own button here when they were built,
+ * because each had shipped buried in a tab nobody opened. Three buttons
+ * opening three tabs of one window turned out to be the opposite mistake, so
+ * there is one now and the tabs do the choosing. These guard that there is
+ * still exactly one obvious way in.
  */
 describe("EditorRightPanel actions", () => {
-  it("offers the replay by name, next to history", () => {
+  it("offers one way into history, naming all three things it holds", () => {
     panel();
-    const replay = screen.getByRole("button", { name: /replay how this was written/i });
-    const history = screen.getByRole("button", { name: /history & commits/i });
-    expect(replay).toBeTruthy();
-    // Adjacent, so finding one finds the other.
-    expect(history.compareDocumentPosition(replay) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const button = screen.getByRole("button", { name: /history, replay & who wrote what/i });
+    expect(button).toBeTruthy();
   });
 
-  it("opens the replay when that button is pressed", () => {
-    const { onReplay, onShowHistory } = panel();
-    fireEvent.click(screen.getByRole("button", { name: /replay how this was written/i }));
-    expect(onReplay).toHaveBeenCalledTimes(1);
-    expect(onShowHistory).not.toHaveBeenCalled();
+  it("opens it when pressed", () => {
+    const { onShowHistory } = panel();
+    fireEvent.click(screen.getByRole("button", { name: /history, replay & who wrote what/i }));
+    expect(onShowHistory).toHaveBeenCalledTimes(1);
   });
 
-  it("offers the blame view by name, beside the replay", () => {
+  it("does not repeat replay and blame as buttons of their own", () => {
+    // They are tabs inside the window this opens; a button per tab made the
+    // reader choose before they could look.
     panel();
-    const blame = screen.getByRole("button", { name: /when each paragraph was written/i });
-    const replay = screen.getByRole("button", { name: /replay how this was written/i });
-    expect(blame).toBeTruthy();
-    expect(replay.compareDocumentPosition(blame) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it("opens the blame view when that button is pressed", () => {
-    const { onBlame, onReplay, onShowHistory } = panel();
-    fireEvent.click(screen.getByRole("button", { name: /when each paragraph was written/i }));
-    expect(onBlame).toHaveBeenCalledTimes(1);
-    expect(onReplay).not.toHaveBeenCalled();
-    expect(onShowHistory).not.toHaveBeenCalled();
-  });
-
-  it("hides all three when there is no repository to read history from", () => {
-    panel(LOCAL);
     expect(screen.queryByRole("button", { name: /replay how this was written/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /when each paragraph was written/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /history & commits/i })).toBeNull();
+  });
+
+  it("hides it when there is no repository to read history from", () => {
+    panel(LOCAL);
+    expect(screen.queryByRole("button", { name: /history, replay & who wrote what/i })).toBeNull();
   });
 });
