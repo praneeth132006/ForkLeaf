@@ -81,13 +81,6 @@ hello world
         never on your computer, and never on the server. It does have internet access, because a
         runbook that cannot reach the host it is about is a text file.
       </P>
-      <Note>
-        This needs a sandbox to be configured, in both your local <Code>apps/web/.env.local</Code>{" "}
-        and your hosting project&rsquo;s environment variables: <Code>VERCEL_TOKEN</Code>,{" "}
-        <Code>VERCEL_TEAM_ID</Code> and <Code>VERCEL_PROJECT_ID</Code>. Without them the Run button
-        says so rather than failing quietly.
-      </Note>
-
       <H2 id="review">5. Reviewing a note as a pull request</H2>
       <OL>
         <LI>
