@@ -517,3 +517,21 @@ export async function readRepoFile(options: {
   );
   return file;
 }
+
+export interface LinkPreviewResult {
+  url: string;
+  title: string | null;
+  description: string | null;
+  host: string;
+}
+
+/**
+ * What is on the other end of a link, for a hover card.
+ *
+ * Given a short timeout of its own: this fires on hover, and a card that
+ * arrives after the pointer has moved on is worse than no card — it would pop
+ * up over whatever the reader looked at next.
+ */
+export async function previewLink(url: string): Promise<LinkPreviewResult> {
+  return call(`/api/link-preview?url=${encodeURIComponent(url)}`, { timeoutMs: 8_000 });
+}

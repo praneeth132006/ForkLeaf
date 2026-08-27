@@ -377,18 +377,28 @@ export function WysiwygEditor({
         "aria-label": "Note content",
       },
       /**
-       * ⌘/Ctrl-click opens an ordinary link, in a tab of its own.
+       * Clicking a link follows it, in a tab of its own.
        *
-       * `openOnClick` is off — a plain click has to keep placing the caret,
-       * because this is text being written and a link you cannot put the
-       * cursor inside is a link you cannot edit. That left links in rich text
-       * with no way to follow them at all: a captured web source rendered its
-       * address and its archived copy, and clicking either did nothing.
+       * `openOnClick` is off, which used to mean a link in rich text did
+       * nothing at all: a captured web source rendered its address and its
+       * archived copy and neither could be opened, in the one view most people
+       * write in. A link you cannot follow is not a link.
        *
-       * The same modifier the wikilink extension uses, for the same reason.
+       * The usual objection is that a plain click has to place the caret,
+       * since this is text being written — so Alt-click still does, and the
+       * hover card says so. Alt is the escape hatch here rather than the other
+       * way round because following a link is what people do to a link a
+       * hundred times for every time they edit its text, and the rare case is
+       * the one that should take the modifier.
+       *
+       * A new tab, always: the alternative navigates away from a note that may
+       * hold unsaved writing.
        */
       handleClick: (_view, _pos, event) => {
-        if (!event.metaKey && !event.ctrlKey) return false;
+        // Alt is "put the caret in here", and every other modifier is the
+        // browser's own — ⇧ extends a selection, and ⌘/Ctrl already mean "open
+        // in a new tab" everywhere else, which is what this does anyway.
+        if (event.altKey || event.shiftKey) return false;
 
         const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>("a[href]");
         const href = anchor?.getAttribute("href") ?? "";

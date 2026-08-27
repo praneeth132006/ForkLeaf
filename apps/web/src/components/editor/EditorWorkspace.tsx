@@ -36,6 +36,7 @@ import { HistoryDialog } from "@/components/HistoryDialog";
 import { ReviewPanel } from "@/components/ReviewPanel";
 import { LinkFileDialog } from "@/components/LinkFileDialog";
 import { RepoFileDialog } from "@/components/RepoFileDialog";
+import { LinkHoverCard } from "@/components/LinkHoverCard";
 import { CaptureDialog } from "@/components/CaptureDialog";
 import { Dialog } from "@/components/Dialog";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
@@ -1631,6 +1632,13 @@ export function EditorWorkspace() {
           />
         </Dialog>
       )}
+
+      {/* Every rendered surface at once — the preview, the rich-text editor,
+          the file viewer, a revision being compared — because a link is a link
+          in all of them and which one is on screen is the reader's choice.
+          Signed out it still names the host and the address; only the page's
+          own title needs a session to fetch. */}
+      <LinkHoverCard within=".fl-prose, .ProseMirror" canRead={Boolean(user)} />
 
       {viewingFile && workspace && !workspace.isLocal && (
         <RepoFileDialog

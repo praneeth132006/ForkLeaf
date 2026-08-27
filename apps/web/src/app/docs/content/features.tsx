@@ -205,6 +205,19 @@ hello world
         If there is no archived copy, the citation says so rather than staying quiet — you should
         know that link may not outlive the page.
       </P>
+      <P>
+        Links written this way — or typed, or pasted — open in a new tab, from the preview and from
+        Rich view alike, so following one never takes an unsaved note with it. In Rich view, where a
+        click also has to be able to place the cursor, <strong>Alt-click</strong> puts the caret
+        inside the link text instead of opening it.
+      </P>
+      <P>
+        Hovering a link shows a small card naming the host, the page&rsquo;s own title and its own
+        one-line summary — enough to decide whether to follow it. The page is read on the server,
+        the same way capturing reads one, so it needs you to be signed in; signed out the card still
+        names the host and the full address. Nothing in the card is loaded from the linked site, so
+        hovering a link never tells that site you did.
+      </P>
       <Note>
         Capturing needs you to be signed in, because the fetch happens on the server. It refuses
         addresses that resolve inside a private network, which is why it cannot capture a page on
