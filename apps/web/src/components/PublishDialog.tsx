@@ -85,6 +85,49 @@ export function PublishDialog({
 
   const warning = useMemo(() => targetWarning(target, workspace.repo), [target, workspace.repo]);
 
+  const [creating, setCreating] = useState(false);
+
+  /**
+   * Makes the public repository and points publishing at it, in one go.
+   *
+   * The alternative was four steps on github.com and a name typed back in, to
+   * work around a limit the reader did not choose. Named after the notes
+   * repository, so months later it is obvious which notebook it belongs to.
+   */
+  const createSiteRepo = useCallback(async () => {
+    if (!onSetTarget) return;
+
+    setCreating(true);
+    setTargetError(null);
+
+    try {
+      const response = await fetch("/api/gh/site-repo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: `${workspace.repo.repo}-site` }),
+      });
+
+      const body = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setTargetError(body?.error?.message ?? "That repository could not be created.");
+        return;
+      }
+
+      await onSetTarget({
+        owner: String(body.owner),
+        repo: String(body.repo),
+        branch: "main",
+        directory: "",
+      });
+      setEditingTarget(false);
+    } catch {
+      setTargetError("Could not reach GitHub to create the repository.");
+    } finally {
+      setCreating(false);
+    }
+  }, [onSetTarget, workspace.repo.repo]);
+
   const saveTarget = useCallback(async () => {
     if (!onSetTarget) return;
 
@@ -242,6 +285,22 @@ export function PublishDialog({
       )}
 
       {warning && <p className="text-[11.5px] leading-snug text-[var(--fl-muted)]">{warning}</p>}
+
+      {/* The way out, offered rather than described. Only while pages still go
+          to the notes' own repository — once they do not, this is solved and
+          the button would be noise. */}
+      {onSetTarget && !split && (
+        <button
+          type="button"
+          onClick={() => void createSiteRepo()}
+          disabled={creating}
+          className="w-full rounded-lg border border-[var(--fl-border)] px-2.5 py-1.5 text-[12px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)] disabled:opacity-50"
+        >
+          {creating
+            ? "Creating…"
+            : `Create ${workspace.repo.owner}/${workspace.repo.repo}-site and publish there`}
+        </button>
+      )}
     </div>
   );
 

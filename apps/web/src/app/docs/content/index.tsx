@@ -1,6 +1,7 @@
 import React from "react";
 import { GettingStarted, HowItWorks } from "./start";
 import { Editor, Diagrams, Properties, Export, Shortcuts } from "./writing";
+import { Features } from "./features";
 import { SigningIn, Repositories, Sync, Conflicts } from "./github";
 import { Plans, PrivacyAndData, Security } from "./account";
 import { SelfHosting, Firebase, Troubleshooting, Faq } from "./running";
@@ -21,6 +22,7 @@ export const DOC_CONTENT: Record<string, () => React.JSX.Element> = {
   properties: Properties,
   export: Export,
   shortcuts: Shortcuts,
+  features: Features,
   "signing-in": SigningIn,
   repositories: Repositories,
   sync: Sync,

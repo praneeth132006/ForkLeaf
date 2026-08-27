@@ -64,6 +64,12 @@ export const DOC_SECTIONS: DocSection[] = [
         title: "Keyboard shortcuts",
         summary: "Every shortcut in the app, in one table.",
       },
+      {
+        slug: "features",
+        title: "What notes-as-commits gets you",
+        summary:
+          "Replay, blame, runnable blocks, review as a pull request, links to files, freshness, publishing from a private notebook, and capturing sources — with where each button is.",
+      },
     ],
   },
   {

@@ -163,6 +163,9 @@ export function HistoryDialog({
             : "Version history"
       }
       subtitle={`${note.path} · ${workspace.repo.owner}/${workspace.repo.repo}`}
+      // Three tabs whose contents differ hugely in height; without this the
+      // window resized under the cursor every time you switched.
+      steady
       onClose={onClose}
       wide
     >
