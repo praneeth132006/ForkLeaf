@@ -41,6 +41,15 @@ export interface ProposeChangesDialogProps {
    * continued editing keeps landing on the same pull request.
    */
   onSwitchBranch: (branch: string, repo?: { owner: string; repo: string }) => void | Promise<void>;
+  /**
+   * Turns auto-save off, so edits queue up instead of landing on the branch.
+   *
+   * Passed in because the only way out of "there is nothing to propose" is to
+   * stop committing straight to the base branch, and sending somebody to hunt
+   * for a control in the status bar to do it is not a way out, it is a
+   * scavenger hunt.
+   */
+  onUseManualSaving?: () => void | Promise<void>;
 }
 
 type Stage = "form" | "working" | "done";
@@ -66,6 +75,7 @@ export function ProposeChangesDialog({
   onProposed,
   onClose,
   onSwitchBranch,
+  onUseManualSaving,
 }: ProposeChangesDialogProps) {
   const [branches, setBranches] = useState<BranchSummaryDto[] | null>(null);
   const [base, setBase] = useState(workspace.repo.branch);
@@ -254,10 +264,19 @@ export function ProposeChangesDialog({
                 <span className="font-mono">{base}</span> does not have yet.
               </p>
               <p className="mt-2 text-[var(--fl-muted)]">
-                To propose work instead of committing it directly: set auto-save to{" "}
-                <strong className="font-medium text-[var(--fl-text)]">Manual</strong> in the status
-                bar at the bottom, make your edits, then come back here.
+                To propose work instead of committing it directly, stop auto-saving first. Then edit
+                the note and come back — those edits become the pull request.
               </p>
+
+              {onUseManualSaving && (
+                <button
+                  type="button"
+                  onClick={() => void onUseManualSaving()}
+                  className="fl-btn fl-btn-primary mt-3 w-full"
+                >
+                  Stop auto-saving and let me propose changes
+                </button>
+              )}
             </div>
           )}
 

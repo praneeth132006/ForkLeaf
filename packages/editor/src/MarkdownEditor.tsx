@@ -17,10 +17,21 @@ import { insertActionsFor, runRichAction, runSourceAction } from "./insert-actio
 import { isolateCurrentLine } from "./isolate-line";
 import { ImageDialog } from "./ui/ImageDialog";
 import { LinkDialog } from "./ui/LinkDialog";
+import type { InsertAction } from "./EditorToolbar";
 import type { ImageBridge } from "./images";
 import type { LinkBridge } from "./links";
 
 export interface MarkdownEditorProps {
+  /**
+   * Actions the app adds to the "/" menu and the toolbar.
+   *
+   * The editor shows them and reports which was chosen; it does not know how
+   * to run them. That is the point — linking a repository file needs the
+   * repository, which is not the editor's to have.
+   */
+  extraActions?: InsertAction[];
+  /** Told which app-supplied action was chosen. */
+  onExtraAction?: (id: string) => void;
   value: string;
   onChange: (markdown: string) => void;
   mode: EditorViewMode;
@@ -67,6 +78,8 @@ const MODES: { value: EditorViewMode; label: string; hint: string }[] = [
  * whether you are in rich text or staring at raw markdown.
  */
 export function MarkdownEditor({
+  extraActions,
+  onExtraAction,
   value,
   onChange,
   mode,
@@ -263,13 +276,20 @@ export function MarkdownEditor({
 
   const runAction = useCallback(
     (id: string) => {
+      // An app-supplied action is the app's to run; the editor only knows it
+      // was chosen.
+      if (extraActions?.some((action) => action.id === id)) {
+        onExtraAction?.(id);
+        return;
+      }
+
       if (isRich) {
         if (tiptap) runRichAction(tiptap, id, actionContext);
       } else {
         runSourceAction(sourceHandle.current, id, actionContext);
       }
     },
-    [isRich, tiptap, actionContext],
+    [isRich, tiptap, actionContext, extraActions, onExtraAction],
   );
 
   const applyLink = useCallback(
@@ -310,7 +330,18 @@ export function MarkdownEditor({
 
   // Rich text and raw Markdown can hold different things, so the toolbar shows
   // only what the surface underneath it can actually apply.
-  const actions = useMemo(() => insertActionsFor(isRich ? "rich" : "source"), [isRich]);
+  /**
+   * The surface's own actions, plus any the app supplies.
+   *
+   * Some things worth reaching from the "/" menu and the toolbar need more
+   * than the editor has: linking a repository file has to list the
+   * repository, and capturing a page has to fetch it. Those live in the app,
+   * so it hands them over here and gets told by id when one is chosen.
+   */
+  const actions = useMemo(
+    () => [...insertActionsFor(isRich ? "rich" : "source"), ...(extraActions ?? [])],
+    [isRich, extraActions],
+  );
 
   const resolveImageSrc = images?.resolve;
 

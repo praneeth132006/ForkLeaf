@@ -763,6 +763,46 @@ export function EditorWorkspace() {
    * Everything here is reachable by mouse somewhere else too — the palette is a
    * faster route to existing actions, not a second place where features live.
    */
+  /**
+   * The two actions that belong in the "/" menu and the toolbar but cannot
+   * live in the editor package: one has to list the repository, the other has
+   * to fetch a web page. Gated exactly as their panel buttons are.
+   */
+  const editorExtras = useMemo(() => {
+    const list: { id: string; label: string; hint: string; icon: React.ReactNode }[] = [];
+
+    if (workspace && !workspace.isLocal) {
+      list.push({
+        id: "link-file",
+        label: "Link a file",
+        hint: "A file in this repository, pinned to the revision you read",
+        icon: (
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
+            <path d="M9 1.5H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5.5Z" />
+            <path d="M9 1.5v4h4" />
+          </svg>
+        ),
+      });
+    }
+
+    if (user) {
+      list.push({
+        id: "capture",
+        label: "Web source",
+        hint: "A page with its address, the time you read it, and an archived copy",
+        icon: (
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
+            <path d="M4 2h6a1 1 0 0 1 1 1v5.5" />
+            <path d="M4 2v11l3-2.2" strokeLinecap="round" />
+            <circle cx="11" cy="11" r="3.2" />
+          </svg>
+        ),
+      });
+    }
+
+    return list;
+  }, [workspace, user]);
+
   const commands = useMemo<Command[]>(() => {
     const list: Command[] = [
       {
@@ -1386,6 +1426,8 @@ export function EditorWorkspace() {
             {note ? (
               <MarkdownEditor
                 key={note.id}
+                extraActions={editorExtras}
+                onExtraAction={(id) => setDialog(id === "link-file" ? "link-file" : "capture")}
                 value={note.content}
                 onChange={notebook.saveNote}
                 mode={mode}
@@ -1636,6 +1678,10 @@ export function EditorWorkspace() {
           onProposed={notebook.discardPending}
           onClose={() => setDialog(null)}
           onSwitchBranch={notebook.switchBranch}
+          onUseManualSaving={() => {
+            notebook.setSyncMode("manual");
+            setNotice("Auto-save is off. Edit the note, then open Propose changes again.");
+          }}
         />
       )}
 

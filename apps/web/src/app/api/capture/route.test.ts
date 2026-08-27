@@ -230,12 +230,62 @@ describe("POST /api/capture — the archived copy", () => {
     expect((await post({ url: "https://example.com/a" })).body.archiveUrl).toMatch(/^https:/);
   });
 
-  it("says there is no snapshot when there is none", async () => {
-    serve({ archive: () => wayback(null) });
+  it("asks for a snapshot to be taken when none exists", async () => {
+    // A citation with no archived copy is an address and a timestamp, which is
+    // what this feature was supposed to improve on.
+    let asked = false;
+    const mock = vi.fn().mockImplementation((input: URL | string) => {
+      const url = String(input);
+      if (url.includes("web.archive.org/save/")) {
+        asked = true;
+        return Promise.resolve(new Response("", { status: 200 }));
+      }
+      if (url.includes("archive.org")) {
+        return Promise.resolve(
+          asked
+            ? wayback({ available: true, url: "http://web.archive.org/web/1/x" })
+            : wayback(null),
+        );
+      }
+      return Promise.resolve(page("<title>A page</title>"));
+    });
+    vi.stubGlobal("fetch", mock);
+
     const { body } = await post({ url: "https://example.com/a" });
 
+    expect(asked).toBe(true);
+    expect(body.archiveUrl).toBe("https://web.archive.org/web/1/x");
+  });
+
+  it("does not ask for one when the archive already has it", async () => {
+    const mock = vi.fn().mockImplementation((input: URL | string) => {
+      const url = String(input);
+      if (url.includes("archive.org")) {
+        return Promise.resolve(wayback({ available: true, url: "http://web.archive.org/web/1/x" }));
+      }
+      return Promise.resolve(page("<title>A page</title>"));
+    });
+    vi.stubGlobal("fetch", mock);
+
+    await post({ url: "https://example.com/a" });
+
+    expect(mock.mock.calls.some(([u]) => String(u).includes("/save/"))).toBe(false);
+  });
+
+  it("still returns the capture when archiving fails outright", async () => {
+    const mock = vi.fn().mockImplementation((input: URL | string) => {
+      const url = String(input);
+      if (url.includes("/save/")) return Promise.reject(new Error("rate limited"));
+      if (url.includes("archive.org")) return Promise.resolve(wayback(null));
+      return Promise.resolve(page("<title>A page</title>"));
+    });
+    vi.stubGlobal("fetch", mock);
+
+    const { status, body } = await post({ url: "https://example.com/a" });
+
+    expect(status).toBe(200);
+    expect(body.title).toBe("A page");
     expect(body.archiveUrl).toBeNull();
-    expect(body.archivedAt).toBeNull();
   });
 
   it("treats an unavailable snapshot as no snapshot", async () => {
