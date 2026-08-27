@@ -38,6 +38,13 @@ export interface NoteFreshnessProps {
   repo: { owner: string; repo: string; branch: string } | null;
   /** Rewrites the note when a link is re-pinned. Absent makes the list read-only. */
   onChange?: (content: string) => void;
+  /**
+   * Opens a linked file for reading, without leaving the note.
+   *
+   * Absent falls back to github.com in a new tab, which is what this list did
+   * before there was anywhere in the app to read a file.
+   */
+  onOpenFile?: (target: RepoTarget) => void;
 }
 
 interface Checked {
@@ -75,7 +82,13 @@ export function hasFreshnessToReport(
   return assessDecay(content, { updatedAt }).verdict !== "fresh";
 }
 
-export function NoteFreshness({ content, updatedAt, repo, onChange }: NoteFreshnessProps) {
+export function NoteFreshness({
+  content,
+  updatedAt,
+  repo,
+  onChange,
+  onOpenFile,
+}: NoteFreshnessProps) {
   const targets = useMemo(() => repoTargetsIn(wikilinkTargets(content)), [content]);
 
   const [checked, setChecked] = useState<Checked[]>([]);
@@ -186,12 +199,21 @@ export function NoteFreshness({ content, updatedAt, repo, onChange }: NoteFreshn
           {checked.map((entry) => (
             <li key={`${entry.target.path}${entry.target.owner ?? ""}`} className="text-[12px]">
               <div className="flex items-baseline justify-between gap-2">
+                {/* Still an anchor when it opens in-app: ⌘-click, middle-click
+                    and "copy link address" all have to keep working, and only
+                    a real href gives them to you. */}
                 <a
                   href={repoTargetUrl(entry.target, repo ?? { owner: "", repo: "", branch: "" })}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={(event) => {
+                    if (!onOpenFile) return;
+                    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    event.preventDefault();
+                    onOpenFile(entry.target);
+                  }}
                   className="truncate font-mono text-[11.5px] text-[var(--fl-text)] underline-offset-2 hover:underline"
-                  title={entry.target.path}
+                  title={onOpenFile ? `Read ${entry.target.path}` : entry.target.path}
                 >
                   {repoTargetLabel(entry.target)}
                 </a>

@@ -75,11 +75,23 @@ const schema: SanitizeSchema = {
     // and the sanitiser honours only the first entry it finds for a property.
     // So our names are merged into that entry rather than appended as a second
     // one, which is silently ignored.
+    //
+    // `target` and `rel` are pinned to single values rather than allowed as
+    // free text: a link in a note is content, and the only thing it is allowed
+    // to say about where it opens is "a new tab, with no handle on this one".
     a: withClasses(defaultSchema.attributes?.a ?? [], [
       "fl-wikilink",
       "fl-wikilink-found",
       "fl-wikilink-missing",
-    ]).concat(["dataWikilink", "dataWikilinkAnchor"]),
+      "fl-external",
+    ]).concat([
+      "dataWikilink",
+      "dataWikilinkAnchor",
+      ["target", "_blank"],
+      // Listed as two tokens, not one string: the sanitiser matches each
+      // value of a multi-valued attribute against the allowlist separately.
+      ["rel", "noopener", "noreferrer"],
+    ]),
     // `loading` keeps a note full of screenshots from fetching every one of
     // them at once; the rest are what the default schema already allows.
     img: [...(defaultSchema.attributes?.img ?? []), ["loading", "lazy"]],
@@ -269,6 +281,40 @@ function rehypeImages(options: RenderOptions) {
 }
 
 /**
+ * A link out of the notebook opens a tab of its own.
+ *
+ * Without this, clicking the source on a captured web page — the whole point
+ * of capturing one — replaced the editor with that page, and any unsaved
+ * paragraph went with it. Every other note-taking tool opens outward links in
+ * a new tab for exactly this reason.
+ *
+ * Only absolute `http(s)` links are touched. In-page anchors, wikilinks and
+ * the app's own relative hrefs stay as they are: those go somewhere the app
+ * can render itself, and a new tab for them would be a bug, not a courtesy.
+ *
+ * `rel` is not optional here. `target="_blank"` without `noopener` hands the
+ * opened page a live reference back to this one.
+ */
+function rehypeExternalLinks() {
+  return (tree: HastRoot) => {
+    visit(tree, "element", (node: Element) => {
+      if (node.tagName !== "a") return;
+
+      const href = typeof node.properties?.href === "string" ? node.properties.href : "";
+      if (!/^https?:\/\//i.test(href)) return;
+
+      node.properties.target = "_blank";
+      node.properties.rel = ["noopener", "noreferrer"];
+
+      const classes = node.properties.className;
+      node.properties.className = Array.isArray(classes)
+        ? [...classes, "fl-external"]
+        : ["fl-external"];
+    });
+  };
+}
+
+/**
  * A paragraph that is only a YouTube link becomes the video.
  *
  * The rule is deliberately narrow — the link has to be the whole paragraph —
@@ -356,6 +402,9 @@ const buildHtmlPipeline = (options: RenderOptions) =>
     .use(rehypeHighlight, { detect: false, languages: allLanguages })
     .use(rehypeImages, options)
     .use(rehypeYoutube)
+    // After the YouTube pass, which turns some links into iframes and leaves
+    // the rest as links — those are the ones that need a tab of their own.
+    .use(rehypeExternalLinks)
     .use(rehypeSanitize, schema)
     .use(rehypeStringify);
 

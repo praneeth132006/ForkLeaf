@@ -217,6 +217,11 @@ export function WysiwygEditor({
       Link.configure({
         openOnClick: false,
         autolink: true,
+        // Carried on the mark so a link survives into exported HTML pointing
+        // outward rather than replacing the page it was exported from. In the
+        // editor itself the click is handled below, since an editable document
+        // does not follow hrefs.
+        HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" },
         // Anything outside this list is dropped, which closes the
         // javascript:-URL XSS vector on pasted links.
         protocols: ["http", "https", "mailto"],
@@ -370,6 +375,38 @@ export function WysiwygEditor({
       attributes: {
         class: "fl-prose focus:outline-none min-h-[50vh]",
         "aria-label": "Note content",
+      },
+      /**
+       * Clicking a link follows it, in a tab of its own.
+       *
+       * `openOnClick` is off, which used to mean a link in rich text did
+       * nothing at all: a captured web source rendered its address and its
+       * archived copy and neither could be opened, in the one view most people
+       * write in. A link you cannot follow is not a link.
+       *
+       * The usual objection is that a plain click has to place the caret,
+       * since this is text being written — so Alt-click still does, and the
+       * hover card says so. Alt is the escape hatch here rather than the other
+       * way round because following a link is what people do to a link a
+       * hundred times for every time they edit its text, and the rare case is
+       * the one that should take the modifier.
+       *
+       * A new tab, always: the alternative navigates away from a note that may
+       * hold unsaved writing.
+       */
+      handleClick: (_view, _pos, event) => {
+        // Alt is "put the caret in here", and every other modifier is the
+        // browser's own — ⇧ extends a selection, and ⌘/Ctrl already mean "open
+        // in a new tab" everywhere else, which is what this does anyway.
+        if (event.altKey || event.shiftKey) return false;
+
+        const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>("a[href]");
+        const href = anchor?.getAttribute("href") ?? "";
+        if (!/^(https?:\/\/|mailto:)/i.test(href)) return false;
+
+        event.preventDefault();
+        window.open(href, "_blank", "noopener,noreferrer");
+        return true;
       },
       handlePaste: (view, event) => {
         const files = imagesFrom(event.clipboardData);

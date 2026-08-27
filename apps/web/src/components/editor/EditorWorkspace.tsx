@@ -10,6 +10,8 @@ import {
   dirname,
   documentStats,
   joinPath,
+  parseRepoTarget,
+  type RepoTarget,
   serializeDocument,
   slugifyFilename,
   stripExtension,
@@ -33,6 +35,8 @@ import { HelpDialog } from "@/components/HelpDialog";
 import { HistoryDialog } from "@/components/HistoryDialog";
 import { ReviewPanel } from "@/components/ReviewPanel";
 import { LinkFileDialog } from "@/components/LinkFileDialog";
+import { RepoFileDialog } from "@/components/RepoFileDialog";
+import { LinkHoverCard } from "@/components/LinkHoverCard";
 import { CaptureDialog } from "@/components/CaptureDialog";
 import { Dialog } from "@/components/Dialog";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
@@ -122,6 +126,14 @@ export function EditorWorkspace() {
    * did not save" and wrong for "your images are back". This is the quiet
    * channel: neutral, and it goes away on its own.
    */
+  /**
+   * The repository file a link was clicked on, being read.
+   *
+   * Its own state rather than a `dialog` value, because the dialog needs to
+   * know *which* file — and a link can name one in a repository this workspace
+   * is not even connected to.
+   */
+  const [viewingFile, setViewingFile] = useState<RepoTarget | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Dismissing the repo chooser has to be remembered, because the condition
   // that raises it stays true until a repository is actually connected.
@@ -264,6 +276,21 @@ export function EditorWorkspace() {
     () => ({
       resolve: links.resolve,
       open: (target) => {
+        /**
+         * A link naming a file in the repository opens the file.
+         *
+         * Checked first, and it has to be: `repo:scripts/scan.sh` resolves to
+         * no note, so this fell through to the branch below and offered to
+         * create a note *called* `repo:scripts/scan.sh`. Every link the file
+         * picker wrote was therefore unopenable, and clicking one left a junk
+         * note behind.
+         */
+        const repoTarget = parseRepoTarget(target);
+        if (repoTarget && workspace && !workspace.isLocal) {
+          setViewingFile(repoTarget);
+          return;
+        }
+
         const path = links.pathFor(target);
         // Clicking a link to a note that has not been written yet writes it.
         // Refusing to navigate would be technically correct and useless.
@@ -271,7 +298,7 @@ export function EditorWorkspace() {
         else createLinked(target);
       },
     }),
-    [links, notebook, createLinked],
+    [links, notebook, createLinked, workspace],
   );
 
   /**
@@ -776,11 +803,11 @@ export function EditorWorkspace() {
         id: "link-file",
         label: "Link a file",
         hint: "A file in this repository, pinned to the revision you read",
+        // Drawn to the same recipe as the editor's own block icons — 16px
+        // grid, 1.4 stroke, round caps — because it sits between them in the
+        // "/" menu, where a thinner, squarer icon read as a rendering fault.
         icon: (
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
-            <path d="M9 1.5H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5.5Z" />
-            <path d="M9 1.5v4h4" />
-          </svg>
+          <ExtraGlyph d="M9 1.75H4.5A1.75 1.75 0 0 0 2.75 3.5v9c0 .97.78 1.75 1.75 1.75h7a1.75 1.75 0 0 0 1.75-1.75V6zM9 1.75V6h4.25M7.1 11.4a1.2 1.2 0 0 0 1.7.1l.9-.9a1.2 1.2 0 0 0-1.7-1.7l-.4.4M8.4 10.1a1.2 1.2 0 0 0-1.7-.1l-.9.9a1.2 1.2 0 0 0 1.7 1.7l.4-.4" />
         ),
       });
     }
@@ -791,11 +818,7 @@ export function EditorWorkspace() {
         label: "Web source",
         hint: "A page with its address, the time you read it, and an archived copy",
         icon: (
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
-            <path d="M4 2h6a1 1 0 0 1 1 1v5.5" />
-            <path d="M4 2v11l3-2.2" strokeLinecap="round" />
-            <circle cx="11" cy="11" r="3.2" />
-          </svg>
+          <ExtraGlyph d="M3.75 2.75h6.5a1 1 0 0 1 1 1V7M3.75 2.75v10.5L6.5 11.2M14 11a3 3 0 1 1-6 0 3 3 0 0 1 6 0M11 9.6v1.5l1 .7" />
         ),
       });
     }
@@ -1493,6 +1516,14 @@ export function EditorWorkspace() {
                     }
                   : undefined
               }
+              onOpenFile={
+                workspace && !workspace.isLocal
+                  ? (target) => {
+                      setDrawer(null);
+                      setViewingFile(target);
+                    }
+                  : undefined
+              }
               onCapture={
                 user
                   ? () => {
@@ -1600,6 +1631,21 @@ export function EditorWorkspace() {
             }}
           />
         </Dialog>
+      )}
+
+      {/* Every rendered surface at once — the preview, the rich-text editor,
+          the file viewer, a revision being compared — because a link is a link
+          in all of them and which one is on screen is the reader's choice.
+          Signed out it still names the host and the address; only the page's
+          own title needs a session to fetch. */}
+      <LinkHoverCard within=".fl-prose, .ProseMirror" canRead={Boolean(user)} />
+
+      {viewingFile && workspace && !workspace.isLocal && (
+        <RepoFileDialog
+          target={viewingFile}
+          repo={workspace.repo}
+          onClose={() => setViewingFile(null)}
+        />
       )}
 
       {openDialog === "link-file" && workspace && !workspace.isLocal && (
@@ -1780,6 +1826,30 @@ function EmptyState({
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * The editor's own block-menu icon, for the two blocks that live out here.
+ *
+ * A copy of the `Glyph` helper in the editor package rather than an import of
+ * it: that one is an implementation detail of the block list and is not
+ * exported, and the two icons it draws beside these have to match to the pixel.
+ */
+function ExtraGlyph({ d }: { d: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d={d} />
+    </svg>
   );
 }
 
