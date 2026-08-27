@@ -39,6 +39,16 @@ export interface EditorRightPanelProps {
   onLinkFile?: () => void;
   /** Reads a linked file in place, rather than sending the reader to github.com. */
   onOpenFile?: (target: RepoTarget) => void;
+  /**
+   * True when this note is locked against editing.
+   *
+   * The properties here are text fields like any other, and a title
+   * half-retyped by accident is exactly what locking exists to prevent. The
+   * writes are refused upstream regardless — this is so the panel says so
+   * rather than accepting keystrokes and quietly dropping them, which is the
+   * worst of both.
+   */
+  locked?: boolean;
   /** Opens the capture dialog; absent when signed out. */
   onCapture?: () => void;
   /** Opens the publish dialog. Absent for a workspace with no repository. */
@@ -111,6 +121,7 @@ export function EditorRightPanel({
   onLinkFile,
   onOpenFile,
   onCapture,
+  locked = false,
   onRewrite,
   onPublish,
   published,
@@ -249,120 +260,133 @@ export function EditorRightPanel({
         ) : (
           <>
             {/* ── Document ──────────────────────────────────────────────── */}
-            <Section title="Document">
-              <label className="block">
-                <span className="mb-1.5 block text-[12px] text-[var(--fl-muted)]">Title</span>
-                <input
-                  value={(frontmatter.title as string) ?? ""}
-                  onChange={(event) => update({ title: event.target.value })}
-                  placeholder="Untitled"
-                  className="fl-input"
-                />
-              </label>
+            {/* A `fieldset` rather than `disabled` on each control: it
+                disables everything nested inside it, including controls added
+                later, which is the difference between a lock and a list of
+                places somebody remembered to lock. */}
+            <fieldset disabled={locked} className="contents">
+              <Section title="Document">
+                <label className="block">
+                  <span className="mb-1.5 block text-[12px] text-[var(--fl-muted)]">Title</span>
+                  <input
+                    value={(frontmatter.title as string) ?? ""}
+                    onChange={(event) => update({ title: event.target.value })}
+                    placeholder="Untitled"
+                    className="fl-input"
+                  />
+                </label>
 
-              <div className="mt-3">
-                <span className="mb-1.5 block text-[12px] text-[var(--fl-muted)]">Tags</span>
+                <div className="mt-3">
+                  <span className="mb-1.5 block text-[12px] text-[var(--fl-muted)]">Tags</span>
 
-                <div className="flex min-h-[38px] flex-wrap items-center gap-1.5 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2 py-1.5">
-                  {tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="flex items-center gap-1 rounded-md bg-[var(--fl-accent-soft)] px-1.5 py-0.5 text-[11.5px] text-[var(--fl-accent)]"
-                    >
-                      {tag}
+                  <div className="flex min-h-[38px] flex-wrap items-center gap-1.5 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2 py-1.5">
+                    {tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="flex items-center gap-1 rounded-md bg-[var(--fl-accent-soft)] px-1.5 py-0.5 text-[11.5px] text-[var(--fl-accent)]"
+                      >
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => update({ tags: tags.filter((t) => t !== tag) })}
+                          aria-label={`Remove tag ${tag}`}
+                          className="opacity-70 transition-opacity hover:opacity-100"
+                        >
+                          <CrossGlyph />
+                        </button>
+                      </span>
+                    ))}
+
+                    {newTag === null ? (
                       <button
                         type="button"
-                        onClick={() => update({ tags: tags.filter((t) => t !== tag) })}
-                        aria-label={`Remove tag ${tag}`}
-                        className="opacity-70 transition-opacity hover:opacity-100"
+                        onClick={() => setNewTag("")}
+                        aria-label="Add a tag"
+                        className="ml-auto rounded p-0.5 text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]"
+                      >
+                        <PlusGlyph />
+                      </button>
+                    ) : (
+                      <input
+                        autoFocus
+                        value={newTag}
+                        onChange={(event) => setNewTag(event.target.value)}
+                        onBlur={() => setNewTag(null)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") setNewTag(null);
+                          if (event.key !== "Enter") return;
+
+                          event.preventDefault();
+                          const value = newTag.trim();
+                          // Silently ignoring a duplicate is right: the tag the
+                          // user wanted is already there.
+                          if (value && !tags.includes(value)) update({ tags: [...tags, value] });
+                          setNewTag("");
+                        }}
+                        placeholder="Add a tag…"
+                        aria-label="New tag"
+                        className="min-w-[6rem] flex-1 bg-transparent text-[12px] text-[var(--fl-text)] outline-none placeholder:text-[var(--fl-muted)]"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {custom.map(([key, value]) => (
+                  <div key={key} className="mt-3">
+                    <span className="mb-1.5 block text-[12px] text-[var(--fl-muted)]">{key}</span>
+                    <div className="flex gap-1">
+                      <input
+                        value={String(value ?? "")}
+                        onChange={(event) => update({ [key]: event.target.value })}
+                        className="fl-input min-w-0 flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => update({ [key]: undefined })}
+                        title={`Remove ${key}`}
+                        aria-label={`Remove ${key}`}
+                        className="shrink-0 rounded-lg px-2 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-danger)]"
                       >
                         <CrossGlyph />
                       </button>
-                    </span>
-                  ))}
-
-                  {newTag === null ? (
-                    <button
-                      type="button"
-                      onClick={() => setNewTag("")}
-                      aria-label="Add a tag"
-                      className="ml-auto rounded p-0.5 text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]"
-                    >
-                      <PlusGlyph />
-                    </button>
-                  ) : (
-                    <input
-                      autoFocus
-                      value={newTag}
-                      onChange={(event) => setNewTag(event.target.value)}
-                      onBlur={() => setNewTag(null)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Escape") setNewTag(null);
-                        if (event.key !== "Enter") return;
-
-                        event.preventDefault();
-                        const value = newTag.trim();
-                        // Silently ignoring a duplicate is right: the tag the
-                        // user wanted is already there.
-                        if (value && !tags.includes(value)) update({ tags: [...tags, value] });
-                        setNewTag("");
-                      }}
-                      placeholder="Add a tag…"
-                      aria-label="New tag"
-                      className="min-w-[6rem] flex-1 bg-transparent text-[12px] text-[var(--fl-text)] outline-none placeholder:text-[var(--fl-muted)]"
-                    />
-                  )}
-                </div>
-              </div>
-
-              {custom.map(([key, value]) => (
-                <div key={key} className="mt-3">
-                  <span className="mb-1.5 block text-[12px] text-[var(--fl-muted)]">{key}</span>
-                  <div className="flex gap-1">
-                    <input
-                      value={String(value ?? "")}
-                      onChange={(event) => update({ [key]: event.target.value })}
-                      className="fl-input min-w-0 flex-1"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => update({ [key]: undefined })}
-                      title={`Remove ${key}`}
-                      aria-label={`Remove ${key}`}
-                      className="shrink-0 rounded-lg px-2 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-danger)]"
-                    >
-                      <CrossGlyph />
-                    </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
 
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const key = newKey.trim();
-                  if (key && !(key in frontmatter)) update({ [key]: "" });
-                  setNewKey("");
-                }}
-                className="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed border-[var(--fl-border)] px-2.5 py-1.5"
-              >
-                <CheckGlyph muted />
-                <input
-                  value={newKey}
-                  onChange={(event) => setNewKey(event.target.value)}
-                  placeholder="Add property"
-                  aria-label="New property name"
-                  className="min-w-0 flex-1 bg-transparent text-[12.5px] text-[var(--fl-text)] outline-none placeholder:text-[var(--fl-muted)]"
-                />
-                <button
-                  type="submit"
-                  aria-label="Add property"
-                  className="shrink-0 rounded p-0.5 text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]"
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const key = newKey.trim();
+                    if (key && !(key in frontmatter)) update({ [key]: "" });
+                    setNewKey("");
+                  }}
+                  className="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed border-[var(--fl-border)] px-2.5 py-1.5"
                 >
-                  <PlusGlyph />
-                </button>
-              </form>
-            </Section>
+                  <CheckGlyph muted />
+                  <input
+                    value={newKey}
+                    onChange={(event) => setNewKey(event.target.value)}
+                    placeholder="Add property"
+                    aria-label="New property name"
+                    className="min-w-0 flex-1 bg-transparent text-[12.5px] text-[var(--fl-text)] outline-none placeholder:text-[var(--fl-muted)]"
+                  />
+                  <button
+                    type="submit"
+                    aria-label="Add property"
+                    className="shrink-0 rounded p-0.5 text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]"
+                  >
+                    <PlusGlyph />
+                  </button>
+                </form>
+
+                {locked && (
+                  <p className="mt-3 text-[11.5px] leading-snug text-[var(--fl-muted)]">
+                    This note is locked. Unlock it from the padlock in the header, or with ⌘⇧L, to
+                    change its properties.
+                  </p>
+                )}
+              </Section>
+            </fieldset>
 
             {/* ── Stats ─────────────────────────────────────────────────── */}
             {stats && (
@@ -721,7 +745,14 @@ function PanelButton({
       disabled={busy}
       className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--fl-border)] px-3 py-2 text-[12.5px] font-medium text-[var(--fl-text)] transition-colors hover:border-[var(--fl-border-strong)] hover:bg-[var(--fl-elevated)] disabled:opacity-50"
     >
-      <span aria-hidden="true" className="shrink-0 text-[var(--fl-muted)]">
+      {/* The size is enforced here as well as in each glyph. An `<svg>` with a
+          viewBox and no width collapses to nothing in a flex row, which is a
+          silent failure — the button still works and simply looks unfinished,
+          which is exactly the kind of thing nobody files a bug about. */}
+      <span
+        aria-hidden="true"
+        className="shrink-0 text-[var(--fl-muted)] [&_svg]:h-3.5 [&_svg]:w-3.5"
+      >
         {icon}
       </span>
       {busy ? "Working…" : children}
@@ -918,11 +949,28 @@ function CaptureGlyph() {
 }
 
 /** Two lines of talk against a document — a review, in miniature. */
+/**
+ * Two lines of talk against a document — a review, in miniature.
+ *
+ * It had no size of its own, and the button it sits in did not give it one, so
+ * an `<svg>` with a viewBox and no width collapsed to nothing: "Review & merge
+ * this note" was the one action in the panel with a blank space where every
+ * other row has an icon.
+ */
 function ReviewGlyph() {
   return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
-      <path d="M2 3.5h7M2 6h5" strokeLinecap="round" />
-      <path d="M6.5 9.5h7a1 1 0 0 1 1 1v2.5a1 1 0 0 1-1 1H9l-2 1.5V14h-.5a1 1 0 0 1-1-1v-2.5a1 1 0 0 1 1-1Z" />
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2.25 3.25h7.5M2.25 5.75h5" />
+      <path d="M6.75 8.75h6.5a1 1 0 0 1 1 1v2.75a1 1 0 0 1-1 1H9.5l-2.25 1.5v-1.5h-.5a1 1 0 0 1-1-1V9.75a1 1 0 0 1 1-1Z" />
     </svg>
   );
 }

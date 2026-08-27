@@ -105,6 +105,16 @@ export interface WysiwygEditorProps {
   slashActions?: ActionContext;
   /** How `[[wikilinks]]` resolve, and what ⌘-clicking one does. */
   links?: LinkBridge;
+  /**
+   * Makes the note readable but not writable.
+   *
+   * Tiptap's own `editable` flag, which takes `contenteditable` off the
+   * surface: no caret, no input, no drag-and-drop into it, and the browser
+   * itself stops treating it as somewhere text can go. Clicking still selects
+   * text and still follows links, because reading a locked note is the entire
+   * point of locking one.
+   */
+  editable?: boolean;
 }
 
 /**
@@ -124,6 +134,7 @@ export function WysiwygEditor({
   images,
   onImageStatus,
   slashActions,
+  editable = true,
   links,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
@@ -367,6 +378,7 @@ export function WysiwygEditor({
   const editor = useEditor({
     extensions,
     content: value,
+    editable,
     autofocus: autoFocus,
     // Required in Next.js: rendering the editor during SSR causes a hydration
     // mismatch because ProseMirror generates DOM the server cannot produce.
@@ -409,6 +421,11 @@ export function WysiwygEditor({
         return true;
       },
       handlePaste: (view, event) => {
+        // ProseMirror will not apply a paste to a non-editable view, but this
+        // handler does not paste — it uploads a file and inserts markdown of
+        // its own, which would sail straight past that.
+        if (!view.editable) return false;
+
         const files = imagesFrom(event.clipboardData);
         if (files.length === 0 || !imagesRef.current?.upload) return false;
 
@@ -420,6 +437,7 @@ export function WysiwygEditor({
         return true;
       },
       handleDrop: (view, event, _slice, moved) => {
+        if (!view.editable) return false;
         // A node being dragged within the document is not an upload.
         if (moved) return false;
 
@@ -506,6 +524,18 @@ export function WysiwygEditor({
     onReadyRef.current?.(editor ?? null);
     return () => onReadyRef.current?.(null);
   }, [editor]);
+
+  /**
+   * Locking and unlocking an editor that already exists.
+   *
+   * `editable` is read when the editor is built, and the editor is built once
+   * per note — so without this, locking a note you already had open changed
+   * nothing until you closed and reopened it, which is the worst possible
+   * behaviour for a switch whose whole job is to be trusted.
+   */
+  useEffect(() => {
+    if (editor && editor.isEditable !== editable) editor.setEditable(editable);
+  }, [editor, editable]);
 
   // Pull external changes in (switching notes, resolving a conflict) without
   // disturbing the caret during normal typing.

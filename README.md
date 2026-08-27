@@ -22,7 +22,8 @@ ForkLeaf has none.
 
 - [Why this exists](#why-this-exists)
 - [Features](#features)
-  - [Writing](#writing) · [Links](#links-between-notes) · [Search](#search) ·
+  - [Writing](#writing) · [Links](#links-between-notes) · [Reading](#reading) ·
+    [Search](#search) ·
     [Diagrams](#diagrams) · [Sync](#sync) · [History and review](#history-and-review) ·
     [Dashboard](#dashboard) · [Workspaces](#workspaces) ·
     [On your desktop](#on-your-desktop) · [Publishing](#publishing) ·
@@ -74,6 +75,35 @@ your notes at all:
   `[[q3-roadmap]]` and `[[Q3 roadmap]]` reach the same note.
 - **Linking ahead of yourself is normal.** A link to a note you haven't written
   is drawn muted rather than broken, and clicking it writes the note.
+
+### Reading
+
+A notebook is read far more often than it is written, and reading has its own
+set of problems.
+
+- **Links open, in a new tab.** One click, from the rendered preview and from
+  rich text alike — following a link never navigates away from a note holding
+  writing that hasn't reached GitHub yet. In rich text, `Alt`-click puts the
+  cursor in the link text instead, because that is the rarer of the two things
+  you do to a link.
+- **Hover a link and a card says where it goes**: the host, the page's own
+  title, its own one-line description, the picture it offers of itself, and the
+  full address. Enough to decide without opening it.
+- **The card doesn't tell the site you looked.** The page is read by ForkLeaf's
+  server, and even the picture is fetched server-side and served back from this
+  origin — no request from your browser, no referrer, no address. Addresses that
+  resolve inside a private network are refused outright.
+- **`[[repo:path/to/file]]` opens the file, in place.** Markdown renders,
+  anything else is shown as highlighted source, images as images — at the
+  revision the link pinned, not at whatever the branch has moved on to. That is
+  what lets a note that reports itself stale still show you what it was written
+  about.
+- **Lock a note against editing.** The padlock in the header, or `⌘⇧L`. A note
+  you read constantly is a note whose text is one stray keystroke from being
+  quietly edited and committed; locking stops typing, the formatting bar, the
+  `/` menu, pasted images, undo, and the properties panel — while leaving
+  reading, copying, links and incoming changes from GitHub exactly as they were.
+  Locks are per device, survive a reload, and carry across a rename.
 
 ### Search
 
@@ -142,6 +172,10 @@ blocks, so they render on github.com and anywhere else Mermaid is supported.
 - **Propose changes.** For a repository you cannot push to, ForkLeaf forks it,
   commits to a branch and opens a pull request — so contributing a documentation
   fix is the same gesture as editing a note.
+- **Capture a web page as a source.** A citation that records the address, the
+  moment you read it, and a link to an archived copy — asking the Wayback
+  Machine to make one if none exists. Written into the note as an ordinary
+  blockquote, so it stays readable anywhere markdown is.
 
 ### Dashboard
 
@@ -218,6 +252,7 @@ Export one note, or the whole workspace at once.
 | `⌘S`     | Save now rather than waiting for autosave            |
 | `⌘⇧N`    | New note                                             |
 | `⌘⇧E`    | Export                                               |
+| `⌘⇧L`    | Lock or unlock the note against editing              |
 | `⌘⇧?`    | Help and the full shortcut list                      |
 
 The complete table, including the rich-text and source-mode bindings, is on the
@@ -335,13 +370,13 @@ The app ships its own documentation site at `/docs`, covering every page below.
 Run `pnpm dev` and open <http://localhost:3000/docs>, or read it on the hosted
 instance.
 
-| Section             | Pages                                                      |
-| ------------------- | ---------------------------------------------------------- |
-| Start here          | Getting started · How ForkLeaf works                       |
-| Writing             | The editor · Diagrams · Properties · Exporting · Shortcuts |
-| GitHub              | Signing in · Repositories · Syncing · Conflicts            |
-| Account             | What it costs · Your data · Security model                 |
-| Running it yourself | Self-hosting · Firebase setup · Troubleshooting · FAQ      |
+| Section             | Pages                                                                       |
+| ------------------- | --------------------------------------------------------------------------- |
+| Start here          | Getting started · How ForkLeaf works                                        |
+| Writing             | The editor · Diagrams · Properties · Reading a note · Exporting · Shortcuts |
+| GitHub              | Signing in · Repositories · Syncing · Conflicts                             |
+| Account             | What it costs · Your data · Security model                                  |
+| Running it yourself | Self-hosting · Firebase setup · Troubleshooting · FAQ                       |
 
 Architecture notes live in [docs/architecture.md](docs/architecture.md), and the
 deployment guide in [docs/self-hosting.md](docs/self-hosting.md).

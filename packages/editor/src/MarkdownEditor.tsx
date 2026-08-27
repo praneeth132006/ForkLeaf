@@ -58,6 +58,16 @@ export interface MarkdownEditorProps {
   imageDestination?: string;
   /** How `[[wikilinks]]` resolve, and what clicking one does. */
   links?: LinkBridge;
+  /**
+   * Makes the note readable but not writable, in every mode at once.
+   *
+   * One flag rather than three, because a lock that holds in rich text and not
+   * in the source view is not a lock — and switching mode is one click. It
+   * takes the formatting bar away as well as the caret: a toolbar button is a
+   * programmatic edit, which no amount of read-only state on the surface
+   * itself would stop.
+   */
+  readOnly?: boolean;
 }
 
 const MODES: { value: EditorViewMode; label: string; hint: string }[] = [
@@ -93,6 +103,7 @@ export function MarkdownEditor({
   images,
   imageDestination,
   links,
+  readOnly = false,
 }: MarkdownEditorProps) {
   // Split view: the divider position, as a percentage of the container width.
   const [splitRatio, setSplitRatio] = useState(50);
@@ -375,7 +386,10 @@ export function MarkdownEditor({
         </div>
       )}
 
-      {!hideToolbar && (
+      {/* The whole bar goes, rather than being disabled in place: a row of
+          twenty greyed-out buttons above a note you are reading is noise, and
+          the lock button in the header already says why it is not there. */}
+      {!hideToolbar && !readOnly && (
         <EditorToolbar
           actions={actions}
           onRun={runAction}
@@ -391,6 +405,7 @@ export function MarkdownEditor({
           <WysiwygEditor
             value={value}
             onChange={onChange}
+            editable={!readOnly}
             onReady={handleTiptapReady}
             onImageStatus={setImageStatus}
             slashActions={actionContext}
@@ -409,10 +424,11 @@ export function MarkdownEditor({
           <SourceEditor
             value={value}
             onChange={onChange}
+            readOnly={readOnly}
             handleRef={sourceHandle}
             onCursorChange={handleCursor}
             slashActions={actionContext}
-            {...(canUpload ? { onImageFiles: handleSourceImages } : {})}
+            {...(canUpload && !readOnly ? { onImageFiles: handleSourceImages } : {})}
             {...(placeholder ? { placeholder } : {})}
             showLineNumbers
           />
@@ -429,10 +445,11 @@ export function MarkdownEditor({
             <SourceEditor
               value={value}
               onChange={onChange}
+              readOnly={readOnly}
               handleRef={sourceHandle}
               onCursorChange={handleCursor}
               slashActions={actionContext}
-              {...(canUpload ? { onImageFiles: handleSourceImages } : {})}
+              {...(canUpload && !readOnly ? { onImageFiles: handleSourceImages } : {})}
               {...(placeholder ? { placeholder } : {})}
               showLineNumbers
               className="min-h-0 w-full flex-1 overflow-hidden"

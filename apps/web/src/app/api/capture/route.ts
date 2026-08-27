@@ -192,10 +192,26 @@ export async function POST(request: NextRequest) {
     await requireClient();
     enforceRateLimit(request, RATE_LIMIT);
 
-    const body = (await request.json().catch(() => null)) as { url?: unknown } | null;
+    const body = (await request.json().catch(() => null)) as {
+      url?: unknown;
+      want?: unknown;
+    } | null;
     if (!body || typeof body.url !== "string") {
       throw new ApiError(400, "validation", "A web address is required.");
     }
+
+    /**
+     * Which half of the work to do.
+     *
+     * Both, by default, which is what this route always did. The dialog asks
+     * for them separately because they take wildly different amounts of time:
+     * reading a page is a second, and asking the Wayback Machine to make a
+     * snapshot that does not exist yet can take most of a minute. Doing them
+     * in one request meant pressing "Capture" and watching nothing happen for
+     * forty seconds, which reads as broken however honest the eventual answer
+     * is.
+     */
+    const want = body.want === "page" || body.want === "archive" ? body.want : "both";
 
     let url: URL;
     try {
@@ -214,16 +230,21 @@ export async function POST(request: NextRequest) {
     try {
       // Together: neither is worth failing the other over.
       const [page, existing] = await Promise.all([
-        fetchChecked(url, controller.signal)
-          .then((response) => (response && response.ok ? readTitle(response) : null))
-          .catch(() => null),
-        findSnapshot(url.toString(), controller.signal),
+        want === "archive"
+          ? Promise.resolve(null)
+          : fetchChecked(url, controller.signal)
+              .then((response) => (response && response.ok ? readTitle(response) : null))
+              .catch(() => null),
+        want === "page"
+          ? Promise.resolve({ archiveUrl: null, archivedAt: null })
+          : findSnapshot(url.toString(), controller.signal),
       ]);
 
       // A citation whose archived copy does not exist is an address and a
       // timestamp — which is what the feature was supposed to improve on. So
       // when there is no snapshot, ask for one before giving up.
-      const snapshot = existing.archiveUrl ? existing : await requestSnapshot(url.toString());
+      const snapshot =
+        want === "page" || existing.archiveUrl ? existing : await requestSnapshot(url.toString());
 
       return {
         url: url.toString(),

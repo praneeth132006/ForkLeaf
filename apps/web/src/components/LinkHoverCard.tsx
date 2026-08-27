@@ -17,11 +17,11 @@ import { previewLink, type LinkPreviewResult } from "@/lib/gateway";
  * rebuilds its DOM whenever the document changes — anything bound per anchor
  * would be lost on the next keystroke.
  *
- * Text only, and that is deliberate. A card showing a remote image would mean
- * the reader's browser fetching from whatever host the note links to, merely
- * because the pointer passed over a word — a tracking pixel with extra steps.
- * The host, the page's own title and its own summary are what the decision
- * actually rests on.
+ * The picture a page offers of itself is shown, because "is this the right
+ * link" is often a question about what the page looks like — but it is served
+ * through `/api/link-image` rather than from the site itself. An `<img>`
+ * pointing at the linked host would tell that host the pointer passed over a
+ * word in somebody's private note, which is not a thing hovering should do.
  */
 
 /** Long enough that crossing a link on the way somewhere else shows nothing. */
@@ -74,6 +74,8 @@ export interface LinkHoverCardProps {
 export function LinkHoverCard({ within, canRead = true }: LinkHoverCardProps) {
   const [anchored, setAnchored] = useState<Anchored | null>(null);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  /** Set when the page's picture will not load, so the card drops it. */
+  const [imageFailed, setImageFailed] = useState(false);
 
   // Timers and the pointer's whereabouts are not rendered, so they are refs:
   // re-rendering the card because the mouse moved would defeat the point.
@@ -107,6 +109,7 @@ export function LinkHoverCard({ within, canRead = true }: LinkHoverCardProps) {
     const show = (anchor: HTMLAnchorElement, url: string) => {
       const box = anchor.getBoundingClientRect();
       showing.current = url;
+      setImageFailed(false);
       setAnchored({
         url,
         rect: { left: box.left, right: box.right, top: box.top, bottom: box.bottom },
@@ -122,7 +125,7 @@ export function LinkHoverCard({ within, canRead = true }: LinkHoverCardProps) {
       if (!canRead) {
         setLoaded({
           status: "ready",
-          preview: { url, title: null, description: null, host: hostOf(url) },
+          preview: { url, title: null, description: null, host: hostOf(url), image: null },
         });
         return;
       }
@@ -144,6 +147,7 @@ export function LinkHoverCard({ within, canRead = true }: LinkHoverCardProps) {
             title: null,
             description: null,
             host: hostOf(url),
+            image: null,
           }),
         )
         .then((preview) => {
@@ -209,7 +213,9 @@ export function LinkHoverCard({ within, canRead = true }: LinkHoverCardProps) {
   // past either edge of the window.
   const below = anchored.rect.bottom + 8;
   const above = anchored.rect.top - 8;
-  const openDownwards = below + 140 < window.innerHeight || above < 160;
+  const tall = loaded.status === "ready" && Boolean(loaded.preview.image) && !imageFailed;
+  const height = tall ? 300 : 150;
+  const openDownwards = below + height < window.innerHeight || above < height;
 
   const left = Math.min(
     Math.max(8, anchored.rect.left),
@@ -240,6 +246,20 @@ export function LinkHoverCard({ within, canRead = true }: LinkHoverCardProps) {
         <p className="text-[12px] text-[var(--fl-muted)]">Reading {hostOf(anchored.url)}…</p>
       ) : (
         <div className="space-y-1">
+          {/* Above the text, and allowed to fail silently: plenty of pages
+              offer no picture, and plenty of the ones that do point at
+              something that will not load. `onError` hides it rather than
+              leaving the browser's broken-image glyph in a card whose whole
+              job is to look like the page. */}
+          {loaded.preview.image && !imageFailed && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={loaded.preview.image}
+              alt=""
+              onError={() => setImageFailed(true)}
+              className="mb-2 h-32 w-full rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] object-cover"
+            />
+          )}
           <p className="truncate text-[11px] uppercase tracking-wide text-[var(--fl-muted)]">
             {loaded.preview.host}
           </p>

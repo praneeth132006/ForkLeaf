@@ -55,6 +55,12 @@ export const DOC_SECTIONS: DocSection[] = [
         summary: "Titles, tags and custom fields, and how they map onto YAML in the file.",
       },
       {
+        slug: "reading",
+        title: "Reading a note",
+        summary:
+          "Following links, the hover card that says where they go, reading a linked file, and locking a note so reading it cannot change it.",
+      },
+      {
         slug: "export",
         title: "Exporting",
         summary: "Markdown, PDF, HTML, Word, plain text and JSON — all produced in your browser.",
