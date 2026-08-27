@@ -129,3 +129,28 @@ export {
   type CapturedSource,
   type CitedSource,
 } from "./provenance";
+
+export {
+  REPO_SCHEME,
+  formatRepoTarget,
+  freshnessOf,
+  isRepoTarget,
+  parseRepoTarget,
+  pinRepoLink,
+  repoTargetLabel,
+  repoTargetUrl,
+  repoTargetsIn,
+  type LinkFreshness,
+  type LinkedFile,
+  type RepoTarget,
+} from "./repolinks";
+
+export {
+  assessDecay,
+  findPerishable,
+  type DecayOptions,
+  type DecayReport,
+  type DecayVerdict,
+  type PerishableKind,
+  type PerishableMention,
+} from "./decay";

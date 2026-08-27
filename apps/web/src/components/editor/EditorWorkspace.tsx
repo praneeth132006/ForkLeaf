@@ -239,6 +239,7 @@ export function EditorWorkspace() {
     openNotes: notebook.openNotes,
     loadNotes: notebook.allNotes,
     hrefFor: hrefForPath,
+    repo: workspace && !workspace.isLocal ? workspace.repo : null,
   });
 
   /**
@@ -1447,6 +1448,7 @@ export function EditorWorkspace() {
               note={note}
               workspace={workspace}
               onFrontmatterChange={notebook.updateFrontmatter}
+              onRewrite={notebook.saveNote}
               onExport={() => {
                 setDrawer(null);
                 setDialog("export");
