@@ -6,6 +6,7 @@ import type { LinkRef } from "@forkleaf/markdown-engine";
 import { extractOutline, documentStats, serializeDocument } from "@forkleaf/markdown-engine";
 import { exportNote, printToPdf, downloadResult } from "@forkleaf/exporter";
 import { exportImageResolver } from "@/lib/export-images";
+import { NoteFreshness, hasFreshnessToReport } from "@/components/NoteFreshness";
 import { deriveTitle } from "@forkleaf/markdown-engine";
 
 export interface EditorRightPanelProps {
@@ -32,6 +33,8 @@ export interface EditorRightPanelProps {
    * question — how this page grew, and which parts of it are old.
    */
   onBlame: () => void;
+  /** Rewrites the note, for re-pinning a repository link. */
+  onRewrite?: (content: string) => void;
   /** Absent for a local workspace, which has no pull requests to read. */
   onReview?: () => void;
   /** Opens the publish dialog. Absent for a workspace with no repository. */
@@ -103,6 +106,7 @@ export function EditorRightPanel({
   onReplay,
   onBlame,
   onReview,
+  onRewrite,
   onPublish,
   published,
   syncMode,
@@ -485,6 +489,25 @@ export function EditorRightPanel({
             <Section title="Links">
               <LinksSection note={note} links={links} />
             </Section>
+
+            {/* ── Freshness ─────────────────────────────────────────────────
+                Renders nothing at all for a note with no datable claims and
+                no linked files, which is most of them — a permanent "all
+                clear" on every page would be a section nobody reads. */}
+            {hasFreshnessToReport(
+              note.content,
+              note.updatedAt ?? null,
+              Boolean(workspace && !workspace.isLocal),
+            ) && (
+              <Section title="Freshness">
+                <NoteFreshness
+                  content={note.content}
+                  updatedAt={note.updatedAt ?? null}
+                  repo={workspace && !workspace.isLocal ? workspace.repo : null}
+                  onChange={onRewrite}
+                />
+              </Section>
+            )}
 
             {/* ── Outline ───────────────────────────────────────────────── */}
             <Section title="Outline" last>

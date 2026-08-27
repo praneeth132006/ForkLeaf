@@ -86,6 +86,21 @@ export function GettingStarted() {
           one sitting or was assembled over a year.
         </LI>
         <LI>
+          <strong>Link a note to the file it describes</strong> — write{" "}
+          <Code>[[repo:scripts/scan.sh]]</Code> to link a file in this repository, or{" "}
+          <Code>[[repo:you/tools:scripts/scan.sh]]</Code> for one in another. Add{" "}
+          <Code>@a1b2c3d</Code> to record the revision you read it at, and the Freshness panel will
+          tell you when that file has changed since — the paragraph describing it is then a
+          paragraph worth re-checking.
+        </LI>
+        <LI>
+          <strong>Freshness</strong> — properties panel. Whether the note is still true: the files
+          it links that have moved on, and the claims in it that expire — version numbers, CVEs,
+          dates, and sentences hanging on the word &ldquo;currently&rdquo; — weighed against how
+          long since you touched it. It never says a note is wrong, only that it is worth
+          re-reading, and always shows why.
+        </LI>
+        <LI>
           <strong>Review &amp; merge this note</strong> — properties panel. Propose a note as a pull
           request, then read the review here instead of on github.com: each comment against the
           paragraph it was written about, replies in place, and a squash-merge when it is settled.

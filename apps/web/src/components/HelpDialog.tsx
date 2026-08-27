@@ -194,6 +194,13 @@ export function HelpDialog({
                   changed in the margin beside it.
                 </span>
                 <span className="mt-3 block">
+                  Write <Mono>[[repo:scripts/scan.sh]]</Mono> to link a note to a file in a
+                  repository rather than to another note, with <Mono>@a1b2c3d</Mono> to pin the
+                  revision you read. The <strong>Freshness</strong> panel then says when that file
+                  has changed since — and weighs the claims in the note that expire against how long
+                  since you touched it.
+                </span>
+                <span className="mt-3 block">
                   <strong>Review &amp; merge this note</strong> reads the pull request open on this
                   branch: every comment shown against the paragraph it was written about, with a
                   reply box on each, and a squash-merge once it is settled. Propose changes first to

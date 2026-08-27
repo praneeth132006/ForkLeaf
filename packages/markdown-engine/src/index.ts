@@ -136,3 +136,13 @@ export {
   type LinkedFile,
   type RepoTarget,
 } from "./repolinks";
+
+export {
+  assessDecay,
+  findPerishable,
+  type DecayOptions,
+  type DecayReport,
+  type DecayVerdict,
+  type PerishableKind,
+  type PerishableMention,
+} from "./decay";
