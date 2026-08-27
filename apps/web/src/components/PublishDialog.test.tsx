@@ -11,6 +11,14 @@ vi.mock("@/lib/gateway", () => ({
   unpublishNote: vi.fn(),
 }));
 
+vi.stubGlobal(
+  "fetch",
+  vi.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ owner: "me", repo: "forkleaf-notes-site", created: true }),
+  }),
+);
+
 vi.mock("@forkleaf/exporter", () => ({ toHtml: () => "<html></html>" }));
 
 afterEach(cleanup);
@@ -132,6 +140,38 @@ describe("PublishDialog — choosing where pages go", () => {
 
     expect(screen.getByText("Pages go to")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /use another repository/i })).toBeNull();
+  });
+
+  it("creates the public repository and publishes into it, in one press", async () => {
+    // The button says "and publish there". Setting the target and leaving the
+    // reader looking at the same failure is how this looked broken.
+    const { publishNote } = await import("@/lib/gateway");
+    vi.mocked(publishNote).mockResolvedValue({
+      url: "https://me.github.io/forkleaf-notes-site/recon.html",
+      siteUrl: "https://me.github.io/forkleaf-notes-site",
+      status: "building",
+      path: "docs/recon.html",
+    });
+
+    const onSetTarget = vi.fn();
+    view({ onSetTarget });
+
+    fireEvent.click(screen.getByRole("button", { name: /create .*-site and publish there/i }));
+
+    await waitFor(() =>
+      expect(onSetTarget).toHaveBeenCalledWith(
+        expect.objectContaining({ owner: "me", repo: "forkleaf-notes-site" }),
+      ),
+    );
+
+    // Into the repository it just made, not the one the closure still holds.
+    await waitFor(() =>
+      expect(publishNote).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repo: expect.objectContaining({ repo: "forkleaf-notes-site" }),
+        }),
+      ),
+    );
   });
 
   it("points at the fix when GitHub refuses for want of a paid plan", async () => {

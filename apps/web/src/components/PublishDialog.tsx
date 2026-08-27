@@ -85,7 +85,58 @@ export function PublishDialog({
 
   const warning = useMemo(() => targetWarning(target, workspace.repo), [target, workspace.repo]);
 
+  const title = useMemo(() => deriveTitle(note.content, note.frontmatter.title, note.path), [note]);
+  const slug = useMemo(
+    () => slugifyFilename(stripExtension(note.path.split("/").pop() ?? "note")),
+    [note.path],
+  );
+
   const [creating, setCreating] = useState(false);
+
+  const [stage, setStage] = useState<Stage>("idle");
+  const [step, setStep] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ url: string | null; status: string | null } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  /**
+   * Publishes into a named repository.
+   *
+   * Takes the repository rather than reading `target` from the closure,
+   * because the one caller that matters most has just changed it: creating the
+   * public site repository and then publishing into `target` would publish
+   * into the old one, since state does not update until the next render.
+   */
+  const publishTo = useCallback(
+    async (repo: RepoRef) => {
+      setStage("working");
+      setError(null);
+
+      try {
+        setStep("Rendering the page…");
+        const html = await toHtml(note.content, note.frontmatter, {
+          format: "html",
+          title,
+          includeFrontmatter: false,
+          renderDiagrams: true,
+          theme: "light",
+        });
+
+        setStep("Committing it to your repository…");
+        const result = await publishNote({ repo, slug, html, title });
+
+        setResult({ url: result.url, status: result.status });
+        setStage("idle");
+        await onChanged?.();
+      } catch (problem) {
+        setError(messageFor(problem));
+        setStage("idle");
+      }
+    },
+    [note, title, slug, onChanged],
+  );
+
+  const publish = useCallback(() => publishTo(target), [publishTo, target]);
 
   /**
    * Makes the public repository and points publishing at it, in one go.
@@ -114,19 +165,26 @@ export function PublishDialog({
         return;
       }
 
-      await onSetTarget({
+      const created: RepoRef = {
         owner: String(body.owner),
         repo: String(body.repo),
         branch: "main",
         directory: "",
-      });
+      };
+
+      await onSetTarget(created);
       setEditingTarget(false);
+
+      // The button says "and publish there", so it publishes there. Setting
+      // the target and leaving the reader looking at the same failure, with a
+      // second button to find, is how this looked broken the first time.
+      await publishTo(created);
     } catch {
       setTargetError("Could not reach GitHub to create the repository.");
     } finally {
       setCreating(false);
     }
-  }, [onSetTarget, workspace.repo.repo]);
+  }, [onSetTarget, workspace.repo.repo, publishTo]);
 
   const saveTarget = useCallback(async () => {
     if (!onSetTarget) return;
@@ -150,18 +208,6 @@ export function PublishDialog({
     setTargetError(null);
   }, [onSetTarget, targetDraft]);
 
-  const title = useMemo(() => deriveTitle(note.content, note.frontmatter.title, note.path), [note]);
-  const slug = useMemo(
-    () => slugifyFilename(stripExtension(note.path.split("/").pop() ?? "note")),
-    [note.path],
-  );
-
-  const [stage, setStage] = useState<Stage>("idle");
-  const [step, setStep] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ url: string | null; status: string | null } | null>(null);
-  const [copied, setCopied] = useState(false);
-
   /**
    * What to show: what this dialog just did, else what was already true.
    *
@@ -179,32 +225,6 @@ export function PublishDialog({
     () => result ?? (published ? { url: published.url, status: "built" as string | null } : null),
     [result, published],
   );
-
-  const publish = useCallback(async () => {
-    setStage("working");
-    setError(null);
-
-    try {
-      setStep("Rendering the page…");
-      const html = await toHtml(note.content, note.frontmatter, {
-        format: "html",
-        title,
-        includeFrontmatter: false,
-        renderDiagrams: true,
-        theme: "light",
-      });
-
-      setStep("Committing it to your repository…");
-      const result = await publishNote({ repo: target, slug, html, title });
-
-      setResult({ url: result.url, status: result.status });
-      setStage("idle");
-      await onChanged?.();
-    } catch (problem) {
-      setError(messageFor(problem));
-      setStage("idle");
-    }
-  }, [note, title, slug, target, onChanged]);
 
   const unpublish = useCallback(async () => {
     setStage("working");
