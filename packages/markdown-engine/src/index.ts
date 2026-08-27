@@ -121,3 +121,11 @@ export {
   type ThreadOptions,
   type Verdict,
 } from "./review";
+
+export {
+  formatSource,
+  isCapturable,
+  sourcesIn,
+  type CapturedSource,
+  type CitedSource,
+} from "./provenance";

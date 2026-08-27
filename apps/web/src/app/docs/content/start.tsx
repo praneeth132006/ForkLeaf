@@ -86,6 +86,20 @@ export function GettingStarted() {
           one sitting or was assembled over a year.
         </LI>
         <LI>
+          <strong>Publish somewhere else</strong> — publish dialog. By default a published page is
+          committed to <Code>docs/</Code> in the same repository as your notes, which cannot work
+          when those notes are private: GitHub Pages needs a paid plan for a private repository, and
+          the page would sit inside the repository you were keeping private. Point publishing at a
+          second, public repository instead and the notes stay where they are. One notebook, two
+          audiences, no copy-paste.
+        </LI>
+        <LI>
+          <strong>Capture a web page as a source</strong> — command palette. Records the address,
+          the moment you read it, and an archived copy from the Wayback Machine, written into the
+          note as an ordinary blockquote. A cited page that later disappears is still readable,
+          which is the difference between a citation and a dead link.
+        </LI>
+        <LI>
           <strong>Review &amp; merge this note</strong> — properties panel. Propose a note as a pull
           request, then read the review here instead of on github.com: each comment against the
           paragraph it was written about, replies in place, and a squash-merge when it is settled.
