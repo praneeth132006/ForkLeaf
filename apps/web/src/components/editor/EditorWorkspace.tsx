@@ -29,11 +29,11 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { ConnectRepoDialog } from "@/components/ConnectRepoDialog";
 import { ProposeChangesDialog } from "@/components/ProposeChangesDialog";
 import { PublishDialog } from "@/components/PublishDialog";
-import { formatSource, isCapturable } from "@forkleaf/markdown-engine";
-import { capturePage } from "@/lib/gateway";
 import { HelpDialog } from "@/components/HelpDialog";
 import { HistoryDialog } from "@/components/HistoryDialog";
 import { ReviewPanel } from "@/components/ReviewPanel";
+import { LinkFileDialog } from "@/components/LinkFileDialog";
+import { CaptureDialog } from "@/components/CaptureDialog";
 import { Dialog } from "@/components/Dialog";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
 import { CommandPalette, type Command } from "@/components/CommandPalette";
@@ -108,6 +108,8 @@ export function EditorWorkspace() {
     | "replay"
     | "blame"
     | "review"
+    | "link-file"
+    | "capture"
     | "propose"
     | "publish"
     | null
@@ -887,47 +889,9 @@ export function EditorWorkspace() {
           hint: "Records the address, when you read it, and an archived copy",
           keywords:
             "capture clip source citation cite provenance archive wayback snapshot reference url link web page bookmark",
-          run: () =>
-            setPrompt({
-              title: "Capture a web page",
-              label: "Address",
-              confirmLabel: "Capture",
-              body: "The address, the moment you read it, and an archived copy are written into this note as an ordinary blockquote — so the citation still means something after the page is gone.",
-              onConfirm: async (value) => {
-                const url = value.trim();
-                if (!isCapturable(url)) {
-                  setNotice("That is not a web address ForkLeaf can capture.");
-                  return;
-                }
-
-                try {
-                  const source = await capturePage(url);
-                  // Written through the same save path as any edit, so it is
-                  // committed like anything else the note contains.
-                  const current = notebook.note;
-                  if (!current) return;
-
-                  const separator = current.content.endsWith("\n") ? "\n" : "\n\n";
-                  await notebook.saveNote(
-                    `${current.content}${separator}${formatSource(source)}\n`,
-                  );
-
-                  setNotice(
-                    source.archiveUrl
-                      ? "Captured, with an archived copy."
-                      : "Captured. The archive has no snapshot of that page yet.",
-                  );
-                } catch (error) {
-                  setNotice(
-                    error instanceof Error ? error.message : "That page could not be captured.",
-                  );
-                }
-              },
-            }),
+          run: () => setDialog("capture"),
         });
-      }
 
-      if (localFiles.supported) {
         list.push({
           id: "save-file-as",
           label: "Save this note to a file…",
@@ -980,6 +944,16 @@ export function EditorWorkspace() {
           keywords:
             "blame who wrote when written provenance attribution authorship age stale old paragraph line origin annotate",
           run: () => setDialog("blame"),
+        });
+
+        list.push({
+          id: "link-file",
+          label: "Link a file from this repository…",
+          group: "Notes",
+          hint: "Pick a file; the revision you read it at is pinned for you",
+          keywords:
+            "link file repo repository script code pin revision reference document describes attach",
+          run: () => setDialog("link-file"),
         });
 
         list.push({
@@ -1473,6 +1447,22 @@ export function EditorWorkspace() {
                     }
                   : undefined
               }
+              onLinkFile={
+                workspace && !workspace.isLocal
+                  ? () => {
+                      setDrawer(null);
+                      setDialog("link-file");
+                    }
+                  : undefined
+              }
+              onCapture={
+                user
+                  ? () => {
+                      setDrawer(null);
+                      setDialog("capture");
+                    }
+                  : undefined
+              }
               onPublish={
                 workspace && !workspace.isLocal
                   ? () => {
@@ -1572,6 +1562,35 @@ export function EditorWorkspace() {
             }}
           />
         </Dialog>
+      )}
+
+      {openDialog === "link-file" && workspace && !workspace.isLocal && (
+        <LinkFileDialog
+          workspace={workspace}
+          onClose={() => setDialog(null)}
+          onInsert={(link) => {
+            const current = notebook.note;
+            if (!current) return;
+            // Appended rather than inserted at the caret: the editor owns the
+            // selection and this dialog has taken focus away from it.
+            const separator = current.content.endsWith("\n") ? "" : "\n";
+            void notebook.saveNote(`${current.content}${separator}\n${link}\n`);
+            setNotice("Link added to the end of this note.");
+          }}
+        />
+      )}
+
+      {openDialog === "capture" && user && (
+        <CaptureDialog
+          onClose={() => setDialog(null)}
+          onInsert={async (markdown) => {
+            const current = notebook.note;
+            if (!current) return;
+            const separator = current.content.endsWith("\n") ? "" : "\n";
+            await notebook.saveNote(`${current.content}${separator}\n${markdown}\n`);
+            setNotice("Source added to the end of this note.");
+          }}
+        />
       )}
 
       {showConflicts && (

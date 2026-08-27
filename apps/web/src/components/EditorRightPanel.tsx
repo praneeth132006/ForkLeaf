@@ -37,6 +37,10 @@ export interface EditorRightPanelProps {
   onRewrite?: (content: string) => void;
   /** Absent for a local workspace, which has no pull requests to read. */
   onReview?: () => void;
+  /** Opens the file picker; absent for a workspace with no repository. */
+  onLinkFile?: () => void;
+  /** Opens the capture dialog; absent when signed out. */
+  onCapture?: () => void;
   /** Opens the publish dialog. Absent for a workspace with no repository. */
   onPublish?: (() => void) | undefined;
   /**
@@ -106,6 +110,8 @@ export function EditorRightPanel({
   onReplay,
   onBlame,
   onReview,
+  onLinkFile,
+  onCapture,
   onRewrite,
   onPublish,
   published,
@@ -473,6 +479,20 @@ export function EditorRightPanel({
                 {onReview && (
                   <PanelButton onClick={onReview} icon={<ReviewGlyph />}>
                     Review &amp; merge this note
+                  </PanelButton>
+                )}
+                {/* Both of these were reachable only from the command palette,
+                    which meant knowing they existed before you could find
+                    them. They insert into the note, so they belong beside the
+                    other things you can do to it. */}
+                {onLinkFile && (
+                  <PanelButton onClick={onLinkFile} icon={<FileLinkGlyph />}>
+                    Link a file from this repository
+                  </PanelButton>
+                )}
+                {onCapture && (
+                  <PanelButton onClick={onCapture} icon={<CaptureGlyph />}>
+                    Capture a web page as a source
                   </PanelButton>
                 )}
                 <button
@@ -847,6 +867,32 @@ function LinkGlyph() {
     >
       <path d="M6.5 9.5a2.75 2.75 0 0 0 4 .25l2-2a2.75 2.75 0 0 0-3.9-3.9l-1.1 1.1" />
       <path d="M9.5 6.5a2.75 2.75 0 0 0-4-.25l-2 2a2.75 2.75 0 0 0 3.9 3.9l1.1-1.1" />
+    </svg>
+  );
+}
+
+/** A page with a link on it — a file, pointed at. */
+function FileLinkGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
+      <path d="M9 1.5H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5.5Z" />
+      <path d="M9 1.5v4h4" />
+      <path
+        d="M6.5 10.5a1.5 1.5 0 0 1 1.5-1.5h.5M9.5 10.5A1.5 1.5 0 0 1 8 12h-.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** A bookmark with a clock — a page, kept at a moment. */
+function CaptureGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
+      <path d="M4 2h6a1 1 0 0 1 1 1v5.5" />
+      <path d="M4 2v11l3-2.2" strokeLinecap="round" />
+      <circle cx="11" cy="11" r="3.2" />
+      <path d="M11 9.6V11l1 .8" strokeLinecap="round" />
     </svg>
   );
 }
