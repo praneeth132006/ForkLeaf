@@ -15,6 +15,7 @@ import {
   type LocalAsset,
   type Note,
   type PendingChange,
+  type RepoRef,
   type SyncMode,
   type SyncPreference,
   type SyncState,
@@ -998,6 +999,32 @@ export function useNotebook(request: NotebookRequest = {}) {
     [state.activeWorkspace, state.workspaces, patch],
   );
 
+  /**
+   * Points the active workspace's published pages at another repository.
+   *
+   * Not routed through `addWorkspace`: that one clears the open notes and
+   * resets the active path, which is right when connecting a repository and
+   * completely wrong for changing where a page is committed. Nothing about the
+   * notes moves here.
+   */
+  const setPublishTarget = useCallback(
+    async (target: RepoRef | null) => {
+      const notes = repoRef.current;
+      const active = state.activeWorkspace;
+      if (!notes || !active) return;
+
+      const updated = await notes.setPublishTarget(active.id, target);
+      if (!updated) return;
+
+      patch({
+        workspaces: state.workspaces.map((w) => (w.id === updated.id ? updated : w)),
+        activeWorkspace: updated,
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.activeWorkspace, state.workspaces],
+  );
+
   const addWorkspace = useCallback(
     async (workspace: Workspace) => {
       const notes = repoRef.current;
@@ -1301,6 +1328,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       switchWorkspace,
       switchBranch,
       addWorkspace,
+      setPublishTarget,
       removeWorkspace,
       syncNow,
       pullRemote,
@@ -1353,6 +1381,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       switchWorkspace,
       switchBranch,
       addWorkspace,
+      setPublishTarget,
       removeWorkspace,
       syncNow,
       pullRemote,

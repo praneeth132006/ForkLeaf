@@ -1,15 +1,30 @@
 "use client";
 
 import React, { useCallback, useMemo, useState } from "react";
-import type { Note, Workspace } from "@forkleaf/types";
+import type { Note, RepoRef, Workspace } from "@forkleaf/types";
 import { deriveTitle, slugifyFilename, stripExtension } from "@forkleaf/markdown-engine";
 import { toHtml } from "@forkleaf/exporter";
 import { ApiGatewayError, publishNote, unpublishNote } from "@/lib/gateway";
 import { Dialog } from "./Dialog";
+import {
+  describeTarget,
+  isSplitPublishing,
+  parseTarget,
+  publishTargetOf,
+  targetWarning,
+} from "@/lib/publish-target";
 
 export interface PublishDialogProps {
   note: Note;
   workspace: Workspace;
+  /**
+   * Points this workspace's pages at another repository, or back at its own.
+   *
+   * Absent makes the chooser read-only, which is what a caller that cannot
+   * persist the choice should show rather than a control that silently
+   * forgets.
+   */
+  onSetTarget?: (target: RepoRef | null) => Promise<void> | void;
   /**
    * Where this note is already published, if it is.
    *
@@ -49,10 +64,49 @@ type Stage = "idle" | "working";
 export function PublishDialog({
   note,
   workspace,
+  onSetTarget,
   published,
   onChanged,
   onClose,
 }: PublishDialogProps) {
+  /**
+   * Where the page goes: this workspace's own repository unless told otherwise.
+   *
+   * Resolved once here rather than read from the workspace at each use, so
+   * publishing, unpublishing and every sentence describing it can never
+   * disagree about which repository is being talked about.
+   */
+  const target = useMemo(() => publishTargetOf(workspace), [workspace]);
+  const split = isSplitPublishing(workspace);
+
+  const [editingTarget, setEditingTarget] = useState(false);
+  const [targetDraft, setTargetDraft] = useState(() => (split ? describeTarget(target) : ""));
+  const [targetError, setTargetError] = useState<string | null>(null);
+
+  const warning = useMemo(() => targetWarning(target, workspace.repo), [target, workspace.repo]);
+
+  const saveTarget = useCallback(async () => {
+    if (!onSetTarget) return;
+
+    const trimmed = targetDraft.trim();
+    if (!trimmed) {
+      await onSetTarget(null);
+      setEditingTarget(false);
+      setTargetError(null);
+      return;
+    }
+
+    const parsed = parseTarget(trimmed);
+    if (!parsed) {
+      setTargetError("That is not an owner/repository name.");
+      return;
+    }
+
+    await onSetTarget(parsed);
+    setEditingTarget(false);
+    setTargetError(null);
+  }, [onSetTarget, targetDraft]);
+
   const title = useMemo(() => deriveTitle(note.content, note.frontmatter.title, note.path), [note]);
   const slug = useMemo(
     () => slugifyFilename(stripExtension(note.path.split("/").pop() ?? "note")),
@@ -98,7 +152,7 @@ export function PublishDialog({
       });
 
       setStep("Committing it to your repository…");
-      const result = await publishNote({ repo: workspace.repo, slug, html, title });
+      const result = await publishNote({ repo: target, slug, html, title });
 
       setResult({ url: result.url, status: result.status });
       setStage("idle");
@@ -107,7 +161,7 @@ export function PublishDialog({
       setError(messageFor(problem));
       setStage("idle");
     }
-  }, [note, title, slug, workspace.repo, onChanged]);
+  }, [note, title, slug, target, onChanged]);
 
   const unpublish = useCallback(async () => {
     setStage("working");
@@ -115,14 +169,14 @@ export function PublishDialog({
     setError(null);
 
     try {
-      await unpublishNote(workspace.repo, slug);
+      await unpublishNote(target, slug);
       await onChanged?.();
       onClose();
     } catch (problem) {
       setError(messageFor(problem));
       setStage("idle");
     }
-  }, [workspace.repo, slug, onChanged, onClose]);
+  }, [target, slug, onChanged, onClose]);
 
   const copy = useCallback(async () => {
     if (!page?.url) return;
@@ -171,10 +225,59 @@ export function PublishDialog({
             </p>
           )}
 
-          <p className="text-[13px] leading-relaxed text-[var(--fl-muted)]">
-            The page is a file in {workspace.repo.owner}/{workspace.repo.repo}, served by GitHub
-            Pages. Anyone with the link can read it.
-          </p>
+          <div className="space-y-1.5 rounded-lg border border-[var(--fl-border)] px-3 py-2.5">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="text-[12px] text-[var(--fl-muted)]">Pages go to</span>
+              {onSetTarget && !editingTarget && (
+                <button
+                  type="button"
+                  onClick={() => setEditingTarget(true)}
+                  className="text-[12px] text-[var(--fl-muted)] underline-offset-2 hover:text-[var(--fl-text)] hover:underline"
+                >
+                  {split ? "Change" : "Use another repository"}
+                </button>
+              )}
+            </div>
+
+            {editingTarget ? (
+              <div className="space-y-1.5">
+                <div className="flex gap-2">
+                  <input
+                    value={targetDraft}
+                    onChange={(event) => setTargetDraft(event.target.value)}
+                    placeholder={`${workspace.repo.owner}/my-public-site`}
+                    aria-label="Repository to publish into"
+                    className="min-w-0 flex-1 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2.5 py-1.5 font-mono text-[12.5px] text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
+                  />
+                  <button type="button" onClick={() => void saveTarget()} className="fl-btn">
+                    Save
+                  </button>
+                </div>
+                {/* Says what clearing it does, because an empty box that means
+                    "go back to the default" is otherwise a guess. */}
+                <p className="text-[11.5px] text-[var(--fl-muted)]">
+                  Leave it empty to publish into {describeTarget(workspace.repo)} alongside your
+                  notes.
+                </p>
+                {targetError && (
+                  <p className="text-[12px] text-[var(--fl-danger)]">{targetError}</p>
+                )}
+              </div>
+            ) : (
+              <p className="font-mono text-[12.5px] text-[var(--fl-text)]">
+                {describeTarget(target)}
+                {split && (
+                  <span className="ml-2 font-sans text-[11.5px] text-[var(--fl-muted)]">
+                    not the repository your notes are in
+                  </span>
+                )}
+              </p>
+            )}
+
+            {warning && (
+              <p className="text-[11.5px] leading-snug text-[var(--fl-muted)]">{warning}</p>
+            )}
+          </div>
 
           {error && (
             <p role="alert" className="text-[13px] leading-relaxed text-[var(--fl-danger)]">
@@ -231,8 +334,8 @@ export function PublishDialog({
         <p className="text-[13px] leading-relaxed text-[var(--fl-muted)]">
           <strong className="font-medium text-[var(--fl-text)]">{title}</strong> is rendered to a
           single self-contained page — diagrams included — and committed to{" "}
-          <code className="font-mono text-[12px]">docs/{slug}.html</code> in {workspace.repo.owner}/
-          {workspace.repo.repo}. GitHub Pages serves it. Nothing is stored on our servers, and
+          <code className="font-mono text-[12px]">docs/{slug}.html</code> in{" "}
+          {describeTarget(target)}. GitHub Pages serves it. Nothing is stored on our servers, and
           unpublishing deletes the file.
         </p>
 

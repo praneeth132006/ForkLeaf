@@ -467,3 +467,24 @@ export async function openPullRequest(options: {
     body: JSON.stringify(options),
   });
 }
+
+/** What a captured page returns: its title, when it was read, and a snapshot. */
+export interface CaptureResult {
+  url: string;
+  title: string;
+  capturedAt: string;
+  archiveUrl: string | null;
+  archivedAt: string | null;
+  /** True when the page itself could not be read and the title is the address. */
+  titleFromUrl: boolean;
+}
+
+/**
+ * Reads a web page so a note can cite it, and finds a copy that outlives it.
+ *
+ * The address is resolved and checked server-side before anything is fetched —
+ * see `lib/safe-fetch` for why that cannot be done in the browser.
+ */
+export async function capturePage(url: string): Promise<CaptureResult> {
+  return call("/api/capture", { method: "POST", body: JSON.stringify({ url }) });
+}

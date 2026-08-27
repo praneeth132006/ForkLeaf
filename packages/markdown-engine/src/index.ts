@@ -123,6 +123,14 @@ export {
 } from "./review";
 
 export {
+  formatSource,
+  isCapturable,
+  sourcesIn,
+  type CapturedSource,
+  type CitedSource,
+} from "./provenance";
+
+export {
   REPO_SCHEME,
   formatRepoTarget,
   freshnessOf,

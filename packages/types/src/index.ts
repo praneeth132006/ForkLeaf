@@ -54,6 +54,14 @@ export interface Workspace {
   isDefault: boolean;
   /** True for the offline-only workspace used in local mode. */
   isLocal: boolean;
+  /**
+   * Where published pages go, when that is not this workspace's own repository.
+   *
+   * Absent on every workspace that has not been split, which is all of them
+   * until somebody asks — so no migration, and the fallback is the behaviour
+   * that already existed.
+   */
+  publishRepo?: RepoRef;
   createdAt: string;
   lastOpenedAt: string;
 }

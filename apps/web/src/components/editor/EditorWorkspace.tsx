@@ -29,6 +29,8 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { ConnectRepoDialog } from "@/components/ConnectRepoDialog";
 import { ProposeChangesDialog } from "@/components/ProposeChangesDialog";
 import { PublishDialog } from "@/components/PublishDialog";
+import { formatSource, isCapturable } from "@forkleaf/markdown-engine";
+import { capturePage } from "@/lib/gateway";
 import { HelpDialog } from "@/components/HelpDialog";
 import { HistoryDialog } from "@/components/HistoryDialog";
 import { ReviewPanel } from "@/components/ReviewPanel";
@@ -874,6 +876,57 @@ export function EditorWorkspace() {
         },
       );
 
+      // Capturing needs a signed-in session for the server to fetch with, not
+      // a connected repository: the citation is written into the note, and a
+      // local notebook is as entitled to a source that outlives its page.
+      if (user) {
+        list.push({
+          id: "capture",
+          label: "Capture a web page as a source…",
+          group: "Notes",
+          hint: "Records the address, when you read it, and an archived copy",
+          keywords:
+            "capture clip source citation cite provenance archive wayback snapshot reference url link web page bookmark",
+          run: () =>
+            setPrompt({
+              title: "Capture a web page",
+              label: "Address",
+              confirmLabel: "Capture",
+              body: "The address, the moment you read it, and an archived copy are written into this note as an ordinary blockquote — so the citation still means something after the page is gone.",
+              onConfirm: async (value) => {
+                const url = value.trim();
+                if (!isCapturable(url)) {
+                  setNotice("That is not a web address ForkLeaf can capture.");
+                  return;
+                }
+
+                try {
+                  const source = await capturePage(url);
+                  // Written through the same save path as any edit, so it is
+                  // committed like anything else the note contains.
+                  const current = notebook.note;
+                  if (!current) return;
+
+                  const separator = current.content.endsWith("\n") ? "\n" : "\n\n";
+                  await notebook.saveNote(
+                    `${current.content}${separator}${formatSource(source)}\n`,
+                  );
+
+                  setNotice(
+                    source.archiveUrl
+                      ? "Captured, with an archived copy."
+                      : "Captured. The archive has no snapshot of that page yet.",
+                  );
+                } catch (error) {
+                  setNotice(
+                    error instanceof Error ? error.message : "That page could not be captured.",
+                  );
+                }
+              },
+            }),
+        });
+      }
+
       if (localFiles.supported) {
         list.push({
           id: "save-file-as",
@@ -957,6 +1010,9 @@ export function EditorWorkspace() {
     note,
     title,
     workspace,
+    // Signing in adds the capture command; without this the list would keep
+    // its signed-out shape until something else happened to invalidate it.
+    user,
     theme,
     sidebarCollapsed,
     panelCollapsed,
@@ -1547,6 +1603,10 @@ export function EditorWorkspace() {
           workspace={workspace}
           note={note}
           published={publishedNote}
+          onSetTarget={async (target) => {
+            await notebook.setPublishTarget(target);
+            publishedPages.refresh();
+          }}
           onChanged={publishedPages.refresh}
           onClose={() => setDialog(null)}
         />

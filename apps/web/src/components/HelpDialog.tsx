@@ -194,6 +194,14 @@ export function HelpDialog({
                   changed in the margin beside it.
                 </span>
                 <span className="mt-3 block">
+                  Publishing commits a page to <Mono>docs/</Mono> in this repository by default. If
+                  these notes are private, point publishing at a second public repository from the
+                  publish dialog — the page becomes public, the notes do not.{" "}
+                  <strong>Capture a web page as a source</strong> in the command palette writes an
+                  address, the time you read it, and an archived copy into the note, so a source
+                  that vanishes is still readable.
+                </span>
+                <span className="mt-3 block">
                   Write <Mono>[[repo:scripts/scan.sh]]</Mono> to link a note to a file in a
                   repository rather than to another note, with <Mono>@a1b2c3d</Mono> to pin the
                   revision you read. The <strong>Freshness</strong> panel then says when that file

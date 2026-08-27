@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RepoRef, Workspace } from "@forkleaf/types";
 import { listPublishedPages, type PublishedPage } from "@/lib/gateway";
+import { publishTargetOf } from "@/lib/publish-target";
 
 /**
  * Which of this repository's notes are published as public pages.
@@ -52,7 +53,10 @@ export function usePublishedPages(workspace: Workspace | null): PublishedState {
 
   const connected = workspace && !workspace.isLocal ? workspace : null;
   const id = connected?.id ?? null;
-  const repo = connected?.repo ?? null;
+  // The repository pages are published *into*, which is the workspace's own
+  // unless it has been split. Listing from the notes repository when pages go
+  // elsewhere reported every published note as unpublished.
+  const repo = connected ? publishTargetOf(connected) : null;
 
   useEffect(() => {
     // A local workspace has no repository to publish from, so there is nothing
