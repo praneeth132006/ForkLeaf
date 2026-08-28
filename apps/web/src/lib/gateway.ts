@@ -260,7 +260,25 @@ export async function fetchSession(): Promise<SessionResponse> {
   // The server is the only authority on this, and it is asked on every boot
   // and after every sign-in, so this stays true to what the cookie actually
   // holds rather than to what the page last rendered.
-  signedInToGitHub = session.mode === "github";
+  const stillSignedIn = session.mode === "github";
+
+  /**
+   * A session can also end quietly, without a 401 for anyone to catch.
+   *
+   * The cookie reaches its thirty days; another tab signs out; a call on some
+   * other route finds the token dead and drops the cookie there. In all of
+   * those the next answer here is a perfectly successful 200 that says "local
+   * mode" — no error, nothing thrown, nothing told. The page carries on
+   * showing an avatar until something happens to fail.
+   *
+   * So the disappearance is the news, not only the refusal. Asking the server
+   * is then a way for any part of the app to find out where it stands, which
+   * is what the failed-push control does before offering to try again.
+   */
+  const ended = signedInToGitHub && !stillSignedIn;
+  signedInToGitHub = stillSignedIn;
+  if (ended) announceExpiry();
+
   return session;
 }
 
@@ -268,6 +286,10 @@ export async function fetchSession(): Promise<SessionResponse> {
 const SESSION_TIMEOUT_MS = 10_000;
 
 export function signOut(): Promise<{ ok: boolean }> {
+  // Leaving on purpose is not a session expiring, and the difference matters:
+  // without this, the next `fetchSession` would find the cookie gone and tell
+  // somebody who has just pressed "Sign out" that their sign-in has expired.
+  signedInToGitHub = false;
   return call<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
 }
 

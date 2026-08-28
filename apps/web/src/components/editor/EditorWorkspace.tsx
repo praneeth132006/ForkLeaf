@@ -44,7 +44,7 @@ import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { StorageBlocked } from "@/components/StorageBlocked";
 import { BootScreen } from "@/components/BootScreen";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
-import { signOut } from "@/lib/gateway";
+import { fetchSession, signOut } from "@/lib/gateway";
 import { postHogReset } from "@/lib/posthog";
 import { assetPathFor, relativeSrc, resolveImageSrc } from "@/lib/assets";
 import { collectFolders } from "@/lib/tree";
@@ -400,6 +400,41 @@ export function EditorWorkspace() {
     const here = `${window.location.pathname}${window.location.search}`;
     router.push(`/sign-in?expired=1&next=${encodeURIComponent(here)}`);
   }, [router]);
+
+  /**
+   * The click on a failed push, doing whichever of the two things is needed.
+   *
+   * "Click to retry" is only the right offer while the sign-in still works.
+   * When it does not, retrying pushes into the same refusal and the bar
+   * reprints the same red sentence with nothing having moved — and the app
+   * does not always know which case it is in. A push can fail for a reason
+   * that never names the sign-in: a 500 from our own route, a proxy in the
+   * way, a request that died before GitHub answered. All of those print the
+   * general "could not push" sentence, whose retry is a dead end whenever the
+   * real reason underneath was the session.
+   *
+   * So a failing push asks the server where it stands before offering
+   * anything. If the sign-in has gone, the click is the sign-in — one press,
+   * from the control the reader already went for, instead of a retry that
+   * fails and a button that appears afterwards. Only on a failure, so an
+   * ordinary "sync now" still goes straight to pushing.
+   */
+  const retrySync = useCallback(async () => {
+    const failing = notebook.sync.status === "error" || notebook.sync.status === "blocked";
+
+    if (failing && workspace && !workspace.isLocal) {
+      // A server we cannot reach tells us nothing about the sign-in, so it
+      // falls through to the retry rather than throwing somebody who is merely
+      // offline at a sign-in page.
+      const session = await fetchSession().catch(() => null);
+      if (session && session.mode !== "github" && session.githubAvailable) {
+        signInAgain();
+        return;
+      }
+    }
+
+    await saveEverything();
+  }, [notebook.sync.status, workspace, signInAgain, saveEverything]);
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
@@ -1635,7 +1670,7 @@ export function EditorWorkspace() {
         words={words}
         syncPreference={notebook.syncPreference}
         onSyncModeChange={notebook.setSyncMode}
-        onSyncNow={() => void saveEverything()}
+        onSyncNow={() => void retrySync()}
         onShowConflicts={() => setConflictsDismissed(false)}
         onSignIn={signInAgain}
       />
