@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiGatewayError, fetchSession, onSessionExpired } from "./gateway";
+import { ApiGatewayError, fetchSession, onSessionExpired, signOut } from "./gateway";
 
 /**
  * The browser's half of "the sign-in ended".
@@ -127,6 +127,52 @@ describe("session expiry", () => {
     const stop = onSessionExpired(told);
 
     await expect(fetchSession()).rejects.toBeInstanceOf(ApiGatewayError);
+    expect(told).not.toHaveBeenCalled();
+
+    stop();
+  });
+
+  it("notices a session that ended without anything failing", async () => {
+    // The quiet ending: the cookie reaches its thirty days, or another tab
+    // signs out, and the very next answer is a successful 200 saying "local
+    // mode". Nothing throws, so nothing used to be told, and the page went on
+    // showing an avatar until some later request happened to fail.
+    await signIn();
+    vi.stubGlobal(
+      "fetch",
+      respondWith(200, { mode: "local", user: null, githubAvailable: true, scopes: [] }),
+    );
+
+    const told = vi.fn();
+    const stop = onSessionExpired(told);
+
+    await fetchSession();
+    expect(told).toHaveBeenCalledTimes(1);
+
+    // And not again on every subsequent check, which is what a status bar
+    // asking before each retry would otherwise produce.
+    await fetchSession();
+    expect(told).toHaveBeenCalledTimes(1);
+
+    stop();
+  });
+
+  it("says nothing when the sign-out was deliberate", async () => {
+    // "Your GitHub sign-in has expired" is the wrong thing to say to somebody
+    // who has just pressed Sign out.
+    await signIn();
+    vi.stubGlobal("fetch", respondWith(200, { ok: true }));
+    await signOut();
+
+    vi.stubGlobal(
+      "fetch",
+      respondWith(200, { mode: "local", user: null, githubAvailable: true, scopes: [] }),
+    );
+
+    const told = vi.fn();
+    const stop = onSessionExpired(told);
+
+    await fetchSession();
     expect(told).not.toHaveBeenCalled();
 
     stop();

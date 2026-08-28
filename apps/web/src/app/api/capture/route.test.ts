@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/session", () => ({
   getSession: () => Promise.resolve({ token: "t", user: { login: "me" } }),
+  // What `requireClient` actually calls: the session with a token that has
+  // been renewed if it needed renewing.
+  getLiveSession: () => Promise.resolve({ token: "t", user: { login: "me" } }),
 }));
 
 vi.mock("@forkleaf/github-client", async () => {

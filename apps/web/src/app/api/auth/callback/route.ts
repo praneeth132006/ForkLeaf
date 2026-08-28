@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { GitHubClient } from "@forkleaf/github-client";
 import { appUrl, safeReturnPath } from "@/lib/app-url";
+import { exchangeCodeForToken } from "@/lib/github-oauth";
 import {
   consumeOAuthState,
   consumeReturnPath,
@@ -44,18 +45,31 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { token, scopes } = await exchangeCodeForToken(
+    const grant = await exchangeCodeForToken(
       code,
       appUrl(request, "/api/auth/callback").toString(),
     );
 
     // Confirm the token works and capture the profile in one call.
-    const client = new GitHubClient({ token });
+    const client = new GitHubClient({ token: grant.token });
     const user = await client.getAuthenticatedUser();
 
+    /**
+     * The refresh token is kept, not discarded.
+     *
+     * ForkLeaf is a GitHub App, and a GitHub App's user token expires eight
+     * hours after this moment. Storing only the access token — which is what
+     * this did — meant every session was over by the same afternoon it began,
+     * with a thirty-day cookie still insisting otherwise. The refresh token
+     * GitHub hands over alongside it is good for six months, and is the entire
+     * reason nobody should have to sign in twice in a day.
+     */
     await setSessionCookie({
-      token,
-      scopes,
+      token: grant.token,
+      scopes: grant.scopes,
+      ...(grant.expiresAt !== undefined ? { expiresAt: grant.expiresAt } : {}),
+      ...(grant.refreshToken !== undefined ? { refreshToken: grant.refreshToken } : {}),
+      ...(grant.refreshExpiresAt !== undefined ? { refreshExpiresAt: grant.refreshExpiresAt } : {}),
       user: {
         id: user.id,
         login: user.login,
@@ -80,45 +94,6 @@ export async function GET(request: NextRequest) {
     console.error("[forkleaf] OAuth callback failed:", error);
     return NextResponse.redirect(withError(home, "exchange_failed"));
   }
-}
-
-async function exchangeCodeForToken(
-  code: string,
-  redirectUri: string,
-): Promise<{ token: string; scopes: string[] }> {
-  const response = await fetch("https://github.com/login/oauth/access_token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
-      client_id: process.env.GITHUB_OAUTH_CLIENT_ID,
-      client_secret: process.env.GITHUB_OAUTH_CLIENT_SECRET,
-      code,
-      redirect_uri: redirectUri,
-    }),
-  });
-
-  const data = (await response.json()) as {
-    access_token?: string;
-    scope?: string;
-    error?: string;
-    error_description?: string;
-  };
-
-  if (!data.access_token) {
-    throw new Error(data.error_description ?? data.error ?? "No access token returned");
-  }
-
-  // What was granted, which is not always what was asked for: somebody can
-  // approve a narrower set on GitHub's own screen.
-  const scopes = (data.scope ?? "")
-    .split(",")
-    .map((scope) => scope.trim())
-    .filter(Boolean);
-
-  return { token: data.access_token, scopes };
 }
 
 function withError(url: URL, code: string): URL {
