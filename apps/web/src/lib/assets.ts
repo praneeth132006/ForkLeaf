@@ -233,7 +233,9 @@ export async function assetFrom(options: {
   const { workspace, repoPath, file, pushed } = options;
 
   if (file.size > MAX_IMAGE_BYTES) {
-    throw new Error("That image is larger than 10 MB.");
+    throw new Error(
+      `That image is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Images have to be under 3 MB to be committed to GitHub — save a smaller copy and paste that instead.`,
+    );
   }
 
   return {

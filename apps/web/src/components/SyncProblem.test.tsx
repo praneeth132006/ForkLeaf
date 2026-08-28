@@ -29,6 +29,7 @@ function state(over: Partial<SyncState> = {}): SyncState {
     lastErrorCode: "unknown",
     lastErrorAt: new Date().toISOString(),
     failedAttempts: 4,
+    blockedChanges: [],
     conflicts: [],
     ...over,
   };
@@ -92,6 +93,29 @@ describe("SyncProblem — the reason, not just the failure", () => {
     view(state({ lastErrorCode: "network" }));
     open();
     expect(screen.getByText(/api\.github\.com is not blocked/)).toBeTruthy();
+  });
+
+  /**
+   * The failure that made the old status bar a dead end. Retrying sends the
+   * same oversized request and signing in again changes nothing about it, so
+   * the file has to be named or there is nothing anybody can do.
+   */
+  it("names the file that is too big to send, and says so as the reason", () => {
+    view(
+      state({
+        status: "blocked",
+        lastErrorCode: "too-large",
+        lastErrorDetail: "assets/screenshot.png is 6.2 MB, which is too big",
+        blockedCount: 1,
+        blockedChanges: [
+          { path: "assets/screenshot.png", error: "assets/screenshot.png is 6.2 MB" },
+        ],
+      }),
+    );
+    open();
+    expect(screen.getByText("assets/screenshot.png")).toBeTruthy();
+    expect(screen.getByText(/pasted image/)).toBeTruthy();
+    expect(screen.getByText(/delete it from the note/)).toBeTruthy();
   });
 });
 

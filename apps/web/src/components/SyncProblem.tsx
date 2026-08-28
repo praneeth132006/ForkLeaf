@@ -104,6 +104,9 @@ export function SyncProblem({
     sync.lastErrorAt ? `Last attempt: ${sync.lastErrorAt}` : null,
     `Failed attempts since last success: ${sync.failedAttempts}`,
     `Unpushed changes: ${sync.pendingCount} (${sync.blockedCount} stopped retrying)`,
+    ...sync.blockedChanges.map(
+      (change) => `  stuck: ${change.path}${change.error ? ` — ${change.error}` : ""}`,
+    ),
     workspace && !workspace.isLocal
       ? `Repository: ${workspace.repo.owner}/${workspace.repo.repo}@${workspace.repo.branch}`
       : null,
@@ -231,6 +234,34 @@ export function SyncProblem({
 
             <Secondary onClick={copyDetails}>{copied ? "Copied" : "Copy details"}</Secondary>
           </div>
+
+          {/* Which files. A count names nothing to go and fix, and the failure
+              that most needs fixing — a file too big to send — is always about
+              one specific file. */}
+          {sync.blockedChanges.length > 0 && (
+            <div className="border-b border-[var(--fl-border)] px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
+                Stuck {sync.blockedChanges.length === 1 ? "file" : "files"}
+              </p>
+              <ul className="mt-1.5 space-y-1.5">
+                {sync.blockedChanges.slice(0, 5).map((change) => (
+                  <li key={change.path} className="text-[11.5px] leading-relaxed">
+                    <span className="break-all font-mono text-[10.5px] text-[var(--fl-text)]">
+                      {change.path}
+                    </span>
+                    {change.error && (
+                      <span className="mt-0.5 block text-[var(--fl-muted)]">{change.error}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {sync.blockedChanges.length > 5 && (
+                <p className="mt-1.5 text-[11px] text-[var(--fl-muted)]">
+                  …and {sync.blockedChanges.length - 5} more.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* The machine's own words, kept but demoted. `GitRPC::BadObjectState`
               is no use to somebody writing notes and every use to whoever ends

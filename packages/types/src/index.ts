@@ -184,6 +184,15 @@ export type SyncErrorCode =
   | "rate-limited"
   | "conflict"
   | "validation"
+  /**
+   * The push was too big to send, whoever refused it.
+   *
+   * Its own kind because it is the one failure where every offer the app used
+   * to make is wrong. Retrying sends the same oversized request; signing in
+   * again changes nothing about how many bytes it is. It needs the file named
+   * and taken out, and nothing else will do.
+   */
+  | "too-large"
   | "network"
   | "server"
   | "unknown";
@@ -241,6 +250,15 @@ export interface SyncState {
    * is dead.
    */
   failedAttempts: number;
+  /**
+   * The changes that have stopped trying, and what stopped them.
+   *
+   * A count alone ("2 changes not on GitHub") names no file, so there is
+   * nothing for the reader to go and fix — and the one failure they most need
+   * to fix, a file too big to send, is always about a specific file. The paths
+   * are the whole point.
+   */
+  blockedChanges: { path: string; error: string | null }[];
   conflicts: Conflict[];
 }
 
