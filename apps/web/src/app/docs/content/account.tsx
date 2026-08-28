@@ -106,9 +106,12 @@ export function PrivacyAndData() {
 
       <H2 id="session">Your session</H2>
       <Def term="The session cookie">
-        Contains your GitHub access token and your public profile — id, login, name, avatar URL —
-        encrypted with JWE (A256GCM). <Code>httpOnly</Code>, <Code>SameSite=Lax</Code>,{" "}
-        <Code>Secure</Code> in production, 30-day expiry. Only the server can decrypt it.
+        Contains your GitHub access token, the refresh token that renews it, and your public profile
+        — id, login, name, avatar URL — encrypted with JWE (A256GCM). <Code>httpOnly</Code>,{" "}
+        <Code>SameSite=Lax</Code>, <Code>Secure</Code> in production, 30-day expiry. Only the server
+        can decrypt it. The refresh token is there because a GitHub App&rsquo;s access token expires
+        after eight hours; it is spent server-side to get a new one, and never reaches the browser
+        either.
       </Def>
       <Def term="The OAuth state cookie">
         A random value that lives for ten minutes during sign-in and is deleted the moment it is
@@ -186,7 +189,8 @@ export function PrivacyAndData() {
         </li>
         <li>
           <strong>Your session:</strong> sign out, then revoke the app at{" "}
-          <A href="https://github.com/settings/applications">GitHub → Authorized OAuth Apps</A>.
+          <A href="https://github.com/settings/applications">GitHub → Applications</A> (the hosted
+          ForkLeaf is registered as a GitHub App, so it is under <em>Authorized GitHub Apps</em>).
         </li>
         <li>
           <strong>Your Firebase record:</strong> email the address in the{" "}

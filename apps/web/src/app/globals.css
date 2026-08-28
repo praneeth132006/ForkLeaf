@@ -887,12 +887,114 @@ mark.fl-hl-orange {
   animation: fl-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* A strip of controls that scrolls rather than wraps — six tab labels wrapping
+   to a second row turn a segmented control into a paragraph. The bar itself is
+   noise on a control this small, so it is hidden while the overflow stays. */
+.fl-scrollbar-none {
+  scrollbar-width: none;
+}
+
+.fl-scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── The hero's product showcase ───────────────────────────────────────────
+   The frame cycles through what the editor can do. Three separate motions,
+   each with a job: the scene arrives (so a change reads as a change rather
+   than as a flicker), its rows arrive just behind it (so the eye is led down
+   the pane instead of meeting all of it at once), and the tick under the
+   active tab shows how long is left, which is what stops an auto-advancing
+   thing from feeling like it is interrupting you.
+
+   All three are switched off wholesale by the reduced-motion rule below, and
+   the timer that drives the cycle is switched off with them, in JavaScript —
+   an animation somebody asked not to see should not carry on invisibly. */
+@keyframes fl-scene-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fl-scene-in {
+  animation: fl-scene-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fl-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fl-row-in {
+  animation: fl-row-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fl-tick {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.fl-tick {
+  transform-origin: left;
+  animation: fl-tick linear both;
+}
+
+/* The insertion point. A still of a text editor with no caret in it reads as a
+   screenshot of a closed file. */
+@keyframes fl-caret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+
+  50%,
+  95% {
+    opacity: 0.15;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.fl-caret {
+  animation: fl-caret 1.2s steps(1, end) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* An infinite animation reduced to a hundredth of a millisecond is not
+     stillness, it is a strobe. These two are named rather than left to the
+     rule above: one repeats forever, and the other only means anything while
+     it is running. */
+  .fl-caret,
+  .fl-tick {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
   }
 }
 

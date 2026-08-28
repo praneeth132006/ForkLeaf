@@ -141,7 +141,13 @@ export function SigningIn() {
         <LI>
           <Code>SameSite=Lax</Code>, and <Code>Secure</Code> in production.
         </LI>
-        <LI>It expires after 30 days, at which point you sign in again.</LI>
+        <LI>
+          The cookie lasts 30 days. The GitHub token inside it lasts eight hours — ForkLeaf is a
+          GitHub App, and that is how long a GitHub App&rsquo;s user token is valid for — so it is
+          renewed for you in the background, using the refresh token GitHub issues alongside it. You
+          sign in again when the cookie ends, when you have been away for six months, or when you
+          revoke access.
+        </LI>
       </UL>
       <P>
         The usual shortcut — a token in <Code>localStorage</Code> — would be readable by any script
@@ -161,9 +167,11 @@ export function SigningIn() {
         not revoke the token on GitHub&rsquo;s side and it does not touch your repository. To revoke
         access entirely, go to{" "}
         <A href="https://github.com/settings/applications">
-          GitHub → Settings → Applications → Authorized OAuth Apps
+          GitHub → Settings → Applications → Authorized GitHub Apps
         </A>{" "}
-        and remove ForkLeaf.
+        and remove ForkLeaf. Revoking takes effect at once rather than at the end of the current
+        eight-hour token: the next renewal is refused, and ForkLeaf ends the session where it finds
+        out.
       </P>
       <P>
         Notes in the <strong>On this device</strong> workspace stay in your browser after signing

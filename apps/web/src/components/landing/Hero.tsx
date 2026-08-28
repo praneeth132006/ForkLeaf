@@ -20,16 +20,35 @@ import { SectionLink } from "./SectionLink";
  *    common reason a developer closes the tab.
  */
 
-/** Named capabilities, in the order a writer would meet them. */
+/**
+ * Named capabilities, in the order a writer would meet them.
+ *
+ * The list is long on purpose. "Notes in your own repo" is a storage decision,
+ * and a reader who has only been told that is entitled to assume they are
+ * being offered a text box over an API — so the chips say, before anybody
+ * scrolls, that this is a full notebook: it links, it searches, it draws, it
+ * remembers, it publishes, and it opens the files already on your disk.
+ *
+ * Every one of these is in the repository today. Nothing aspirational goes in
+ * this list; the moment one entry turns out to be a plan, the reader is right
+ * to stop believing the other eleven.
+ */
 const CAPABILITIES = [
   "Rich, split & source editing",
   "[[Wikilinks]] & backlinks",
-  "Full-text search",
+  "Offline full-text search",
   "Visual Mermaid studio",
-  "Offline-first",
   "Real commit history",
+  "Version compare & restore",
+  "Conflicts shown, never merged",
+  "Pull requests from the editor",
+  "Publish to GitHub Pages",
   "PDF, Word & HTML export",
-  "Publish to a public link",
+  "Opens the .md files on your disk",
+  "Runs the code in your notes",
+  "Web sources, archived",
+  "Line-by-line blame",
+  "Works offline",
 ] as const;
 
 export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
@@ -68,15 +87,17 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
           </h1>
 
           <p className="mx-auto mt-6 max-w-2xl text-[16px] leading-[1.6] text-[var(--fl-muted)] sm:mt-7 sm:text-[17.5px] sm:leading-[1.62]">
-            ForkLeaf is a full Markdown workspace — linked notes, search, diagrams, exports — that
-            keeps every note as a plain{" "}
-            <code className="font-mono text-[15px] text-[var(--fl-text)]">.md</code> file in a
-            GitHub repository <em className="not-italic text-[var(--fl-text)]">you</em> own. It
-            saves to your device as you type, and turns those edits into real commits in your own
-            history. There is no ForkLeaf database to be locked out of.
+            ForkLeaf is a full Markdown workspace — linked notes, offline search, a visual diagram
+            studio, real version history, exports and publishing — and its database is a{" "}
+            <em className="not-italic text-[var(--fl-text)]">GitHub repository you already own</em>.
+            Every note is a plain{" "}
+            <code className="font-mono text-[15px] text-[var(--fl-text)]">.md</code> file. It saves
+            to your device as you type, then turns those edits into real commits under your own
+            name. Nothing is stored on our servers, and there is no ForkLeaf database to be locked
+            out of.
           </p>
 
-          <ul className="mx-auto mt-7 flex max-w-2xl flex-wrap items-center justify-center gap-x-2 gap-y-2 text-[12.5px] text-[var(--fl-muted)]">
+          <ul className="mx-auto mt-7 flex max-w-3xl flex-wrap items-center justify-center gap-x-2 gap-y-2 text-[12.5px] text-[var(--fl-muted)]">
             {CAPABILITIES.map((item) => (
               <li
                 key={item}

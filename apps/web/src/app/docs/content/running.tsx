@@ -58,6 +58,17 @@ pnpm dev`}</Pre>
         Development and production need <strong>separate OAuth apps</strong>, because each app has
         one callback URL. Trying to share one between localhost and a deployed domain does not work.
       </Note>
+      <P>
+        A <strong>GitHub App</strong> works here too, and is the better choice if you want
+        per-repository access rather than the account-wide <Code>repo</Code> scope — its client ID
+        and secret go in the same two variables. Its user tokens expire after eight hours; ForkLeaf
+        keeps the refresh token GitHub issues alongside them and renews in the background, so there
+        is nothing extra to configure. The hosted deployment runs this way. See{" "}
+        <A href="https://github.com/praneeth132006/ForkLeaf/blob/main/docs/self-hosting.md">
+          the self-hosting guide
+        </A>{" "}
+        for the details.
+      </P>
 
       <H2 id="env">Environment variables</H2>
       <P>
