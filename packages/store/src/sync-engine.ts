@@ -41,6 +41,22 @@ const RETRY_BASE_MS = 5_000;
 const RETRY_MAX_MS = 5 * 60_000;
 
 /**
+ * The most we will put in one commit request.
+ *
+ * Not a rule of ours — the host in front of the API refuses a request body
+ * over its own limit before any of our code sees it, and answers 413 with no
+ * message of its own. That is what a pasted screenshot used to turn into: a
+ * push that could never succeed, retried forever, explaining nothing, because
+ * nothing on this side had checked the size before sending.
+ *
+ * So the size is checked here, where the queue can do something about it —
+ * split the batch, and isolate a single change too big to ever send. Set well
+ * under the 4.5 MB the platform allows, because base64 inflates by a third and
+ * the JSON around it is not free.
+ */
+export const MAX_REQUEST_BYTES = 3 * 1024 * 1024;
+
+/**
  * Local-first sync.
  *
  * Every edit is written to IndexedDB immediately and acknowledged instantly, so
@@ -246,6 +262,17 @@ export class SyncEngine {
       lastErrorCode: this.lastErrorCode,
       lastErrorAt: this.lastErrorAt,
       failedAttempts: this.failedAttempts,
+      unpushed: this.queue.map((change) => ({
+        id: change.id,
+        path:
+          change.op === "rename" || change.op === "move"
+            ? (change.toPath ?? change.path)
+            : change.path,
+        bytes: weigh(change),
+        tooLarge: weigh(change) > MAX_REQUEST_BYTES,
+        blocked: change.blocked === true,
+        error: change.lastError ?? null,
+      })),
       conflicts: this.conflicts,
     };
   }
@@ -287,6 +314,44 @@ export class SyncEngine {
 
     this.setStatus(this.restingStatus());
     this.emit();
+  }
+
+  /**
+   * Drops one stuck change, and the file behind it.
+   *
+   * The escape hatch for a change that can never be sent — a picture too big
+   * for one request being the case that made this necessary. Everything else
+   * the app could offer about such a change was advice: find the note it was
+   * pasted into, find the image inside it, delete it by hand. That is not a
+   * thing somebody can reasonably do when the note is one of hundreds and the
+   * file is called `Pasted image 20260828.png`.
+   *
+   * Only removes what was queued to be pushed. A note keeps its text and stays
+   * dirty, so nothing is claimed to be in sync that is not; an image that never
+   * reached GitHub is deleted from this device too, because a local copy of a
+   * file with nothing left to push it is exactly the orphan this app already
+   * goes to some trouble to avoid.
+   */
+  async discardChange(id: string): Promise<void> {
+    const change = this.queue.find((item) => item.id === id);
+    if (!change) return;
+
+    this.queue = this.queue.filter((item) => item.id !== id);
+    await this.db.deleteQueueItem(id);
+
+    const asset = await this.db.getAsset(`${change.workspaceId}::${change.path}`);
+    if (asset && !asset.pushed) await this.db.deleteAsset(asset.id);
+
+    // The failure it was reported under may have been about this change alone.
+    if (this.blocked().length === 0 && this.pushable().length === 0) {
+      this.lastError = null;
+      this.lastErrorDetail = null;
+      this.lastErrorCode = null;
+    }
+
+    this.setStatus(this.restingStatus());
+    this.emit();
+    if (this.pushable().length > 0) this.scheduleFlush();
   }
 
   // ─── Recording changes ────────────────────────────────────────────────────
@@ -571,7 +636,42 @@ export class SyncEngine {
     const safe = await this.filterConflicts(workspaceId, changes);
     if (safe.length === 0) return;
 
-    await this.push(workspaceId, safe);
+    // Sized before it is sent. A batch over the limit is split; a single
+    // change over it on its own is stopped here, because there is no batch
+    // left to split and the request would come back 413 however many times it
+    // was tried.
+    const { batches, oversized } = batchBySize(safe);
+
+    let failure: unknown = null;
+
+    for (const change of oversized) {
+      await this.stop(change, tooLarge(change));
+      failure ??= tooLarge(change);
+    }
+
+    for (const batch of batches) {
+      try {
+        await this.push(workspaceId, batch);
+      } catch (err) {
+        failure ??= err;
+      }
+    }
+
+    if (failure) throw failure;
+  }
+
+  /**
+   * Parks one change immediately, with the reason on it.
+   *
+   * Distinct from running out of attempts. A change that cannot be sent at all
+   * has nothing to gain from four more tries, and spending them only delays
+   * the moment somebody is told which file is stuck.
+   */
+  private async stop(change: PendingChange, err: Error): Promise<void> {
+    change.attempts += 1;
+    change.lastError = err.message;
+    change.blocked = true;
+    await this.db.putQueueItem(change);
   }
 
   /**
@@ -932,6 +1032,69 @@ function forkPath(path: string): string {
 }
 
 /**
+ * Roughly what one change costs on the wire.
+ *
+ * The content dominates and base64 is already text, so the encoded length is
+ * the answer; the path and the JSON scaffolding around it are a rounding error
+ * that the generous headroom below the platform's limit covers.
+ */
+function weigh(change: PendingChange): number {
+  return (change.content?.length ?? 0) + change.path.length + (change.toPath?.length ?? 0) + 64;
+}
+
+/** A change that will not fit in a request however it is batched. */
+function tooLarge(change: PendingChange): Error {
+  const path =
+    change.op === "rename" || change.op === "move" ? (change.toPath ?? change.path) : change.path;
+  const mb = (weigh(change) / (1024 * 1024)).toFixed(1);
+  const err = new Error(
+    `${path} is ${mb} MB, which is too big to send to GitHub in one request (the limit is 3 MB).`,
+  ) as Error & { code: string; status: number };
+  err.code = "too-large";
+  err.status = 413;
+  return err;
+}
+
+/**
+ * Packs the queue into requests that fit, and names what never will.
+ *
+ * Greedy and order-preserving: changes go into the current batch until the
+ * next one would push it over, then a new batch starts. Anything that exceeds
+ * the budget by itself comes back separately, because no amount of batching
+ * makes it sendable and the reader needs to be told which file it is.
+ */
+export function batchBySize(changes: PendingChange[]): {
+  batches: PendingChange[][];
+  oversized: PendingChange[];
+} {
+  const batches: PendingChange[][] = [];
+  const oversized: PendingChange[] = [];
+  let current: PendingChange[] = [];
+  let weight = 0;
+
+  for (const change of changes) {
+    const size = weigh(change);
+
+    if (size > MAX_REQUEST_BYTES) {
+      oversized.push(change);
+      continue;
+    }
+
+    if (current.length > 0 && weight + size > MAX_REQUEST_BYTES) {
+      batches.push(current);
+      current = [];
+      weight = 0;
+    }
+
+    current.push(change);
+    weight += size;
+  }
+
+  if (current.length > 0) batches.push(current);
+  return { batches, oversized };
+}
+
+/**
  * True when the server rejected *what* was sent rather than the fact that we
  * sent it.
  *
@@ -943,7 +1106,10 @@ function forkPath(path: string): string {
 function isContentRejection(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const { code, status } = err as { code?: unknown; status?: unknown };
-  return code === "validation" || status === 422;
+  // 413 belongs here too: a body refused for its size is a statement about
+  // what was sent, and splitting it is both the way to find the file at fault
+  // and, for everything standing behind that file, the way to get pushed.
+  return code === "validation" || code === "too-large" || status === 422 || status === 413;
 }
 
 /**
@@ -975,6 +1141,7 @@ export function codeOf(err: unknown): SyncErrorCode {
     case "rate-limited":
     case "conflict":
     case "validation":
+    case "too-large":
     case "network":
       return code;
   }
@@ -984,6 +1151,7 @@ export function codeOf(err: unknown): SyncErrorCode {
     if (status === 403) return "forbidden";
     if (status === 404) return "not-found";
     if (status === 409) return "conflict";
+    if (status === 413) return "too-large";
     if (status === 422) return "validation";
     if (status === 429) return "rate-limited";
     if (status >= 500) return "server";
@@ -1008,6 +1176,8 @@ export function plainly(err: unknown): string {
       return "This note also changed on GitHub. Open it to choose which version to keep.";
     case "validation":
       return "GitHub refused one of these changes. Everything else has been pushed, and this note is safe on this device.";
+    case "too-large":
+      return "This change is too big to send to GitHub. It is safe on this device, but it will not push until the large file in it is made smaller or removed.";
     case "network":
       return "Could not reach GitHub. Your work is saved on this device and will push when the connection returns.";
   }
@@ -1098,6 +1268,18 @@ export function remedyFor(code: SyncErrorCode | null, detail?: string | null): S
         steps: [
           "Check the note's path for characters GitHub will not take, and its size — the API refuses files over 100 MB.",
           "Renaming the note is usually enough to get it moving.",
+        ],
+        retryable: false,
+      };
+
+    case "too-large":
+      return {
+        reason:
+          "The request was refused for its size before it reached GitHub. Almost always this is one pasted image: a picture is carried as text, which makes it about a third bigger again, and a few megabytes of screenshot is past what a single request may carry.",
+        steps: [
+          "Find the file named below in the note it was pasted into, and delete it from the note.",
+          "If you need the picture, save a smaller copy — an export at a lower resolution, or a JPEG instead of a PNG — and paste that instead.",
+          "Everything else you have written pushes on its own once the large file is out of the queue.",
         ],
         retryable: false,
       };

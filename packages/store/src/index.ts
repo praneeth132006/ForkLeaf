@@ -6,6 +6,8 @@ export {
   plainly,
   codeOf,
   remedyFor,
+  batchBySize,
+  MAX_REQUEST_BYTES,
   type SyncEngineOptions,
   type SyncRemedy,
 } from "./sync-engine";

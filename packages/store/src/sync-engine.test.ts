@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Note, SyncMode, TreeNode } from "@forkleaf/types";
+import type { Note, PendingChange, SyncMode, TreeNode } from "@forkleaf/types";
 import { SyncEngine } from "./sync-engine";
 import { MemoryDatabase } from "./memory-db";
 import { coalesce, describeChanges } from "./queue";
-import { plainly, codeOf, remedyFor } from "./sync-engine";
+import { plainly, codeOf, remedyFor, batchBySize } from "./sync-engine";
 import type { RemoteCommitInput, RemoteGateway } from "./ports";
 
 // ─── Test doubles ───────────────────────────────────────────────────────────
@@ -399,6 +399,77 @@ describe("a failure reported to the reader", () => {
     // An unrecognised failure has nothing to explain it but GitHub's own words,
     // so those become the reason rather than being hidden.
     expect(remedyFor("unknown", "GitRPC::BadObjectState").reason).toContain("BadObjectState");
+  });
+
+  /**
+   * The failure that made all of this necessary. A pasted screenshot made a
+   * request bigger than the host in front of the API will carry, so the push
+   * came back 413 before any of our code ran — unclassified, unexplained, and
+   * identical on every retry. Nothing had checked the size before sending.
+   */
+  it("stops a change too big to send instead of failing on it forever", async () => {
+    const ctx = setup();
+    const huge = "x".repeat(4 * 1024 * 1024);
+
+    await ctx.engine.recordUpsert(makeNote({ path: "big.md", baseSha: null }), huge);
+    await ctx.engine.recordUpsert(makeNote({ path: "small.md", baseSha: null }), "ordinary");
+    await ctx.timers.tick();
+
+    // The one that cannot be sent is parked at once, named, and told why.
+    expect(ctx.engine.state.lastErrorCode).toBe("too-large");
+    const stuck = ctx.engine.state.unpushed.filter((change) => change.tooLarge);
+    expect(stuck.map((change) => change.path)).toEqual(["big.md"]);
+    expect(stuck[0]?.error).toContain("too big to send");
+    expect(stuck[0]?.blocked).toBe(true);
+
+    // And it no longer takes everything else down with it.
+    expect(ctx.gateway.commits.length).toBeGreaterThan(0);
+    expect(ctx.engine.pendingFor().map((change) => change.path)).toEqual(["big.md"]);
+  });
+
+  it("packs the queue into requests that fit rather than one that does not", () => {
+    const change = (path: string, bytes: number): PendingChange => ({
+      id: path,
+      workspaceId: "w",
+      path,
+      op: "upsert",
+      content: "x".repeat(bytes),
+      baseSha: null,
+      queuedAt: new Date().toISOString(),
+      attempts: 0,
+    });
+
+    const { batches, oversized } = batchBySize([
+      change("a.md", 2 * 1024 * 1024),
+      change("b.md", 2 * 1024 * 1024),
+      change("c.md", 4 * 1024 * 1024),
+    ]);
+
+    expect(batches.map((batch) => batch.map((c) => c.path))).toEqual([["a.md"], ["b.md"]]);
+    expect(oversized.map((c) => c.path)).toEqual(["c.md"]);
+  });
+
+  /**
+   * "Go and find the image and delete it" is not an instruction anybody can
+   * follow when the file is called `Pasted image 20260828.png` and the note is
+   * one of hundreds. The queue knows exactly which change is stuck.
+   */
+  it("removes a stuck change, and the unpushed file behind it", async () => {
+    const ctx = setup();
+    const huge = "x".repeat(4 * 1024 * 1024);
+
+    await ctx.engine.recordUpsert(makeNote({ path: "big.md", baseSha: null }), huge);
+    await ctx.timers.tick();
+
+    const [stuck] = ctx.engine.state.unpushed;
+    expect(stuck).toBeDefined();
+
+    await ctx.engine.discardChange(stuck!.id);
+
+    expect(ctx.engine.state.unpushed).toEqual([]);
+    expect(ctx.engine.pendingFor()).toEqual([]);
+    // The queue is clear, so the bar stops reporting a failure that is over.
+    expect(ctx.engine.state.lastErrorCode).toBeNull();
   });
 
   it("forgets the failure once a push succeeds", async () => {

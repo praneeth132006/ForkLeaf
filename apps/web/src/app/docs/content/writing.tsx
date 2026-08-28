@@ -103,7 +103,7 @@ export function Editor() {
       <P>
         Paste a screenshot straight into a note, drag a file onto it, or use the{" "}
         <strong>Image</strong> button — all three work in Rich, Split and Source. PNG, JPEG, GIF,
-        WebP, AVIF, BMP and ICO are accepted, up to 10 MB each. SVG is not: it is a document format
+        WebP, AVIF, BMP and ICO are accepted, up to 3 MB each. SVG is not: it is a document format
         that can carry script, and serving one back would be a hole in every note that embeds it.
       </P>
       <P>

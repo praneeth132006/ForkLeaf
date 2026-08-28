@@ -18,8 +18,19 @@ export const IMAGE_TYPES: Record<string, string> = {
   ico: "image/x-icon",
 };
 
-/** Largest image we will commit. Repositories are not an asset CDN. */
-export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+/**
+ * Largest image we will commit.
+ *
+ * Repositories are not an asset CDN, and the ceiling is lower than it looks:
+ * an image travels to the commit route as base64 inside a JSON body, which is
+ * a third bigger again than the file, and the host in front of that route
+ * refuses a body over 4.5 MB before any of our code runs. The old 10 MB limit
+ * was therefore a promise the app could not keep — the paste was accepted, the
+ * note saved, and the push then failed 413 forever with nothing said about
+ * which file was at fault. Refusing the picture at the moment it is pasted is
+ * the honest version of the same limit.
+ */
+export const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 
 /** Extension of a path, lowercased and without the dot. */
 export function extensionOf(path: string): string {

@@ -184,6 +184,15 @@ export type SyncErrorCode =
   | "rate-limited"
   | "conflict"
   | "validation"
+  /**
+   * The push was too big to send, whoever refused it.
+   *
+   * Its own kind because it is the one failure where every offer the app used
+   * to make is wrong. Retrying sends the same oversized request; signing in
+   * again changes nothing about how many bytes it is. It needs the file named
+   * and taken out, and nothing else will do.
+   */
+  | "too-large"
   | "network"
   | "server"
   | "unknown";
@@ -241,6 +250,27 @@ export interface SyncState {
    * is dead.
    */
   failedAttempts: number;
+  /**
+   * Everything waiting to reach GitHub, named and sized.
+   *
+   * A count names no file, so there is nothing for the reader to go and look
+   * at — and the failure they most need to act on, a file too big to send, is
+   * always about one specific file they cannot otherwise find. It was not
+   * enough to list only the changes that had already stopped trying: a push
+   * that is still failing and retrying showed no files at all, which is the
+   * state somebody is most likely to be looking at.
+   */
+  unpushed: {
+    id: string;
+    path: string;
+    /** Roughly what it weighs on the wire. */
+    bytes: number;
+    /** True when it is too big to ever be sent, however often it is retried. */
+    tooLarge: boolean;
+    /** True once it has stopped retrying. */
+    blocked: boolean;
+    error: string | null;
+  }[];
   conflicts: Conflict[];
 }
 

@@ -4,8 +4,13 @@ import { handle, requireClient, readRepoRefFromBody, normalize, ApiError } from 
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { imageTypeFor, MAX_IMAGE_BYTES } from "@/lib/media";
 
-/** Largest single note we will accept, to keep one bad paste from wedging a repo. */
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
+/**
+ * Largest single note we will accept, to keep one bad paste from wedging a
+ * repo — and to stay under what the host will carry in one request body, which
+ * is the lower of the two limits and the one that used to be discovered only
+ * as an unexplained 413 at push time.
+ */
+const MAX_FILE_BYTES = 3 * 1024 * 1024;
 const MAX_CHANGES_PER_COMMIT = 100;
 
 interface CommitBody {
@@ -131,13 +136,13 @@ function assertImage(content: string, path: string): void {
   // Base64 carries three bytes in every four characters; no need to decode to
   // know whether it is over the limit.
   if (Math.floor((packed.length * 3) / 4) > MAX_IMAGE_BYTES) {
-    throw new ApiError(413, "validation", `${path} is larger than 10 MB.`);
+    throw new ApiError(413, "too-large", `${path} is larger than 3 MB.`);
   }
 }
 
 function assertSize(content: string, path: string): void {
   // Byte length, not character count — a note full of emoji is larger than it looks.
   if (new TextEncoder().encode(content).length > MAX_FILE_BYTES) {
-    throw new ApiError(413, "validation", `${path} is too large to save (limit 5 MB).`);
+    throw new ApiError(413, "too-large", `${path} is too large to save (limit 3 MB).`);
   }
 }

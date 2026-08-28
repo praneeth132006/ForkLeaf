@@ -121,7 +121,7 @@ export function ImageDialog({
               Drop an image here, or choose a file
             </p>
             <p className="mt-1 text-[12.5px] text-[var(--fl-muted)]">
-              PNG, JPEG, GIF, WebP, AVIF, BMP or ICO, up to 10 MB. You can also paste one straight
+              PNG, JPEG, GIF, WebP, AVIF, BMP or ICO, up to 3 MB. You can also paste one straight
               into the note.
             </p>
 
