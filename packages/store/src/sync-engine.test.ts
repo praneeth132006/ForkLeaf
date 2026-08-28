@@ -3,7 +3,7 @@ import type { Note, SyncMode, TreeNode } from "@forkleaf/types";
 import { SyncEngine } from "./sync-engine";
 import { MemoryDatabase } from "./memory-db";
 import { coalesce, describeChanges } from "./queue";
-import { plainly, codeOf } from "./sync-engine";
+import { plainly, codeOf, remedyFor } from "./sync-engine";
 import type { RemoteCommitInput, RemoteGateway } from "./ports";
 
 // ─── Test doubles ───────────────────────────────────────────────────────────
@@ -367,6 +367,38 @@ describe("a failure reported to the reader", () => {
     expect(codeOf({ status: 401 })).toBe("unauthorized");
     expect(codeOf({ status: 503 })).toBe("server");
     expect(codeOf(new Error("who knows"))).toBe("unknown");
+  });
+
+  /**
+   * The number behind "I keep clicking retry and nothing happens". Without it
+   * the fifth failure is indistinguishable from the first, and the only thing
+   * a reader can conclude is that the button is broken.
+   */
+  it("counts the attempts that have failed in a row", async () => {
+    const ctx = setup();
+    ctx.gateway.rejects.add("a.md");
+
+    await ctx.engine.recordUpsert(makeNote({ path: "a.md", baseSha: null }), "a");
+    await ctx.timers.tick();
+    expect(ctx.engine.state.failedAttempts).toBe(1);
+    expect(ctx.engine.state.lastErrorAt).not.toBeNull();
+
+    ctx.engine.retryNow();
+    await ctx.timers.tick();
+    expect(ctx.engine.state.failedAttempts).toBeGreaterThan(1);
+  });
+
+  /**
+   * Most of what fixes a failed push is something only the person at the
+   * keyboard can do, so the app has to be able to say what that is.
+   */
+  it("offers steps for the failures it cannot fix by itself", () => {
+    expect(remedyFor("forbidden").steps.join(" ")).toContain("write access");
+    expect(remedyFor("forbidden").retryable).toBe(false);
+    expect(remedyFor("network").retryable).toBe(true);
+    // An unrecognised failure has nothing to explain it but GitHub's own words,
+    // so those become the reason rather than being hidden.
+    expect(remedyFor("unknown", "GitRPC::BadObjectState").reason).toContain("BadObjectState");
   });
 
   it("forgets the failure once a push succeeds", async () => {

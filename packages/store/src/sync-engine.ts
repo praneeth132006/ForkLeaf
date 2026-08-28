@@ -76,6 +76,8 @@ export class SyncEngine {
   private lastError: string | null = null;
   private lastErrorDetail: string | null = null;
   private lastErrorCode: SyncErrorCode | null = null;
+  private lastErrorAt: string | null = null;
+  private failedAttempts = 0;
   private readonly listeners = new Set<Listener>();
 
   constructor(options: SyncEngineOptions) {
@@ -242,6 +244,8 @@ export class SyncEngine {
       lastError: this.lastError,
       lastErrorDetail: this.lastErrorDetail,
       lastErrorCode: this.lastErrorCode,
+      lastErrorAt: this.lastErrorAt,
+      failedAttempts: this.failedAttempts,
       conflicts: this.conflicts,
     };
   }
@@ -490,12 +494,16 @@ export class SyncEngine {
       this.lastError = null;
       this.lastErrorDetail = null;
       this.lastErrorCode = null;
+      this.lastErrorAt = null;
+      this.failedAttempts = 0;
       this.retryDelay = 0;
       this.setStatus(this.restingStatus());
     } catch (err) {
       this.lastError = plainly(err);
       this.lastErrorDetail = err instanceof Error ? err.message : String(err);
       this.lastErrorCode = codeOf(err);
+      this.lastErrorAt = this.now().toISOString();
+      this.failedAttempts += 1;
       // "error" means a push failed and will be tried again by itself. Once
       // nothing is left that *will* be tried again, that reading is wrong and
       // the honest word is "blocked" — it has stopped, and it needs asking.
@@ -1009,6 +1017,135 @@ export function plainly(err: unknown): string {
   }
 
   return "Could not push to GitHub just now. Your work is saved on this device and will be retried.";
+}
+
+/**
+ * What is actually wrong, and what a person can do about it.
+ *
+ * `plainly` is one sentence, because the status bar is one line — and one line
+ * is all somebody gets before they have to decide whether to worry. It is not
+ * enough to act on. "Could not push, will be retried" beside a retry that
+ * keeps failing tells a reader nothing about *why* it keeps failing, so the
+ * only move left is to press the button again, which is exactly the loop this
+ * exists to end.
+ *
+ * So every failure also carries the reason underneath it and the steps worth
+ * taking, in the order worth taking them — including the ones the app cannot
+ * do on the reader's behalf, like giving itself write access to a repository.
+ * `retryable` says whether pressing retry unchanged could plausibly work, so
+ * the UI can stop offering it as the answer when it is not one.
+ */
+export interface SyncRemedy {
+  /** The cause, said as a fact about the world rather than about the app. */
+  reason: string;
+  /** What to do, most likely fix first. */
+  steps: string[];
+  /** True when the same push, unchanged, might succeed on another attempt. */
+  retryable: boolean;
+}
+
+export function remedyFor(code: SyncErrorCode | null, detail?: string | null): SyncRemedy {
+  switch (code) {
+    case "unauthorized":
+      return {
+        reason:
+          "GitHub is refusing this app's sign-in. The token it holds has expired, been revoked, or lost the permission it needs.",
+        steps: [
+          "Sign in to GitHub again — this is the only thing that fixes it.",
+          "If signing in does not help, check that ForkLeaf is still authorised at github.com/settings/applications and has not been revoked.",
+        ],
+        retryable: false,
+      };
+
+    case "forbidden":
+      return {
+        reason:
+          "GitHub knows who you are and will not accept this commit. That is a permission on the repository or the branch, not a problem with your notes.",
+        steps: [
+          "Check you still have write access to this repository on GitHub.",
+          "If the branch is protected, switch to another branch from the status bar, or use “Propose changes…” to open a pull request instead.",
+          "If the repository has been archived, unarchive it — archived repositories accept nothing.",
+        ],
+        retryable: false,
+      };
+
+    case "not-found":
+      return {
+        reason:
+          "The repository or branch this workspace points at is not there any more. It may have been renamed, deleted, or made private to an account you are no longer signed in as.",
+        steps: [
+          "Open the repository on GitHub and confirm it still exists under that name.",
+          "If the branch was deleted, pick another one from the branch menu in the status bar.",
+          "Otherwise connect the workspace again — your notes stay on this device throughout.",
+        ],
+        retryable: false,
+      };
+
+    case "conflict":
+      return {
+        reason: "This note changed on GitHub as well, so there are two versions of it.",
+        steps: [
+          "Open the conflict and choose which version to keep.",
+          "Nothing is overwritten until you choose; both versions are intact.",
+        ],
+        retryable: false,
+      };
+
+    case "validation":
+      return {
+        reason:
+          "GitHub rejected one particular file in this commit. Everything else in it went through.",
+        steps: [
+          "Check the note's path for characters GitHub will not take, and its size — the API refuses files over 100 MB.",
+          "Renaming the note is usually enough to get it moving.",
+        ],
+        retryable: false,
+      };
+
+    case "rate-limited":
+      return {
+        reason: "GitHub is throttling this app for making too many requests too quickly.",
+        steps: [
+          "Wait a few minutes — this clears by itself and the queue keeps retrying.",
+          "If it keeps happening, switch syncing to a timer so a burst of writing becomes one push instead of many.",
+        ],
+        retryable: true,
+      };
+
+    case "network":
+      return {
+        reason: "The request never reached GitHub.",
+        steps: [
+          "Check this device is online.",
+          "If you are on a VPN, a corporate network, or behind a proxy, check that api.github.com is not blocked — that is the usual cause when everything else works.",
+          "The queue retries by itself as soon as the connection is back.",
+        ],
+        retryable: true,
+      };
+
+    case "server":
+      return {
+        reason: "GitHub answered with an error of its own. Nothing is wrong on this device.",
+        steps: [
+          "Check githubstatus.com for an ongoing incident.",
+          "This retries by itself; there is nothing to do but wait it out.",
+        ],
+        retryable: true,
+      };
+
+    default:
+      return {
+        reason: detail
+          ? `The push failed without GitHub giving a reason we recognise. What came back was: ${detail}`
+          : "The push failed without saying why, and no error came back that we recognise.",
+        steps: [
+          "Try again — an attempt that fails this way sometimes succeeds on the next one.",
+          "Check githubstatus.com, and whether a VPN or proxy is intercepting requests to api.github.com.",
+          "If it keeps failing, copy the details below and report it. Your notes stay on this device, and you can export them at any time.",
+        ],
+        retryable: true,
+      };
+  }
 }
 
 /**
