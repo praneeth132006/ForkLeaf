@@ -433,8 +433,13 @@ export function EditorWorkspace() {
       }
     }
 
-    await saveEverything();
-  }, [notebook.sync.status, workspace, signInAgain, saveEverything]);
+    // Straight to the push, not through `saveEverything`. That helper writes
+    // the open note back to its linked file on this computer and stops there
+    // when it does — which is right for ⌘S and wrong here, because it meant a
+    // press of "retry" on a failed *GitHub* push wrote a local file and never
+    // went near the queue. From this control the push is the whole point.
+    await notebook.syncNow();
+  }, [notebook, workspace, signInAgain]);
 
   // ── Actions ─────────────────────────────────────────────────────────────
 

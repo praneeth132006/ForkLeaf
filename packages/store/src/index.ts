@@ -1,7 +1,14 @@
 export type { LocalDatabase, RemoteGateway, RemoteCommitInput, RemoteCommitResult } from "./ports";
 
 export { coalesce, describeChanges, changeId, type CoalesceInput } from "./queue";
-export { SyncEngine, plainly, codeOf, type SyncEngineOptions } from "./sync-engine";
+export {
+  SyncEngine,
+  plainly,
+  codeOf,
+  remedyFor,
+  type SyncEngineOptions,
+  type SyncRemedy,
+} from "./sync-engine";
 export { MemoryDatabase } from "./memory-db";
 export {
   IndexedDbDatabase,

@@ -4,6 +4,7 @@ import type { CursorPosition } from "@forkleaf/editor";
 import type { SyncMode, SyncPreference, SyncState, Workspace } from "@forkleaf/types";
 import { BranchMenu } from "./BranchMenu";
 import { SyncModeMenu } from "./SyncModeMenu";
+import { SyncProblem } from "./SyncProblem";
 
 export interface EditorStatusBarProps {
   sync: SyncState;
@@ -88,25 +89,48 @@ export function EditorStatusBar({
    * over the whole status control rather than sitting behind it.
    */
   const expired = sync.lastErrorCode === "unauthorized" || sessionExpired;
-  const status = describe(sync, expired);
+  /**
+   * A failure gets the panel, not the one-liner.
+   *
+   * The old control retried on click and said so, which is fine exactly once.
+   * Every time after that it was a button that reprinted its own sentence with
+   * nothing having changed, and no way anywhere in the app to find out why —
+   * so the reader's only remaining move was to press it again. The reason and
+   * the fix live behind this now, and the retry is one of the things inside.
+   */
+  const failing =
+    sync.conflicts.length > 0 ||
+    sync.status === "error" ||
+    sync.status === "blocked" ||
+    (expired && sync.pendingCount > 0);
+  const status = describe(sync, expired, failing);
 
   return (
     <footer className="flex h-8 shrink-0 items-center gap-3 px-4 text-[0.7rem] text-[var(--fl-muted)]">
-      <button
-        type="button"
-        onClick={sync.conflicts.length > 0 ? onShowConflicts : expired ? onSignIn : onSyncNow}
-        title={
-          sync.conflicts.length > 0
-            ? "Resolve conflicts"
-            : expired
-              ? "Sign in to GitHub again"
-              : "Sync now"
-        }
-        className="flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-[var(--fl-elevated)]"
-      >
-        <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
-        <span className={status.className}>{status.label}</span>
-      </button>
+      {failing ? (
+        <SyncProblem
+          sync={sync}
+          expired={expired}
+          workspace={workspace}
+          label={status.label}
+          labelClassName={status.className}
+          dot={status.dot}
+          onRetry={onSyncNow}
+          onSignIn={onSignIn}
+          onShowConflicts={onShowConflicts}
+          onPropose={onPropose}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={onSyncNow}
+          title="Sync now"
+          className="flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-[var(--fl-elevated)]"
+        >
+          <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
+          <span className={status.className}>{status.label}</span>
+        </button>
+      )}
 
       {/* The way out, drawn as a button rather than left as advice inside a
           sentence. Somebody reading "sign in again" in red text has no reason
@@ -154,7 +178,7 @@ export function EditorStatusBar({
 
       {/* Only when the status control is not already saying it: the same
           sentence printed twice across one bar reads as two problems. */}
-      {sync.lastError && sync.status !== "error" && sync.status !== "blocked" && (
+      {sync.lastError && !failing && (
         <span
           className="ml-auto truncate text-[var(--fl-danger)]"
           title={sync.lastErrorDetail ?? sync.lastError}
@@ -163,7 +187,7 @@ export function EditorStatusBar({
         </span>
       )}
 
-      {notePath && !sync.lastError && (
+      {notePath && (!sync.lastError || failing) && (
         <div className="ml-auto flex shrink-0 items-center gap-3">
           <span className="hidden truncate font-mono lg:inline" title={notePath}>
             {notePath}
@@ -226,6 +250,7 @@ export function EditorStatusBar({
 function describe(
   sync: SyncState,
   expired: boolean,
+  failing: boolean,
 ): { label: string; className: string; dot: string } {
   if (sync.conflicts.length > 0) {
     return {
@@ -265,14 +290,15 @@ function describe(
 
     case "error":
       return {
-        // The message already says what happened and that the work is safe;
-        // what to press is the only thing left to add — and for an expired
-        // token that is not "retry", which is what made the old label a dead
-        // end for the one failure people actually hit.
+        // The sentence is a summary of something that has to be read in full
+        // to be acted on, and this line is too short to hold the full thing —
+        // it was arriving on narrow windows cut off mid-word. So the label
+        // stops trying: it names the failure and points at where the reason,
+        // the fix and the retry all are.
         label: expired
-          ? `${sync.lastError ?? "Your GitHub sign-in has expired."} Click to sign in.`
-          : `${sync.lastError ?? "Could not push to GitHub."} Click to retry.`,
-        className: "text-[var(--fl-danger)] truncate max-w-[500px]",
+          ? "Not pushed to GitHub — your sign-in expired. Click to fix."
+          : `Not pushed to GitHub — ${sync.pendingCount} change${sync.pendingCount === 1 ? "" : "s"} waiting. Click to see why.`,
+        className: "text-[var(--fl-danger)] truncate max-w-[420px]",
         dot: "bg-[var(--fl-danger)]",
       };
 
@@ -283,7 +309,7 @@ function describe(
       return {
         label: expired
           ? `${sync.blockedCount} change${sync.blockedCount === 1 ? "" : "s"} not on GitHub — click to sign in again`
-          : `${sync.blockedCount} change${sync.blockedCount === 1 ? "" : "s"} not on GitHub — click to retry`,
+          : `${sync.blockedCount} change${sync.blockedCount === 1 ? "" : "s"} stopped trying — click to see why`,
         className: "text-[var(--fl-danger)] font-medium",
         dot: "bg-[var(--fl-danger)]",
       };
@@ -300,6 +326,13 @@ function describe(
 
     case "idle":
     default:
+      if (failing && expired) {
+        return {
+          label: "Your GitHub sign-in expired. Click to fix.",
+          className: "text-[var(--fl-danger)] truncate max-w-[420px]",
+          dot: "bg-[var(--fl-danger)]",
+        };
+      }
       return {
         label: sync.lastSyncedAt
           ? `All changes saved ${relative(sync.lastSyncedAt)}`

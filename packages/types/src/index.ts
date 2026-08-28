@@ -224,6 +224,23 @@ export interface SyncState {
    * out.
    */
   lastErrorCode: SyncErrorCode | null;
+  /**
+   * When the last push failed, so the UI can say how long this has been true.
+   *
+   * "Could not push" with no time on it reads as a thing that just happened,
+   * every time it is read. It is worth knowing that the last attempt was four
+   * seconds ago and the first one was an hour ago.
+   */
+  lastErrorAt: string | null;
+  /**
+   * Pushes that have failed in a row since the last success.
+   *
+   * The number behind "click to retry" not working: somebody pressing it a
+   * fifth time deserves to be told that the previous four went the same way,
+   * rather than watching the same sentence reappear and concluding the button
+   * is dead.
+   */
+  failedAttempts: number;
   conflicts: Conflict[];
 }
 

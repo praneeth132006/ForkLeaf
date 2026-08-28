@@ -226,6 +226,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       lastError: null,
       lastErrorDetail: null,
       lastErrorCode: null,
+      lastErrorAt: null,
+      failedAttempts: 0,
       conflicts: [],
     },
     syncPreference: DEFAULT_SYNC_PREFERENCE,
