@@ -19,7 +19,6 @@ const POINTS = [
 const LINKS = [
   { label: "How it works", href: "/docs/how-it-works" },
   { label: "Security model", href: "/docs/security" },
-  { label: "Self-hosting", href: "/docs/self-hosting" },
 ] as const;
 
 /**
@@ -97,18 +96,15 @@ export function Ownership() {
                 If that is too much
               </dt>
               <dd className="mt-1 text-[13.5px] leading-relaxed text-[var(--fl-muted)]">
-                Run your own copy with a GitHub App and grant it a single repository — or use
-                ForkLeaf with no account at all, on this device only.
+                Sign in with public-repository access only, and ForkLeaf cannot open a private
+                repository at all — or use it with no account whatsoever, on this device.
               </dd>
             </div>
           </dl>
 
           <div className="mt-6 flex flex-wrap gap-2">
-            <Link
-              href="/docs/self-hosting#github-app"
-              className="fl-btn fl-btn-ghost !py-2 !text-[13.5px]"
-            >
-              Set it up with a GitHub App
+            <Link href="/sign-in" className="fl-btn fl-btn-ghost !py-2 !text-[13.5px]">
+              Grant public repositories only
             </Link>
             <Link href="/editor" className="fl-btn fl-btn-ghost !py-2 !text-[13.5px]">
               Try it without an account

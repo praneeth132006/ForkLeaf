@@ -50,7 +50,7 @@ packages/
   diagrams/          Mermaid rendering, templates, graph model
   exporter/          Client-side exports
   editor/            React editing components
-docs/                Architecture and self-hosting guides
+docs/                Architecture notes
 ```
 
 Packages ship TypeScript source; Next compiles them via `transpilePackages`.

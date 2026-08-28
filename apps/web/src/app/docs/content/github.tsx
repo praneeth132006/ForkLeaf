@@ -101,8 +101,8 @@ export function SigningIn() {
         </strong>{" "}
         It is the narrowest classic OAuth scope GitHub offers that still allows writing to a private
         repository — there is no &ldquo;only this one repo&rdquo; classic scope. If that is too much
-        for your account, install ForkLeaf as a GitHub App instead, where you grant access
-        repository by repository. See <A href="/docs/self-hosting">Self-hosting</A>.
+        for your account, <A href="/sign-in">sign in with public-repository access only</A> — or use
+        ForkLeaf with no account at all, on this device.
       </Note>
       <P>
         You are not made to take the wide one. <A href="/sign-in">Signing in</A> offers{" "}

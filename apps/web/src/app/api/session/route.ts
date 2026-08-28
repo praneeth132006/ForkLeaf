@@ -4,7 +4,7 @@ import { getLiveSession, githubOAuthConfigured } from "@/lib/session";
 /**
  * Reports who is signed in, and whether GitHub sign-in is even available on
  * this deployment. The client uses the second flag to decide whether to show
- * "Continue with GitHub" or point at the self-hosting setup docs.
+ * "Continue with GitHub" or say that notes stay on this device.
  *
  * Never returns the access token.
  */

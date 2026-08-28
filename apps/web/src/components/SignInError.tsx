@@ -12,7 +12,7 @@ const MESSAGES: Record<string, string> = {
     "That sign-in link expired or did not match. Please try signing in again from this page.",
   missing_code: "GitHub did not send an authorisation code. Please try again.",
   exchange_failed:
-    "Could not complete sign-in with GitHub. If you are self-hosting, check that GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET are correct.",
+    "Could not complete sign-in with GitHub. Try again — if it keeps happening, check that you have not revoked ForkLeaf's access on GitHub.",
   oauth_not_configured:
     "GitHub sign-in is not configured on this deployment. See the README for how to set it up — or carry on with local-only notes.",
 };

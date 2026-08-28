@@ -283,10 +283,11 @@ how the test suite and CI exercise the app.
 
 **Requirements:** Node.js 20.9+ and pnpm 9+.
 
-### Connect GitHub
+### Connect GitHub (for local development)
 
-To sync notes to a repository, register a GitHub OAuth app and add three
-environment variables.
+To exercise repository sync while working on ForkLeaf, register your own GitHub
+OAuth app and add three environment variables. These are the credentials of
+_your_ development app, never of any deployment you do not run.
 
 1. Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth App**.
 2. Set:
@@ -315,8 +316,8 @@ Restart `pnpm dev` and "Continue with GitHub" will appear.
 
 > **On the `repo` scope:** ForkLeaf requests `repo` because it writes notes to
 > your private repositories, and that is the narrowest classic OAuth scope that
-> permits private-repo writes. If you'd rather grant access to one repository
-> only, see [docs/self-hosting.md](docs/self-hosting.md) for the GitHub App route.
+> permits private-repo writes. `public_repo` is offered on the sign-in page as an
+> equal choice for anyone keeping notes in public repositories only.
 
 ---
 
@@ -370,16 +371,15 @@ The app ships its own documentation site at `/docs`, covering every page below.
 Run `pnpm dev` and open <http://localhost:3000/docs>, or read it on the hosted
 instance.
 
-| Section             | Pages                                                                       |
-| ------------------- | --------------------------------------------------------------------------- |
-| Start here          | Getting started · How ForkLeaf works                                        |
-| Writing             | The editor · Diagrams · Properties · Reading a note · Exporting · Shortcuts |
-| GitHub              | Signing in · Repositories · Syncing · Conflicts                             |
-| Account             | What it costs · Your data · Security model                                  |
-| Running it yourself | Self-hosting · Firebase setup · Troubleshooting · FAQ                       |
+| Section    | Pages                                                                       |
+| ---------- | --------------------------------------------------------------------------- |
+| Start here | Getting started · How ForkLeaf works                                        |
+| Writing    | The editor · Diagrams · Properties · Reading a note · Exporting · Shortcuts |
+| GitHub     | Signing in · Repositories · Syncing · Conflicts                             |
+| Account    | What it costs · Your data · Security model                                  |
+| Help       | Troubleshooting · FAQ                                                       |
 
-Architecture notes live in [docs/architecture.md](docs/architecture.md), and the
-deployment guide in [docs/self-hosting.md](docs/self-hosting.md).
+Architecture notes live in [docs/architecture.md](docs/architecture.md).
 
 ---
 
