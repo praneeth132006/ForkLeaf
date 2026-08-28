@@ -85,12 +85,29 @@ If you want per-repository access instead, register a **GitHub App**:
 4. Enable **Request user authorization (OAuth) during installation**
 
 The user-to-server token a GitHub App issues works with the same endpoints
-ForkLeaf already uses, so `apps/web/src/app/api/auth/` needs only small changes:
-the authorize URL becomes the app's install URL, and tokens expire after 8 hours
-unless you enable and handle refresh tokens.
+ForkLeaf already uses, and the same `GITHUB_OAUTH_CLIENT_ID` /
+`GITHUB_OAUTH_CLIENT_SECRET` variables hold its credentials.
 
-This is a genuinely better security posture and a welcome contribution — see
-[CONTRIBUTING.md](../CONTRIBUTING.md).
+**Its user tokens expire after 8 hours.** ForkLeaf handles that: the refresh
+token GitHub issues alongside the access token is kept in the session cookie and
+spent to renew the access token before it runs out, so a sign-in lasts as long
+as the cookie says it does rather than ending every working morning. Nothing to
+configure — if GitHub sends a refresh token, it is used; if it does not (an
+OAuth App, or a GitHub App with user-to-server token expiration switched off),
+the token is simply held until GitHub refuses it.
+
+Two consequences worth knowing when self-hosting a GitHub App:
+
+- **The refresh token is good for 6 months, and only from this deployment.**
+  Changing `SESSION_SECRET` makes every existing cookie undecryptable, which
+  signs every user out at once and discards their refresh tokens with it. Treat
+  it as a value you set once per deployment.
+- **Revoking the authorization ends the session immediately**, rather than at
+  the next 8-hour boundary: GitHub refuses the renewal, and the app says so
+  instead of retrying into a wall.
+
+Per-repository access is a genuinely better security posture than the `repo`
+scope, and this is the setup ForkLeaf itself runs on.
 
 ## Reverse proxies
 

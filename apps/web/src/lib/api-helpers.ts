@@ -2,7 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { GitHubClient, GitHubError } from "@forkleaf/github-client";
 import type { RepoRef } from "@forkleaf/types";
-import { clearSessionCookie, getSession } from "@/lib/session";
+import { clearSessionCookie, getLiveSession } from "@/lib/session";
 
 /**
  * Shared plumbing for the GitHub proxy routes.
@@ -23,9 +23,16 @@ export class ApiError extends Error {
   }
 }
 
-/** Builds an authenticated client, or throws a 401. */
+/**
+ * Builds an authenticated client, or throws a 401.
+ *
+ * `getLiveSession` rather than `getSession`, because this is the function every
+ * GitHub call in the app passes through and a GitHub App's user token lasts
+ * eight hours. Renewing it here means one place knows about expiry, and every
+ * route gets a token that works.
+ */
 export async function requireClient(): Promise<{ client: GitHubClient; login: string }> {
-  const session = await getSession();
+  const session = await getLiveSession();
   if (!session) {
     throw new ApiError(401, "unauthorized", "Sign in with GitHub to continue.");
   }

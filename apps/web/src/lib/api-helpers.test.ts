@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/session", () => ({
   clearSessionCookie: vi.fn(async () => {}),
   getSession: vi.fn(async () => null),
+  getLiveSession: vi.fn(async () => null),
 }));
 
 beforeEach(() => {

@@ -4,7 +4,7 @@ import { extractMermaidBlocks } from "@forkleaf/markdown-engine";
 import { pairDiagrams, diffDiagrams, summarizeDiff } from "@forkleaf/diagrams";
 import type { RepoRef } from "@forkleaf/types";
 import { ApiError, assertName, handle, withRateLimitAdvice } from "@/lib/api-helpers";
-import { getSession } from "@/lib/session";
+import { getLiveSession } from "@/lib/session";
 
 /**
  * The diagrams a pull request changes.
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
       throw new ApiError(400, "validation", "That is not a pull request number.");
     }
 
-    const session = await getSession();
+    const session = await getLiveSession();
 
     // No retry budget for a rate limit on this route.
     //

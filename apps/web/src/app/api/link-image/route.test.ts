@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const session = vi.fn().mockResolvedValue({ token: "t", user: { login: "me" } });
-vi.mock("@/lib/session", () => ({ getSession: () => session() }));
+vi.mock("@/lib/session", () => ({
+  getSession: () => session(),
+  getLiveSession: () => session(),
+}));
 
 // Every hostname resolves to one public address unless a test says otherwise.
 const lookup = vi.fn().mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);

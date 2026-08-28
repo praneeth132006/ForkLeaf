@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession, githubOAuthConfigured } from "@/lib/session";
+import { getLiveSession, githubOAuthConfigured } from "@/lib/session";
 
 /**
  * Reports who is signed in, and whether GitHub sign-in is even available on
@@ -9,7 +9,11 @@ import { getSession, githubOAuthConfigured } from "@/lib/session";
  * Never returns the access token.
  */
 export async function GET() {
-  const session = await getSession();
+  // The live session, not just the cookie: this is what the browser asks on
+  // every boot, so it is the natural moment to renew an eight-hour token that
+  // ran out while the tab was closed — and the answer here is what decides
+  // whether the app draws itself as signed in.
+  const session = await getLiveSession();
 
   return NextResponse.json(
     {
