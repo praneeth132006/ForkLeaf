@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { remedyFor } from "@forkleaf/store";
+import { remedyFor, MAX_REQUEST_BYTES } from "@forkleaf/store";
 import type { SyncState, Workspace } from "@forkleaf/types";
 
 export interface SyncProblemProps {
@@ -28,6 +28,15 @@ export interface SyncProblemProps {
    * it does, it is holding it — it can be the one to remove it.
    */
   onDiscard: (id: string) => void;
+  /**
+   * Opens the note a stuck file lives in.
+   *
+   * "Delete the image from the note" assumes the reader can find the note. For
+   * a picture called `Pasted image 20260828.png` in a notebook of several
+   * hundred, they cannot — so the app takes them there instead of describing
+   * where to look.
+   */
+  onLocate: (path: string) => void;
 }
 
 /**
@@ -59,6 +68,7 @@ export function SyncProblem({
   onShowConflicts,
   onPropose,
   onDiscard,
+  onLocate,
 }: SyncProblemProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -89,7 +99,19 @@ export function SyncProblem({
     return () => clearTimeout(handle);
   }, [copied]);
 
-  const code = expired ? "unauthorized" : sync.lastErrorCode;
+  const oversized = sync.unpushed.filter((change) => change.tooLarge);
+  /**
+   * A file too big to send outranks whatever the last attempt happened to
+   * report.
+   *
+   * The queue is the evidence, and it is better evidence than the error: a
+   * batch containing an oversized file can fail with a timeout, a 500, or the
+   * platform's own unexplained 413 depending on where it dies, and every one
+   * of those sends the reader somewhere useless. If something in the queue
+   * cannot be sent, that is the reason, and it stays the reason until it is
+   * out of the queue.
+   */
+  const code = oversized.length > 0 ? "too-large" : expired ? "unauthorized" : sync.lastErrorCode;
   const remedy = remedyFor(code, sync.lastErrorDetail);
   const conflicted = sync.conflicts.length > 0;
   /**
@@ -105,7 +127,9 @@ export function SyncProblem({
 
   const headline = conflicted
     ? `${sync.conflicts.length} note${sync.conflicts.length === 1 ? "" : "s"} changed here and on GitHub`
-    : (sync.lastError ?? "Could not push to GitHub.");
+    : oversized.length > 0
+      ? `${oversized.length === 1 ? "A file is" : `${oversized.length} files are`} too big to send to GitHub`
+      : (sync.lastError ?? "Could not push to GitHub.");
 
   const details = [
     `ForkLeaf sync failure`,
@@ -114,8 +138,9 @@ export function SyncProblem({
     sync.lastErrorAt ? `Last attempt: ${sync.lastErrorAt}` : null,
     `Failed attempts since last success: ${sync.failedAttempts}`,
     `Unpushed changes: ${sync.pendingCount} (${sync.blockedCount} stopped retrying)`,
-    ...sync.blockedChanges.map(
-      (change) => `  stuck: ${change.path}${change.error ? ` — ${change.error}` : ""}`,
+    ...sync.unpushed.map(
+      (change) =>
+        `  ${change.tooLarge ? "too large" : change.blocked ? "stopped" : "waiting"}: ${change.path} (${size(change.bytes)})${change.error ? ` — ${change.error}` : ""}`,
     ),
     workspace && !workspace.isLocal
       ? `Repository: ${workspace.repo.owner}/${workspace.repo.repo}@${workspace.repo.branch}`
@@ -245,50 +270,87 @@ export function SyncProblem({
             <Secondary onClick={copyDetails}>{copied ? "Copied" : "Copy details"}</Secondary>
           </div>
 
-          {/* Which files. A count names nothing to go and fix, and the failure
-              that most needs fixing — a file too big to send — is always about
-              one specific file. */}
-          {sync.blockedChanges.length > 0 && (
+          {/* What has not synced. Everything queued, not only what has given
+              up — a push that is still failing and retrying is the state
+              somebody is most likely to be reading this in, and it used to
+              show no files at all. Oversized first: it is the one that has to
+              go before anything else moves. */}
+          {sync.unpushed.length > 0 && (
             <div className="border-b border-[var(--fl-border)] px-3 py-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
-                Stuck {sync.blockedChanges.length === 1 ? "file" : "files"}
+                Not synced ({sync.unpushed.length})
               </p>
-              <ul className="mt-1.5 space-y-1.5">
-                {sync.blockedChanges.slice(0, 5).map((change) => (
-                  <li key={change.id} className="text-[11.5px] leading-relaxed">
-                    <div className="flex items-start gap-2">
-                      <span className="min-w-0 flex-1 break-all font-mono text-[10.5px] text-[var(--fl-text)]">
-                        {change.path}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => onDiscard(change.id)}
-                        title={`Remove ${change.path} from the queue`}
-                        // Several stuck files mean several buttons reading
-                        // "Remove", which tells a screen reader nothing about
-                        // which file it is about to remove.
-                        aria-label={`Remove ${change.path} from the queue`}
-                        className="shrink-0 rounded border border-[var(--fl-border)] px-1.5 py-0.5 text-[10.5px] font-medium text-[var(--fl-danger)] transition-colors hover:bg-[var(--fl-elevated)]"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                    {change.error && (
-                      <span className="mt-0.5 block text-[var(--fl-muted)]">{change.error}</span>
-                    )}
-                  </li>
-                ))}
+              <ul className="mt-1.5 space-y-2">
+                {[...sync.unpushed]
+                  .sort((a, b) => Number(b.tooLarge) - Number(a.tooLarge) || b.bytes - a.bytes)
+                  .slice(0, 6)
+                  .map((change) => (
+                    <li key={change.id} className="text-[11.5px] leading-relaxed">
+                      <div className="flex items-start gap-2">
+                        <span className="min-w-0 flex-1">
+                          <span className="block break-all font-mono text-[10.5px] text-[var(--fl-text)]">
+                            {change.path}
+                          </span>
+                          <span className="mt-0.5 block text-[10.5px] text-[var(--fl-muted)]">
+                            {size(change.bytes)}
+                            {change.tooLarge && (
+                              <span className="ml-1.5 rounded bg-[var(--fl-danger-soft,var(--fl-elevated))] px-1 py-px font-semibold uppercase tracking-wide text-[9.5px] text-[var(--fl-danger)]">
+                                Too big to send — over {size(MAX_REQUEST_BYTES)}
+                              </span>
+                            )}
+                            {!change.tooLarge && change.blocked && (
+                              <span className="ml-1.5 text-[var(--fl-danger)]">stopped trying</span>
+                            )}
+                          </span>
+                        </span>
+
+                        <span className="flex shrink-0 gap-1">
+                          {/* The answer to "I cannot find those images". */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onLocate(change.path);
+                              setOpen(false);
+                            }}
+                            title={`Open the note ${change.path} is in`}
+                            aria-label={`Find ${change.path}`}
+                            className="rounded border border-[var(--fl-border)] px-1.5 py-0.5 text-[10.5px] font-medium text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
+                          >
+                            Find
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDiscard(change.id)}
+                            title={`Remove ${change.path} from the queue`}
+                            // Several files mean several buttons reading
+                            // "Remove", which tells a screen reader nothing
+                            // about which file it is about to remove.
+                            aria-label={`Remove ${change.path} from the queue`}
+                            className="rounded border border-[var(--fl-border)] px-1.5 py-0.5 text-[10.5px] font-medium text-[var(--fl-danger)] transition-colors hover:bg-[var(--fl-elevated)]"
+                          >
+                            Remove
+                          </button>
+                        </span>
+                      </div>
+                      {change.error && (
+                        <span className="mt-0.5 block text-[var(--fl-muted)]">{change.error}</span>
+                      )}
+                    </li>
+                  ))}
               </ul>
-              {sync.blockedChanges.length > 5 && (
+              {sync.unpushed.length > 6 && (
                 <p className="mt-1.5 text-[11px] text-[var(--fl-muted)]">
-                  …and {sync.blockedChanges.length - 5} more.
+                  …and {sync.unpushed.length - 6} more.
                 </p>
               )}
               {/* Said plainly, because "remove" beside a filename could
                   reasonably be read as deleting the note it sits in. */}
               <p className="mt-2 text-[11px] leading-relaxed text-[var(--fl-muted)]">
-                Removing takes the file out of the queue so everything behind it can push. Your
-                notes and their text are untouched.
+                <strong className="font-semibold text-[var(--fl-text)]">Find</strong> opens the note
+                the file is in.{" "}
+                <strong className="font-semibold text-[var(--fl-text)]">Remove</strong> takes it out
+                of the queue so everything behind it can push — your notes and their text are
+                untouched.
               </p>
             </div>
           )}
@@ -382,6 +444,13 @@ function Detail({ term, children }: { term: string; children: React.ReactNode })
       <dd className="min-w-0 flex-1 text-[var(--fl-text)]">{children}</dd>
     </div>
   );
+}
+
+/** A byte count as somebody would say it. */
+function size(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} bytes`;
 }
 
 function when(iso: string): string {

@@ -54,7 +54,7 @@ const RETRY_MAX_MS = 5 * 60_000;
  * under the 4.5 MB the platform allows, because base64 inflates by a third and
  * the JSON around it is not free.
  */
-const MAX_REQUEST_BYTES = 3 * 1024 * 1024;
+export const MAX_REQUEST_BYTES = 3 * 1024 * 1024;
 
 /**
  * Local-first sync.
@@ -262,12 +262,15 @@ export class SyncEngine {
       lastErrorCode: this.lastErrorCode,
       lastErrorAt: this.lastErrorAt,
       failedAttempts: this.failedAttempts,
-      blockedChanges: this.blocked().map((change) => ({
+      unpushed: this.queue.map((change) => ({
         id: change.id,
         path:
           change.op === "rename" || change.op === "move"
             ? (change.toPath ?? change.path)
             : change.path,
+        bytes: weigh(change),
+        tooLarge: weigh(change) > MAX_REQUEST_BYTES,
+        blocked: change.blocked === true,
         error: change.lastError ?? null,
       })),
       conflicts: this.conflicts,

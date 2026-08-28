@@ -251,14 +251,26 @@ export interface SyncState {
    */
   failedAttempts: number;
   /**
-   * The changes that have stopped trying, and what stopped them.
+   * Everything waiting to reach GitHub, named and sized.
    *
-   * A count alone ("2 changes not on GitHub") names no file, so there is
-   * nothing for the reader to go and fix — and the one failure they most need
-   * to fix, a file too big to send, is always about a specific file. The paths
-   * are the whole point.
+   * A count names no file, so there is nothing for the reader to go and look
+   * at — and the failure they most need to act on, a file too big to send, is
+   * always about one specific file they cannot otherwise find. It was not
+   * enough to list only the changes that had already stopped trying: a push
+   * that is still failing and retrying showed no files at all, which is the
+   * state somebody is most likely to be looking at.
    */
-  blockedChanges: { id: string; path: string; error: string | null }[];
+  unpushed: {
+    id: string;
+    path: string;
+    /** Roughly what it weighs on the wire. */
+    bytes: number;
+    /** True when it is too big to ever be sent, however often it is retried. */
+    tooLarge: boolean;
+    /** True once it has stopped retrying. */
+    blocked: boolean;
+    error: string | null;
+  }[];
   conflicts: Conflict[];
 }
 

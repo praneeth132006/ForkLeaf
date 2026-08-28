@@ -47,6 +47,7 @@ import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { fetchSession, signOut } from "@/lib/gateway";
 import { postHogReset } from "@/lib/posthog";
 import { assetPathFor, relativeSrc, resolveImageSrc } from "@/lib/assets";
+import { imageTypeFor } from "@/lib/media";
 import { collectFolders } from "@/lib/tree";
 import { hasRelativeImages, repairNoteLinks } from "@/lib/repair-links";
 import { flattenTree, isMarkdown } from "@/lib/library";
@@ -440,6 +441,40 @@ export function EditorWorkspace() {
     // went near the queue. From this control the push is the whole point.
     await notebook.syncNow();
   }, [notebook, workspace, signInAgain]);
+
+  /**
+   * Opens whatever a stuck file needs somebody to look at.
+   *
+   * A note is its own answer — open it. A picture is not: it has no note of
+   * its own, it lives inside one, and the one thing the reader needs is to be
+   * standing in front of that note with the image in view. So its filename is
+   * looked for across the notebook and the note carrying it is opened.
+   *
+   * A picture nothing references any more still gets an honest outcome: there
+   * is nowhere to go, and saying so beats opening an unrelated note.
+   */
+  const locateUnsynced = useCallback(
+    async (path: string) => {
+      if (!imageTypeFor(path)) {
+        await notebook.openNote(path);
+        return;
+      }
+
+      const name = path.split("/").pop() ?? path;
+      const notes = await notebook.allNotes();
+      const holder = notes.find((note) => note.content.includes(name));
+
+      if (holder) {
+        await notebook.openNote(holder.path);
+        return;
+      }
+
+      setNotice(
+        `${name} is not referenced by any note any more. Removing it will unblock everything else.`,
+      );
+    },
+    [notebook],
+  );
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
@@ -1679,6 +1714,7 @@ export function EditorWorkspace() {
         onShowConflicts={() => setConflictsDismissed(false)}
         onSignIn={signInAgain}
         onDiscardChange={(id) => void notebook.discardChange(id)}
+        onLocateChange={(path) => void locateUnsynced(path)}
       />
 
       {/* ── Dialogs ────────────────────────────────────────────────────── */}

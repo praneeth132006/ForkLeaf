@@ -417,9 +417,10 @@ describe("a failure reported to the reader", () => {
 
     // The one that cannot be sent is parked at once, named, and told why.
     expect(ctx.engine.state.lastErrorCode).toBe("too-large");
-    const stuck = ctx.engine.state.blockedChanges;
+    const stuck = ctx.engine.state.unpushed.filter((change) => change.tooLarge);
     expect(stuck.map((change) => change.path)).toEqual(["big.md"]);
     expect(stuck[0]?.error).toContain("too big to send");
+    expect(stuck[0]?.blocked).toBe(true);
 
     // And it no longer takes everything else down with it.
     expect(ctx.gateway.commits.length).toBeGreaterThan(0);
@@ -460,12 +461,12 @@ describe("a failure reported to the reader", () => {
     await ctx.engine.recordUpsert(makeNote({ path: "big.md", baseSha: null }), huge);
     await ctx.timers.tick();
 
-    const [stuck] = ctx.engine.state.blockedChanges;
+    const [stuck] = ctx.engine.state.unpushed;
     expect(stuck).toBeDefined();
 
     await ctx.engine.discardChange(stuck!.id);
 
-    expect(ctx.engine.state.blockedChanges).toEqual([]);
+    expect(ctx.engine.state.unpushed).toEqual([]);
     expect(ctx.engine.pendingFor()).toEqual([]);
     // The queue is clear, so the bar stops reporting a failure that is over.
     expect(ctx.engine.state.lastErrorCode).toBeNull();

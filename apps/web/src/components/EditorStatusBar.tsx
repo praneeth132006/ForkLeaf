@@ -60,6 +60,8 @@ export interface EditorStatusBarProps {
   onSignIn: () => void;
   /** Removes one change that can never be pushed, and the file behind it. */
   onDiscardChange: (id: string) => void;
+  /** Opens the note an unsynced file lives in, so it can be dealt with. */
+  onLocateChange: (path: string) => void;
 }
 
 /**
@@ -85,6 +87,7 @@ export function EditorStatusBar({
   onPropose,
   onSignIn,
   onDiscardChange,
+  onLocateChange,
   sessionExpired = false,
 }: EditorStatusBarProps) {
   /**
@@ -123,6 +126,7 @@ export function EditorStatusBar({
           onShowConflicts={onShowConflicts}
           onPropose={onPropose}
           onDiscard={onDiscardChange}
+          onLocate={onLocateChange}
         />
       ) : (
         <button
