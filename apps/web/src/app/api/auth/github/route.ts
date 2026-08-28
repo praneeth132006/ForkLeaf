@@ -25,11 +25,10 @@ import { createOAuthState, githubOAuthConfigured, setReturnPath } from "@/lib/se
  * requested for a reason that does not survive being written down is a
  * permission to drop.
  *
- * What is genuinely not on offer is per-repository selection. Classic OAuth
- * scopes have no such thing; picking individual repositories requires
- * installing this as a GitHub App, which is a different install flow and is
- * described in docs/self-hosting.md. Pretending otherwise in the UI would be
- * worse than saying so.
+ * What is genuinely not on offer is per-repository selection: classic OAuth
+ * scopes have no such thing, and pretending otherwise in the UI would be worse
+ * than saying so. The narrower `public_repo` grant is offered instead, as an
+ * equal choice rather than as a thing you would have to know to ask for.
  */
 
 /** The scopes this route will ask for, by the name the UI uses. */

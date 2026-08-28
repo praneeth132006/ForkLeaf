@@ -63,6 +63,30 @@ const FEATURES = [
     span: "",
     art: <ExportArt />,
   },
+  {
+    title: "The code in your notes actually runs",
+    body: "Give a fenced block a language and it gets a Run button. bash, Python and JavaScript execute in a throwaway VM, and the output is written into the note underneath — committed with it, replaced on the next run, and kept in the history like anything else.",
+    span: "md:col-span-2",
+    art: <RunArt />,
+  },
+  {
+    title: "Sources that survive link rot",
+    body: "Paste an address and ForkLeaf writes the citation: the page's real title, plus a Wayback archive of it. The link still means something after the site is sold.",
+    span: "",
+    art: <CaptureArt />,
+  },
+  {
+    title: "Notes that say when they have gone off",
+    body: "Version numbers, dates, CVEs and linked files that have moved on since you last touched the note. It never claims a note is wrong — only that it is worth re-reading, and always why.",
+    span: "",
+    art: <FreshnessArt />,
+  },
+  {
+    title: "Review a note like code",
+    body: "Propose changes to a repository you cannot push to and ForkLeaf opens a real pull request. Read a PR as rendered notes rather than a diff, see who wrote each line, and watch the diagrams change shape between two commits.",
+    span: "md:col-span-2",
+    art: <ReviewArt />,
+  },
 ] as const;
 
 export function Features() {
@@ -71,7 +95,7 @@ export function Features() {
       <SectionHeading
         eyebrow="Features"
         title="Built like a text editor, not like a database with a text box"
-        body="Plain files, plain git, plain exports — and the linking, search and diagramming a real notebook needs. Everything below is in the repository today."
+        body="Plain files, plain git, plain exports — and the linking, search, diagramming, reviewing and running that a real notebook needs. Everything below is in the repository today, not on a roadmap."
       />
 
       <div className="mt-12 grid gap-4 md:grid-cols-3">
@@ -129,6 +153,101 @@ function LinksArt() {
               Blocked until [[Q3 roadmap]] lands…
             </p>
           </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RunArt() {
+  return (
+    <div className="overflow-hidden rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)]">
+      <div className="flex items-center gap-2 border-b border-[var(--fl-border)] px-3 py-1.5">
+        <span className="font-mono text-[11px] text-[var(--fl-muted)]">python</span>
+        <span className="ml-auto rounded border border-[var(--fl-accent)] px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--fl-accent)]">
+          Run
+        </span>
+      </div>
+      <p className="px-3 py-2 font-mono text-[12px] text-[var(--fl-text)]">
+        print(&quot;hello world&quot;)
+      </p>
+      <div className="border-t border-[var(--fl-border)] px-3 py-2">
+        <p className="font-mono text-[10.5px] text-[var(--fl-muted)]">
+          — ran 2026-08-27 11:09 UTC · ok · 34ms
+        </p>
+        <p className="font-mono text-[12px] text-[var(--fl-text)]">hello world</p>
+      </div>
+    </div>
+  );
+}
+
+function CaptureArt() {
+  return (
+    <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3">
+      <p className="truncate font-mono text-[11.5px] text-[var(--fl-muted)]">
+        https://example.com/post
+      </p>
+      <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--fl-text)]">
+        [The post&rsquo;s real title]
+        <span className="text-[var(--fl-muted)]">(https://example.com/post)</span>
+      </p>
+      <p className="mt-1.5 flex items-center gap-1.5 text-[11.5px] text-[var(--fl-accent)]">
+        <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[var(--fl-accent)]" />
+        archived copy · web.archive.org
+      </p>
+    </div>
+  );
+}
+
+function FreshnessArt() {
+  return (
+    <div className="space-y-2">
+      {[
+        { note: "Deploy runbook", why: "mentions v14 · 8 months untouched", stale: true },
+        { note: "How I think about scope", why: "nothing datable in it", stale: false },
+      ].map((item) => (
+        <div
+          key={item.note}
+          className={`rounded-lg border px-3 py-2 ${
+            item.stale
+              ? "border-[var(--fl-accent)] bg-[var(--fl-accent-soft)]"
+              : "border-[var(--fl-border)] bg-[var(--fl-elevated)]"
+          }`}
+        >
+          <p className="text-[12.5px] text-[var(--fl-text)]">{item.note}</p>
+          <p className="truncate text-[11.5px] text-[var(--fl-muted)]">
+            {item.stale ? "Worth re-reading — " : "Never stale — "}
+            {item.why}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ReviewArt() {
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--fl-muted)]">
+          Pull request #42
+        </p>
+        <p className="text-[12.5px] text-[var(--fl-text)]">Update the deploy runbook</p>
+        <p className="mt-1 font-mono text-[11.5px] text-[var(--fl-muted)]">
+          notes:you/patch-1 → main
+        </p>
+      </div>
+      <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3">
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--fl-muted)]">
+          Who wrote this line
+        </p>
+        {[
+          { who: "you", when: "2 days ago" },
+          { who: "priya", when: "last month" },
+        ].map((row) => (
+          <p key={row.who} className="truncate text-[11.5px] text-[var(--fl-muted)]">
+            <span className="text-[var(--fl-accent)]">{row.who}</span> · {row.when}
+          </p>
         ))}
       </div>
     </div>

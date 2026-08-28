@@ -46,7 +46,6 @@ const COLUMNS = [
       { label: "Repositories", href: "/docs/repositories" },
       { label: "Syncing & commits", href: "/docs/sync" },
       { label: "Conflicts", href: "/docs/conflicts" },
-      { label: "Self-hosting", href: "/docs/self-hosting" },
       { label: "FAQ", href: "/docs/faq" },
     ],
   },

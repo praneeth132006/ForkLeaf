@@ -5,7 +5,7 @@ import { Reading } from "./reading";
 import { Features } from "./features";
 import { SigningIn, Repositories, Sync, Conflicts } from "./github";
 import { Plans, PrivacyAndData, Security } from "./account";
-import { SelfHosting, Firebase, Troubleshooting, Faq } from "./running";
+import { Troubleshooting, Faq } from "./running";
 
 /**
  * Slug → article body.
@@ -32,8 +32,6 @@ export const DOC_CONTENT: Record<string, () => React.JSX.Element> = {
   plans: Plans,
   "privacy-and-data": PrivacyAndData,
   security: Security,
-  "self-hosting": SelfHosting,
-  firebase: Firebase,
   troubleshooting: Troubleshooting,
   faq: Faq,
 };

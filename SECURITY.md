@@ -78,5 +78,5 @@ vulnerability.**
 
 - Anything requiring the attacker to already control the user's GitHub account
 - Vulnerabilities in GitHub itself
-- Self-hosted deployments that set a weak or shared `SESSION_SECRET`
-- Denial of service against your own self-hosted instance
+- Deployments you run yourself, which are yours to configure and secure
+- Denial of service against an instance you operate

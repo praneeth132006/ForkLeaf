@@ -101,8 +101,8 @@ export function SigningIn() {
         </strong>{" "}
         It is the narrowest classic OAuth scope GitHub offers that still allows writing to a private
         repository — there is no &ldquo;only this one repo&rdquo; classic scope. If that is too much
-        for your account, install ForkLeaf as a GitHub App instead, where you grant access
-        repository by repository. See <A href="/docs/self-hosting">Self-hosting</A>.
+        for your account, <A href="/sign-in">sign in with public-repository access only</A> — or use
+        ForkLeaf with no account at all, on this device.
       </Note>
       <P>
         You are not made to take the wide one. <A href="/sign-in">Signing in</A> offers{" "}
@@ -141,7 +141,13 @@ export function SigningIn() {
         <LI>
           <Code>SameSite=Lax</Code>, and <Code>Secure</Code> in production.
         </LI>
-        <LI>It expires after 30 days, at which point you sign in again.</LI>
+        <LI>
+          The cookie lasts 30 days. The GitHub token inside it lasts eight hours — ForkLeaf is a
+          GitHub App, and that is how long a GitHub App&rsquo;s user token is valid for — so it is
+          renewed for you in the background, using the refresh token GitHub issues alongside it. You
+          sign in again when the cookie ends, when you have been away for six months, or when you
+          revoke access.
+        </LI>
       </UL>
       <P>
         The usual shortcut — a token in <Code>localStorage</Code> — would be readable by any script
@@ -161,9 +167,11 @@ export function SigningIn() {
         not revoke the token on GitHub&rsquo;s side and it does not touch your repository. To revoke
         access entirely, go to{" "}
         <A href="https://github.com/settings/applications">
-          GitHub → Settings → Applications → Authorized OAuth Apps
+          GitHub → Settings → Applications → Authorized GitHub Apps
         </A>{" "}
-        and remove ForkLeaf.
+        and remove ForkLeaf. Revoking takes effect at once rather than at the end of the current
+        eight-hour token: the next renewal is refused, and ForkLeaf ends the session where it finds
+        out.
       </P>
       <P>
         Notes in the <strong>On this device</strong> workspace stay in your browser after signing

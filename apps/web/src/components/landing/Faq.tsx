@@ -38,10 +38,10 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
         broad — it is the narrowest classic scope that can write to a private repository. It is used
         only to read and commit Markdown in the repositories you connect. The token is encrypted
         into an httpOnly cookie the browser cannot read. If that is more than you want to grant,{" "}
-        <Link href="/docs/self-hosting#github-app" className="fl-link">
-          run your own copy with a GitHub App
+        <Link href="/sign-in" className="fl-link">
+          sign in with public-repository access only
         </Link>{" "}
-        scoped to a single repository.
+        — or use ForkLeaf with no account at all.
       </>
     ),
   },

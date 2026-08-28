@@ -36,7 +36,7 @@ export function Plans() {
         <LI>Export to Markdown, PDF, HTML, Word, plain text and JSON.</LI>
         <LI>Offline editing and background sync.</LI>
         <LI>Conflict detection and resolution.</LI>
-        <LI>Self-hosting the whole thing under Apache-2.0.</LI>
+        <LI>Running the whole thing yourself — the source is Apache-2.0.</LI>
       </UL>
       <P>
         Scale is not a paywall here either: more repositories, search across all of them, and branch
@@ -62,8 +62,8 @@ export function Plans() {
         another tool at it. There is no export step, because there was never an import step.
       </P>
       <P>
-        The source is Apache-2.0 licensed, so a self-hosted instance stays possible regardless — see{" "}
-        <A href="/docs/self-hosting">Self-hosting</A>.
+        The source is Apache-2.0 licensed and public, so nothing about that depends on this
+        deployment continuing to exist.
       </P>
     </>
   );
@@ -106,9 +106,12 @@ export function PrivacyAndData() {
 
       <H2 id="session">Your session</H2>
       <Def term="The session cookie">
-        Contains your GitHub access token and your public profile — id, login, name, avatar URL —
-        encrypted with JWE (A256GCM). <Code>httpOnly</Code>, <Code>SameSite=Lax</Code>,{" "}
-        <Code>Secure</Code> in production, 30-day expiry. Only the server can decrypt it.
+        Contains your GitHub access token, the refresh token that renews it, and your public profile
+        — id, login, name, avatar URL — encrypted with JWE (A256GCM). <Code>httpOnly</Code>,{" "}
+        <Code>SameSite=Lax</Code>, <Code>Secure</Code> in production, 30-day expiry. Only the server
+        can decrypt it. The refresh token is there because a GitHub App&rsquo;s access token expires
+        after eight hours; it is spent server-side to get a new one, and never reaches the browser
+        either.
       </Def>
       <Def term="The OAuth state cookie">
         A random value that lives for ten minutes during sign-in and is deleted the moment it is
@@ -186,7 +189,8 @@ export function PrivacyAndData() {
         </li>
         <li>
           <strong>Your session:</strong> sign out, then revoke the app at{" "}
-          <A href="https://github.com/settings/applications">GitHub → Authorized OAuth Apps</A>.
+          <A href="https://github.com/settings/applications">GitHub → Applications</A> (the hosted
+          ForkLeaf is registered as a GitHub App, so it is under <em>Authorized GitHub Apps</em>).
         </li>
         <li>
           <strong>Your Firebase record:</strong> email the address in the{" "}
@@ -212,21 +216,21 @@ export function Security() {
       <H2 id="token">Token handling</H2>
       <UL>
         <LI>
-          The access token is encrypted (JWE, A256GCM) into an <Code>httpOnly</Code> cookie. The key
-          is derived by SHA-256 from <Code>SESSION_SECRET</Code>.
+          The access token is encrypted into an <Code>httpOnly</Code> cookie that only the server
+          can open, with authenticated encryption and a key this deployment alone holds.
         </LI>
         <LI>
           It is never serialised into the page, never returned by an API route, and never placed in
           a URL or redirect.
         </LI>
         <LI>
-          Every GitHub call is proxied through <Code>/api/gh/*</Code>, which attaches the token
-          server-side.
+          Every GitHub call is proxied by ForkLeaf&rsquo;s own server, which attaches the token on
+          the way out.
         </LI>
         <LI>
-          <Code>SESSION_SECRET</Code> has no default. A deployment that forgets to set it fails
-          loudly at startup rather than falling back to a shared constant that would let anyone
-          forge a session.
+          The token expires after eight hours and is renewed server-side with a refresh token held
+          in the same cookie, so the sign-in outlives the token without either value ever reaching
+          the browser. <A href="/docs/signing-in">Signing in</A>.
         </LI>
       </UL>
       <Note>
@@ -237,9 +241,8 @@ export function Security() {
 
       <H2 id="csrf">OAuth CSRF</H2>
       <P>
-        The <Code>state</Code> parameter is a 24-byte random value stored in a short-lived cookie
-        and compared on return with a constant-time comparison. It is single-use: consumed and
-        deleted whether or not it matched.
+        The sign-in round trip carries a single-use random value, held in a short-lived cookie and
+        compared on return. It is consumed and deleted whether or not it matched.
       </P>
       <P>
         Without it, an attacker can complete an OAuth flow in your browser and bind your session to
@@ -263,18 +266,14 @@ export function Security() {
         </LI>
       </UL>
 
-      <H2 id="history">The commit-rewrite guard</H2>
+      <H2 id="history">Your history is not rewritten</H2>
       <P>
-        ForkLeaf squashes consecutive commits so your history is not one commit per keystroke. That
-        means it amends commits, which means it can destroy work if it gets the conditions wrong.
-        The rules are deliberately narrow — it only amends a commit when:
+        ForkLeaf squashes consecutive edits so your history is not one commit per keystroke, which
+        means it amends commits. It amends <em>only</em> a commit it made itself, moments ago, as
+        you, with nothing else having landed since. Anything outside that — a commit from another
+        device, from a collaborator, from a GitHub Action, from you on github.com — is never
+        touched, and neither is a commit old enough to have been read by somebody.
       </P>
-      <UL>
-        <LI>The head commit&rsquo;s message carries ForkLeaf&rsquo;s own marker.</LI>
-        <LI>It was made within a short time window.</LI>
-        <LI>The author matches.</LI>
-        <LI>Nobody else has pushed since.</LI>
-      </UL>
       <Note kind="danger">
         <strong>
           A way to make ForkLeaf rewrite or destroy a commit it did not create is a security bug,
@@ -284,37 +283,12 @@ export function Security() {
         <A href="https://github.com/praneeth132006/ForkLeaf/blob/main/SECURITY.md">SECURITY.md</A>.
       </Note>
 
-      <H2 id="firestore">Firestore rules</H2>
-      <P>
-        Users can read and write their own profile document and nothing else. There is no billing
-        collection, because there is nothing to bill for — rules that reserved room for a
-        subscription would read as a paywall waiting to be switched on:
-      </P>
-      <Pre label="firestore.rules">{`rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-
-    match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-
-      // No subcollection is expected under a user.
-      match /{other=**} {
-        allow read, write: if false;
-      }
-    }
-
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}`}</Pre>
-
       <H2 id="scope">Known trade-offs</H2>
       <Def term="The repo scope is broad">
         It is the narrowest classic OAuth scope that allows writing to a private repository, and it
         is the only scope requested — no profile, email or organisation permission is asked for
-        alongside it. A GitHub App gives per-repository consent and is supported for self-hosters —
-        see <A href="/docs/self-hosting">Self-hosting</A>.
+        alongside it. If you only keep notes in public repositories, <Code>public_repo</Code> is
+        offered as an equal choice on the sign-in page.
       </Def>
       <Def term="Notes are only as private as the repository">
         ForkLeaf creates the notes repository private, but if you make it public, or connect a

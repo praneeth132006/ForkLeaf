@@ -4,7 +4,7 @@ import { DOC_SECTIONS } from "./nav";
 export const metadata = {
   title: "Documentation",
   description:
-    "Everything about ForkLeaf: writing, diagrams, GitHub sync, conflicts, exports, plans, security and self-hosting.",
+    "Everything about ForkLeaf: writing, diagrams, GitHub sync, conflicts, exports, plans and security.",
 };
 
 export default function DocsIndex() {

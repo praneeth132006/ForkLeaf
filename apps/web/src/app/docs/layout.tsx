@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     template: "%s · ForkLeaf Docs",
   },
   description:
-    "How ForkLeaf works: the editor, Mermaid diagrams, GitHub sync, conflict resolution, exporting, security and self-hosting.",
+    "How ForkLeaf works: the editor, Mermaid diagrams, GitHub sync, conflict resolution, exporting and security.",
 };
 
 export default function DocsLayout({ children }: { children: React.ReactNode }) {

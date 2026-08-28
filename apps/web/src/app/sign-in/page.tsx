@@ -45,12 +45,8 @@ export default async function SignInPage({
         <Frame>
           <h1 className="text-2xl font-semibold tracking-tight">GitHub sign-in is not set up</h1>
           <p className="mt-3 text-[15px] leading-relaxed text-[var(--fl-muted)]">
-            This deployment has no GitHub OAuth application configured, so notes stay on this
-            device. That works — it is the whole app, minus syncing.{" "}
-            <Link href="/docs/self-hosting" className="fl-link">
-              Setting it up
-            </Link>{" "}
-            takes a few minutes.
+            GitHub sign-in is unavailable here, so notes stay on this device. That works — it is the
+            whole app, minus syncing.
           </p>
           <Link href={back ?? "/editor"} className="fl-btn fl-btn-primary mt-6 inline-flex">
             Start writing on this device

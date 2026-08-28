@@ -662,11 +662,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
           </button>
         ) : (
           <p className="px-2 text-[11.5px] leading-snug text-[var(--fl-muted)]">
-            GitHub sign-in is not configured here. Notes stay on this device —{" "}
-            <Link href="/docs/self-hosting" className="text-[var(--fl-accent)] underline">
-              set it up
-            </Link>
-            .
+            GitHub sign-in is unavailable here. Notes stay on this device, and nothing else changes.
           </p>
         )}
       </div>

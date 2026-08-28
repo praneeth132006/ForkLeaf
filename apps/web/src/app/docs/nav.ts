@@ -122,24 +122,13 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         slug: "security",
         title: "Security model",
-        summary:
-          "Token handling, the OAuth CSRF defence, sanitisation, and the commit-rewrite guard.",
+        summary: "How the GitHub token is held, and what protects your notes and your history.",
       },
     ],
   },
   {
-    title: "Running it yourself",
+    title: "Help",
     pages: [
-      {
-        slug: "self-hosting",
-        title: "Self-hosting",
-        summary: "Deploy your own ForkLeaf: environment variables, OAuth app setup, and hosting.",
-      },
-      {
-        slug: "firebase",
-        title: "Firebase setup",
-        summary: "Wiring up product analytics and the thin user record.",
-      },
       {
         slug: "troubleshooting",
         title: "Troubleshooting",

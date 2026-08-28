@@ -84,10 +84,9 @@ export function HelpDialog({
                 </button>
               ) : (
                 <Callout>
-                  GitHub sign-in is not configured on this deployment. Whoever runs it needs to set{" "}
-                  <Mono>GITHUB_OAUTH_CLIENT_ID</Mono>, <Mono>GITHUB_OAUTH_CLIENT_SECRET</Mono> and{" "}
-                  <Mono>SESSION_SECRET</Mono> — see the{" "}
-                  <DocLink href="/docs/self-hosting">self-hosting guide</DocLink>.
+                  GitHub sign-in is unavailable on this deployment, so notes stay on this device.
+                  Everything else in this list still works —{" "}
+                  <DocLink href="/docs/privacy-and-data">where your notes live</DocLink>.
                 </Callout>
               ))}
           </Step>
