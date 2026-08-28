@@ -3,24 +3,28 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 /**
- * The hero's product demo: one window, cycling through what the editor does.
+ * The hero's product demo: the editor itself, cycling through what it does.
  *
- * A landing page gets a few seconds of attention pointed at one rectangle, and
- * a single still frame spends them making a single claim — here, "it edits
- * Markdown", which is the least surprising thing ForkLeaf does. The interesting
- * half is everything a visitor would otherwise have to take on faith: that the
- * links really resolve, that the search really runs offline, that the diagrams
- * really are Mermaid, that the history really is git. So the frame shows them,
- * one after another, and moves on by itself.
+ * Two rules govern everything here.
  *
- * It advances on its own but never traps anybody: hovering or focusing it stops
- * the clock, the tabs jump straight to a scene, and a visitor who has asked for
- * reduced motion gets no cycling at all — the tabs still work, the window still
- * fills, nothing moves unless they ask it to.
+ * **It is the real editor, not an illustration of one.** The same sidebar, the
+ * same tab strip and Rich/Split/Source control, the same right-hand panel, the
+ * same status bar in the same order — down to the wording, because a landing
+ * page whose product shot is a prettier invention teaches the visitor a screen
+ * that does not exist, and the first thing they meet after signing in is the
+ * gap between the two. Anything drawn here can be found in `EditorWorkspace`,
+ * `EditorSidebar`, `EditorRightPanel` and `EditorStatusBar`.
  *
- * Everything is drawn in markup rather than shipped as a screenshot: it
- * re-themes with the page, stays sharp at any zoom, costs nothing to download,
- * and cannot go stale in the way an exported PNG of a UI always does.
+ * **It shows the things nobody would guess.** A still frame of a Markdown
+ * editor makes one claim, and it is the least surprising one available. What a
+ * reader cannot know without being shown is that links have a hover card, that
+ * prose has blame, that a code block runs and commits its output, that a note
+ * can be reviewed as a pull request, that a note will tell you when it has gone
+ * off, that a citation gets archived. So those are the scenes.
+ *
+ * It advances on its own and never traps anybody: hover or keyboard focus stops
+ * the clock, the tabs jump straight to a scene, and reduced motion turns the
+ * cycling off entirely while leaving every scene reachable.
  */
 
 const SCENES = [
@@ -28,19 +32,48 @@ const SCENES = [
     id: "write",
     label: "Write",
     caption: "Rich text, split, or raw Markdown — the same file either way.",
-    /** What the status bar says while this scene is up. */
-    status: "All changes saved · 412 words",
+    status: "All changes saved just now",
   },
   {
-    id: "link",
-    label: "Link",
-    caption: "[[Wikilinks]] and backlinks that quote the line they were written on.",
-    status: "4 backlinks · 2 outgoing links",
+    id: "links",
+    label: "Links",
+    caption: "Hover a [[link]] to see where it goes before you follow it.",
+    status: "All changes saved · 4 backlinks",
+  },
+  {
+    id: "blame",
+    label: "Blame",
+    caption: "Blame for prose: when each paragraph was written, and by whom.",
+    status: "Reading history from GitHub · main",
+  },
+  {
+    id: "run",
+    label: "Run",
+    caption: "Run a code block. The output is committed back into the note.",
+    status: "Ran in a throwaway VM · output committed",
+  },
+  {
+    id: "review",
+    label: "Review",
+    caption: "Review a note as a pull request, where the note reads.",
+    status: "Pull request #42 · 2 comments",
+  },
+  {
+    id: "fresh",
+    label: "Freshness",
+    caption: "Which notes have gone off, and why it thinks so.",
+    status: "3 notes worth re-reading",
+  },
+  {
+    id: "capture",
+    label: "Capture",
+    caption: "Cite a page and keep an archived copy of it, for later.",
+    status: "Archived copy found · web.archive.org",
   },
   {
     id: "search",
     label: "Search",
-    caption: "Every word of every note, ranked and answered in your browser.",
+    caption: "Every word of every note, ranked, answered in your browser.",
     status: "Searched 128 notes offline · 9 ms",
   },
   {
@@ -50,15 +83,9 @@ const SCENES = [
     status: "Saved as a ```mermaid block · renders on github.com too",
   },
   {
-    id: "history",
-    label: "History",
-    caption: "Every version, read from your repository's own commit log.",
-    status: "Reading history from GitHub · main",
-  },
-  {
-    id: "share",
-    label: "Share",
-    caption: "Publish a page, or export to PDF, Word and HTML — all in the browser.",
+    id: "publish",
+    label: "Publish",
+    caption: "Publish one note as a page, or export the lot.",
     status: "Published to your repo · nothing on our servers",
   },
 ] as const;
@@ -66,33 +93,25 @@ const SCENES = [
 type SceneId = (typeof SCENES)[number]["id"];
 
 /** How long each scene holds. Long enough to read the pane, not to wait on it. */
-const HOLD_MS = 6000;
+const HOLD_MS = 5500;
 
 export function AppPreview() {
   const [index, setIndex] = useState(0);
   /**
-   * Whether the cycle is currently running.
+   * Whether the cycle is running.
    *
-   * Off while a pointer is over the frame or the keyboard is inside it — an
-   * animation that changes what you are reading, while you are reading it, is
-   * the reason auto-advancing carousels have the reputation they have.
+   * Off while a pointer is over the frame or the keyboard is inside it — a
+   * demo that changes what you are reading, while you are reading it, is the
+   * reason auto-advancing carousels have the reputation they have.
    */
   const [running, setRunning] = useState(true);
   const [motion, setMotion] = useState(true);
-  /**
-   * Bumped on every change so the scene and its progress tick remount.
-   *
-   * The tick has to restart from zero when a tab is clicked, and CSS
-   * animations do not restart on their own for an element that stayed put.
-   */
+  /** Bumped on every change so the scene and its progress tick remount. */
   const [turn, setTurn] = useState(0);
 
   const scene = SCENES[index]!;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Somebody who has asked their system for less motion is asking for this
-  // too: no cycling, no ticking bar, no caret. The tabs still work, so nothing
-  // is out of reach — it just waits to be asked.
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
     const sync = () => setMotion(!query.matches);
@@ -122,12 +141,12 @@ export function AppPreview() {
       onBlurCapture={() => setRunning(true)}
     >
       <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-        {/* Scrolls rather than wraps on a narrow screen: six labels wrapping to
-            two rows turns the control into a paragraph. */}
+        {/* Scrolls rather than wraps: ten labels on two rows turn a segmented
+            control into a paragraph. */}
         <div
           role="tablist"
           aria-label="What ForkLeaf does"
-          className="fl-scrollbar-none -mx-1 flex max-w-full overflow-x-auto rounded-full border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1"
+          className="fl-scrollbar-none flex max-w-full overflow-x-auto rounded-full border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1"
         >
           {SCENES.map((item, position) => {
             const selected = position === index;
@@ -139,7 +158,7 @@ export function AppPreview() {
                 role="tab"
                 aria-selected={selected}
                 onClick={() => go(position)}
-                className={`relative shrink-0 overflow-hidden rounded-full px-4 py-1.5 text-[13.5px] font-medium transition-colors ${
+                className={`relative shrink-0 overflow-hidden rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
                   selected
                     ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
                     : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
@@ -147,9 +166,6 @@ export function AppPreview() {
               >
                 {item.label}
 
-                {/* How long this scene has left, under the label it belongs to.
-                    Without it an auto-advancing frame changes for no visible
-                    reason, which reads as a glitch rather than as a demo. */}
                 {selected && motion && running && (
                   <span
                     key={turn}
@@ -163,8 +179,6 @@ export function AppPreview() {
           })}
         </div>
 
-        {/* Keyed so the caption crossfades with the pane rather than swapping
-            under it a frame early. */}
         <p
           key={`caption-${turn}`}
           className="fl-scene-in min-w-0 text-[13.5px] text-[var(--fl-muted)]"
@@ -173,34 +187,21 @@ export function AppPreview() {
         </p>
       </div>
 
-      <Frame status={scene.status} scene={scene.id} turn={turn} motion={motion} />
+      <Frame scene={scene.id} status={scene.status} turn={turn} motion={motion} />
     </div>
   );
 }
 
-/**
- * The window chrome.
- *
- * This used to be drawn in literal hex — a hand-kept copy of the dark palette —
- * so that it stayed dark on a light page and "read as a screenshot". What it
- * actually read as, next to the theme-aware window further down the page, was a
- * bug: one product shot in each colour scheme, on the same screen, in a product
- * whose own light mode this page is otherwise showing off. It follows the theme
- * now, like everything else here.
- *
- * The border is `--fl-border-strong` rather than `--fl-border` for the same
- * reason a picture gets a frame: this is the one element on the page that has
- * to hold its own edge against a full-bleed background, and the hairline used
- * for cards inside the page disappeared against it.
- */
+/* ── The application shell ────────────────────────────────────────────────── */
+
 function Frame({
-  status,
   scene,
+  status,
   turn,
   motion,
 }: {
-  status: string;
   scene: SceneId;
+  status: string;
   turn: number;
   motion: boolean;
 }) {
@@ -210,74 +211,350 @@ function Frame({
       aria-label={`The ForkLeaf editor: ${scene}`}
       className="overflow-hidden rounded-2xl border border-[var(--fl-border-strong)] bg-[var(--fl-surface)] text-[var(--fl-text)] shadow-[var(--fl-shadow-lg)] ring-1 ring-[var(--fl-border)]"
     >
-      {/* Title bar */}
-      <div className="flex items-center gap-3 border-b border-[var(--fl-border)] bg-[var(--fl-elevated)] px-4 py-3">
-        <span className="flex gap-1.5" aria-hidden="true">
-          <span className="h-2.5 w-2.5 rounded-full bg-[var(--fl-border-strong)]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[var(--fl-border-strong)]" />
-          <span className="h-2.5 w-2.5 rounded-full bg-[var(--fl-border-strong)]" />
-        </span>
+      {/* Height is fixed so the page cannot jump on a timer, and the panes clip
+          rather than paint over the status bar when they wrap on a narrow
+          screen. */}
+      <div className="flex h-[430px] sm:h-[480px]">
+        <Sidebar scene={scene} />
 
-        <span className="mx-auto rounded-md border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-1 font-mono text-[11px] text-[var(--fl-muted)]">
-          notes · main
-        </span>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <TabStrip scene={scene} />
 
-        <span className="hidden items-center gap-1.5 text-[11px] text-[var(--fl-muted)] sm:flex">
-          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[var(--fl-accent)]" />
-          Synced
-        </span>
+          <div
+            key={turn}
+            className={`relative min-h-0 flex-1 overflow-hidden ${motion ? "fl-scene-in" : ""}`}
+          >
+            {scene === "write" && <WritePane motion={motion} />}
+            {scene === "links" && <LinksPane />}
+            {scene === "blame" && <BlamePane />}
+            {scene === "run" && <RunPane />}
+            {scene === "review" && <ReviewPane />}
+            {scene === "fresh" && <FreshPane />}
+            {scene === "capture" && <CapturePane />}
+            {scene === "search" && <SearchPane motion={motion} />}
+            {scene === "diagram" && <DiagramPane />}
+            {scene === "publish" && <PublishPane />}
+          </div>
+        </div>
+
+        <RightPanel scene={scene} turn={turn} motion={motion} />
       </div>
 
-      {/* One fixed height for every scene: a frame that resized as it cycled
-          would push the rest of the page up and down on a timer. */}
-      <div className="flex h-[380px] sm:h-[420px]">
-        <aside
-          aria-hidden="true"
-          className="hidden w-52 shrink-0 flex-col gap-0.5 border-r border-[var(--fl-border)] p-3 sm:flex"
-        >
-          <div className="mb-2 truncate rounded-md border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-2.5 py-1.5 text-[11px] text-[var(--fl-muted)]">
-            {scene === "search" ? "atomic commit" : "Search notes…"}
-          </div>
-          <TreeRow depth={0} label="architecture" folder />
-          <TreeRow depth={1} label="sync-engine.md" active={scene !== "link"} />
-          <TreeRow depth={1} label="storage.md" />
-          <TreeRow depth={0} label="meetings" folder />
-          <TreeRow depth={1} label="2026-08-14.md" active={scene === "link"} />
-          <TreeRow depth={0} label="reading-list.md" />
-          <TreeRow depth={0} label="README.md" />
-        </aside>
+      <StatusBar status={status} turn={turn} motion={motion} />
+    </div>
+  );
+}
 
-        {/* `overflow-hidden` is load-bearing, not tidiness: the frame's height is
-            fixed so the page does not jump as scenes change, and a pane that
-            wraps taller than that on a narrow screen was painting straight over
-            the status bar underneath it. */}
-        <div key={turn} className={`min-w-0 flex-1 overflow-hidden ${motion ? "fl-scene-in" : ""}`}>
-          {scene === "write" && <WritePane motion={motion} />}
-          {scene === "link" && <LinkPane />}
-          {scene === "search" && <SearchPane />}
-          {scene === "diagram" && <DiagramPane />}
-          {scene === "history" && <HistoryPane />}
-          {scene === "share" && <SharePane />}
+/** The sidebar, in the order the real one puts things. */
+function Sidebar({ scene }: { scene: SceneId }) {
+  return (
+    <aside
+      aria-hidden="true"
+      className="hidden w-56 shrink-0 flex-col border-r border-[var(--fl-border)] sm:flex"
+    >
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--fl-accent-soft)] text-[10px] font-semibold text-[var(--fl-accent)]">
+          ⑂
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-[12.5px] font-semibold text-[var(--fl-text)]">
+            notes
+          </span>
+          <span className="block truncate text-[10.5px] text-[var(--fl-muted)]">
+            praneeth132006 · main
+          </span>
+        </span>
+        <span className="ml-auto text-[10px] text-[var(--fl-muted)]">⌄</span>
+      </div>
+
+      <div className="px-3">
+        <div className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--fl-accent)] px-3 py-1.5 text-[12px] font-semibold text-[var(--fl-accent-contrast)]">
+          + New Note
+        </div>
+        <div className="mt-2 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-2.5 py-1.5 text-[11px] text-[var(--fl-muted)]">
+          Filter by filename…
         </div>
       </div>
 
-      {/* Status bar. It says something different per scene, because in the real
-          app it does too — this is the strip that answers "where is my work". */}
-      <div className="flex items-center gap-3 border-t border-[var(--fl-border)] bg-[var(--fl-elevated)] px-4 py-2 text-[11px] text-[var(--fl-muted)]">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span
-            aria-hidden="true"
-            className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fl-accent)]"
-          />
-          <span key={turn} className={`truncate ${motion ? "fl-scene-in" : ""}`}>
-            {status}
-          </span>
+      <p className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
+        Notes
+      </p>
+
+      <div className="min-h-0 flex-1 px-2">
+        <TreeRow depth={0} label="architecture" folder />
+        <TreeRow depth={1} label="sync-engine.md" active={scene !== "links"} />
+        <TreeRow depth={1} label="storage.md" />
+        <TreeRow depth={0} label="meetings" folder />
+        <TreeRow depth={1} label="2026-08-14.md" active={scene === "links"} />
+        <TreeRow depth={0} label="deploy-runbook.md" stale={scene === "fresh"} />
+        <TreeRow depth={0} label="reading-list.md" />
+        <TreeRow depth={0} label="README.md" />
+      </div>
+
+      <div className="space-y-1 border-t border-[var(--fl-border)] px-3 py-2 text-[11.5px] text-[var(--fl-muted)]">
+        <p>Dashboard</p>
+        <p>Help &amp; shortcuts</p>
+      </div>
+    </aside>
+  );
+}
+
+/** The tab strip: open notes, the view control, search, and the panel toggles. */
+function TabStrip({ scene }: { scene: SceneId }) {
+  const modes = ["Rich", "Split", "Source"] as const;
+  const active =
+    scene === "write" || scene === "diagram" ? "Split" : scene === "run" ? "Source" : "Rich";
+
+  return (
+    <div className="flex shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-3 py-2">
+      <div className="flex min-w-0 items-center gap-1.5 rounded-md border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-2 py-1 text-[11.5px]">
+        <span aria-hidden="true" className="text-[var(--fl-muted)]">
+          ▤
         </span>
-        <span className="ml-auto hidden shrink-0 font-mono md:inline">
-          architecture/sync-engine.md
+        <span className="max-w-[7rem] truncate text-[var(--fl-text)]">
+          {scene === "links" ? "2026-08-14" : "Sync engine"}
+        </span>
+        <span aria-hidden="true" className="text-[var(--fl-muted)]">
+          ×
         </span>
       </div>
+
+      <div className="hidden rounded-md bg-[var(--fl-elevated)] p-0.5 md:flex">
+        {modes.map((mode) => (
+          <span
+            key={mode}
+            className={`rounded px-2 py-0.5 text-[11.5px] font-medium ${
+              mode === active
+                ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
+                : "text-[var(--fl-muted)]"
+            }`}
+          >
+            {mode}
+          </span>
+        ))}
+      </div>
+
+      <div className="ml-auto hidden items-center gap-1.5 rounded-md border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-2 py-1 text-[11px] text-[var(--fl-muted)] sm:flex">
+        <span aria-hidden="true">⌕</span> Search
+        <span className="rounded bg-[var(--fl-surface)] px-1 font-mono text-[10px]">⌘K</span>
+      </div>
+
+      <span className="hidden items-center gap-2 pl-1 text-[12px] text-[var(--fl-muted)] lg:flex">
+        {/* The lock is the reading-mode control: it is on when the scene is one
+            you would be reading rather than writing. */}
+        <span className={scene === "links" || scene === "blame" ? "text-[var(--fl-accent)]" : ""}>
+          ⌸
+        </span>
+        <span>?</span>
+        <span>◐</span>
+        <span>▥</span>
+      </span>
     </div>
+  );
+}
+
+/** The status bar, in the real order: state, repo, branch, sync mode, file. */
+function StatusBar({ status, turn, motion }: { status: string; turn: number; motion: boolean }) {
+  return (
+    <div className="flex items-center gap-3 border-t border-[var(--fl-border)] bg-[var(--fl-elevated)] px-4 py-2 text-[11px] text-[var(--fl-muted)]">
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fl-accent)]"
+        />
+        <span key={turn} className={`truncate ${motion ? "fl-scene-in" : ""}`}>
+          {status}
+        </span>
+      </span>
+
+      <span className="hidden shrink-0 sm:inline">praneeth132006/notes</span>
+      <span className="hidden shrink-0 font-mono md:inline">⑂ main</span>
+      <span className="hidden shrink-0 lg:inline">Sync: automatic</span>
+      <span className="hidden shrink-0 lg:inline">Propose changes…</span>
+
+      <span className="ml-auto hidden shrink-0 items-center gap-3 xl:flex">
+        <span>UTF-8</span>
+        <span>LF</span>
+        <span>Markdown</span>
+        <span className="tabular-nums">412 words</span>
+      </span>
+    </div>
+  );
+}
+
+/* ── The right-hand panel, whose contents are half the demo ───────────────── */
+
+function RightPanel({ scene, turn, motion }: { scene: SceneId; turn: number; motion: boolean }) {
+  return (
+    <aside
+      aria-hidden="true"
+      key={turn}
+      className={`hidden w-60 shrink-0 flex-col overflow-hidden border-l border-[var(--fl-border)] lg:flex ${
+        motion ? "fl-scene-in" : ""
+      }`}
+    >
+      <div className="flex items-center gap-2 border-b border-[var(--fl-border)] px-3 py-2 text-[11.5px] text-[var(--fl-muted)]">
+        <span className="text-[var(--fl-accent)]">✓</span> Auto-save ON
+        <span className="ml-auto">›</span>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-hidden px-3 py-3">
+        {scene === "links" && <PanelBacklinks />}
+        {scene === "blame" && <PanelBlame />}
+        {scene === "review" && <PanelReview />}
+        {scene === "fresh" && <PanelFreshness />}
+        {scene === "publish" && <PanelExport />}
+        {(scene === "write" ||
+          scene === "run" ||
+          scene === "capture" ||
+          scene === "search" ||
+          scene === "diagram") && <PanelDocument />}
+      </div>
+    </aside>
+  );
+}
+
+function PanelDocument() {
+  return (
+    <>
+      <PanelLabel>Document</PanelLabel>
+      <p className="mb-1 text-[11px] text-[var(--fl-muted)]">Title</p>
+      <div className="rounded-md border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-2.5 py-1.5 text-[12px] text-[var(--fl-text)]">
+        Sync engine
+      </div>
+
+      <PanelLabel className="mt-4">Stats</PanelLabel>
+      <dl className="space-y-1 text-[11.5px]">
+        {[
+          ["Words", "412"],
+          ["Read time", "2 min"],
+          ["Headings", "4"],
+          ["Code blocks", "1"],
+          ["Links", "3"],
+        ].map(([term, value]) => (
+          <div key={term} className="flex justify-between">
+            <dt className="text-[var(--fl-muted)]">{term}</dt>
+            <dd className="tabular-nums text-[var(--fl-text)]">{value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <PanelLabel className="mt-4">Outline</PanelLabel>
+      <p className="text-[11.5px] text-[var(--fl-muted)]">· Sync engine</p>
+      <p className="pl-3 text-[11.5px] text-[var(--fl-muted)]">· Guarantees</p>
+    </>
+  );
+}
+
+function PanelBacklinks() {
+  return (
+    <>
+      <PanelLabel>Links</PanelLabel>
+      <p className="mb-2 text-[11px] text-[var(--fl-muted)]">4 notes link here</p>
+      {[
+        ["architecture/sync-engine.md", "Blocked on [[Storage layout]]…"],
+        ["reading-list.md", "Re-read [[Storage layout]] before…"],
+        ["meetings/2026-08-07.md", "Agreed to fold it into v1."],
+      ].map(([note, line], row) => (
+        <Row key={note} row={row} className="mb-2 last:mb-0">
+          <p className="truncate font-mono text-[10.5px] text-[var(--fl-muted)]">{note}</p>
+          <p className="truncate text-[11.5px] text-[var(--fl-text)]">{line}</p>
+        </Row>
+      ))}
+      <p className="mt-3 text-[11px] leading-relaxed text-[var(--fl-muted)]">
+        Quoted at the line it was written on.
+      </p>
+    </>
+  );
+}
+
+function PanelBlame() {
+  return (
+    <>
+      <PanelLabel>Who wrote this</PanelLabel>
+      {[
+        ["you", "a3f9c21", "2 days ago"],
+        ["priya", "7b21e08", "last month"],
+        ["you", "0f2a1de", "3 months ago"],
+      ].map(([who, sha, when], row) => (
+        <Row
+          key={sha}
+          row={row}
+          className="mb-1.5 rounded-md border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-2.5 py-1.5"
+        >
+          <p className="text-[11.5px] text-[var(--fl-accent)]">{who}</p>
+          <p className="flex justify-between font-mono text-[10.5px] text-[var(--fl-muted)]">
+            <span>{sha}</span>
+            <span>{when}</span>
+          </p>
+        </Row>
+      ))}
+      <p className="mt-3 text-[11px] leading-relaxed text-[var(--fl-muted)]">
+        Paragraph by paragraph, from the repository&rsquo;s own log.
+      </p>
+    </>
+  );
+}
+
+function PanelReview() {
+  return (
+    <>
+      <PanelLabel>Review · #42</PanelLabel>
+      {[
+        ["priya", "Is eight hours right? The docs say four."],
+        ["sam", "Add the offline case here."],
+      ].map(([who, said], row) => (
+        <Row
+          key={who}
+          row={row}
+          className="mb-2 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-2.5 py-2"
+        >
+          <p className="text-[11px] font-semibold text-[var(--fl-accent)]">{who}</p>
+          <p className="text-[11.5px] leading-snug text-[var(--fl-text)]">{said}</p>
+        </Row>
+      ))}
+      <div className="mt-2 rounded-md border border-[var(--fl-accent)] px-2.5 py-1.5 text-center text-[11.5px] font-semibold text-[var(--fl-accent)]">
+        Approve
+      </div>
+    </>
+  );
+}
+
+function PanelFreshness() {
+  return (
+    <>
+      <PanelLabel>Freshness</PanelLabel>
+      <div className="rounded-lg border border-[var(--fl-accent)] bg-[var(--fl-accent-soft)] px-2.5 py-2">
+        <p className="text-[11.5px] font-semibold text-[var(--fl-text)]">Worth re-reading</p>
+        <p className="mt-1 text-[11px] leading-snug text-[var(--fl-muted)]">
+          Names v14 · untouched for 8 months · the file it links to moved on in June.
+        </p>
+      </div>
+      <p className="mt-3 text-[11px] leading-relaxed text-[var(--fl-muted)]">
+        It never says a note is wrong. It says why it might be, so you can disagree at a glance.
+      </p>
+    </>
+  );
+}
+
+function PanelExport() {
+  return (
+    <>
+      <PanelLabel>Actions</PanelLabel>
+      {["Copy Markdown", "Export HTML", "Export PDF"].map((action, row) => (
+        <Row
+          key={action}
+          row={row}
+          className="mb-1.5 rounded-md border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-2.5 py-1.5 text-center text-[11.5px] text-[var(--fl-text)]"
+        >
+          {action}
+        </Row>
+      ))}
+      <p className="mt-2 text-[11px] text-[var(--fl-muted)]">More formats and options…</p>
+      <p className="mt-3 text-[11px] leading-relaxed text-[var(--fl-muted)]">
+        Word, plain text and JSON too — all rendered here, in your browser.
+      </p>
+    </>
   );
 }
 
@@ -285,8 +562,8 @@ function Frame({
 
 function WritePane({ motion }: { motion: boolean }) {
   return (
-    <div className="flex h-full overflow-hidden">
-      <div className="hidden min-w-0 flex-1 flex-col border-r border-[var(--fl-border)] p-5 font-mono text-[12.5px] leading-relaxed md:flex">
+    <div className="flex h-full">
+      <div className="hidden min-w-0 flex-1 flex-col border-r border-[var(--fl-border)] p-4 font-mono text-[12px] leading-relaxed md:flex">
         <PaneLabel>Source</PaneLabel>
         <pre className="whitespace-pre-wrap text-[var(--fl-muted)]">
           <span className="font-semibold text-[var(--fl-accent)]"># Sync engine</span>
@@ -306,19 +583,19 @@ function WritePane({ motion }: { motion: boolean }) {
         </pre>
       </div>
 
-      <div className="min-w-0 flex-1 p-5 sm:p-6">
+      <div className="min-w-0 flex-1 p-5">
         <PaneLabel>Preview</PaneLabel>
-        <h3 className="mb-3 text-2xl font-semibold tracking-tight text-[var(--fl-text)]">
+        <h3 className="mb-2.5 text-xl font-semibold tracking-tight text-[var(--fl-text)]">
           Sync engine
         </h3>
-        <p className="mb-5 text-[15px] leading-relaxed text-[var(--fl-muted)]">
+        <p className="mb-4 text-[14px] leading-relaxed text-[var(--fl-muted)]">
           Writes land in IndexedDB first, then drain to GitHub as one{" "}
           <strong className="font-semibold text-[var(--fl-text)]">atomic commit</strong>.
         </p>
-        <h4 className="mb-2 text-[15px] font-semibold tracking-tight text-[var(--fl-text)]">
+        <h4 className="mb-2 text-[14px] font-semibold tracking-tight text-[var(--fl-text)]">
           Guarantees
         </h4>
-        <ul className="space-y-1.5 text-[14px] text-[var(--fl-muted)]">
+        <ul className="space-y-1.5 text-[13px] text-[var(--fl-muted)]">
           {[
             "Nothing is lost when the tab closes",
             "Offline edits queue and replay",
@@ -327,7 +604,7 @@ function WritePane({ motion }: { motion: boolean }) {
             <Row key={item} row={row} className="flex gap-2.5">
               <span
                 aria-hidden="true"
-                className="mt-[9px] h-1 w-1 shrink-0 rounded-full bg-[var(--fl-accent)]"
+                className="mt-[8px] h-1 w-1 shrink-0 rounded-full bg-[var(--fl-accent)]"
               />
               {item}
             </Row>
@@ -338,106 +615,307 @@ function WritePane({ motion }: { motion: boolean }) {
   );
 }
 
-/** Links and backlinks: the thing that makes a folder of files a notebook. */
-function LinkPane() {
-  const backlinks = [
-    { note: "architecture/sync-engine.md", line: "Blocked on [[Storage layout]] landing first." },
-    { note: "reading-list.md", line: "Re-read [[Storage layout]] before the review." },
-    { note: "meetings/2026-08-07.md", line: "Agreed to fold [[Storage layout]] into v1." },
-  ];
-
+/** The hover card, which is the thing you cannot know about until you see it. */
+function LinksPane() {
   return (
-    <div className="flex h-full overflow-hidden">
-      <div className="hidden min-w-0 flex-1 flex-col border-r border-[var(--fl-border)] p-5 sm:p-6 md:flex">
-        <PaneLabel>2026-08-14.md</PaneLabel>
-        <p className="text-[14.5px] leading-[1.75] text-[var(--fl-muted)]">
-          Storage is settled — see <WikiLink>Storage layout</WikiLink> for the shape we agreed. The
-          queue work depends on it, so <WikiLink>Sync engine</WikiLink> moves after it, and{" "}
-          <WikiLink pending>Offline queue v2</WikiLink> is not written yet.
-        </p>
+    <div className="relative h-full p-5">
+      <PaneLabel>meetings/2026-08-14.md</PaneLabel>
+      <p className="max-w-lg text-[14px] leading-[1.9] text-[var(--fl-muted)]">
+        Storage is settled — see{" "}
+        <span className="rounded bg-[var(--fl-accent-soft)] px-1 text-[var(--fl-accent)] underline decoration-dotted underline-offset-4">
+          [[Storage layout]]
+        </span>{" "}
+        for the shape we agreed. The queue work depends on it, so{" "}
+        <span className="rounded bg-[var(--fl-accent-soft)] px-1 text-[var(--fl-accent)]">
+          [[Sync engine]]
+        </span>{" "}
+        moves after it, and{" "}
+        <span className="rounded border-b border-dashed border-[var(--fl-muted)] px-0.5">
+          [[Offline queue v2]]
+        </span>{" "}
+        is not written yet.
+      </p>
 
-        <p className="mt-4 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-3 py-2 text-[11.5px] leading-relaxed text-[var(--fl-muted)]">
-          A dotted link is a note that does not exist. Clicking it writes the file.
+      {/* Anchored under the first link, the way the real card sits under the
+          word it describes. */}
+      <div className="fl-row-in absolute left-6 top-[7.5rem] w-[19rem] rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-3 shadow-[var(--fl-shadow-lg)]">
+        <p className="truncate text-[10.5px] uppercase tracking-wide text-[var(--fl-muted)]">
+          architecture/storage.md
+        </p>
+        <p className="mt-1 text-[13px] font-medium leading-snug text-[var(--fl-text)]">
+          Storage layout
+        </p>
+        <p className="mt-1 line-clamp-3 text-[11.5px] leading-snug text-[var(--fl-muted)]">
+          One folder per topic, one file per note, and the front matter carries everything the app
+          would otherwise need a database for.
+        </p>
+        <p className="mt-2 border-t border-[var(--fl-border)] pt-2 text-[10.5px] text-[var(--fl-muted)]">
+          Click to open · ⌘ click for a new tab
         </p>
       </div>
 
-      <div className="min-w-0 flex-1 p-5 sm:p-6">
-        <PaneLabel>Backlinks · Storage layout</PaneLabel>
-        <ul className="space-y-2">
-          {backlinks.map((item, row) => (
-            <Row
-              key={item.note}
-              row={row}
-              className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-3.5 py-2.5"
-            >
-              <p className="truncate font-mono text-[11px] text-[var(--fl-muted)]">{item.note}</p>
-              <p className="mt-1 text-[13px] leading-relaxed text-[var(--fl-text)]">{item.line}</p>
-            </Row>
-          ))}
-        </ul>
-        <p className="mt-4 hidden text-[12.5px] leading-relaxed text-[var(--fl-muted)] sm:block">
-          Every mention, quoted at the line it was written on — so you can see why a note was
-          linked, not just that it was.
-        </p>
-      </div>
+      <p className="absolute bottom-4 left-5 right-5 hidden text-[11.5px] text-[var(--fl-muted)] sm:block">
+        A dotted link is a note that does not exist yet. Clicking it writes the file.
+      </p>
     </div>
   );
 }
 
-/** Search: BM25 over every note, in the browser, with no server involved. */
-function SearchPane() {
-  const results = [
+/** Blame for prose: the gutter the real reading view puts beside a paragraph. */
+function BlamePane() {
+  const paragraphs = [
     {
-      note: "architecture/sync-engine.md",
-      line: "drain to GitHub as one atomic commit.",
-      score: "BM25 8.4",
+      who: "you",
+      when: "2 days ago",
+      text: "Writes land in IndexedDB first, then drain to GitHub as one atomic commit.",
+      mine: true,
     },
     {
-      note: "meetings/2026-08-14.md",
-      line: "One atomic commit per burst, not per keystroke.",
-      score: "BM25 6.1",
+      who: "priya",
+      when: "last month",
+      text: "Rapid edits coalesce, so the history is one commit per burst rather than one per keystroke.",
+      mine: false,
     },
     {
-      note: "architecture/storage.md",
-      line: "The queue replays until the commit lands.",
-      score: "BM25 3.7",
+      who: "you",
+      when: "3 months ago",
+      text: "Conflicts are shown, never merged — you pick the version that survives.",
+      mine: true,
     },
   ];
 
   return (
-    <div className="flex h-full flex-col overflow-hidden p-5 sm:p-6">
-      <PaneLabel>Search · 128 notes</PaneLabel>
-
-      <div className="flex items-center gap-2 rounded-lg border border-[var(--fl-border-strong)] bg-[var(--fl-elevated)] px-3.5 py-2.5">
-        <span aria-hidden="true" className="text-[13px] text-[var(--fl-muted)]">
-          ⌘K
-        </span>
-        <span className="font-mono text-[13px] text-[var(--fl-text)]">atomic commit</span>
-        <span className="fl-caret inline-block h-[1.05em] w-[2px] bg-[var(--fl-accent)]" />
-        <span className="ml-auto text-[11.5px] text-[var(--fl-muted)]">3 results · 9 ms</span>
-      </div>
-
-      <ul className="mt-3 space-y-2">
-        {results.map((result, row) => (
-          <Row
-            key={result.note}
-            row={row}
-            className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-3.5 py-2.5"
-          >
-            <div className="flex items-baseline gap-3">
-              <p className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--fl-muted)]">
-                {result.note}
-              </p>
-              <p className="shrink-0 font-mono text-[10.5px] text-[var(--fl-muted)]">
-                {result.score}
-              </p>
-            </div>
-            <p className="mt-1 text-[13px] leading-relaxed text-[var(--fl-text)]">{result.line}</p>
+    <div className="h-full p-5">
+      <PaneLabel>Sync engine · blame</PaneLabel>
+      <div className="space-y-3">
+        {paragraphs.map((paragraph, row) => (
+          <Row key={paragraph.text} row={row} className="flex gap-3">
+            <span
+              className={`w-20 shrink-0 border-l-2 pl-2 text-[10.5px] leading-tight ${
+                paragraph.mine
+                  ? "border-[var(--fl-accent)] text-[var(--fl-accent)]"
+                  : "border-[var(--fl-border-strong)] text-[var(--fl-muted)]"
+              }`}
+            >
+              {paragraph.who}
+              <span className="block text-[var(--fl-muted)]">{paragraph.when}</span>
+            </span>
+            <span className="min-w-0 text-[13px] leading-relaxed text-[var(--fl-muted)]">
+              {paragraph.text}
+            </span>
           </Row>
         ))}
-      </ul>
+      </div>
+      <p className="mt-4 hidden text-[11.5px] text-[var(--fl-muted)] sm:block">
+        Not line numbers in a diff — the paragraph you are reading, and the commit it arrived in.
+      </p>
+    </div>
+  );
+}
 
-      <p className="mt-auto hidden pt-5 text-[12.5px] leading-relaxed text-[var(--fl-muted)] sm:block">
+/** A runnable block, with the output block it writes back into the note. */
+function RunPane() {
+  return (
+    <div className="h-full p-5 font-mono text-[12px]">
+      <PaneLabel>Source</PaneLabel>
+
+      <div className="overflow-hidden rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)]">
+        <div className="flex items-center gap-2 border-b border-[var(--fl-border)] px-3 py-1.5">
+          <span className="text-[11px] text-[var(--fl-muted)]">python</span>
+          <span className="ml-auto rounded border border-[var(--fl-accent)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--fl-accent)]">
+            ▶ Run
+          </span>
+        </div>
+        <p className="px-3 py-2 text-[var(--fl-text)]">print(&quot;hello world&quot;)</p>
+      </div>
+
+      <div className="fl-row-in mt-2 overflow-hidden rounded-lg border border-[var(--fl-accent)] bg-[var(--fl-accent-soft)]">
+        <p className="border-b border-[var(--fl-border)] px-3 py-1.5 text-[10.5px] text-[var(--fl-muted)]">
+          ```output — ran 2026-08-27 11:09 UTC · ok · 34ms
+        </p>
+        <p className="px-3 py-2 text-[var(--fl-text)]">hello world</p>
+      </div>
+
+      <p className="mt-4 hidden font-sans text-[11.5px] leading-relaxed text-[var(--fl-muted)] sm:block">
+        The output is written into the note underneath the block, committed with it, and replaced —
+        not repeated — the next time you press Run. The old results are in the commit history, which
+        is where history belongs.
+      </p>
+    </div>
+  );
+}
+
+/** A pull request read as a note, with the comments beside the prose. */
+function ReviewPane() {
+  return (
+    <div className="h-full p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="rounded-full bg-[var(--fl-accent-soft)] px-2 py-0.5 text-[10.5px] font-semibold text-[var(--fl-accent)]">
+          Pull request #42
+        </span>
+        <span className="truncate font-mono text-[10.5px] text-[var(--fl-muted)]">
+          patch-1 → main
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        <Row row={0} className="rounded-lg border border-[var(--fl-border)] px-3 py-2">
+          <p className="text-[13px] leading-relaxed text-[var(--fl-muted)]">
+            The session cookie lasts thirty days.
+          </p>
+        </Row>
+        <Row
+          row={1}
+          className="rounded-lg border border-[var(--fl-accent)] bg-[var(--fl-accent-soft)] px-3 py-2"
+        >
+          <p className="text-[13px] leading-relaxed text-[var(--fl-text)]">
+            The token inside it lasts eight hours, and is renewed for you.
+          </p>
+          <p className="mt-1.5 border-t border-[var(--fl-border)] pt-1.5 text-[11.5px] text-[var(--fl-muted)]">
+            <span className="font-semibold text-[var(--fl-accent)]">priya</span> · Is eight hours
+            right? The docs say four.
+          </p>
+        </Row>
+        <Row row={2} className="rounded-lg border border-[var(--fl-border)] px-3 py-2">
+          <p className="text-[13px] leading-relaxed text-[var(--fl-muted)]">
+            Queued changes are kept on the device until it succeeds.
+          </p>
+        </Row>
+      </div>
+
+      <p className="mt-4 hidden text-[11.5px] leading-relaxed text-[var(--fl-muted)] sm:block">
+        The review reads where the note reads — rendered prose with the comments attached to the
+        paragraph they are about, rather than a diff of Markdown source.
+      </p>
+    </div>
+  );
+}
+
+/** Freshness: the notes that have gone off, and the reason each is flagged. */
+function FreshPane() {
+  const notes = [
+    {
+      note: "deploy-runbook.md",
+      why: "names v14 · untouched 8 months · linked file changed in June",
+      stale: true,
+    },
+    { note: "architecture/storage.md", why: "cites CVE-2025-4381 · 5 months", stale: true },
+    {
+      note: "how-i-think-about-scope.md",
+      why: "nothing datable in it — never stale",
+      stale: false,
+    },
+  ];
+
+  return (
+    <div className="h-full p-5">
+      <PaneLabel>Freshness · 128 notes</PaneLabel>
+      <div className="space-y-2">
+        {notes.map((item, row) => (
+          <Row
+            key={item.note}
+            row={row}
+            className={`rounded-lg border px-3 py-2.5 ${
+              item.stale
+                ? "border-[var(--fl-accent)] bg-[var(--fl-accent-soft)]"
+                : "border-[var(--fl-border)] bg-[var(--fl-elevated)]"
+            }`}
+          >
+            <p className="truncate font-mono text-[11px] text-[var(--fl-text)]">{item.note}</p>
+            <p className="mt-0.5 truncate text-[11.5px] text-[var(--fl-muted)]">
+              {item.stale ? "Worth re-reading — " : "Never stale — "}
+              {item.why}
+            </p>
+          </Row>
+        ))}
+      </div>
+      <p className="mt-4 hidden text-[11.5px] leading-relaxed text-[var(--fl-muted)] sm:block">
+        Prose about how you think does not expire, however old it is. A version number does.
+      </p>
+    </div>
+  );
+}
+
+/** Capturing a source, as the dialog that does it. */
+function CapturePane() {
+  return (
+    <div className="relative h-full p-5">
+      <PaneLabel>Capture a web page as a source</PaneLabel>
+
+      <div className="max-w-md rounded-xl border border-[var(--fl-border-strong)] bg-[var(--fl-elevated)] p-4 shadow-[var(--fl-shadow-lg)]">
+        <p className="truncate rounded-md border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2.5 py-1.5 font-mono text-[11.5px] text-[var(--fl-text)]">
+          https://example.com/the-post
+        </p>
+
+        <div className="mt-3 space-y-1.5 text-[11.5px]">
+          <p className="flex items-center gap-2 text-[var(--fl-muted)]">
+            <span className="text-[var(--fl-accent)]">✓</span> Title read from the page
+          </p>
+          <p className="flex items-center gap-2 text-[var(--fl-muted)]">
+            <span className="text-[var(--fl-accent)]">✓</span> Archived copy · web.archive.org
+          </p>
+        </div>
+
+        <div className="fl-row-in mt-3 rounded-md border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2.5 py-2 font-mono text-[11px] leading-relaxed text-[var(--fl-muted)]">
+          [The post&rsquo;s real title](https://example.com/the-post){" "}
+          <span className="text-[var(--fl-accent)]">([archived](https://web.archive.org/…))</span>
+        </div>
+
+        <div className="mt-3 flex justify-end">
+          <span className="rounded-md bg-[var(--fl-accent)] px-3 py-1 text-[11.5px] font-semibold text-[var(--fl-accent-contrast)]">
+            Add to this note
+          </span>
+        </div>
+      </div>
+
+      <p className="mt-4 hidden text-[11.5px] leading-relaxed text-[var(--fl-muted)] sm:block">
+        The citation is shown exactly as it will be written, before it is written — and it still
+        means something after the site is sold.
+      </p>
+    </div>
+  );
+}
+
+function SearchPane({ motion }: { motion: boolean }) {
+  const results = [
+    { note: "architecture/sync-engine.md", line: "drain to GitHub as one atomic commit." },
+    { note: "meetings/2026-08-14.md", line: "One atomic commit per burst, not per keystroke." },
+    { note: "architecture/storage.md", line: "The queue replays until the commit lands." },
+  ];
+
+  return (
+    <div className="h-full p-5">
+      {/* The command palette, which is how search is actually reached. */}
+      <div className="mx-auto max-w-lg overflow-hidden rounded-xl border border-[var(--fl-border-strong)] bg-[var(--fl-elevated)] shadow-[var(--fl-shadow-lg)]">
+        <div className="flex items-center gap-2 border-b border-[var(--fl-border)] px-3 py-2.5">
+          <span className="font-mono text-[11px] text-[var(--fl-muted)]">⌘K</span>
+          <span className="font-mono text-[13px] text-[var(--fl-text)]">atomic commit</span>
+          {motion && (
+            <span
+              aria-hidden="true"
+              className="fl-caret inline-block h-[1.05em] w-[2px] bg-[var(--fl-accent)]"
+            />
+          )}
+          <span className="ml-auto text-[11px] text-[var(--fl-muted)]">3 results · 9 ms</span>
+        </div>
+
+        <ul>
+          {results.map((result, row) => (
+            <Row
+              key={result.note}
+              row={row}
+              className="border-b border-[var(--fl-border)] px-3 py-2 last:border-0"
+            >
+              <p className="truncate font-mono text-[10.5px] text-[var(--fl-muted)]">
+                {result.note}
+              </p>
+              <p className="truncate text-[12.5px] text-[var(--fl-text)]">{result.line}</p>
+            </Row>
+          ))}
+        </ul>
+      </div>
+
+      <p className="mt-4 hidden text-center text-[11.5px] leading-relaxed text-[var(--fl-muted)] sm:block">
         The index lives in your browser, so search keeps working on a plane — and no query ever
         leaves the machine you typed it on.
       </p>
@@ -447,8 +925,8 @@ function SearchPane() {
 
 function DiagramPane() {
   return (
-    <div className="flex h-full overflow-hidden">
-      <div className="hidden min-w-0 flex-1 flex-col border-r border-[var(--fl-border)] p-5 font-mono text-[12.5px] leading-relaxed md:flex">
+    <div className="flex h-full">
+      <div className="hidden min-w-0 flex-1 flex-col border-r border-[var(--fl-border)] p-4 font-mono text-[12px] leading-relaxed md:flex">
         <PaneLabel>Source</PaneLabel>
         <pre className="whitespace-pre-wrap text-[var(--fl-muted)]">
           <span className="text-[var(--fl-border-strong)]">```mermaid</span>
@@ -461,13 +939,13 @@ function DiagramPane() {
           {"  "}C --&gt;|no| B{"\n"}
           <span className="text-[var(--fl-border-strong)]">```</span>
         </pre>
-        <p className="mt-4 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-3 py-2 text-[11px] leading-relaxed text-[var(--fl-muted)]">
+        <p className="mt-3 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-3 py-2 text-[11px] leading-relaxed text-[var(--fl-muted)]">
           Or drag it on a canvas — the source is written for you, and node positions survive the
           round trip.
         </p>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col p-5 sm:p-6">
+      <div className="flex min-w-0 flex-1 flex-col p-5">
         <PaneLabel>Rendered</PaneLabel>
         <div className="flex flex-1 items-center justify-center">
           <Flowchart />
@@ -477,93 +955,31 @@ function DiagramPane() {
   );
 }
 
-function HistoryPane() {
-  const commits = [
-    { msg: "Add conflict resolution notes", sha: "a3f9c21", when: "2 minutes ago", now: true },
-    { msg: "Update 3 notes", sha: "7b21e08", when: "1 hour ago", now: false },
-    { msg: "Rename reading.md to reading-list.md", sha: "1c94ffa", when: "yesterday", now: false },
-    { msg: "Initial commit", sha: "0f2a1de", when: "3 days ago", now: false },
-  ];
-
+function PublishPane() {
   return (
-    <div className="flex h-full flex-col overflow-hidden p-5 sm:p-6">
-      <PaneLabel>Version history</PaneLabel>
+    <div className="h-full p-5">
+      <PaneLabel>Publish this note</PaneLabel>
 
-      <ol className="space-y-1.5">
-        {commits.map((commit, row) => (
-          <Row
-            key={commit.sha}
-            row={row}
-            className={`flex items-center gap-3 rounded-lg border px-3.5 py-2.5 ${
-              commit.now
-                ? "border-[var(--fl-accent)]/40 bg-[var(--fl-accent-soft)]"
-                : "border-[var(--fl-border)] bg-[var(--fl-elevated)]"
-            }`}
-          >
-            <span
-              aria-hidden="true"
-              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                commit.now ? "bg-[var(--fl-accent)]" : "bg-[var(--fl-border-strong)]"
-              }`}
-            />
-            <span className="min-w-0 flex-1 truncate text-[13.5px] text-[var(--fl-text)]">
-              {commit.msg}
-            </span>
-            <span className="shrink-0 font-mono text-[11px] text-[var(--fl-muted)]">
-              {commit.sha}
-            </span>
-            <span className="hidden shrink-0 text-[11.5px] text-[var(--fl-muted)] sm:inline">
-              {commit.when}
-            </span>
-          </Row>
-        ))}
-      </ol>
-
-      <p className="mt-auto hidden pt-5 text-[12.5px] leading-relaxed text-[var(--fl-muted)] sm:block">
-        Read straight from the repository&rsquo;s own log — open any version, compare two, or
-        restore one. Clone it, revert it, or walk away with all of it: there is no export step,
-        because there was never an import step.
-      </p>
-    </div>
-  );
-}
-
-function SharePane() {
-  const exports = ["PDF", "Word", "HTML", "Markdown", "Plain text", "JSON"];
-
-  return (
-    <div className="flex h-full flex-col overflow-hidden p-5 sm:p-6">
-      <PaneLabel>Share this note</PaneLabel>
-
-      <div className="rounded-lg border border-[var(--fl-border-strong)] bg-[var(--fl-elevated)] p-4">
-        <p className="text-[13.5px] font-semibold text-[var(--fl-text)]">Published page</p>
-        <p className="mt-1 font-mono text-[12px] text-[var(--fl-accent)]">
-          yourname.github.io/notes/sync-engine
-        </p>
-        <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--fl-muted)]">
-          One self-contained file, committed to <span className="font-mono">docs/</span> in your own
-          repository and served by GitHub Pages. Unpublishing is a deleted file.
+      <div className="rounded-lg border border-[var(--fl-border-strong)] bg-[var(--fl-elevated)] p-3.5">
+        <p className="text-[13px] font-semibold text-[var(--fl-text)]">Published page</p>
+        <p className="mt-1 break-all font-mono text-[11.5px] text-[var(--fl-accent)]">
+          praneeth132006.github.io/notes/sync-engine
         </p>
       </div>
 
-      <p className="mb-2 mt-5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
-        Or export it
-      </p>
-      <ul className="grid grid-cols-3 gap-2">
-        {exports.map((format, row) => (
-          <Row
-            key={format}
-            row={row}
-            className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-3 py-2.5 text-center text-[12.5px] text-[var(--fl-text)]"
-          >
-            {format}
-          </Row>
-        ))}
-      </ul>
+      <div className="fl-row-in mt-2.5 rounded-lg border border-[var(--fl-border)] px-3.5 py-2.5">
+        <p className="text-[11.5px] font-semibold text-[var(--fl-text)]">
+          Publishing from a private notebook
+        </p>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--fl-muted)]">
+          The page can be committed to a different, public repository — so one note becomes a link
+          you can send without the notebook around it becoming public.
+        </p>
+      </div>
 
-      <p className="mt-auto hidden pt-5 text-[12.5px] leading-relaxed text-[var(--fl-muted)] sm:block">
-        Rendered in the browser, diagrams included — the note never leaves your machine in order to
-        become a file.
+      <p className="mt-4 hidden text-[11.5px] leading-relaxed text-[var(--fl-muted)] sm:block">
+        One self-contained file in a repository you own, served by GitHub Pages. Unpublishing is a
+        deleted file.
       </p>
     </div>
   );
@@ -587,27 +1003,31 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <li className={`fl-row-in ${className}`} style={{ animationDelay: `${120 + row * 70}ms` }}>
+    <div className={`fl-row-in ${className}`} style={{ animationDelay: `${120 + row * 70}ms` }}>
       {children}
-    </li>
-  );
-}
-
-function WikiLink({ children, pending = false }: { children: React.ReactNode; pending?: boolean }) {
-  return pending ? (
-    <span className="rounded border-b border-dashed border-[var(--fl-muted)] px-0.5 text-[var(--fl-muted)]">
-      [[{children}]]
-    </span>
-  ) : (
-    <span className="rounded bg-[var(--fl-accent-soft)] px-1 text-[var(--fl-accent)]">
-      [[{children}]]
-    </span>
+    </div>
   );
 }
 
 function PaneLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
+    <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
+      {children}
+    </p>
+  );
+}
+
+function PanelLabel({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <p
+      className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)] ${className}`}
+    >
       {children}
     </p>
   );
@@ -618,16 +1038,18 @@ function TreeRow({
   depth,
   folder = false,
   active = false,
+  stale = false,
 }: {
   label: string;
   depth: number;
   folder?: boolean;
   active?: boolean;
+  stale?: boolean;
 }) {
   return (
     <div
       style={{ paddingLeft: `${0.5 + depth * 0.75}rem` }}
-      className={`flex items-center gap-1.5 rounded-md py-1 pr-2 text-[12.5px] transition-colors ${
+      className={`flex items-center gap-1.5 rounded-md py-1 pr-2 text-[12px] transition-colors ${
         active ? "bg-[var(--fl-accent-soft)] text-[var(--fl-accent)]" : "text-[var(--fl-muted)]"
       }`}
     >
@@ -635,6 +1057,12 @@ function TreeRow({
         {folder ? "▾" : "•"}
       </span>
       <span className="truncate">{label}</span>
+      {stale && (
+        <span
+          aria-hidden="true"
+          className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fl-accent)]"
+        />
+      )}
     </div>
   );
 }
