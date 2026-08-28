@@ -1349,6 +1349,17 @@ export function useNotebook(request: NotebookRequest = {}) {
   }, [state.activeWorkspace]);
 
   /**
+   * Drops one stuck change, so the queue behind it can move.
+   *
+   * The way out of a change that can never be pushed. Needs a refresh of the
+   * sync state afterwards because the queue is the thing that changed, and
+   * nothing about a removal arrives through a push.
+   */
+  const discardChange = useCallback(async (id: string) => {
+    await syncRef.current?.discardChange(id);
+  }, []);
+
+  /**
    * Changes how eagerly this workspace pushes.
    *
    * Auto is the default and stays the default; this only exists for the people
@@ -1538,6 +1549,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       pullRemote,
       pendingChanges,
       discardPending,
+      discardChange,
       setSyncMode,
       resolveConflict,
       allNotes,
@@ -1593,6 +1605,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       pullRemote,
       pendingChanges,
       discardPending,
+      discardChange,
       setSyncMode,
       resolveConflict,
       allNotes,

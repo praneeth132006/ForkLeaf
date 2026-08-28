@@ -1678,6 +1678,7 @@ export function EditorWorkspace() {
         onSyncNow={() => void retrySync()}
         onShowConflicts={() => setConflictsDismissed(false)}
         onSignIn={signInAgain}
+        onDiscardChange={(id) => void notebook.discardChange(id)}
       />
 
       {/* ── Dialogs ────────────────────────────────────────────────────── */}

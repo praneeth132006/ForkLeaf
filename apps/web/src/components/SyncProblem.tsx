@@ -19,6 +19,15 @@ export interface SyncProblemProps {
   onShowConflicts: () => void;
   /** Opens the pull-request flow — the way out of a protected branch. */
   onPropose: () => void;
+  /**
+   * Removes one stuck change from the queue, and the file behind it.
+   *
+   * The alternative was telling somebody to go and find a file called
+   * `Pasted image 20260828.png` inside one of several hundred notes, which is
+   * not a thing anybody can do. If the app knows which change is stuck — and
+   * it does, it is holding it — it can be the one to remove it.
+   */
+  onDiscard: (id: string) => void;
 }
 
 /**
@@ -49,6 +58,7 @@ export function SyncProblem({
   onSignIn,
   onShowConflicts,
   onPropose,
+  onDiscard,
 }: SyncProblemProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -245,10 +255,24 @@ export function SyncProblem({
               </p>
               <ul className="mt-1.5 space-y-1.5">
                 {sync.blockedChanges.slice(0, 5).map((change) => (
-                  <li key={change.path} className="text-[11.5px] leading-relaxed">
-                    <span className="break-all font-mono text-[10.5px] text-[var(--fl-text)]">
-                      {change.path}
-                    </span>
+                  <li key={change.id} className="text-[11.5px] leading-relaxed">
+                    <div className="flex items-start gap-2">
+                      <span className="min-w-0 flex-1 break-all font-mono text-[10.5px] text-[var(--fl-text)]">
+                        {change.path}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onDiscard(change.id)}
+                        title={`Remove ${change.path} from the queue`}
+                        // Several stuck files mean several buttons reading
+                        // "Remove", which tells a screen reader nothing about
+                        // which file it is about to remove.
+                        aria-label={`Remove ${change.path} from the queue`}
+                        className="shrink-0 rounded border border-[var(--fl-border)] px-1.5 py-0.5 text-[10.5px] font-medium text-[var(--fl-danger)] transition-colors hover:bg-[var(--fl-elevated)]"
+                      >
+                        Remove
+                      </button>
+                    </div>
                     {change.error && (
                       <span className="mt-0.5 block text-[var(--fl-muted)]">{change.error}</span>
                     )}
@@ -260,6 +284,12 @@ export function SyncProblem({
                   …and {sync.blockedChanges.length - 5} more.
                 </p>
               )}
+              {/* Said plainly, because "remove" beside a filename could
+                  reasonably be read as deleting the note it sits in. */}
+              <p className="mt-2 text-[11px] leading-relaxed text-[var(--fl-muted)]">
+                Removing takes the file out of the queue so everything behind it can push. Your
+                notes and their text are untouched.
+              </p>
             </div>
           )}
 

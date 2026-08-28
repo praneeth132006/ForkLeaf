@@ -47,6 +47,7 @@ function view(sync: SyncState, over: Partial<React.ComponentProps<typeof SyncPro
     onSignIn: vi.fn(),
     onShowConflicts: vi.fn(),
     onPropose: vi.fn(),
+    onDiscard: vi.fn(),
     ...over,
   };
   render(<SyncProblem {...props} />);
@@ -108,14 +109,41 @@ describe("SyncProblem — the reason, not just the failure", () => {
         lastErrorDetail: "assets/screenshot.png is 6.2 MB, which is too big",
         blockedCount: 1,
         blockedChanges: [
-          { path: "assets/screenshot.png", error: "assets/screenshot.png is 6.2 MB" },
+          {
+            id: "w::assets/screenshot.png",
+            path: "assets/screenshot.png",
+            error: "assets/screenshot.png is 6.2 MB",
+          },
         ],
       }),
     );
     open();
     expect(screen.getByText("assets/screenshot.png")).toBeTruthy();
     expect(screen.getByText(/pasted image/)).toBeTruthy();
-    expect(screen.getByText(/delete it from the note/)).toBeTruthy();
+  });
+
+  /**
+   * The step nobody can actually perform on their own: the file is called
+   * something like `Pasted image 20260828.png` and lives in one of hundreds of
+   * notes. The app is holding the change, so the app removes it.
+   */
+  it("removes the stuck file itself rather than describing where to look", () => {
+    const props = view(
+      state({
+        status: "blocked",
+        lastErrorCode: "too-large",
+        blockedCount: 1,
+        blockedChanges: [
+          { id: "w::assets/screenshot.png", path: "assets/screenshot.png", error: "6.2 MB" },
+        ],
+      }),
+    );
+    open();
+    fireEvent.click(screen.getByRole("button", { name: /Remove assets\/screenshot\.png/ }));
+    expect(props.onDiscard).toHaveBeenCalledWith("w::assets/screenshot.png");
+    // And says what it did and did not touch, since "remove" beside a filename
+    // could be read as deleting the note.
+    expect(screen.getByText(/notes and their text are untouched/)).toBeTruthy();
   });
 });
 

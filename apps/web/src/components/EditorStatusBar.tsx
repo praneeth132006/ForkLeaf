@@ -58,6 +58,8 @@ export interface EditorStatusBarProps {
    * is the sign-in, the button has to be the sign-in.
    */
   onSignIn: () => void;
+  /** Removes one change that can never be pushed, and the file behind it. */
+  onDiscardChange: (id: string) => void;
 }
 
 /**
@@ -82,6 +84,7 @@ export function EditorStatusBar({
   onSwitchBranch,
   onPropose,
   onSignIn,
+  onDiscardChange,
   sessionExpired = false,
 }: EditorStatusBarProps) {
   /**
@@ -119,6 +122,7 @@ export function EditorStatusBar({
           onSignIn={onSignIn}
           onShowConflicts={onShowConflicts}
           onPropose={onPropose}
+          onDiscard={onDiscardChange}
         />
       ) : (
         <button

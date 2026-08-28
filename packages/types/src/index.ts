@@ -258,7 +258,7 @@ export interface SyncState {
    * to fix, a file too big to send, is always about a specific file. The paths
    * are the whole point.
    */
-  blockedChanges: { path: string; error: string | null }[];
+  blockedChanges: { id: string; path: string; error: string | null }[];
   conflicts: Conflict[];
 }
 

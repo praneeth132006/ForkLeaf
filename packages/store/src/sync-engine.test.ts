@@ -448,6 +448,29 @@ describe("a failure reported to the reader", () => {
     expect(oversized.map((c) => c.path)).toEqual(["c.md"]);
   });
 
+  /**
+   * "Go and find the image and delete it" is not an instruction anybody can
+   * follow when the file is called `Pasted image 20260828.png` and the note is
+   * one of hundreds. The queue knows exactly which change is stuck.
+   */
+  it("removes a stuck change, and the unpushed file behind it", async () => {
+    const ctx = setup();
+    const huge = "x".repeat(4 * 1024 * 1024);
+
+    await ctx.engine.recordUpsert(makeNote({ path: "big.md", baseSha: null }), huge);
+    await ctx.timers.tick();
+
+    const [stuck] = ctx.engine.state.blockedChanges;
+    expect(stuck).toBeDefined();
+
+    await ctx.engine.discardChange(stuck!.id);
+
+    expect(ctx.engine.state.blockedChanges).toEqual([]);
+    expect(ctx.engine.pendingFor()).toEqual([]);
+    // The queue is clear, so the bar stops reporting a failure that is over.
+    expect(ctx.engine.state.lastErrorCode).toBeNull();
+  });
+
   it("forgets the failure once a push succeeds", async () => {
     const ctx = setup();
     ctx.gateway.failNext = 1;

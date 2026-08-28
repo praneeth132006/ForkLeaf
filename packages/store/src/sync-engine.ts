@@ -263,6 +263,7 @@ export class SyncEngine {
       lastErrorAt: this.lastErrorAt,
       failedAttempts: this.failedAttempts,
       blockedChanges: this.blocked().map((change) => ({
+        id: change.id,
         path:
           change.op === "rename" || change.op === "move"
             ? (change.toPath ?? change.path)
@@ -310,6 +311,44 @@ export class SyncEngine {
 
     this.setStatus(this.restingStatus());
     this.emit();
+  }
+
+  /**
+   * Drops one stuck change, and the file behind it.
+   *
+   * The escape hatch for a change that can never be sent — a picture too big
+   * for one request being the case that made this necessary. Everything else
+   * the app could offer about such a change was advice: find the note it was
+   * pasted into, find the image inside it, delete it by hand. That is not a
+   * thing somebody can reasonably do when the note is one of hundreds and the
+   * file is called `Pasted image 20260828.png`.
+   *
+   * Only removes what was queued to be pushed. A note keeps its text and stays
+   * dirty, so nothing is claimed to be in sync that is not; an image that never
+   * reached GitHub is deleted from this device too, because a local copy of a
+   * file with nothing left to push it is exactly the orphan this app already
+   * goes to some trouble to avoid.
+   */
+  async discardChange(id: string): Promise<void> {
+    const change = this.queue.find((item) => item.id === id);
+    if (!change) return;
+
+    this.queue = this.queue.filter((item) => item.id !== id);
+    await this.db.deleteQueueItem(id);
+
+    const asset = await this.db.getAsset(`${change.workspaceId}::${change.path}`);
+    if (asset && !asset.pushed) await this.db.deleteAsset(asset.id);
+
+    // The failure it was reported under may have been about this change alone.
+    if (this.blocked().length === 0 && this.pushable().length === 0) {
+      this.lastError = null;
+      this.lastErrorDetail = null;
+      this.lastErrorCode = null;
+    }
+
+    this.setStatus(this.restingStatus());
+    this.emit();
+    if (this.pushable().length > 0) this.scheduleFlush();
   }
 
   // ─── Recording changes ────────────────────────────────────────────────────
