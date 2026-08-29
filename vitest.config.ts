@@ -29,6 +29,7 @@ export default defineConfig({
       "@forkleaf/diagrams": r("./packages/diagrams/src/index.ts"),
       "@forkleaf/exporter": r("./packages/exporter/src/index.ts"),
       "@forkleaf/editor": r("./packages/editor/src/index.ts"),
+      "@forkleaf/pdf": r("./packages/pdf/src/index.ts"),
     },
   },
 });

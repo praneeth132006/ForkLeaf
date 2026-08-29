@@ -5,10 +5,13 @@ import {
   canEditLocalFiles,
   consumeLaunchedFiles,
   openLocalFile,
+  openPdfFile,
   readLocalFile,
   saveLocalFileAs,
   writeLocalFile,
+  type LocalDocument,
   type LocalFile,
+  type LocalPdf,
 } from "@/lib/local-files";
 
 /**
@@ -33,6 +36,8 @@ export interface LocalFilesState {
   fileFor: (notePath: string) => string | null;
   /** Opens the picker and adopts whatever is chosen. */
   openFile: () => Promise<void>;
+  /** Opens a PDF from this machine, in the reader rather than the notebook. */
+  openPdf: () => Promise<void>;
   /**
    * Writes a note back to its file. Returns false when it has none, so the
    * caller can fall back to "Save as" rather than reporting a failure.
@@ -52,6 +57,15 @@ export interface LocalFilesState {
  */
 export function useLocalFiles(
   adopt: (file: LocalFile, existingNotePath: string | null) => Promise<string | null>,
+  /**
+   * Hands a PDF to the reader.
+   *
+   * A separate route out of this hook rather than a second branch inside
+   * `adopt`, because a PDF does not become a note and never gets a note path —
+   * it has no place in the handle map, cannot be saved back, and would have to
+   * be special-cased at every use of the one that could.
+   */
+  openInReader?: (pdf: LocalPdf) => void,
 ): LocalFilesState {
   const handles = useRef(new Map<string, FileSystemFileHandle>());
   /** Mirrors the handle map's names, because a ref cannot drive a render. */
@@ -59,8 +73,10 @@ export function useLocalFiles(
   const [error, setError] = useState<string | null>(null);
 
   const adoptRef = useRef(adopt);
+  const readerRef = useRef(openInReader);
   useEffect(() => {
     adoptRef.current = adopt;
+    readerRef.current = openInReader;
   });
 
   /**
@@ -84,9 +100,14 @@ export function useLocalFiles(
   }, []);
 
   const take = useCallback(
-    async (files: LocalFile[]) => {
+    async (files: LocalDocument[]) => {
       for (const file of files) {
         try {
+          if (file.kind === "pdf") {
+            readerRef.current?.(file);
+            continue;
+          }
+
           const already = await findOpen(file.handle);
           const notePath = await adoptRef.current(file, already);
           if (!notePath) continue;
@@ -115,6 +136,15 @@ export function useLocalFiles(
       if (file) await take([file]);
     } catch (problem) {
       setError(problem instanceof Error ? problem.message : "That file could not be opened.");
+    }
+  }, [take]);
+
+  const openPdf = useCallback(async () => {
+    try {
+      const pdf = await openPdfFile();
+      if (pdf) await take([pdf]);
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : "That PDF could not be opened.");
     }
   }, [take]);
 
@@ -154,6 +184,7 @@ export function useLocalFiles(
     supported: canEditLocalFiles(),
     fileFor,
     openFile,
+    openPdf,
     saveToFile,
     saveFileAs,
     error,

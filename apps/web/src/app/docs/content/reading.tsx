@@ -14,7 +14,8 @@ export function Reading() {
       <Lead>
         A notebook is read far more often than it is written. This page covers what a note does when
         you are reading it: following links, seeing where they go before you commit to them, opening
-        a linked file, and locking a note so that reading it cannot change it.
+        a linked file, reading a PDF beside the note you are writing from it, and locking a note so
+        that reading it cannot change it.
       </Lead>
 
       <H2 id="links">Opening a link</H2>
@@ -109,6 +110,107 @@ export function Reading() {
         The file names listed under <strong>Freshness</strong> in the properties panel open the same
         viewer.
       </P>
+
+      <H2 id="pdf">Reading a PDF</H2>
+      <P>
+        ForkLeaf opens PDFs. Not as an attachment or a download — as a document beside the note you
+        are writing from it, with the passages you quote linked back to the exact words on the page.
+      </P>
+
+      <H3 id="pdf-open">Four ways in</H3>
+      <UL>
+        <LI>
+          <strong>Drag one onto the window.</strong> Works in every browser.
+        </LI>
+        <LI>
+          <strong>Open a PDF…</strong> from the command palette (<Code>⌘K</Code>). Chromium browsers
+          only — Firefox and Safari have no file picker ForkLeaf can use, which is why the drag
+          target exists.
+        </LI>
+        <LI>
+          <strong>Click one in the sidebar.</strong> A PDF committed to your repository sits in the
+          file tree beside your notes, and clicking it opens the reader rather than trying to edit
+          it as text.
+        </LI>
+        <LI>
+          <strong>Click a link to one in a note.</strong> An ordinary markdown link —{" "}
+          <Code>[the paper](papers/attention.pdf)</Code> — opens the reader instead of navigating
+          away from what you were writing.
+        </LI>
+      </UL>
+      <P>
+        Install ForkLeaf and <Code>.pdf</Code> joins <Code>.md</Code> in your operating
+        system&rsquo;s <strong>Open with</strong> list. ForkLeaf does not make itself your default
+        PDF viewer and should not; that is your setting to make.
+      </P>
+
+      <H3 id="pdf-reader">In the reader</H3>
+      <Table
+        head={["", "What it does"]}
+        rows={[
+          [
+            "Contents",
+            "The document's own bookmarks, with page numbers. The heading you are currently under is shown beside the page count.",
+          ],
+          [
+            "Find",
+            "Searches the whole document, not the page. Matches across line breaks, through hyphenation, and through the ligatures a typesetter left in — so “find” matches a page that really contains “ﬁnd”.",
+          ],
+          ["Fit", "Fits the page to the panel. Zooming by hand turns it off and leaves it off."],
+          [
+            "Page box",
+            "Type a number and press Enter. Page Up, Page Down and the arrow keys turn pages.",
+          ],
+        ]}
+      />
+
+      <H3 id="pdf-cite">Quoting into a note</H3>
+      <P>
+        Select a passage and the reader offers <strong>Quote into note</strong>. What lands in the
+        note is a blockquote and a link, and nothing else:
+      </P>
+      <P>
+        <Code>
+          &gt; The key result is that latency fell by half.
+          <br />
+          &gt;
+          <br />
+          &gt; — [On Attention, p. 12](papers/attention.pdf#page=12&amp;q=…)
+        </Code>
+      </P>
+      <P>
+        That is a plain markdown link. It renders on github.com, it opens page 12 in Acrobat, in
+        Preview and in your browser&rsquo;s own viewer — <Code>#page=</Code> is the parameter every
+        PDF reader has understood since 2003 — and in ForkLeaf it does something more.
+      </P>
+
+      <H3 id="pdf-anchors">Why the link carries the sentence</H3>
+      <P>
+        A citation that records only a page number is wrong the moment the document changes. Add a
+        figure to page 4 of a paper and every reference to page 12 now points at page 13 — silently,
+        because the link still opens.
+      </P>
+      <P>
+        So a ForkLeaf citation records the <em>words</em>, with the page number kept only as a hint
+        about where to start looking. Clicking one searches the document for that passage, uses the
+        text either side of it to tell two occurrences apart, and opens the page it is actually on
+        with the sentence highlighted. If the passage has genuinely gone, you are told — rather than
+        being shown whatever happens to be on page 12 now.
+      </P>
+      <P>
+        The <Code>q=</Code>, <Code>pre=</Code> and <Code>suf=</Code> parameters are how that is
+        carried, and any tool that does not understand them ignores them and still lands on the
+        right page.
+      </P>
+
+      <Note>
+        ForkLeaf reads PDFs and does not write them. It will not annotate, sign or fill one in: the
+        file in your repository stays exactly as it was committed, and everything you add lives in
+        markdown next to it — which is the only form in which your annotations are still readable in
+        ten years, by something other than ForkLeaf. A PDF opened from your own disk rather than
+        from the repository is quoted with a plain attribution instead of a link, because a link to
+        a path on one computer is a broken link everywhere else.
+      </Note>
 
       <H2 id="locking">Locking a note</H2>
       <P>

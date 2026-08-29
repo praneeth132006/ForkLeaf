@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import type { CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
+import { displayTitle, parseCitation, type PdfCitation } from "@forkleaf/pdf";
 import type { EditorViewMode, Workspace } from "@forkleaf/types";
 import {
   deriveTitle,
@@ -21,7 +22,13 @@ import { useNotebook } from "@/hooks/useNotebook";
 import { usePublishedPages } from "@/hooks/usePublishedPages";
 import { useLinks } from "@/hooks/useLinks";
 import { useLocalFiles } from "@/hooks/useLocalFiles";
-import type { LocalFile } from "@/lib/local-files";
+import type { LocalFile, LocalPdf } from "@/lib/local-files";
+import { usePdfReader } from "@/hooks/usePdfReader";
+import { PdfReader } from "@/components/PdfReader";
+import { localSource, pdfLinkTarget, repoSource, type PdfSource } from "@/lib/pdf-source";
+import { readDroppedPdf } from "@/lib/local-files";
+import { insertionFor, quoteMarkdown } from "@/lib/pdf-quote";
+import { isPdfPath } from "@/lib/media";
 import { useTheme } from "@/hooks/useTheme";
 import { EditorSidebar } from "@/components/EditorSidebar";
 import { EditorRightPanel } from "@/components/EditorRightPanel";
@@ -269,6 +276,129 @@ export function EditorWorkspace() {
     [workspaceIdForLinks],
   );
 
+  // ── The reader ────────────────────────────────────────────────────────
+  //
+  // A PDF is not a note and never becomes one: it has no markdown body, cannot
+  // be edited, and would need its own branch at every place a note is written,
+  // saved, synced or exported. It gets a pane of its own beside the note
+  // instead — which is also the arrangement the feature exists for, since the
+  // point of opening a paper in a notes app is to write about it.
+  const reader = usePdfReader(workspace);
+  const [readerCitation, setReaderCitation] = useState<PdfCitation | null>(null);
+  /** The repo path of the document open in the reader, for writing links to. */
+  const [readerPath, setReaderPath] = useState<string | null>(null);
+  /** A PDF that could not even be read off the disk, before the reader saw it. */
+  const [readerError, setReaderError] = useState<string | null>(null);
+
+  const openInReader = useCallback(
+    (next: PdfSource, citation: PdfCitation | null, path: string | null) => {
+      setReaderCitation(citation);
+      setReaderPath(path);
+      reader.open(next);
+      // The reader shares the width with the note, so on a narrow screen the
+      // panels beside them have to give way or there is nothing left for
+      // either.
+      setDrawer(null);
+    },
+    [reader],
+  );
+
+  const openLocalPdf = useCallback(
+    (pdf: LocalPdf) => openInReader(localSource(pdf.name, pdf.bytes), null, null),
+    [openInReader],
+  );
+
+  /**
+   * A PDF dropped onto the window opens in the reader.
+   *
+   * Not a convenience. Firefox and Safari have no File System Access API, so
+   * the "Open a PDF…" command does not exist there at all — dropping the file
+   * is the only way in, and without it the whole feature would be a Chromium
+   * feature. Dropping also skips a native dialog for the case the dialog
+   * exists, which is the common one.
+   *
+   * Bound at the window rather than on a drop zone, because a drop zone that
+   * only accepts a file over one particular rectangle is a target people miss.
+   */
+  useEffect(() => {
+    const pdfFrom = (transfer: DataTransfer | null): File | null =>
+      Array.from(transfer?.files ?? []).find(
+        (file) => file.type === "application/pdf" || /\.pdf$/i.test(file.name),
+      ) ?? null;
+
+    const onDragOver = (event: DragEvent) => {
+      // The default action for a dropped file is for the browser to navigate
+      // to it, which throws away everything unsaved in the tab. Preventing the
+      // dragover is what makes the drop reach us at all.
+      if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+    };
+
+    const onDrop = (event: DragEvent) => {
+      const file = pdfFrom(event.dataTransfer);
+      if (!file) return;
+
+      event.preventDefault();
+      void readDroppedPdf(file)
+        .then((pdf) => openInReader(localSource(pdf.name, pdf.bytes), null, null))
+        .catch((problem: unknown) => {
+          setReaderError(
+            problem instanceof Error ? problem.message : "That PDF could not be opened.",
+          );
+        });
+    };
+
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [openInReader]);
+
+  /**
+   * Opens a PDF that lives in the repository, at a passage if one was asked for.
+   */
+  const openRepoPdf = useCallback(
+    (path: string, fragment: string) => {
+      if (!workspace) return;
+      openInReader(repoSource(workspace, path), fragment ? parseCitation(fragment) : null, path);
+    },
+    [workspace, openInReader],
+  );
+
+  /**
+   * Writes a cited passage into the note being read alongside.
+   *
+   * The link is written *relative to the note*, exactly as an image is, so the
+   * markdown that lands in the file is the markdown a person would have
+   * written by hand — and still resolves when the repository is opened in
+   * anything else.
+   */
+  const citeIntoNote = useCallback(
+    (citation: PdfCitation, withQuote: boolean) => {
+      if (!note) return;
+
+      const markdown = quoteMarkdown({
+        // A document from the user's own disk has no path this repository can
+        // resolve, so the quotation is attributed rather than linked.
+        target: readerPath ? relativeSrc(note.path, readerPath) : null,
+        title: reader.info
+          ? displayTitle(reader.info.metadata, reader.source?.name ?? "")
+          : (reader.source?.name ?? "PDF"),
+        citation,
+        includeQuote: withQuote,
+      });
+
+      // Appended at the end rather than at the caret: the caret is in the
+      // editor, which has not been focused since the reader was opened, so its
+      // recorded position is wherever it was several minutes and one document
+      // ago. The end of the note is where a passage being read into it goes.
+      const { text } = insertionFor(note.content, note.content.length, markdown);
+      notebook.saveNote(text);
+    },
+    [note, readerPath, reader.info, reader.source, notebook],
+  );
+
   const links = useLinks({
     workspaceId: workspaceIdForLinks,
     paths: markdownPaths,
@@ -318,8 +448,25 @@ export function EditorWorkspace() {
         if (path) notebook.openNote(path);
         else createLinked(target);
       },
+      /**
+       * An ordinary markdown link to a PDF in this repository opens the reader.
+       *
+       * Claimed here rather than left to the browser because following it would
+       * navigate the tab to a path that resolves against this app's origin and
+       * 404s — the link is correct, and correct for github.com, and simply not
+       * something a browser sitting on `/editor` can follow.
+       */
+      openHref: (href) => {
+        if (!workspace || workspace.isLocal || !notePath) return false;
+
+        const target = pdfLinkTarget(notePath, href);
+        if (!target) return false;
+
+        openRepoPdf(target.path, target.fragment);
+        return true;
+      },
     }),
-    [links, notebook, createLinked, workspace],
+    [links, notebook, createLinked, workspace, notePath, openRepoPdf],
   );
 
   /**
@@ -349,7 +496,7 @@ export function EditorWorkspace() {
     [notebook],
   );
 
-  const localFiles = useLocalFiles(adoptFile);
+  const localFiles = useLocalFiles(adoptFile, openLocalPdf);
 
   /**
    * Saves the note, and the file behind it when there is one.
@@ -1225,6 +1372,26 @@ export function EditorWorkspace() {
         keywords: "import disk local filesystem md markdown open with",
         run: () => void localFiles.openFile(),
       });
+
+      list.push({
+        id: "open-pdf",
+        label: "Open a PDF…",
+        group: "Notes",
+        hint: "Reads it beside your note, and quotes from it",
+        keywords:
+          "pdf paper document read reader cite citation quote source reference article book scan acrobat",
+        run: () => void localFiles.openPdf(),
+      });
+    }
+
+    if (reader.status !== "idle") {
+      list.push({
+        id: "close-pdf",
+        label: "Close the PDF",
+        group: "View",
+        keywords: "pdf close reader hide document",
+        run: () => reader.close(),
+      });
     }
 
     return list;
@@ -1250,6 +1417,7 @@ export function EditorWorkspace() {
     handleDelete,
     repairImages,
     localFiles,
+    reader,
   ]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
@@ -1388,7 +1556,11 @@ export function EditorWorkspace() {
             tree={notebook.tree}
             activePath={note?.path ?? null}
             onOpenNote={(path) => {
-              notebook.openNote(path);
+              // A PDF in the tree opens in the reader. It is in the tree
+              // because ForkLeaf can open it; handing it to the notebook would
+              // make a note whose body is the raw bytes of a PDF.
+              if (isPdfPath(path)) openRepoPdf(path, "");
+              else notebook.openNote(path);
               // On a phone the drawer covers the note it just opened.
               setDrawer(null);
             }}
@@ -1610,6 +1782,7 @@ export function EditorWorkspace() {
           {[
             { text: notebook.error, dismiss: notebook.dismissError },
             { text: localFiles.error, dismiss: localFiles.clearError },
+            { text: readerError, dismiss: () => setReaderError(null) },
           ]
             .filter((banner) => banner.text)
             .map((banner) => (
@@ -1708,7 +1881,43 @@ export function EditorWorkspace() {
           </div>
         </main>
 
-        {(!panelCollapsed || drawer === "document") && (
+        {/*
+          The reader, beside the note.
+
+          Its own panel rather than a dialog over the editor, because the whole
+          point is to have both at once: a dialog would mean reading a
+          paragraph, dismissing the document, writing about it, and reopening
+          it — which is the workflow people use two windows to avoid.
+
+          It takes the properties panel's place at this width rather than
+          squeezing a third column in. Three columns of content on a laptop
+          leaves the note about forty characters wide, which is not a width
+          anybody writes at. Below `lg` it covers the window instead: a
+          document page beside a note on a phone is two unreadable columns.
+
+          One element, switched by class, and not two rendered at different
+          breakpoints. Two would both mount — Tailwind's `hidden` hides a
+          component, it does not stop it existing — so every page of the
+          document would be parsed, laid out and drawn to a canvas twice, and
+          the copy nobody can see would win half the races for the scroll
+          container that `goToPage` looks up by selector.
+        */}
+        {reader.status !== "idle" && (
+          <div className="fl-panel fixed inset-2 z-40 flex overflow-hidden shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:w-[min(46rem,45vw)] lg:shrink-0 lg:shadow-none">
+            <PdfReader
+              reader={reader}
+              initialCitation={readerCitation}
+              {...(note ? { onCite: citeIntoNote } : {})}
+              onClose={() => {
+                reader.close();
+                setReaderCitation(null);
+                setReaderPath(null);
+              }}
+            />
+          </div>
+        )}
+
+        {(!panelCollapsed || drawer === "document") && reader.status === "idle" && (
           <div
             className={`fl-panel ${
               drawer === "document"

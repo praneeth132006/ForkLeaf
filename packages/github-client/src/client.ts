@@ -857,13 +857,23 @@ export class GitHubClient {
   }
 
   /**
-   * Reads the full markdown file tree for a workspace.
+   * Reads the file tree for a workspace.
    *
    * Uses one recursive tree call rather than walking directories, so a repo with
    * hundreds of notes costs a single request. Conditional via ETag, so polling
    * for remote changes is nearly free.
+   *
+   * `include` decides what counts as part of the notebook:
+   *
+   *   - `"notes"` (the default) is markdown and PDF. A repository holds a great
+   *     deal that is not a note — configuration, code, images — and listing all
+   *     of it turns the sidebar into a file manager. PDFs are in because
+   *     ForkLeaf can open one, and a paper filed beside the notes about it is
+   *     part of the notebook in every sense that matters to the person reading.
+   *   - `"all"` is every blob, which the link repair needs: it can only find
+   *     the image a broken note meant if it can see the images.
    */
-  async listTree(repo: RepoRef, options: { markdownOnly?: boolean } = {}): Promise<TreeNode[]> {
+  async listTree(repo: RepoRef, options: { include?: "notes" | "all" } = {}): Promise<TreeNode[]> {
     const head = await this.getBranchHead(repo);
     const path = `/repos/${repo.owner}/${repo.repo}/git/trees/${head}?recursive=1`;
 
@@ -895,7 +905,7 @@ export class GitHubClient {
     const flat = tree.tree.filter((entry) => {
       if (entry.type !== "blob") return false;
       if (!inDirectory(entry.path)) return false;
-      if (options.markdownOnly !== false && !/\.mdx?$/i.test(entry.path)) return false;
+      if (options.include !== "all" && !/\.(mdx?|pdf)$/i.test(entry.path)) return false;
       return true;
     });
 

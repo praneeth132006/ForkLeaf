@@ -54,6 +54,24 @@ export default function manifest(): MetadataRoute.Manifest {
           "text/mdx": [".mdx"],
         },
       },
+      /**
+       * PDFs, declared separately from the markdown handler.
+       *
+       * A separate entry rather than another line in the one above, because
+       * the operating system shows the handler's *action* in the "Open with"
+       * list and these are two different things ForkLeaf does — opening a note
+       * to edit, and opening a document to read and cite. Both land on
+       * `/editor`, which routes by the file's own name.
+       *
+       * ForkLeaf does not claim to be the default PDF viewer and should not
+       * be; it claims to be *a* choice, which is what a "Open with" list is
+       * for. Nothing here makes it the default — that is the user's setting to
+       * make, in their own operating system.
+       */
+      {
+        action: "/editor",
+        accept: { "application/pdf": [".pdf"] },
+      },
     ],
 
     /**

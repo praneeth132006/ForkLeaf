@@ -19,7 +19,20 @@
  * so `canEditLocalFiles` is false there and the app hides the affordance
  * rather than offering something that throws — a download is still available
  * through the export dialog, which is the honest fallback.
+ *
+ * ## PDFs are a different kind of open
+ *
+ * A markdown file opened from disk becomes a note: it is text, ForkLeaf can
+ * edit it, and writing through the handle writes the user's own file. A PDF is
+ * none of those things. It is bytes ForkLeaf reads and cannot write, so it
+ * comes back as bytes and goes to the reader rather than to the notebook — and
+ * `openPdfFile` deliberately asks for read permission only, so opening a paper
+ * never produces a browser prompt asking to *edit* it. An editor that requests
+ * write access to a file it will never write has told the user something
+ * untrue about itself.
  */
+
+import { MAX_PDF_BYTES } from "@/lib/media";
 
 /** True when this browser can open and write files on this machine. */
 export function canEditLocalFiles(): boolean {
@@ -31,14 +44,27 @@ export function canReceiveLaunchedFiles(): boolean {
   return typeof window !== "undefined" && "launchQueue" in window;
 }
 
-/** A file on disk that ForkLeaf currently has open. */
+/** A text file on disk that ForkLeaf currently has open. */
 export interface LocalFile {
+  kind: "text";
   handle: FileSystemFileHandle;
   /** The file's own name, `meeting-notes.md`. */
   name: string;
   /** Its contents, as text. */
   text: string;
 }
+
+/** A PDF on disk that ForkLeaf currently has open. Read-only, by nature. */
+export interface LocalPdf {
+  kind: "pdf";
+  handle: FileSystemFileHandle;
+  name: string;
+  /** The file's bytes, for the reader to parse. */
+  bytes: Uint8Array;
+}
+
+/** Either kind of file the pickers and the operating system can hand over. */
+export type LocalDocument = LocalFile | LocalPdf;
 
 /**
  * The file types the pickers offer.
@@ -56,6 +82,16 @@ const PICKER_TYPES: FilePickerAcceptType[] = [
     },
   },
 ];
+
+/** The reader's own picker. Separate, because a PDF is not a note. */
+const PDF_PICKER_TYPES: FilePickerAcceptType[] = [
+  { description: "PDF", accept: { "application/pdf": [".pdf"] } },
+];
+
+/** True for a name the reader should take rather than the notebook. */
+export function isPdfName(name: string): boolean {
+  return /\.pdf$/i.test(name);
+}
 
 /**
  * Asks the user for a file and reads it.
@@ -82,10 +118,75 @@ export async function openLocalFile(): Promise<LocalFile | null> {
   return readLocalFile(handle);
 }
 
-/** Reads a handle's current contents. */
+/** Reads a handle's current contents as text. */
 export async function readLocalFile(handle: FileSystemFileHandle): Promise<LocalFile> {
   const file = await handle.getFile();
-  return { handle, name: file.name, text: await file.text() };
+  return { kind: "text", handle, name: file.name, text: await file.text() };
+}
+
+/**
+ * Asks the user for a PDF and reads its bytes.
+ *
+ * Returns null when the picker is dismissed, exactly as `openLocalFile` does.
+ */
+export async function openPdfFile(): Promise<LocalPdf | null> {
+  if (!canEditLocalFiles()) throw new Error(UNSUPPORTED);
+
+  let handle: FileSystemFileHandle;
+  try {
+    [handle] = await window.showOpenFilePicker({
+      types: PDF_PICKER_TYPES,
+      excludeAcceptAllOption: false,
+      multiple: false,
+    });
+  } catch (error) {
+    if (isDismissal(error)) return null;
+    throw error;
+  }
+
+  return readLocalPdf(handle);
+}
+
+/**
+ * Reads a handle's bytes, refusing one too large to open.
+ *
+ * The size is checked before the bytes are read rather than after. Reading a
+ * 600 MB file into memory in order to discover it is too big to hold in memory
+ * is a way of crashing the tab that also loses whatever was unsaved in it.
+ */
+export async function readLocalPdf(handle: FileSystemFileHandle): Promise<LocalPdf> {
+  const file = await handle.getFile();
+
+  if (file.size > MAX_PDF_BYTES) {
+    throw new Error(
+      `${file.name} is ${(file.size / (1024 * 1024)).toFixed(0)} MB. ForkLeaf can open PDFs up to ${MAX_PDF_BYTES / (1024 * 1024)} MB.`,
+    );
+  }
+
+  return {
+    kind: "pdf",
+    handle,
+    name: file.name,
+    bytes: new Uint8Array(await file.arrayBuffer()),
+  };
+}
+
+/**
+ * A PDF from anywhere that is not a file handle — a drop, a paste, an `<input>`.
+ *
+ * Firefox and Safari have no File System Access API, so the picker above does
+ * not exist there. Dragging a PDF onto the window still does, and this is what
+ * makes the reader work in those browsers at all: no handle, no writing back,
+ * but the document opens.
+ */
+export async function readDroppedPdf(file: File): Promise<Omit<LocalPdf, "handle">> {
+  if (file.size > MAX_PDF_BYTES) {
+    throw new Error(
+      `${file.name} is ${(file.size / (1024 * 1024)).toFixed(0)} MB. ForkLeaf can open PDFs up to ${MAX_PDF_BYTES / (1024 * 1024)} MB.`,
+    );
+  }
+
+  return { kind: "pdf", name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) };
 }
 
 /**
@@ -148,20 +249,24 @@ export async function saveLocalFileAs(
  * one, double-clicking a file opens ForkLeaf on an empty editor and the file
  * is silently dropped.
  */
-export function consumeLaunchedFiles(onFiles: (files: LocalFile[]) => void): void {
+export function consumeLaunchedFiles(onFiles: (files: LocalDocument[]) => void): void {
   if (!canReceiveLaunchedFiles()) return;
 
   window.launchQueue?.setConsumer((params) => {
     if (!params.files || params.files.length === 0) return;
 
     void (async () => {
-      const opened: LocalFile[] = [];
+      const opened: LocalDocument[] = [];
 
       for (const entry of params.files) {
         // A directory can be launched too; there is nothing to edit in one.
         if (entry.kind !== "file") continue;
+        const handle = entry as FileSystemFileHandle;
         try {
-          opened.push(await readLocalFile(entry as FileSystemFileHandle));
+          // Routed by name, because the launch queue says nothing about type.
+          opened.push(
+            isPdfName(handle.name) ? await readLocalPdf(handle) : await readLocalFile(handle),
+          );
         } catch {
           // One unreadable file should not lose the others.
         }

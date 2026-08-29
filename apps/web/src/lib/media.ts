@@ -32,6 +32,36 @@ export const IMAGE_TYPES: Record<string, string> = {
  */
 export const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 
+/**
+ * The document types ForkLeaf will read out of a repository.
+ *
+ * Separate from `IMAGE_TYPES` because the two are served under different
+ * rules. An image is handed to an `<img>` and rendered by the browser; a
+ * document here is fetched as bytes and parsed by code we ship, and is served
+ * with `Content-Disposition: attachment` so that a browser which decides to
+ * navigate to the URL directly downloads the file instead of rendering
+ * repository content on this app's own origin.
+ *
+ * PDF is the only entry, and the list exists rather than a boolean so that
+ * adding the next one is a line rather than a refactor.
+ */
+export const DOCUMENT_TYPES: Record<string, string> = {
+  pdf: "application/pdf",
+};
+
+/**
+ * Largest PDF ForkLeaf will open.
+ *
+ * Higher than the image ceiling, and for a different reason. A PDF is not
+ * committed through the JSON commit route, so the 4.5 MB body limit that caps
+ * images does not apply — this is a limit on what the browser can hold and
+ * parse without the tab dying. Above about 100 MB, pdf.js and the canvas
+ * layer together will exhaust memory on a modest laptop, and failing at the
+ * point the file is chosen is far kinder than failing halfway through
+ * rendering page 400.
+ */
+export const MAX_PDF_BYTES = 100 * 1024 * 1024;
+
 /** Extension of a path, lowercased and without the dot. */
 export function extensionOf(path: string): string {
   const name = path.split("/").pop() ?? path;
@@ -42,6 +72,28 @@ export function extensionOf(path: string): string {
 /** The MIME type for a path we are willing to serve, or null. */
 export function imageTypeFor(path: string): string | null {
   return IMAGE_TYPES[extensionOf(path)] ?? null;
+}
+
+/** The MIME type for a document path we are willing to serve, or null. */
+export function documentTypeFor(path: string): string | null {
+  return DOCUMENT_TYPES[extensionOf(path)] ?? null;
+}
+
+/**
+ * The MIME type for any repository file ForkLeaf serves back, or null.
+ *
+ * The single gate the raw-asset route checks. Anything not named here is
+ * refused, which is what keeps that route — which reads with the user's OAuth
+ * token — from being a way to serve arbitrary repository content, HTML very
+ * much included, from this app's origin.
+ */
+export function servableTypeFor(path: string): string | null {
+  return imageTypeFor(path) ?? documentTypeFor(path);
+}
+
+/** True for a path that is a PDF. */
+export function isPdfPath(path: string): boolean {
+  return documentTypeFor(path) === "application/pdf";
 }
 
 /** The extension to store a browser `File` under, from its type then its name. */

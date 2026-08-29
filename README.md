@@ -63,6 +63,23 @@ your notes at all:
   command, without leaving the keyboard.
 - Document outline, word count, reading time and task progress.
 
+### Reading PDFs
+
+- **A PDF opens beside the note you're writing from it** — its own pane, its own
+  table of contents, and find-across-the-document that matches through line
+  breaks, hyphenation and ligatures. Drag one onto the window, pick one from the
+  palette, or click a `.pdf` in your repository's file tree.
+- **Select a passage and quote it into the note.** What lands in the file is a
+  blockquote and an ordinary markdown link — it renders on github.com and opens
+  the right page in Acrobat, Preview and your browser's own viewer.
+- **Citations record the sentence, not the page number.** Add a figure to page 4
+  of a paper and every "page 12" reference in every other tool now quietly
+  points at page 13. ForkLeaf searches the document for the words you quoted,
+  uses the text either side to tell repeated phrases apart, and tells you
+  plainly when a passage has genuinely gone.
+- **Nothing is written back to the PDF.** The file in your repository stays
+  exactly as it was committed; your annotations live in markdown next to it.
+
 ### Links between notes
 
 - **`[[Wikilinks]]`**, in the Obsidian dialect — `[[target]]`,
@@ -358,6 +375,7 @@ page can read your token.
 | `@forkleaf/store`           | IndexedDB storage, change queue, sync engine, conflicts, search index  |
 | `@forkleaf/diagrams`        | Mermaid rendering, templates, autocomplete, visual-builder graph model |
 | `@forkleaf/exporter`        | Client-side PDF / HTML / DOCX / Markdown / ZIP export                  |
+| `@forkleaf/pdf`             | PDF reading: text extraction, in-document search, durable citations    |
 | `@forkleaf/editor`          | React editing surfaces (rich text, source, split, diagram studio)      |
 | `@forkleaf/web`             | Next.js app: auth, API routes, publishing, application shell           |
 

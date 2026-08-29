@@ -3,6 +3,29 @@
 Notable changes to ForkLeaf. Dates are the release date; the git history is the
 full record.
 
+## Unreleased
+
+### Reading PDFs
+
+ForkLeaf opens PDFs, beside the note you are writing from them.
+
+- A reader in its own pane: page rendering, the document's own table of
+  contents, and find-across-the-document that matches through line breaks,
+  hyphenation and ligatures — so searching for "find" matches a page that
+  really contains "ﬁnd"
+- Open one by dragging it onto the window, from the command palette, from a
+  `.pdf` in the repository file tree, from an ordinary markdown link in a note,
+  or from the operating system's "Open with" list
+- **Quote into note** turns a selected passage into a blockquote and a link.
+  Nothing bespoke lands in the file: `[On Attention, p. 12](paper.pdf#page=12…)`
+  renders on github.com and opens the right page in every other PDF reader
+- Citations record the sentence, not the page. Clicking one finds those words
+  in the document as it is now — so a citation still points at the right
+  paragraph after the author adds a figure to page 4, and says so plainly when
+  the passage has genuinely gone
+- Nothing is ever written back to the PDF. The file in your repository stays
+  exactly as it was committed
+
 ## 1.0.0 — 2026-08-26
 
 The first release.
