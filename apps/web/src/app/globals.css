@@ -978,6 +978,41 @@ mark.fl-hl-orange {
   animation: fl-caret 1.2s steps(1, end) infinite;
 }
 
+/* "That one, there." Put on an image by Find, and taken off again a couple of
+   seconds later.
+
+   A ring plus two pulses, rather than a ring alone: a static outline on a
+   screenshot that may already have a border of its own is easy to look past,
+   and the point of this is to be the thing your eye lands on. The ring is
+   drawn with `box-shadow` so it follows the image's own corner radius and
+   takes up no layout — an outline that reflowed the paragraph around it would
+   move the picture as it was being pointed at. */
+@keyframes fl-reveal {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 3px var(--fl-accent),
+      0 0 0 8px color-mix(in srgb, var(--fl-accent) 28%, transparent);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 3px var(--fl-accent),
+      0 0 0 16px color-mix(in srgb, var(--fl-accent) 0%, transparent);
+  }
+}
+
+.fl-reveal {
+  border-radius: 6px;
+  animation: fl-reveal 900ms ease-out 3;
+  /* The ring is still there when the animation is not — reduced motion, or the
+     third pulse having finished a moment before the class comes off. */
+  box-shadow:
+    0 0 0 3px var(--fl-accent),
+    0 0 0 8px color-mix(in srgb, var(--fl-accent) 28%, transparent);
+  scroll-margin-block: 25vh;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -987,13 +1022,19 @@ mark.fl-hl-orange {
   }
 
   /* An infinite animation reduced to a hundredth of a millisecond is not
-     stillness, it is a strobe. These two are named rather than left to the
-     rule above: one repeats forever, and the other only means anything while
-     it is running. */
+     stillness, it is a strobe. These are named rather than left to the rule
+     above: one repeats forever, and the others only mean anything while they
+     are running. The revealed image keeps its ring — that is the answer to
+     "where is it", and it is the animation that was unwelcome, not the mark. */
   .fl-caret,
-  .fl-tick {
+  .fl-tick,
+  .fl-reveal {
     animation: none !important;
     opacity: 1;
+  }
+
+  .fl-caret,
+  .fl-tick {
     transform: none;
   }
 }

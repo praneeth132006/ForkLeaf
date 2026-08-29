@@ -5,7 +5,7 @@ import { Reading } from "./reading";
 import { Features } from "./features";
 import { SigningIn, Repositories, Sync, Conflicts } from "./github";
 import { Plans, PrivacyAndData, Security } from "./account";
-import { Troubleshooting, Faq } from "./running";
+import { Troubleshooting, Faq, Support } from "./running";
 
 /**
  * Slug → article body.
@@ -34,4 +34,5 @@ export const DOC_CONTENT: Record<string, () => React.JSX.Element> = {
   security: Security,
   troubleshooting: Troubleshooting,
   faq: Faq,
+  support: Support,
 };

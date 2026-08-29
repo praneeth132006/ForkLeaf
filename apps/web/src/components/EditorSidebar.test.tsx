@@ -67,6 +67,12 @@ function renderSidebar(currentFolder: string, overrides: Record<string, unknown>
       activePath={activePath}
       currentFolder={currentFolder}
       onOpenNote={() => {}}
+      sortMode="smart"
+      onSortModeChange={() => {}}
+      onReorder={() => {}}
+      onReorderTo={() => {}}
+      onResetOrder={() => {}}
+      manualFolders={[]}
       onCreateNote={onCreateNote}
       onDeleteNote={() => {}}
       onRenameNote={() => {}}

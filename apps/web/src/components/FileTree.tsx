@@ -32,6 +32,25 @@ export interface FileTreeProps {
    * across one at a time.
    */
   onMoveFolder?: (path: string, toFolder: string) => void;
+  /**
+   * Moves a row one step up or down inside its own folder.
+   *
+   * Given the siblings as the tree is currently drawing them, because the order
+   * being recorded is the one the reader can see — not the one the sort mode
+   * would have produced from the same nodes.
+   */
+  onReorder?: (siblings: readonly TreeNode[], path: string, direction: -1 | 1) => void;
+  /** Drops a row into the gap above or below one of its own siblings. */
+  onReorderTo?: (
+    siblings: readonly TreeNode[],
+    path: string,
+    target: string,
+    position: "before" | "after",
+  ) => void;
+  /** Puts one folder's contents back under the automatic sort. */
+  onResetOrder?: (parent: string) => void;
+  /** Folders whose contents somebody has arranged by hand. */
+  manualFolders?: readonly string[];
   /** Pins a note to the top of the sidebar, or unpins one already there. */
   onTogglePin?: (path: string) => void;
   /** Paths currently pinned, so the menu can say which way it will go. */
@@ -74,6 +93,10 @@ export function FileTree({
   onDeleteFolder,
   onMoveNote,
   onMoveFolder,
+  onReorder,
+  onReorderTo,
+  onResetOrder,
+  manualFolders,
   onTogglePin,
   pinnedPaths,
   openFolders,
@@ -156,6 +179,53 @@ export function FileTree({
     },
     [dragging, canDropOn, onMoveNote, onMoveFolder],
   );
+  /**
+   * The gap a reordering drag is currently hovering, if any.
+   *
+   * Separate from `dropTarget`, which means "into this folder". One drag can
+   * mean either — the middle of a row moves the thing inside, the top and
+   * bottom edges move it above or below — and the two need different feedback:
+   * a ring around a folder, or a line between two rows.
+   */
+  const [reorderTarget, setReorderTarget] = useState<{
+    path: string;
+    position: "before" | "after";
+  } | null>(null);
+
+  /**
+   * Reordering is only offered against a row's own siblings.
+   *
+   * Dragging across folders already means something — move it there — and a
+   * gesture that meant "move" or "reorder" depending on which quarter of which
+   * row you released over would be a gesture nobody could aim.
+   *
+   * It is also off while a filter is typed: the rows on screen are then a
+   * subset in filtered order, and recording that as the folder's order would
+   * write down positions for notes the reader cannot currently see.
+   */
+  const canReorderWith = useCallback(
+    (path: string) =>
+      Boolean(onReorderTo) &&
+      !filter &&
+      dragging !== null &&
+      dragging.path !== path &&
+      dirnameOf(dragging.path) === dirnameOf(path),
+    [onReorderTo, filter, dragging],
+  );
+
+  const dropBeside = useCallback(
+    (target: string, position: "before" | "after") => {
+      const payload = dragging;
+      setDragging(null);
+      setDropTarget(null);
+      setReorderTarget(null);
+      if (!payload || !onReorderTo) return;
+
+      onReorderTo(siblingsOf(nodes, target), payload.path, target, position);
+    },
+    [dragging, onReorderTo, nodes],
+  );
+
   const { menu, open: openMenu, close: closeMenu } = useContextMenu<TreeNode>();
 
   const visible = useMemo(
@@ -223,6 +293,46 @@ export function FileTree({
     }
   }
 
+  /**
+   * Move up, move down, and put it back — the same three on a note and on a
+   * folder, because "these two are the wrong way round" is the same complaint
+   * whichever kind of row it is about.
+   *
+   * In the menu rather than only on the drag, so the order is reachable from
+   * the keyboard: a tree that can only be arranged by dragging is a tree some
+   * people cannot arrange at all.
+   */
+  const orderItems = useCallback(
+    (node: TreeNode): MenuItem[] => {
+      if (!onReorder || filter) return [];
+
+      const siblings = siblingsOf(nodes, node.path);
+      const index = siblings.findIndex((sibling) => sibling.path === node.path);
+      if (index === -1 || siblings.length < 2) return [];
+
+      const parent = dirnameOf(node.path);
+      const arranged = manualFolders?.includes(parent) ?? false;
+
+      return [
+        ...(index > 0
+          ? [{ label: "Move up", onSelect: () => onReorder(siblings, node.path, -1) }]
+          : []),
+        ...(index < siblings.length - 1
+          ? [{ label: "Move down", onSelect: () => onReorder(siblings, node.path, 1) }]
+          : []),
+        ...(arranged && onResetOrder
+          ? [
+              {
+                label: parent ? `Reset order in ${nameOf(parent)}` : "Reset order",
+                onSelect: () => onResetOrder(parent),
+              },
+            ]
+          : []),
+      ];
+    },
+    [onReorder, onResetOrder, manualFolders, filter, nodes],
+  );
+
   const menuItems = useMemo((): MenuItem[] => {
     if (!menu) return [];
     const node = menu.target;
@@ -243,6 +353,7 @@ export function FileTree({
             onCreateFolder(node.path);
           },
         },
+        ...orderItems(node),
         { label: "Rename folder…", onSelect: () => onRenameFolder(node.path) },
         {
           label: "Delete folder",
@@ -264,12 +375,14 @@ export function FileTree({
             },
           ]
         : []),
+      ...orderItems(node),
       { label: "Rename…", onSelect: () => onRename(node.path) },
       { label: "Delete note", destructive: true, onSelect: () => onDelete(node.path) },
     ];
   }, [
     menu,
     reveal,
+    orderItems,
     onCreateIn,
     onCreateFolder,
     onRenameFolder,
@@ -340,6 +453,10 @@ export function FileTree({
             onDrop={drop}
             dropTarget={dropTarget}
             onDropTarget={setDropTarget}
+            canReorderWith={canReorderWith}
+            reorderTarget={reorderTarget}
+            onReorderTarget={setReorderTarget}
+            onDropBeside={dropBeside}
             // A search should reveal matches inside collapsed folders.
             forceOpen={filter.length > 0}
           />
@@ -370,6 +487,11 @@ interface TreeItemProps {
   onDrop: (folder: string) => void;
   dropTarget: string | null;
   onDropTarget: (path: string | null) => void;
+  /** Whether a drag hovering this row could be reordered against it. */
+  canReorderWith: (path: string) => boolean;
+  reorderTarget: { path: string; position: "before" | "after" } | null;
+  onReorderTarget: (target: { path: string; position: "before" | "after" } | null) => void;
+  onDropBeside: (target: string, position: "before" | "after") => void;
   forceOpen: boolean;
 }
 
@@ -394,6 +516,10 @@ const TreeItem = memo(function TreeItem({
   onDrop,
   dropTarget,
   onDropTarget,
+  canReorderWith,
+  reorderTarget,
+  onReorderTarget,
+  onDropBeside,
   forceOpen,
 }: TreeItemProps) {
   const open = forceOpen || expanded.has(node.path);
@@ -405,6 +531,40 @@ const TreeItem = memo(function TreeItem({
   const lifted =
     dragging !== null && (dragging.path === node.path || node.path.startsWith(`${dragging.path}/`));
   const dropFolder = isFolder ? node.path : dirnameOf(node.path);
+  const insertion = reorderTarget?.path === node.path ? reorderTarget.position : null;
+
+  /**
+   * Which of the two things a drop on this row means.
+   *
+   * The top and bottom fifth of a row are the gaps between rows, and a release
+   * there puts the dragged thing above or below this one. Everything in
+   * between is the row itself, which for a folder means "inside it".
+   *
+   * A fifth rather than a third: the middle of the row is by far the more
+   * common intent, and edges wide enough to be easy to hit are edges that
+   * swallow the drop somebody meant for the folder.
+   */
+  const intentAt = useCallback(
+    (event: React.DragEvent<HTMLDivElement>): "before" | "after" | "into" => {
+      if (!canReorderWith(node.path)) return "into";
+
+      const box = event.currentTarget.getBoundingClientRect();
+      // jsdom reports every box as zero-sized, and every point in a zero-high
+      // row is on both its edges. Reordering needs real layout to aim, so with
+      // none it is simply not offered.
+      if (box.height === 0) return "into";
+
+      const offset = (event.clientY - box.top) / box.height;
+      if (offset <= 0.2) return "before";
+      if (offset >= 0.8) return "after";
+
+      // A note is not a folder, so the middle of one cannot mean "inside it".
+      // Rather than refuse the drop, it lands beside — which is what dropping
+      // a note onto a note in an arranged folder plainly means.
+      return isFolder ? "into" : offset < 0.5 ? "before" : "after";
+    },
+    [canReorderWith, node.path, isFolder],
+  );
 
   /**
    * Brings the selected row into view.
@@ -460,6 +620,7 @@ const TreeItem = memo(function TreeItem({
         onDragEnd={() => {
           onDragging(null);
           onDropTarget(null);
+          onReorderTarget(null);
         }}
         // Where a drop on this row lands. A folder takes things inside it; a
         // note stands for the folder it is in, which is what dropping "next to
@@ -472,6 +633,17 @@ const TreeItem = memo(function TreeItem({
         // repository instead of doing nothing.
         onDragOver={(event) => {
           event.stopPropagation();
+          const intent = intentAt(event);
+
+          if (intent !== "into") {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            onDropTarget(null);
+            onReorderTarget({ path: node.path, position: intent });
+            return;
+          }
+
+          onReorderTarget(null);
           if (!canDropOn(dropFolder)) return;
           event.preventDefault();
           event.dataTransfer.dropEffect = "move";
@@ -480,14 +652,35 @@ const TreeItem = memo(function TreeItem({
         onDragLeave={(event) => {
           event.stopPropagation();
           onDropTarget(null);
+          onReorderTarget(null);
         }}
         onDrop={(event) => {
           event.stopPropagation();
+          const intent = intentAt(event);
+
+          if (intent !== "into") {
+            event.preventDefault();
+            onDropBeside(node.path, intent);
+            return;
+          }
+
           if (!canDropOn(dropFolder)) return;
           event.preventDefault();
           onDrop(dropFolder);
         }}
       >
+        {/* Where a release right now would put it. A line in the gap rather
+            than a highlight on the row, because "between these two" is what
+            the drop means and a highlighted row says "into this one". */}
+        {insertion && (
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-x-1 h-[2px] rounded-full bg-[var(--fl-accent)] ${
+              insertion === "before" ? "top-0" : "bottom-0"
+            }`}
+          />
+        )}
+
         {/* The selected note gets a bar rather than a fill alone: at sidebar
             width, a slightly lighter row is easy to lose track of. */}
         {active && (
@@ -580,6 +773,10 @@ const TreeItem = memo(function TreeItem({
               onDrop={onDrop}
               dropTarget={dropTarget}
               onDropTarget={onDropTarget}
+              canReorderWith={canReorderWith}
+              reorderTarget={reorderTarget}
+              onReorderTarget={onReorderTarget}
+              onDropBeside={onDropBeside}
               forceOpen={forceOpen}
             />
           ))}
@@ -644,6 +841,36 @@ function FileGlyph() {
 function dirnameOf(path: string): string {
   const cut = path.lastIndexOf("/");
   return cut === -1 ? "" : path.slice(0, cut);
+}
+
+/** The last segment of a path, for naming a folder in a menu item. */
+function nameOf(path: string): string {
+  return path.slice(path.lastIndexOf("/") + 1);
+}
+
+/**
+ * The list a path sits in — its parent's children, or the top level.
+ *
+ * Read from the whole tree rather than the filtered one, because the order
+ * being written down is the folder's, not the search result's.
+ */
+function siblingsOf(nodes: readonly TreeNode[], path: string): TreeNode[] {
+  const parent = dirnameOf(path);
+  if (parent === "") return [...nodes];
+
+  const find = (list: readonly TreeNode[]): TreeNode[] | null => {
+    for (const node of list) {
+      if (node.kind !== "folder") continue;
+      if (node.path === parent) return [...(node.children ?? [])];
+      if (parent.startsWith(`${node.path}/`)) {
+        const found = find(node.children ?? []);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  return find(nodes) ?? [];
 }
 
 /** Every folder above a path, outermost first. `[]` for anything at the root. */

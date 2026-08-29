@@ -181,6 +181,71 @@ describe("showing where the selected note lives", () => {
  * that one" — meant creating the destination by hand and moving the notes one
  * at a time.
  */
+describe("rearranging by hand", () => {
+  /** Right-clicks a row and returns the labels its menu offers. */
+  function menuFor(label: string): string[] {
+    fireEvent.contextMenu(screen.getByText(label), { clientX: 0, clientY: 0 });
+    return screen.getAllByRole("menuitem").map((item) => item.textContent ?? "");
+  }
+
+  it("offers to move a row down, and reports the siblings it is moving among", () => {
+    const onReorder = vi.fn();
+    draw({ openFolders: ["OSINT"], onReorder });
+
+    expect(menuFor("Fieldwork")).toContain("Move down");
+    fireEvent.click(screen.getByText("Move down"));
+
+    const [siblings, path, direction] = onReorder.mock.calls[0]!;
+    expect(siblings.map((node: TreeNode) => node.path)).toEqual(["Fieldwork", "OSINT"]);
+    expect([path, direction]).toEqual(["Fieldwork", 1]);
+  });
+
+  it("does not offer to move the first row up or the last row down", () => {
+    draw({ openFolders: [], onReorder: vi.fn() });
+
+    expect(menuFor("Fieldwork")).not.toContain("Move up");
+    cleanup();
+
+    draw({ openFolders: [], onReorder: vi.fn() });
+    expect(menuFor("OSINT")).not.toContain("Move down");
+  });
+
+  it("moves notes as readily as folders", () => {
+    const onReorder = vi.fn();
+    draw({ openFolders: ["OSINT"], onReorder });
+
+    expect(menuFor("osint")).toContain("Move down");
+  });
+
+  it("says nothing about order for an only child", () => {
+    const onReorder = vi.fn();
+    draw({ openFolders: ["Fieldwork"], onReorder });
+
+    expect(menuFor("notes")).not.toContain("Move up");
+    expect(menuFor("notes")).not.toContain("Move down");
+  });
+
+  it("stays quiet while a filter is narrowing the tree, which reorders nothing", () => {
+    draw({ filter: "o", onReorder: vi.fn() });
+
+    expect(menuFor("OSINT")).not.toContain("Move down");
+  });
+
+  it("offers to reset a folder that was arranged, and only that one", () => {
+    const onResetOrder = vi.fn();
+    draw({ openFolders: ["OSINT"], onReorder: vi.fn(), onResetOrder, manualFolders: ["OSINT"] });
+
+    expect(menuFor("Fieldwork")).not.toContain("Reset order");
+    cleanup();
+
+    draw({ openFolders: ["OSINT"], onReorder: vi.fn(), onResetOrder, manualFolders: ["OSINT"] });
+    expect(menuFor("osint")).toContain("Reset order in OSINT");
+
+    fireEvent.click(screen.getByText("Reset order in OSINT"));
+    expect(onResetOrder).toHaveBeenCalledWith("OSINT");
+  });
+});
+
 describe("rearranging by drag", () => {
   it("moves a note into a folder", () => {
     const onMoveNote = vi.fn();

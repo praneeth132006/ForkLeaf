@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import type { SessionUser, Workspace } from "@forkleaf/types";
 import { Dialog } from "./Dialog";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/constants";
 
 export interface HelpDialogProps {
   onClose: () => void;
@@ -280,9 +281,16 @@ export function HelpDialog({
         </div>
       )}
 
-      <p className="mt-6 border-t border-[var(--fl-border)] pt-4 text-[13px] text-[var(--fl-muted)]">
+      {/* "Still stuck?" used to end at the documentation, which is only an
+          answer when the documentation has one. Somebody reading this line has
+          usually already looked. */}
+      <p className="mt-6 border-t border-[var(--fl-border)] pt-4 text-[13px] leading-relaxed text-[var(--fl-muted)]">
         Still stuck? The <DocLink href="/docs">full documentation</DocLink> goes into much more
-        depth.
+        depth, and <DocLink href="/support">support</DocLink> is a real inbox — write to{" "}
+        <a href={SUPPORT_MAILTO} className="text-[var(--fl-accent)] underline underline-offset-2">
+          {SUPPORT_EMAIL}
+        </a>{" "}
+        with what happened and what you expected.
       </p>
     </Dialog>
   );
