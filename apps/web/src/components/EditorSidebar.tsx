@@ -7,6 +7,7 @@ import { FileTree } from "./FileTree";
 import { ForkLeafMark } from "./Brand";
 import { useDismissable } from "@/hooks/useDismissable";
 import { collectFilePaths, collectFolders } from "@/lib/tree";
+import { SORT_MODE_LABELS, type TreeSortMode } from "@/lib/tree-order";
 
 export interface EditorSidebarProps {
   collapsed: boolean;
@@ -48,6 +49,22 @@ export interface EditorSidebarProps {
   onMoveNote: (path: string, toFolder: string) => void;
   /** Moves a folder, and everything under it, from a drag within the tree. */
   onMoveFolder: (path: string, toFolder: string) => void;
+  /** How the tree is sorted when nobody has arranged a folder by hand. */
+  sortMode: TreeSortMode;
+  onSortModeChange: (mode: TreeSortMode) => void;
+  /** Moves a row one step up or down inside its own folder. */
+  onReorder: (siblings: readonly TreeNode[], path: string, direction: -1 | 1) => void;
+  /** Drops a row into the gap above or below one of its own siblings. */
+  onReorderTo: (
+    siblings: readonly TreeNode[],
+    path: string,
+    target: string,
+    position: "before" | "after",
+  ) => void;
+  /** Puts one folder's contents back under the automatic sort. */
+  onResetOrder: (parent: string) => void;
+  /** Folders somebody has arranged by hand. */
+  manualFolders: readonly string[];
   /** Notes kept at the top, in the order they were put there. */
   pinnedPaths: readonly string[];
   /** Folders the reader had open last time, in the order they opened them. */
@@ -76,6 +93,8 @@ export function EditorSidebar(props: EditorSidebarProps) {
   const [showWorkspaces, setShowWorkspaces] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [showFolders, setShowFolders] = useState(false);
+  const [showSort, setShowSort] = useState(false);
+  const [showMore, setShowMore] = useState(false);
 
   /**
    * Each menu closes on Escape and on a click anywhere else.
@@ -87,10 +106,14 @@ export function EditorSidebar(props: EditorSidebarProps) {
   const workspacesRef = useRef<HTMLDivElement | null>(null);
   const foldersRef = useRef<HTMLDivElement | null>(null);
   const accountRef = useRef<HTMLDivElement | null>(null);
+  const sortRef = useRef<HTMLDivElement | null>(null);
+  const moreRef = useRef<HTMLDivElement | null>(null);
 
   useDismissable(workspacesRef, showWorkspaces, () => setShowWorkspaces(false));
   useDismissable(foldersRef, showFolders, () => setShowFolders(false));
   useDismissable(accountRef, showAccount, () => setShowAccount(false));
+  useDismissable(sortRef, showSort, () => setShowSort(false));
+  useDismissable(moreRef, showMore, () => setShowMore(false));
   const searchRef = useRef<HTMLInputElement>(null);
 
   /**
@@ -529,9 +552,86 @@ export function EditorSidebar(props: EditorSidebarProps) {
           </>
         )}
 
-        <p className="px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
-          {props.activeWorkspace?.isLocal ? "Notes" : "Repository"}
-        </p>
+        {/* The heading is also where the order is chosen, because the order is
+            a fact about this list and nowhere else in the app is about it.
+            Buried in a settings screen it would be a preference nobody found;
+            here it is next to the thing it changes. */}
+        <div className="relative flex items-center gap-1 px-2 pb-1.5 pt-1" ref={sortRef}>
+          <p className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
+            {props.activeWorkspace?.isLocal ? "Notes" : "Repository"}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setShowSort((value) => !value)}
+            aria-expanded={showSort}
+            aria-haspopup="menu"
+            title={`Sort: ${SORT_MODE_LABELS[props.sortMode]}`}
+            aria-label={`Change the order. Currently ${SORT_MODE_LABELS[props.sortMode]}.`}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+          >
+            <SortGlyph />
+          </button>
+
+          {showSort && (
+            <div
+              role="menu"
+              className="absolute right-1 top-full z-30 w-64 rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1 shadow-xl"
+            >
+              <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
+                Sort by
+              </p>
+
+              {(Object.keys(SORT_MODE_LABELS) as TreeSortMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={props.sortMode === mode}
+                  onClick={() => {
+                    props.onSortModeChange(mode);
+                    setShowSort(false);
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors hover:bg-[var(--fl-elevated)] ${
+                    props.sortMode === mode ? "text-[var(--fl-text)]" : "text-[var(--fl-muted)]"
+                  }`}
+                >
+                  {/* Hidden from assistive technology: `aria-checked` already
+                      says which one is on, and a tick in the accessible name
+                      makes the row read as "tick, Date created". */}
+                  <span aria-hidden="true" className="w-3 shrink-0 text-[var(--fl-accent)]">
+                    {props.sortMode === mode ? "✓" : ""}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{SORT_MODE_LABELS[mode]}</span>
+                </button>
+              ))}
+
+              <p className="border-t border-[var(--fl-border)] px-2.5 pb-1.5 pt-2 text-[11.5px] leading-relaxed text-[var(--fl-muted)]">
+                Drag a note or folder onto the gap above or below one of its neighbours to arrange a
+                folder by hand, or use Move up and Move down in its right-click menu.
+              </p>
+
+              {/* Only when there is something to undo. An always-present
+                  "reset" on a tree nobody has touched is a button that does
+                  nothing, sitting where a reader has to read past it. */}
+              {props.manualFolders.length > 0 && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    for (const folder of props.manualFolders) props.onResetOrder(folder);
+                    setShowSort(false);
+                  }}
+                  className="mt-0.5 flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-[13px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+                >
+                  Reset {props.manualFolders.length === 1 ? "the folder" : "all folders"} arranged
+                  by hand
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         <FileTree
           nodes={props.tree}
           activePath={props.activePath}
@@ -542,6 +642,10 @@ export function EditorSidebar(props: EditorSidebarProps) {
           onCreateFolder={props.onCreateFolder}
           onMoveNote={props.onMoveNote}
           onMoveFolder={props.onMoveFolder}
+          onReorder={props.onReorder}
+          onReorderTo={props.onReorderTo}
+          onResetOrder={props.onResetOrder}
+          manualFolders={props.manualFolders}
           onTogglePin={props.onTogglePin}
           pinnedPaths={props.pinnedPaths}
           onRenameFolder={props.onRenameFolder}
@@ -554,44 +658,81 @@ export function EditorSidebar(props: EditorSidebarProps) {
 
       {/* ── Footer: the ways out, help, account ───────────────────────── */}
       <div className="border-t border-[var(--fl-border)] p-2">
-        {/* The editor used to be a room with no marked exits: once you were in
-            it, the only way back to the rest of the app was the logo, and the
-            dashboard could not be reached at all.
+        {/* Three rows became one.
 
-            It sat between the search row and the tree, which put a link to
-            another page in the middle of the column you use to move around this
-            one — you read past it every time you looked for a note. Down here it
-            is with the other exits, next to help and the account, and the file
-            tree runs uninterrupted from the filter to the bottom. */}
-        <Link
-          href="/dashboard"
-          className="mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
-        >
-          <DashboardGlyph className="h-3.5 w-3.5" />
-          <span className="min-w-0 flex-1 truncate text-left">Dashboard</span>
-          <kbd className="shrink-0 rounded border border-[var(--fl-border)] px-1 py-px font-sans text-[10px]">
-            ⌘⇧D
-          </kbd>
-        </Link>
+            The editor used to be a room with no marked exits, so exits were
+            added — and then each new one took another row off the bottom of the
+            tree. Three of them, stacked, spent a third of the footer on things
+            nobody clicks while they are writing, and the file list is what this
+            column is for.
 
-        <button
-          type="button"
-          onClick={props.onOpenHelp}
-          className="mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
-        >
-          <svg
-            viewBox="0 0 16 16"
-            className="h-3.5 w-3.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
+            One button that says what is behind it, opening upwards over the
+            note rather than over the tree. The ⌘⇧D shortcut still goes straight
+            to the dashboard without passing through here — a menu is the way in
+            for somebody who does not know the shortcut, not a step added for
+            somebody who does. */}
+        <div className="relative" ref={moreRef}>
+          <button
+            type="button"
+            onClick={() => setShowMore((value) => !value)}
+            aria-expanded={showMore}
+            aria-haspopup="menu"
+            className={`mb-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12.5px] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] ${
+              showMore ? "bg-[var(--fl-elevated)] text-[var(--fl-text)]" : "text-[var(--fl-muted)]"
+            }`}
           >
-            <circle cx="8" cy="8" r="6.25" />
-            <path d="M6.2 6.2a1.9 1.9 0 1 1 2.3 2.2v1.1M8.5 12h.01" />
-          </svg>
-          <span className="min-w-0 flex-1 truncate text-left">Help &amp; shortcuts</span>
-        </button>
+            <MoreGlyph />
+            <span className="min-w-0 flex-1 truncate text-left">More</span>
+            <ChevronGlyph open={showMore} />
+          </button>
+
+          {showMore && (
+            /* Upwards. A menu opening down from a control this close to the
+               bottom would hang off the window. */
+            <div
+              role="menu"
+              className="absolute bottom-full left-0 z-30 mb-1 w-56 rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1 shadow-xl"
+            >
+              <Link
+                href="/dashboard"
+                role="menuitem"
+                onClick={() => setShowMore(false)}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+              >
+                <DashboardGlyph className="h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 flex-1 truncate text-left">Dashboard</span>
+                <kbd className="shrink-0 rounded border border-[var(--fl-border)] px-1 py-px font-sans text-[10px]">
+                  ⌘⇧D
+                </kbd>
+              </Link>
+
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setShowMore(false);
+                  props.onOpenHelp();
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+              >
+                <HelpGlyph />
+                <span className="min-w-0 flex-1 truncate text-left">Help &amp; shortcuts</span>
+              </button>
+
+              {/* Beneath help, because it is what you reach for when help did
+                  not have it. */}
+              <Link
+                href="/support"
+                role="menuitem"
+                onClick={() => setShowMore(false)}
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+              >
+                <SupportGlyph />
+                <span className="min-w-0 flex-1 truncate text-left">Support</span>
+              </Link>
+            </div>
+          )}
+        </div>
 
         {props.user ? (
           <div className="relative" ref={accountRef}>
@@ -692,6 +833,88 @@ function DashboardGlyph({ className = "h-4 w-4" }: { className?: string }) {
 /** `Fieldwork/intro.md` → `intro`, which is what the row is called. */
 function nameOf(path: string): string {
   return (path.split("/").pop() ?? path).replace(/\.mdx?$/i, "");
+}
+
+/** Three dots: the one mark that means "and the rest" without naming them. */
+function MoreGlyph() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5" fill="currentColor">
+      <circle cx="3.5" cy="8" r="1.25" />
+      <circle cx="8" cy="8" r="1.25" />
+      <circle cx="12.5" cy="8" r="1.25" />
+    </svg>
+  );
+}
+
+/** Points the way the menu opens, so the button says where to look. */
+function ChevronGlyph({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 12 12"
+      aria-hidden="true"
+      className={`h-3 w-3 shrink-0 transition-transform duration-150 ${open ? "" : "rotate-180"}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2.5 7.5 6 4l3.5 3.5" />
+    </svg>
+  );
+}
+
+function HelpGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    >
+      <circle cx="8" cy="8" r="6.25" />
+      <path d="M6.2 6.2a1.9 1.9 0 1 1 2.3 2.2v1.1M8.5 12h.01" />
+    </svg>
+  );
+}
+
+/** An envelope: the one glyph nobody has to be taught means "write to us". */
+function SupportGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="2" y="3.5" width="12" height="9" rx="1.4" />
+      <path d="m2.6 4.6 4.6 3.5a1.3 1.3 0 0 0 1.6 0l4.6-3.5" />
+    </svg>
+  );
+}
+
+/** Three rules, shortest last: the universal "this list has an order" mark. */
+function SortGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    >
+      <path d="M3 4.5h10M3 8h6.5M3 11.5h3.5" />
+    </svg>
+  );
 }
 
 function PinGlyph() {
