@@ -1,4 +1,11 @@
-import type { Note, NoteFrontmatter, RepoRef, TreeNode, Workspace } from "@forkleaf/types";
+import {
+  compareTreeEntries,
+  type Note,
+  type NoteFrontmatter,
+  type RepoRef,
+  type TreeNode,
+  type Workspace,
+} from "@forkleaf/types";
 import {
   parseDocument,
   serializeDocument,
@@ -626,8 +633,5 @@ function withPath(tree: TreeNode[], path: string): TreeNode[] {
 
 /** Folders first, then by name — the order the tree already arrives in. */
 function sortNodes(nodes: TreeNode[]): TreeNode[] {
-  return [...nodes].sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
+  return [...nodes].sort(compareTreeEntries);
 }

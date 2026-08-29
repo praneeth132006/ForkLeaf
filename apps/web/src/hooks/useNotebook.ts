@@ -11,6 +11,7 @@ import {
 } from "@forkleaf/store";
 import {
   workspaceId,
+  compareTreeEntries,
   DEFAULT_SYNC_PREFERENCE,
   type LocalAsset,
   type Note,
@@ -34,6 +35,21 @@ import {
 import { LOCAL_WORKSPACE, collapseBranchDuplicates } from "@/lib/workspaces";
 import { forgetLock, isPathLocked, lockedKey, renameLock, toggleLock } from "@/lib/locks";
 import { assetFrom, assetObjectUrl } from "@/lib/assets";
+import {
+  DEFAULT_TREE_ORDER,
+  orderTree,
+  prunedOrder,
+  withCreated,
+  withCreatedRenamed,
+  withDropped,
+  withMoved,
+  withPathRenamed,
+  withoutCreated,
+  withoutManual,
+  type CreationTimes,
+  type TreeOrder,
+  type TreeSortMode,
+} from "@/lib/tree-order";
 
 /**
  * The application's single source of truth.
@@ -125,6 +141,25 @@ export interface NotebookState {
    */
   expandedFolders: string[] | null;
   /**
+   * The order the sidebar draws the tree in, and any folder somebody has
+   * arranged by hand.
+   *
+   * A per-device preference like the pinned notes above it: git sorts its own
+   * tree and records nothing about what anybody wanted to read first, so an
+   * order kept anywhere else would have to be a manifest committed into the
+   * repository that no other tool would understand.
+   */
+  treeOrder: TreeOrder;
+  /**
+   * When each note and folder was made, for the modes that sort by it.
+   *
+   * Only ever holds what ForkLeaf watched happen. Everything that was already
+   * in a repository when it was connected has no entry here, and sorts by name
+   * instead — GitHub's tree carries no creation date, and a made-up one would
+   * order the notebook confidently and wrongly.
+   */
+  createdAt: CreationTimes;
+  /**
    * True when this is a GitHub session with no repository connected yet. The
    * editor turns it into the connect dialog; the dashboard turns it into the
    * first-run repository chooser.
@@ -165,6 +200,10 @@ const pinnedKey = (workspace: string) => `pinned:${workspace}`;
  * opened are a fair description of what they are working on.
  */
 const expandedKey = (workspace: string) => `expanded:${workspace}`;
+/** The sidebar's sort mode and any folder arranged by hand. See `treeOrder`. */
+const treeOrderKey = (workspace: string) => `treeOrder:${workspace}`;
+/** When each note and folder ForkLeaf made was made. See `createdAt`. */
+const createdKey = (workspace: string) => `created:${workspace}`;
 
 /**
  * Shown when the browser will not give ForkLeaf durable local storage at all.
@@ -239,6 +278,8 @@ export function useNotebook(request: NotebookRequest = {}) {
     pinnedPaths: [],
     lockedPaths: [],
     expandedFolders: null,
+    treeOrder: DEFAULT_TREE_ORDER,
+    createdAt: {},
     needsRepoChoice: false,
     remoteChange: null,
   });
@@ -501,6 +542,19 @@ export function useNotebook(request: NotebookRequest = {}) {
       // No record at all is a first visit, not a deliberate "all closed" — the
       // top level opens, as it always did.
       if (!cancelled) patch({ expandedFolders: expanded ?? null });
+
+      // Per workspace, because how you want to read a course numbered 1 to 10
+      // and how you want to read a colleague's documentation repo are not the
+      // same question.
+      const order = await dbRef.current?.getMeta<TreeOrder>(treeOrderKey(workspace.id));
+      const created =
+        (await dbRef.current?.getMeta<Record<string, string>>(createdKey(workspace.id))) ?? {};
+      if (!cancelled) {
+        patch({
+          treeOrder: order ? { ...DEFAULT_TREE_ORDER, ...order } : DEFAULT_TREE_ORDER,
+          createdAt: created,
+        });
+      }
 
       // Reopen the tabs this workspace had last time, plus whatever the URL
       // asked for. A note that has since been deleted simply fails to load and
@@ -798,6 +852,44 @@ export function useNotebook(request: NotebookRequest = {}) {
     [activeNote, patchOpenNote, isLocked],
   );
 
+  /**
+   * Persists the sidebar's order and reflects it in state in one step.
+   *
+   * Folders that are no longer in the tree are dropped on the way past. They
+   * accumulate whenever a folder is deleted somewhere this device did not
+   * watch — another machine, a commit made on github.com — and while they cost
+   * nothing to draw (`orderTree` ignores an arrangement for a folder that is
+   * not there), a record that only ever grows is one that eventually holds a
+   * repository's worth of folders nobody has had in years.
+   *
+   * Here, rather than in an effect watching the tree: an effect that writes
+   * state on every refresh from GitHub is a cascading render on a hot path, to
+   * tidy something nothing is reading.
+   */
+  const putTreeOrder = useCallback(
+    (next: TreeOrder) => {
+      const workspace = state.activeWorkspace;
+      const pruned =
+        state.tree.length > 0
+          ? prunedOrder(next, withEmptyFolders(state.tree, state.emptyFolders))
+          : next;
+
+      patch({ treeOrder: pruned });
+      if (workspace) void dbRef.current?.putMeta(treeOrderKey(workspace.id), pruned);
+    },
+    [state.activeWorkspace, state.tree, state.emptyFolders, patch],
+  );
+
+  /** Persists the creation stamps and reflects them in state in one step. */
+  const putCreated = useCallback(
+    (next: CreationTimes) => {
+      const workspace = state.activeWorkspace;
+      patch({ createdAt: next });
+      if (workspace) void dbRef.current?.putMeta(createdKey(workspace.id), next);
+    },
+    [state.activeWorkspace, patch],
+  );
+
   const createNote = useCallback(
     async (title: string, folder = "", content?: string) => {
       const workspace = state.activeWorkspace;
@@ -831,10 +923,22 @@ export function useNotebook(request: NotebookRequest = {}) {
       if (stillEmpty.length !== state.emptyFolders.length) {
         void dbRef.current?.putMeta(emptyFoldersKey(workspace.id), stillEmpty);
       }
+      // So the sidebar can put it where it was written rather than where its
+      // name falls in the alphabet.
+      putCreated(withCreated(state.createdAt, note.path, new Date().toISOString()));
       rememberTabs(workspace.id, open, note.path);
       return note;
     },
-    [state.activeWorkspace, state.tree, state.openNotes, state.emptyFolders, patch, rememberTabs],
+    [
+      state.activeWorkspace,
+      state.tree,
+      state.openNotes,
+      state.emptyFolders,
+      state.createdAt,
+      putCreated,
+      patch,
+      rememberTabs,
+    ],
   );
 
   /**
@@ -862,6 +966,9 @@ export function useNotebook(request: NotebookRequest = {}) {
       const activePath = state.activePath === path ? (open[0]?.path ?? null) : state.activePath;
 
       patch({ tree: removeFromTree(state.tree, path), openNotes: open, activePath });
+      // A stamp left behind would date the next note created at this path to
+      // whenever the deleted one was written.
+      putCreated(withoutCreated(state.createdAt, path));
       rememberTabs(workspace.id, open, activePath);
     },
     [
@@ -870,7 +977,9 @@ export function useNotebook(request: NotebookRequest = {}) {
       state.activePath,
       state.activeWorkspace,
       state.lockedPaths,
+      state.createdAt,
       putLocked,
+      putCreated,
       patch,
       rememberTabs,
     ],
@@ -901,6 +1010,13 @@ export function useNotebook(request: NotebookRequest = {}) {
         openNotes: open,
         activePath,
       });
+
+      // A rename is the same note under a new name, and a drag into another
+      // folder is the same note somewhere else. Neither is a new note, so
+      // neither loses when it was written or where somebody put it.
+      putCreated(withCreatedRenamed(state.createdAt, note.path, renamed.path));
+      putTreeOrder(withPathRenamed(state.treeOrder, note.path, renamed.path));
+
       if (state.activeWorkspace) rememberTabs(state.activeWorkspace.id, open, activePath);
       return renamed;
     },
@@ -910,7 +1026,11 @@ export function useNotebook(request: NotebookRequest = {}) {
       state.activePath,
       state.activeWorkspace,
       state.lockedPaths,
+      state.createdAt,
+      state.treeOrder,
       putLocked,
+      putCreated,
+      putTreeOrder,
       patch,
       rememberTabs,
     ],
@@ -944,6 +1064,45 @@ export function useNotebook(request: NotebookRequest = {}) {
       if (workspace) void dbRef.current?.putMeta(pinnedKey(workspace.id), next);
     },
     [state.activeWorkspace, patch],
+  );
+
+  /**
+   * Switches how the tree is sorted.
+   *
+   * Folders somebody arranged by hand are left alone: the mode is what to do
+   * with everything nobody has said anything about, and throwing away a
+   * hand-made order because the mode was changed once would make the mode
+   * menu a destructive control.
+   */
+  const setTreeSortMode = useCallback(
+    (mode: TreeSortMode) => putTreeOrder({ ...state.treeOrder, mode }),
+    [state.treeOrder, putTreeOrder],
+  );
+
+  /**
+   * Moves one row up or down within its own folder.
+   *
+   * `siblings` is what the sidebar is currently drawing, so the recorded order
+   * is the one the reader can see rather than the one the sort mode would have
+   * produced.
+   */
+  const moveInTree = useCallback(
+    (siblings: readonly TreeNode[], path: string, direction: -1 | 1) =>
+      putTreeOrder(withMoved(state.treeOrder, siblings, path, direction)),
+    [state.treeOrder, putTreeOrder],
+  );
+
+  /** Drops one row into the gap above or below another in the same folder. */
+  const dropInTree = useCallback(
+    (siblings: readonly TreeNode[], path: string, target: string, position: "before" | "after") =>
+      putTreeOrder(withDropped(state.treeOrder, siblings, path, target, position)),
+    [state.treeOrder, putTreeOrder],
+  );
+
+  /** Puts one folder's contents back under whichever sort mode is in force. */
+  const resetTreeOrder = useCallback(
+    (parent: string) => putTreeOrder(withoutManual(state.treeOrder, parent)),
+    [state.treeOrder, putTreeOrder],
   );
 
   /** Pins a note, or unpins one already pinned. */
@@ -1014,9 +1173,20 @@ export function useNotebook(request: NotebookRequest = {}) {
       );
 
       putEmptyFolders([...state.emptyFolders, ...ancestors, clean].sort());
+
+      // Every level that had to be invented counts as made now, so a folder
+      // and its new parent do not end up dated differently.
+      const at = new Date().toISOString();
+      putCreated(
+        [...ancestors, clean].reduce(
+          (times, folder) => withCreated(times, folder, at),
+          state.createdAt,
+        ),
+      );
+
       return clean;
     },
-    [state.tree, state.emptyFolders, putEmptyFolders],
+    [state.tree, state.emptyFolders, state.createdAt, putEmptyFolders, putCreated],
   );
 
   /**
@@ -1051,6 +1221,9 @@ export function useNotebook(request: NotebookRequest = {}) {
           ),
         );
 
+        putCreated(withCreatedRenamed(state.createdAt, source, target));
+        putTreeOrder(withPathRenamed(state.treeOrder, source, target));
+
         await refreshTree();
       } finally {
         patch({ busy: null });
@@ -1059,7 +1232,18 @@ export function useNotebook(request: NotebookRequest = {}) {
     // `state.openNotes` was here to find an already-open note to rename;
     // `moveFolderContents` looks that up itself, so keeping it in this list
     // would rebuild the callback on every keystroke in any open note.
-    [state.tree, state.activeWorkspace, state.emptyFolders, putEmptyFolders, refreshTree, patch],
+    [
+      state.tree,
+      state.activeWorkspace,
+      state.emptyFolders,
+      state.createdAt,
+      state.treeOrder,
+      putEmptyFolders,
+      putCreated,
+      putTreeOrder,
+      refreshTree,
+      patch,
+    ],
   );
 
   /** Deletes a folder and every note inside it. */
@@ -1093,6 +1277,8 @@ export function useNotebook(request: NotebookRequest = {}) {
           : (open[0]?.path ?? null);
 
         patch({ openNotes: open, activePath });
+        putCreated(withoutCreated(state.createdAt, folder));
+        putTreeOrder(withoutManual(state.treeOrder, folder));
         rememberTabs(workspace.id, open, activePath);
         await refreshTree();
       } finally {
@@ -1105,7 +1291,11 @@ export function useNotebook(request: NotebookRequest = {}) {
       state.activePath,
       state.activeWorkspace,
       state.emptyFolders,
+      state.createdAt,
+      state.treeOrder,
       putEmptyFolders,
+      putCreated,
+      putTreeOrder,
       refreshTree,
       rememberTabs,
       patch,
@@ -1512,9 +1702,19 @@ export function useNotebook(request: NotebookRequest = {}) {
     [state.activeWorkspace, patch],
   );
 
+  /**
+   * The tree as the sidebar draws it: the repository, plus the folders made
+   * here that are still waiting for their first note, in the order the reader
+   * asked for.
+   *
+   * The ordering happens here rather than in the tree itself because the tree
+   * is replaced wholesale by every refresh from GitHub — an order written into
+   * it would survive exactly until the next pull.
+   */
   const displayTree = useMemo(
-    () => withEmptyFolders(state.tree, state.emptyFolders),
-    [state.tree, state.emptyFolders],
+    () =>
+      orderTree(withEmptyFolders(state.tree, state.emptyFolders), state.treeOrder, state.createdAt),
+    [state.tree, state.emptyFolders, state.treeOrder, state.createdAt],
   );
 
   return useMemo(
@@ -1537,6 +1737,10 @@ export function useNotebook(request: NotebookRequest = {}) {
       toggleLocked,
       isLocked,
       movePinned,
+      setTreeSortMode,
+      moveInTree,
+      dropInTree,
+      resetTreeOrder,
       renameFolder,
       deleteFolder,
       setViewMode,
@@ -1565,10 +1769,7 @@ export function useNotebook(request: NotebookRequest = {}) {
        * somebody closes the tab believing it was committed.
        */
       reportError: (message: string) => patch({ error: message }),
-      /**
-       * The tree as the sidebar should draw it: what is in the repository,
-       * plus the folders made here that are still waiting for their first note.
-       */
+      /** The tree as the sidebar should draw it. See `displayTree`. */
       tree: displayTree,
     }),
     [
@@ -1592,6 +1793,10 @@ export function useNotebook(request: NotebookRequest = {}) {
       toggleLocked,
       isLocked,
       movePinned,
+      setTreeSortMode,
+      moveInTree,
+      dropInTree,
+      resetTreeOrder,
       renameFolder,
       deleteFolder,
       displayTree,
@@ -1742,10 +1947,7 @@ function removeFromTree(tree: TreeNode[], path: string): TreeNode[] {
 }
 
 function sortNodes(nodes: TreeNode[]): TreeNode[] {
-  return [...nodes].sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1;
-    return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-  });
+  return [...nodes].sort(compareTreeEntries);
 }
 
 /** The blob SHA the tree reported for a path, when it reported one. */

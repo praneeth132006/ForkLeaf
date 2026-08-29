@@ -1,5 +1,5 @@
 import { deriveTitle, documentStats, extractTags } from "@forkleaf/markdown-engine";
-import type { Note, TreeNode, Workspace } from "@forkleaf/types";
+import { compareTreeNames, type Note, type TreeNode, type Workspace } from "@forkleaf/types";
 
 /**
  * The note index that the dashboard is built on.
@@ -324,9 +324,9 @@ export function queryIndex(entries: IndexEntry[], options: QueryOptions = {}): I
 function compare(a: IndexEntry, b: IndexEntry, sort: SortKey): number {
   switch (sort) {
     case "title":
-      return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+      return compareTreeNames(a.title, b.title);
     case "path":
-      return a.path.localeCompare(b.path, undefined, { sensitivity: "base" });
+      return compareTreeNames(a.path, b.path);
     case "words":
       return b.words - a.words;
     case "recent":
@@ -334,7 +334,7 @@ function compare(a: IndexEntry, b: IndexEntry, sort: SortKey): number {
       // Never-opened notes have no local timestamp, so they sort last rather
       // than pretending to be from 1970.
       if (!a.updatedAt && !b.updatedAt) {
-        return a.path.localeCompare(b.path, undefined, { sensitivity: "base" });
+        return compareTreeNames(a.path, b.path);
       }
       if (!a.updatedAt) return 1;
       if (!b.updatedAt) return -1;
@@ -358,7 +358,7 @@ export function folderCounts(entries: IndexEntry[]): { path: string; count: numb
 
   return [...counts.entries()]
     .map(([path, count]) => ({ path, count }))
-    .sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: "base" }));
+    .sort((a, b) => compareTreeNames(a.path, b.path));
 }
 
 /**
@@ -395,7 +395,7 @@ export function subfolders(
 
   return [...counts.entries()]
     .map(([path, count]) => ({ path, name: path.slice(prefix.length), count }))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+    .sort((a, b) => compareTreeNames(a.name, b.name));
 }
 
 /** How many notes sit in this exact folder rather than in one below it. */
@@ -500,10 +500,12 @@ export function buildNoteTree(entries: IndexEntry[]): NoteFolder {
   }
 
   // Counts roll up, and both lists sort by name so the tree is stable between
-  // renders and between sessions.
+  // renders and between sessions. By natural name order, the same as the
+  // editor's sidebar — a numbered notebook that read in two different orders
+  // depending on which screen you were looking at was its own small bug.
   const finish = (node: NoteFolder): number => {
-    node.folders.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-    node.notes.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
+    node.folders.sort((a, b) => compareTreeNames(a.name, b.name));
+    node.notes.sort((a, b) => compareTreeNames(a.title, b.title));
     node.count =
       node.notes.length + node.folders.reduce((total, child) => total + finish(child), 0);
     return node.count;

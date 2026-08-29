@@ -1,4 +1,4 @@
-import type { RepoRef, TreeNode } from "@forkleaf/types";
+import { compareTreeEntries, type RepoRef, type TreeNode } from "@forkleaf/types";
 import { Transport, type RateLimit, type TransportConfig } from "./http";
 import { GitHubError } from "./errors";
 import { encodeBase64, decodeBase64 } from "./base64";
@@ -1526,12 +1526,15 @@ export function buildTree(entries: { path: string; sha: string; size?: number }[
   return root;
 }
 
-/** Folders first, then files, each alphabetical and case-insensitive. */
+/**
+ * Folders first, then files, each in natural name order.
+ *
+ * Natural rather than plain alphabetical: a notebook whose folders are
+ * numbered `1.`…`10.` is numbered so it reads in that order, and a straight
+ * string compare puts the tenth second.
+ */
 function sortTree(nodes: TreeNode[]): void {
-  nodes.sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1;
-    return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-  });
+  nodes.sort(compareTreeEntries);
   for (const node of nodes) {
     if (node.children) sortTree(node.children);
   }
