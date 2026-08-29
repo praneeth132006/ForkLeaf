@@ -11,6 +11,7 @@ import {
   documentStats,
   joinPath,
   parseRepoTarget,
+  referencedPaths,
   type RepoTarget,
   serializeDocument,
   slugifyFilename,
@@ -47,6 +48,7 @@ import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { fetchSession, signOut } from "@/lib/gateway";
 import { postHogReset } from "@/lib/posthog";
 import { assetPathFor, relativeSrc, resolveImageSrc } from "@/lib/assets";
+import { revealAsset } from "@/lib/reveal-asset";
 import { imageTypeFor } from "@/lib/media";
 import { collectFolders } from "@/lib/tree";
 import { hasRelativeImages, repairNoteLinks } from "@/lib/repair-links";
@@ -188,6 +190,15 @@ export function EditorWorkspace() {
    */
   const currentFolder = notePath ? dirname(notePath) : "";
   const takenPaths = useMemo(() => flattenTree(notebook.tree), [notebook.tree]);
+
+  // Which folders the sidebar should offer to put back under the sort mode.
+  const manualFolders = useMemo(
+    () =>
+      Object.entries(notebook.treeOrder.manual)
+        .filter(([, paths]) => paths.length > 0)
+        .map(([folder]) => folder),
+    [notebook.treeOrder],
+  );
 
   /**
    * Where images in this note come from and go.
@@ -443,15 +454,74 @@ export function EditorWorkspace() {
   }, [notebook, workspace, signInAgain]);
 
   /**
-   * Opens whatever a stuck file needs somebody to look at.
+   * The element the note is drawn into, so a picture in it can be found.
+   *
+   * A ref rather than an id lookup: two editors are never on screen at once
+   * today, but a `document.querySelector` that assumes so is a bug waiting for
+   * the day one is.
+   */
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * Rings an image once the note it is in has actually drawn it.
+   *
+   * Opening a note is not the same as the note being on screen: its text is
+   * fetched, the editor mounts, and an image resolves through an asset store
+   * that may still be reading the bytes off this device. Marking the image in
+   * the same tick as the open would reliably mark nothing.
+   *
+   * So it is retried across frames until the image appears or the window
+   * closes. The window exists because "never" is a real answer — raw markdown
+   * view draws no images at all — and something has to say so rather than
+   * polling for the rest of the session.
+   */
+  const revealWhenDrawn = useCallback(
+    (notePath: string, assetPath: string) =>
+      new Promise<"revealed" | "not-rendered">((resolve) => {
+        const deadline = Date.now() + 2500;
+
+        const attempt = () => {
+          const outcome = revealAsset({
+            root: canvasRef.current,
+            notePath,
+            assetPath,
+            // Recomputed each time: the resolver reads an asset store that
+            // fills up while this is running, so its answer for a picture
+            // being read off disk changes between one frame and the next.
+            resolvedSrc: images.resolve?.(relativeSrc(notePath, assetPath)) ?? null,
+          });
+
+          if (outcome === "revealed" || Date.now() > deadline) {
+            resolve(outcome);
+            return;
+          }
+
+          requestAnimationFrame(attempt);
+        };
+
+        requestAnimationFrame(attempt);
+      }),
+    [images],
+  );
+
+  /**
+   * Opens whatever a stuck file needs somebody to look at, and points at it.
    *
    * A note is its own answer — open it. A picture is not: it has no note of
    * its own, it lives inside one, and the one thing the reader needs is to be
-   * standing in front of that note with the image in view. So its filename is
-   * looked for across the notebook and the note carrying it is opened.
+   * standing in front of that note with the image in view.
    *
-   * A picture nothing references any more still gets an honest outcome: there
-   * is nowhere to go, and saying so beats opening an unrelated note.
+   * Which note that is used to be decided by `content.includes(filename)`,
+   * which is a substring search for a bare name. It matched a note that merely
+   * wrote the words `sunset.png` in a sentence, matched `archive/sunset.png`
+   * in a different folder as readily as the picture actually queued, and, when
+   * several notes were candidates, opened whichever came first. Every
+   * reference form is resolved against the note holding it now, so the match
+   * is the file and not its name.
+   *
+   * Opening the note was also only half the errand: in a note of any length,
+   * "it is in here somewhere" is the same complaint the button was added to
+   * answer, moved one step later. The image is scrolled to and ringed.
    */
   const locateUnsynced = useCallback(
     async (path: string) => {
@@ -462,18 +532,34 @@ export function EditorWorkspace() {
 
       const name = path.split("/").pop() ?? path;
       const notes = await notebook.allNotes();
-      const holder = notes.find((note) => note.content.includes(name));
+      const holders = notes.filter((note) =>
+        referencedPaths(note.path, note.content).includes(path),
+      );
+      const holder = holders[0];
 
-      if (holder) {
-        await notebook.openNote(holder.path);
+      if (!holder) {
+        setNotice(
+          `${name} is not referenced by any note any more. Removing it will unblock everything else.`,
+        );
         return;
       }
 
+      await notebook.openNote(holder.path);
+
+      // Also used in more than one note, which changes what removing it means.
+      const alsoIn = holders.length > 1 ? ` It is used in ${holders.length} notes.` : "";
+
+      const outcome = await revealWhenDrawn(holder.path, path);
+
       setNotice(
-        `${name} is not referenced by any note any more. Removing it will unblock everything else.`,
+        outcome === "revealed"
+          ? `${name} is here, in ${holder.path}.${alsoIn}`
+          : // Raw markdown draws no images, so there is nothing on screen to
+            // ring. Saying which note it is in beats a silent no-op.
+            `${name} is in ${holder.path}. Switch to Rich or Split view to see it.${alsoIn}`,
       );
     },
-    [notebook],
+    [notebook, revealWhenDrawn],
   );
 
   // ── Actions ─────────────────────────────────────────────────────────────
@@ -1318,6 +1404,12 @@ export function EditorWorkspace() {
             pinnedPaths={notebook.pinnedPaths}
             {...(notebook.expandedFolders ? { openFolders: notebook.expandedFolders } : {})}
             onOpenFoldersChange={notebook.setExpandedFolders}
+            sortMode={notebook.treeOrder.mode}
+            onSortModeChange={notebook.setTreeSortMode}
+            onReorder={notebook.moveInTree}
+            onReorderTo={notebook.dropInTree}
+            onResetOrder={notebook.resetTreeOrder}
+            manualFolders={manualFolders}
             onTogglePin={notebook.togglePinned}
             onMovePin={notebook.movePinned}
             user={user}
@@ -1583,7 +1675,7 @@ export function EditorWorkspace() {
           )}
 
           {/* ── Canvas ───────────────────────────────────────────────── */}
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div ref={canvasRef} className="flex min-h-0 flex-1 flex-col">
             {note ? (
               <MarkdownEditor
                 key={note.id}

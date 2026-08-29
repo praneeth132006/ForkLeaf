@@ -312,7 +312,7 @@ export function SyncProblem({
                               onLocate(change.path);
                               setOpen(false);
                             }}
-                            title={`Open the note ${change.path} is in`}
+                            title={`Show ${change.path} in the note that uses it`}
                             aria-label={`Find ${change.path}`}
                             className="rounded border border-[var(--fl-border)] px-1.5 py-0.5 text-[10.5px] font-medium text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
                           >
@@ -347,7 +347,7 @@ export function SyncProblem({
                   reasonably be read as deleting the note it sits in. */}
               <p className="mt-2 text-[11px] leading-relaxed text-[var(--fl-muted)]">
                 <strong className="font-semibold text-[var(--fl-text)]">Find</strong> opens the note
-                the file is in.{" "}
+                the file is in and rings it.{" "}
                 <strong className="font-semibold text-[var(--fl-text)]">Remove</strong> takes it out
                 of the queue so everything behind it can push — your notes and their text are
                 untouched.
