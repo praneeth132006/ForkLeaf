@@ -1,7 +1,14 @@
 import React from "react";
 import Link from "next/link";
 import { ForkLeafLogo } from "@/components/Brand";
-import { CONTRIBUTING_URL, ISSUES_URL, LICENSE_URL, REPO_URL } from "@/lib/constants";
+import {
+  CONTRIBUTING_URL,
+  ISSUES_URL,
+  LICENSE_URL,
+  REPO_URL,
+  SUPPORT_EMAIL,
+  SUPPORT_MAILTO,
+} from "@/lib/constants";
 import { SectionLink } from "./SectionLink";
 
 /**
@@ -60,6 +67,16 @@ const COLUMNS = [
     ],
   },
   {
+    heading: "Support",
+    links: [
+      { label: "Getting help", href: "/support" },
+      { label: "Email support", href: SUPPORT_MAILTO },
+      { label: "Troubleshooting", href: "/docs/troubleshooting" },
+      { label: "Report a bug", href: ISSUES_URL },
+      { label: "FAQ", href: "/docs/faq" },
+    ],
+  },
+  {
     heading: "Legal & data",
     links: [
       { label: "Privacy Policy", href: "/privacy" },
@@ -75,7 +92,7 @@ export function Footer() {
   return (
     <footer className="border-t border-[var(--fl-border)] bg-[var(--fl-bg)]">
       <div className="mx-auto w-full max-w-6xl px-6 py-16">
-        <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_repeat(5,minmax(0,1fr))]">
+        <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-[1.5fr_repeat(6,minmax(0,1fr))]">
           <div>
             <ForkLeafLogo textClassName="text-[1.0625rem]" />
             <p className="mt-4 max-w-xs text-[14px] leading-relaxed text-[var(--fl-muted)]">
@@ -105,6 +122,7 @@ export function Footer() {
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <FooterLink href="/privacy">Privacy</FooterLink>
             <FooterLink href="/terms">Terms</FooterLink>
+            <FooterLink href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</FooterLink>
             <span>Your notes are in your repository, not ours.</span>
           </div>
         </div>
@@ -128,6 +146,16 @@ function FooterLink({ href, children }: { href: string; children: React.ReactNod
       <SectionLink hash={href} className={className}>
         {children}
       </SectionLink>
+    );
+  }
+
+  // A mail client is not a tab, so `target="_blank"` would open an empty one
+  // beside the compose window and leave it there.
+  if (href.startsWith("mailto:")) {
+    return (
+      <a href={href} className={className}>
+        {children}
+      </a>
     );
   }
 

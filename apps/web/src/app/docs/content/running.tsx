@@ -1,4 +1,5 @@
-import { A, Code, Def, H2, Lead, P } from "@/components/prose";
+import { A, Code, Def, H2, LI, Lead, P, UL } from "@/components/prose";
+import { ISSUES_URL, SECURITY_URL, SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/constants";
 
 /**
  * What is left of the operations pages: the errors people hit, and the
@@ -182,6 +183,68 @@ export function Faq() {
         Delete the repository on GitHub, clear site data in your browser, and revoke the OAuth app.
         Step-by-step in <A href="/docs/privacy-and-data">Your data</A>.
       </Def>
+    </>
+  );
+}
+
+/**
+ * The last page of the Help section, and the one every "Support" link in the
+ * app can be followed to from inside the documentation.
+ *
+ * Deliberately short. It exists so that somebody reading the docs and not
+ * finding their answer has a next step on the page they are already on, rather
+ * than having to go back to the marketing site to discover there is an inbox.
+ */
+export function Support() {
+  return (
+    <>
+      <Lead>
+        When the documentation does not have your answer, write in. ForkLeaf is built and answered
+        by one person, and the inbox is read.
+      </Lead>
+
+      <H2 id="where">Where to write</H2>
+      <P>
+        Email <A href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</A> for anything specific to your account,
+        your repository, or something you would rather not post in public. A reply usually takes a
+        day or two. For bugs and feature requests that other people would hit too,{" "}
+        <A href={ISSUES_URL}>GitHub Issues</A> is better: it is searchable, and the fix is visible
+        when it lands.
+      </P>
+      <P>
+        Security findings go through the <A href={SECURITY_URL}>security policy</A> rather than the
+        public tracker, so a flaw is fixed before it is advertised.
+      </P>
+
+      <H2 id="include">What to include</H2>
+      <P>
+        None of this is required, but a report with these in it can usually be answered rather than
+        asked about:
+      </P>
+      <UL>
+        <LI>What you were doing, and what happened instead.</LI>
+        <LI>
+          Whether the repository is connected to GitHub, or the notes are local to that browser.
+        </LI>
+        <LI>
+          The exact text of any error, including whatever is behind its “Details” or “Why” link.
+        </LI>
+        <LI>
+          Your browser and operating system, and the note&rsquo;s path if it is about one note.
+        </LI>
+      </UL>
+      <P>
+        Never send a GitHub token, a password, or a screenshot containing one. Nothing about a
+        support request needs one.
+      </P>
+
+      <H2 id="meanwhile">While you wait</H2>
+      <P>
+        Your notes are Markdown files in a repository you own, in ordinary git history. Whatever is
+        wrong with the app, you can clone that repository and keep working in any editor that reads
+        text — nothing you are waiting on a reply for is holding your writing.{" "}
+        <A href="/support">The support page</A> lists what to try first.
+      </P>
     </>
   );
 }

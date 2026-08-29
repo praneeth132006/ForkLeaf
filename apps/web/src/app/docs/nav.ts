@@ -139,6 +139,12 @@ export const DOC_SECTIONS: DocSection[] = [
         title: "FAQ",
         summary: "Short answers to the questions that come up most.",
       },
+      {
+        slug: "support",
+        title: "Contact support",
+        summary:
+          "Where to write when the documentation does not have it, what to include, and how long a reply takes.",
+      },
     ],
   },
 ];

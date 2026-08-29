@@ -1,8 +1,13 @@
 import React from "react";
 import Link from "next/link";
+import { SUPPORT_EMAIL } from "@/lib/constants";
 
-/** Where privacy and data requests go. */
-export const CONTACT_EMAIL = "praneeth2006.dev@gmail.com";
+/**
+ * Where privacy and data requests go — the support address, because it is the
+ * same inbox and two addresses that reach one person is a way to be told a
+ * problem twice and answer it once.
+ */
+export const CONTACT_EMAIL = SUPPORT_EMAIL;
 
 /**
  * The date shown on the legal pages.

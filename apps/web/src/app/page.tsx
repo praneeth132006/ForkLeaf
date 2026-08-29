@@ -10,6 +10,7 @@ import { Positioning } from "@/components/landing/Positioning";
 import { Comparison } from "@/components/landing/Comparison";
 import { Ownership } from "@/components/landing/Ownership";
 import { Faq } from "@/components/landing/Faq";
+import { Support } from "@/components/landing/Support";
 import { Pricing } from "@/components/landing/Pricing";
 import { CallToAction } from "@/components/landing/CallToAction";
 import { Footer } from "@/components/landing/Footer";
@@ -78,6 +79,7 @@ export default async function Home({
         <Ownership />
         <Pricing />
         <Faq />
+        <Support />
         <CallToAction githubAvailable={githubAvailable} />
       </main>
 

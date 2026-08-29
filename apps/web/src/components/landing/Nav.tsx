@@ -22,6 +22,7 @@ const SECTIONS = [
   { hash: "#features", label: "Features" },
   { hash: "#compare", label: "Compare" },
   { hash: "#pricing", label: "Pricing" },
+  { hash: "#support", label: "Support" },
 ] as const;
 
 export function Nav({
