@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildPdf } from "./fixture";
 import { openPdf, PdfOpenError } from "./document";
 import { createCitation, parseCitation, resolveCitation, serializeCitation } from "./citation";
@@ -12,20 +12,21 @@ import { searchPdf } from "./search";
  * runs `assemblePageText` expects. This is the test that fails if a pdf.js
  * upgrade changes the shape of a text item, and it is the only one that could.
  *
- * ## Two polyfills
+ * ## Which pdf.js build runs here
  *
- * pdf.js 6 targets current browsers and uses two methods Node does not have
- * yet. Its own guidance for Node is to use the `legacy` build, which is a
- * second, transpiled copy of the whole library; three lines here are cheaper
- * and leave the app running the build it actually ships.
+ * The suite aliases `pdfjs-dist` to its `legacy` build (see
+ * `vitest.config.ts`). The default entry point targets current browsers and
+ * uses whatever V8 has shipped most recently; Node lags that, and the failure
+ * mode is silent — `getDocument` simply never settles. The app still ships the
+ * modern build to browsers, where it belongs.
+ *
+ * That build is transpiled and takes a beat to start: the first document
+ * costs well over a second, and every one after it a couple of milliseconds.
+ * The default five-second timeout leaves too little room for that on a shared
+ * runner, so this file asks for more — a slow first parse is not a failure,
+ * and a suite that goes red on a busy afternoon teaches everyone to ignore it.
  */
-const proto = Map.prototype as unknown as Record<string, unknown>;
-proto.getOrInsertComputed ??= function <K, V>(this: Map<K, V>, key: K, make: (key: K) => V): V {
-  if (!this.has(key)) this.set(key, make(key));
-  return this.get(key)!;
-};
-const maths = Math as unknown as Record<string, unknown>;
-maths.sumPrecise ??= (values: Iterable<number>) => [...values].reduce((a, b) => a + b, 0);
+vi.setConfig({ testTimeout: 30_000 });
 
 const DOCUMENT = buildPdf([
   {
