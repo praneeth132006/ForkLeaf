@@ -27,6 +27,27 @@ export interface LinkBridge {
    * open a tab rather than navigating away from unsaved work.
    */
   open: (target: string, anchor: string | null) => void;
+
+  /**
+   * A click on an ordinary markdown link, offered to the app first.
+   *
+   * Returning true claims the click and stops the browser following it;
+   * returning false — or not supplying this at all — leaves the link to behave
+   * exactly as it did before.
+   *
+   * This exists for links to files the app can open itself rather than
+   * navigate to. A PDF beside a note is the case it was added for: `[the
+   * paper](papers/x.pdf#page=12)` is a perfectly ordinary markdown link, it
+   * renders as one on github.com, and in ForkLeaf it should open the reader on
+   * page 12 rather than navigating the tab away from unsaved work to a URL the
+   * browser cannot resolve anyway.
+   *
+   * Deliberately a *veto*, not a handler. The bridge sees every link click and
+   * claims the few it recognises, so nothing has to enumerate in advance which
+   * hrefs are special — and an app that supplies no `openHref` behaves as
+   * though this were never added.
+   */
+  openHref?: (href: string) => boolean;
 }
 
 /** The resolver `markdownToHtml` wants, from a bridge that may not be there. */
@@ -35,24 +56,45 @@ export function wikilinkResolver(bridge: LinkBridge | undefined) {
 }
 
 /**
- * Turns a click anywhere inside rendered markdown into a wikilink open.
+ * Turns a click anywhere inside rendered markdown into an open.
  *
  * Delegated from a container rather than bound per link: the HTML is injected
  * with `dangerouslySetInnerHTML`, so there is no React element to put a
- * handler on. Returns true when the click was a wikilink and has been handled.
+ * handler on. Returns true when the click has been handled and the browser
+ * should not follow it.
+ *
+ * Wikilinks are checked first because they are unambiguous — a `data-wikilink`
+ * anchor is one by construction. An ordinary link is only claimed if the app
+ * says it wants it.
  */
-export function handleWikilinkClick(event: MouseEvent, bridge: LinkBridge | undefined): boolean {
+export function handleLinkClick(event: MouseEvent, bridge: LinkBridge | undefined): boolean {
   if (!bridge) return false;
   // Leave the browser's own affordances alone: ⌘-click, middle-click and
   // right-click should still do what they do everywhere else.
   if (event.defaultPrevented || event.button !== 0) return false;
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
 
-  const anchor = (event.target as HTMLElement | null)?.closest<HTMLElement>("a[data-wikilink]");
-  const target = anchor?.dataset.wikilink;
-  if (!target) return false;
+  const element = event.target as HTMLElement | null;
+
+  const wikilink = element?.closest<HTMLElement>("a[data-wikilink]");
+  const target = wikilink?.dataset.wikilink;
+  if (target) {
+    event.preventDefault();
+    bridge.open(target, wikilink?.dataset.wikilinkAnchor ?? null);
+    return true;
+  }
+
+  const anchor = element?.closest<HTMLAnchorElement>("a[href]");
+  // `getAttribute` rather than `.href`, which the DOM has already resolved
+  // into an absolute URL against this page — turning the relative path the
+  // note actually contains into `https://forkleaf.app/papers/x.pdf`, which is
+  // not a path the app can look up in a repository.
+  const href = anchor?.getAttribute("href");
+  if (!href || !bridge.openHref?.(href)) return false;
 
   event.preventDefault();
-  bridge.open(target, anchor?.dataset.wikilinkAnchor ?? null);
   return true;
 }
+
+/** @deprecated Use `handleLinkClick`, which also offers ordinary links. */
+export const handleWikilinkClick = handleLinkClick;

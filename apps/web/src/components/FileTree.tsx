@@ -730,7 +730,13 @@ const TreeItem = memo(function TreeItem({
           <span
             className={`shrink-0 ${active ? "text-[var(--fl-accent)]" : "text-[var(--fl-muted)]"}`}
           >
-            {isFolder ? <FolderGlyph open={open} /> : <FileGlyph />}
+            {isFolder ? (
+              <FolderGlyph open={open} />
+            ) : isPdf(node.path) ? (
+              <PdfGlyph />
+            ) : (
+              <FileGlyph />
+            )}
           </span>
           <span
             className={`truncate text-[14px] leading-[1.35] ${
@@ -807,6 +813,40 @@ function FolderGlyph({ open }: { open: boolean }) {
           it is in; the icon only has to say "folder". */}
       <path d="M2 12.4V4.4a.9.9 0 0 1 .9-.9h2.7l1.4 1.6h6.1a.9.9 0 0 1 .9.9v6.4a.9.9 0 0 1-.9.9H2.9a.9.9 0 0 1-.9-.9Z" />
       {open && <path d="M2.3 6.9h11.4" />}
+    </svg>
+  );
+}
+
+/** True for a row that opens in the reader rather than the editor. */
+function isPdf(path: string): boolean {
+  return /\.pdf$/i.test(path);
+}
+
+/**
+ * A page with a corner turned down, for a document ForkLeaf reads but does not
+ * write.
+ *
+ * Deliberately close to the note glyph rather than a red "PDF" badge. The
+ * distinction the sidebar needs to draw is "this one opens somewhere else",
+ * which a different silhouette carries at 17 pixels; a brand colour would make
+ * the one row in the tree that is not a note the loudest thing in it.
+ */
+function PdfGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-[17px] w-[17px]"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3.6 2.6h5.3l3.5 3.5v7.3a.9.9 0 0 1-.9.9H3.6a.9.9 0 0 1-.9-.9V3.5a.9.9 0 0 1 .9-.9Z" />
+      <path d="M8.9 2.6v3.5h3.5" />
+      {/* Dense ruling: a typeset page, rather than a note's two written lines. */}
+      <path d="M5.2 8.4h5.6M5.2 10.3h5.6M5.2 12.2h3.6" />
     </svg>
   );
 }

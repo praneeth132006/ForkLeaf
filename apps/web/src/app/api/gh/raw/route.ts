@@ -7,10 +7,10 @@ import {
   ApiError,
   forgetDeadSession,
 } from "@/lib/api-helpers";
-import { imageTypeFor } from "@/lib/media";
+import { imageTypeFor, servableTypeFor } from "@/lib/media";
 
 /**
- * Serves an image out of the repository.
+ * Serves a file out of the repository — an image in a note, or a PDF.
  *
  * Notes reference their images by repo-relative path, which is what makes them
  * render on github.com and in any other markdown tool. The browser cannot
@@ -18,9 +18,17 @@ import { imageTypeFor } from "@/lib/media";
  * fetch the file even if it could — the OAuth token lives on the server. So
  * this route is the bridge: same-origin URL in, image bytes out.
  *
- * Only image types are served. This proxy reads with the user's token, so
- * letting it return arbitrary file types would turn it into a way to render
- * repository content as HTML on our own origin.
+ * Only an explicit allowlist of types is served — images, and the documents
+ * ForkLeaf can read. This proxy reads with the user's token, so letting it
+ * return arbitrary file types would turn it into a way to render repository
+ * content as HTML on our own origin.
+ *
+ * Anything that is not an image is additionally sent as an attachment. The
+ * reader fetches a PDF as bytes and parses it in a worker, so it never needs
+ * the browser to render the response — and marking it as a download means that
+ * someone who pastes the URL into the address bar gets a file rather than a
+ * document rendered on this origin. Belt to the `nosniff` and `sandbox`
+ * braces already below.
  */
 /**
  * Headers that must match on a 200 and a 304 alike, or the browser will not
@@ -44,6 +52,18 @@ function cacheHeaders(etag: string): Record<string, string> {
   };
 }
 
+/**
+ * A filename safe to put in a header.
+ *
+ * Quotes and control characters in a `Content-Disposition` value are a header
+ * injection, and a repository path is not something this app chose — it can
+ * contain anything a filesystem allows.
+ */
+function downloadName(path: string): string {
+  const name = path.split("/").pop() ?? "file";
+  return name.replace(/[^\w.\-]+/g, "_").slice(0, 100) || "file";
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { client } = await requireClient();
@@ -53,8 +73,11 @@ export async function GET(request: NextRequest) {
     const path = normalize(params.get("path") ?? "");
     if (!path) throw new ApiError(400, "validation", "A file path is required.");
 
-    const type = imageTypeFor(path);
-    if (!type) throw new ApiError(400, "validation", "That file is not a supported image.");
+    const type = servableTypeFor(path);
+    if (!type) {
+      throw new ApiError(400, "validation", "ForkLeaf does not serve that kind of file.");
+    }
+    const inline = imageTypeFor(path) !== null;
 
     /**
      * The browser's own copy, offered back to GitHub before any bytes move.
@@ -86,6 +109,9 @@ export async function GET(request: NextRequest) {
         ...cacheHeaders(`"${file.sha}"`),
         "Content-Type": type,
         "Content-Length": String(bytes.length),
+        ...(inline
+          ? {}
+          : { "Content-Disposition": `attachment; filename="${downloadName(path)}"` }),
         "Content-Security-Policy": "default-src 'none'; sandbox",
         "X-Content-Type-Options": "nosniff",
       },
@@ -114,9 +140,9 @@ export async function GET(request: NextRequest) {
           headers: { "Cache-Control": "no-store" },
         });
       }
-      return new Response("Could not read that image.", { status: 502 });
+      return new Response("Could not read that file.", { status: 502 });
     }
     console.error("[forkleaf] Raw asset error:", error);
-    return new Response("Could not read that image.", { status: 500 });
+    return new Response("Could not read that file.", { status: 500 });
   }
 }

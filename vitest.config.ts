@@ -1,8 +1,18 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
+
+/**
+ * Resolved rather than written as a path: pnpm does not hoist, so
+ * `pdfjs-dist` lives under the one workspace package that depends on it and
+ * nowhere a relative path from here could reliably reach.
+ */
+const legacyPdfJs = createRequire(r("./packages/pdf/package.json")).resolve(
+  "pdfjs-dist/legacy/build/pdf.mjs",
+);
 
 export default defineConfig({
   plugins: [react()],
@@ -29,6 +39,24 @@ export default defineConfig({
       "@forkleaf/diagrams": r("./packages/diagrams/src/index.ts"),
       "@forkleaf/exporter": r("./packages/exporter/src/index.ts"),
       "@forkleaf/editor": r("./packages/editor/src/index.ts"),
+      "@forkleaf/pdf": r("./packages/pdf/src/index.ts"),
+      /**
+       * pdf.js's Node build, for the tests only.
+       *
+       * The default entry point targets current browsers and reaches for
+       * whatever V8 has shipped most recently — `Map.getOrInsertComputed` and
+       * `Math.sumPrecise` among them. Node lags that by a release or two, and
+       * the failure mode is the worst kind: `getDocument` never settles, so
+       * every test in `document.test.ts` sits there until the timeout with
+       * nothing thrown and nothing logged but pdf.js's own advice, which is
+       * exactly this — "please use the `legacy` build in Node.js".
+       *
+       * Scoped to the test runner deliberately. The app still bundles and
+       * ships the modern build to browsers, which is where it belongs; only
+       * the suite, which has no browser, takes the transpiled one. Guessing at
+       * polyfills instead would work until the next V8 feature pdf.js adopts.
+       */
+      "pdfjs-dist": legacyPdfJs,
     },
   },
 });

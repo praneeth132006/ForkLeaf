@@ -58,7 +58,7 @@ export const DOC_SECTIONS: DocSection[] = [
         slug: "reading",
         title: "Reading a note",
         summary:
-          "Following links, the hover card that says where they go, reading a linked file, and locking a note so reading it cannot change it.",
+          "Following links, the hover card that says where they go, reading a linked file, reading and citing a PDF, and locking a note so reading it cannot change it.",
       },
       {
         slug: "export",

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { markdownToHtml, extractMermaidBlocks } from "@forkleaf/markdown-engine";
 import { renderDiagram, LIGHT_THEME, DARK_THEME } from "@forkleaf/diagrams";
 import { useDocumentTheme } from "./useDocumentTheme";
-import { handleWikilinkClick, type LinkBridge } from "./links";
+import { handleLinkClick, type LinkBridge } from "./links";
 
 export interface PreviewProps {
   markdown: string;
@@ -149,7 +149,7 @@ export function Preview({
     if (!container) return;
 
     const handler = (event: MouseEvent) => {
-      if (handleWikilinkClick(event, links)) return;
+      if (handleLinkClick(event, links)) return;
       if (!onDiagramClick) return;
 
       const figure = (event.target as HTMLElement).closest<HTMLElement>("[data-diagram-index]");
