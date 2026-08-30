@@ -47,6 +47,8 @@ import { readDroppedPdf } from "@/lib/local-files";
 import { insertionFor, quoteMarkdown } from "@/lib/pdf-quote";
 import { isPdfPath } from "@/lib/media";
 import { useTheme } from "@/hooks/useTheme";
+import { ColumnResizer } from "@/components/ColumnResizer";
+import { useColumnWidth } from "@/hooks/useColumnWidth";
 import { EditorSidebar } from "@/components/EditorSidebar";
 import { EditorRightPanel } from "@/components/EditorRightPanel";
 import { EditorStatusBar } from "@/components/EditorStatusBar";
@@ -135,6 +137,22 @@ function subscribeToPdfBeside(onChange: () => void): () => void {
   return () => window.removeEventListener("storage", handle);
 }
 
+/**
+ * How wide each side column may be dragged, and where it starts.
+ *
+ * Bounds rather than free rein: a file tree narrower than about eleven
+ * characters of filename is not a file tree, and one wide enough to leave the
+ * note forty characters across is a way to make the app useless with one
+ * accidental drag. The defaults are the widths the columns had when they were
+ * fixed, so nobody who never touches a seam sees any change at all.
+ */
+const COLUMNS = {
+  sidebar: { key: "forkleaf:width:sidebar", start: 256, min: 180, max: 520 },
+  panel: { key: "forkleaf:width:panel", start: 288, min: 240, max: 560 },
+  reader: { key: "forkleaf:width:reader", start: 640, min: 360, max: 1120 },
+  index: { key: "forkleaf:width:pdf-index", start: 288, min: 200, max: 520 },
+} as const;
+
 const MODES: { value: EditorViewMode; label: string; hint: string }[] = [
   { value: "wysiwyg", label: "Rich", hint: "Format as you type" },
   { value: "split", label: "Split", hint: "Markdown beside a live preview" },
@@ -160,6 +178,27 @@ export function EditorWorkspace() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+
+  // The widths of the three columns that are not the document, each dragged by
+  // the seam beside it and remembered on this device.
+  const [sidebarWidth, setSidebarWidth, resetSidebarWidth] = useColumnWidth(
+    COLUMNS.sidebar.key,
+    COLUMNS.sidebar.start,
+    COLUMNS.sidebar.min,
+    COLUMNS.sidebar.max,
+  );
+  const [panelWidth, setPanelWidth, resetPanelWidth] = useColumnWidth(
+    COLUMNS.panel.key,
+    COLUMNS.panel.start,
+    COLUMNS.panel.min,
+    COLUMNS.panel.max,
+  );
+  const [readerWidth, setReaderWidth, resetReaderWidth] = useColumnWidth(
+    COLUMNS.reader.key,
+    COLUMNS.reader.start,
+    COLUMNS.reader.min,
+    COLUMNS.reader.max,
+  );
   /**
    * Which panel is open over the document on a narrow screen.
    *
@@ -1729,9 +1768,10 @@ export function EditorWorkspace() {
         <div
           className={`fl-panel ${
             drawer === "files"
-              ? "fixed inset-y-2 left-2 z-40 flex w-[min(19rem,85vw)] shadow-[var(--fl-shadow-lg)] md:static md:z-auto md:w-auto md:shadow-none"
+              ? "fixed inset-y-2 left-2 z-40 flex w-[min(19rem,85vw)] shadow-[var(--fl-shadow-lg)] md:static md:z-auto md:shadow-none"
               : "hidden md:flex"
-          }`}
+          } ${sidebarCollapsed ? "md:w-auto" : "md:w-[var(--fl-col)]"}`}
+          style={{ "--fl-col": `${sidebarWidth}px` } as React.CSSProperties}
         >
           <EditorSidebar
             collapsed={sidebarCollapsed}
@@ -1784,6 +1824,22 @@ export function EditorWorkspace() {
             githubAvailable={notebook.session?.githubAvailable ?? false}
           />
         </div>
+
+        {/* The seam between the file tree and the document. Hidden on a phone,
+            where the tree is a drawer over the document and has no edge to
+            share with it. */}
+        {!sidebarCollapsed && (
+          <ColumnResizer
+            label="Notes and folders"
+            width={sidebarWidth}
+            min={COLUMNS.sidebar.min}
+            max={COLUMNS.sidebar.max}
+            side="left"
+            onChange={setSidebarWidth}
+            onReset={resetSidebarWidth}
+            className="hidden md:block"
+          />
+        )}
 
         <main className="fl-panel flex min-w-0 flex-1 flex-col">
           {/* ── Header ────────────────────────────────────────────────── */}
@@ -2095,7 +2151,23 @@ export function EditorWorkspace() {
           container that `goToPage` looks up by selector.
         */}
         {reader.status !== "idle" && (
-          <div className="fl-panel fixed inset-2 z-40 flex overflow-hidden shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:w-[min(46rem,45vw)] lg:shrink-0 lg:shadow-none">
+          <ColumnResizer
+            label="Reader"
+            width={readerWidth}
+            min={COLUMNS.reader.min}
+            max={COLUMNS.reader.max}
+            side="right"
+            onChange={setReaderWidth}
+            onReset={resetReaderWidth}
+            className="hidden lg:block"
+          />
+        )}
+
+        {reader.status !== "idle" && (
+          <div
+            className="fl-panel fixed inset-2 z-40 flex overflow-hidden shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:w-[var(--fl-col)] lg:max-w-[70vw] lg:shrink-0 lg:shadow-none"
+            style={{ "--fl-col": `${readerWidth}px` } as React.CSSProperties}
+          >
             <PdfReader
               reader={reader}
               initialCitation={readerCitation}
@@ -2123,12 +2195,26 @@ export function EditorWorkspace() {
         )}
 
         {(!panelCollapsed || drawer === "document") && reader.status === "idle" && (
+          <ColumnResizer
+            label="Document panel"
+            width={panelWidth}
+            min={COLUMNS.panel.min}
+            max={COLUMNS.panel.max}
+            side="right"
+            onChange={setPanelWidth}
+            onReset={resetPanelWidth}
+            className="hidden lg:block"
+          />
+        )}
+
+        {(!panelCollapsed || drawer === "document") && reader.status === "idle" && (
           <div
-            className={`fl-panel ${
+            className={`fl-panel lg:w-[var(--fl-col)] ${
               drawer === "document"
-                ? "fixed inset-y-2 right-2 z-40 flex w-[min(21rem,88vw)] shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:w-auto lg:shadow-none"
+                ? "fixed inset-y-2 right-2 z-40 flex w-[min(21rem,88vw)] shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:shadow-none"
                 : "hidden lg:flex"
             }`}
+            style={{ "--fl-col": `${panelWidth}px` } as React.CSSProperties}
           >
             <EditorRightPanel
               collapsed={false}
