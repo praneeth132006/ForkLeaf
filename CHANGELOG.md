@@ -58,6 +58,30 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### A picture too big to send can be resized instead of deleted
+
+When an image cannot be pushed — a screenshot is larger than GitHub will take
+in one request — the panel offered exactly one way out: remove it. The picture
+was fine; there was simply more of it than the wire would carry.
+
+- **Resize** now sits beside Remove for any PNG, JPEG or WebP that is stuck.
+  Pick how small — as large as will still send, 1 MB, or 500 KB — and the
+  picture is re-encoded, replaces the copy on this device, and is pushed again.
+  Your notes keep showing it, at the same path, in the same format
+- Quality comes down before size does, so a photograph stays full-size where it
+  can; a screenshot comes down in scale, which is what actually makes it small
+- Animated GIFs are not offered: a canvas holds one frame, so "resizing" one
+  would silently throw away every frame but the first
+
+### Fixed — removing a stuck image left the note pointing at nothing
+
+**Remove** took the file out of the queue and off this device and left the
+markdown in place, so a note that used to show a chart showed a broken-image
+icon instead — with no file left anywhere to put back. It now takes the image
+out of every note that used it, in every form a reference can take. A link to
+the file keeps its words and loses the link; a line that held nothing but the
+image goes with it.
+
 ### Everything you have written about a paper, on the paper
 
 Open a PDF from your repository and the contents column has a third tab:

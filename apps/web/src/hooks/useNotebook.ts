@@ -24,7 +24,7 @@ import {
   type Workspace,
   type EditorViewMode,
 } from "@forkleaf/types";
-import { dirname, serializeDocument } from "@forkleaf/markdown-engine";
+import { dirname, removeReferencesTo, serializeDocument } from "@forkleaf/markdown-engine";
 import {
   GitHubGateway,
   LocalGateway,
@@ -40,7 +40,8 @@ import {
   visibleWorkspaces,
 } from "@/lib/workspaces";
 import { forgetLock, isPathLocked, lockedKey, renameLock, toggleLock } from "@/lib/locks";
-import { assetFrom, assetObjectUrl } from "@/lib/assets";
+import { assetBlob, assetFrom, assetObjectUrl, blobAsBase64, isImagePath } from "@/lib/assets";
+import { shrinkImage, ShrinkError } from "@/lib/shrink-image";
 import {
   DEFAULT_TREE_ORDER,
   orderTree,
@@ -1593,15 +1594,57 @@ export function useNotebook(request: NotebookRequest = {}) {
   }, [state.activeWorkspace]);
 
   /**
+   * Takes an image out of every note that shows it.
+   *
+   * The other half of removing a picture. Dropping the file and leaving the
+   * markdown behind is not "removed" — it is a note that used to show a chart
+   * and now shows a broken-image icon, in a file the reader was told had been
+   * dealt with. The file and the places it was used are one thing, so they go
+   * together.
+   *
+   * A locked note is edited too, deliberately. The lock exists to stop a note
+   * being changed by accident; this is somebody deleting a file on purpose,
+   * and a reference left pointing at a file that is definitely gone is worse
+   * for that note than the edit is.
+   */
+  const forgetImageEverywhere = useCallback(
+    async (workspace: Workspace, path: string) => {
+      const notes = repoRef.current;
+      if (!notes) return;
+
+      for (const note of await notes.listNotes(workspace.id)) {
+        const next = removeReferencesTo(note.path, note.content, path);
+        if (next === note.content) continue;
+
+        await notes.saveNote(note, next);
+        patchOpenNote(note.path, { content: next, dirty: true });
+      }
+    },
+    [patchOpenNote],
+  );
+
+  /**
    * Drops one stuck change, so the queue behind it can move.
    *
    * The way out of a change that can never be pushed. Needs a refresh of the
    * sync state afterwards because the queue is the thing that changed, and
    * nothing about a removal arrives through a push.
    */
-  const discardChange = useCallback(async (id: string) => {
-    await syncRef.current?.discardChange(id);
-  }, []);
+  const discardChange = useCallback(
+    async (id: string) => {
+      // Read before the discard, since the queue is where the path lives and
+      // the discard is what takes it out of there.
+      const stuck = state.sync.unpushed.find((change) => change.id === id);
+      const workspace = state.activeWorkspace;
+
+      await syncRef.current?.discardChange(id);
+
+      if (stuck && workspace && isImagePath(stuck.path)) {
+        await forgetImageEverywhere(workspace, stuck.path);
+      }
+    },
+    [state.sync.unpushed, state.activeWorkspace, forgetImageEverywhere],
+  );
 
   /**
    * Changes how eagerly this workspace pushes.
@@ -1746,6 +1789,57 @@ export function useNotebook(request: NotebookRequest = {}) {
     [state.activeWorkspace, urlForAsset],
   );
 
+  /**
+   * Makes a stuck image small enough to send, and sends it.
+   *
+   * The alternative on offer used to be deletion, full stop, which is a
+   * strange demand to make about a screenshot that is perfectly good and
+   * merely bigger than one request will carry. The resized file replaces the
+   * original everywhere it is held — the copy on this device and the bytes
+   * waiting in the queue — so the note keeps rendering the picture it always
+   * did, at a size that fits.
+   */
+  const shrinkChange = useCallback(
+    async (id: string, targetBytes: number) => {
+      const engine = syncRef.current;
+      const db = dbRef.current;
+      const workspace = state.activeWorkspace;
+      const stuck = state.sync.unpushed.find((change) => change.id === id);
+
+      if (!engine || !db || !workspace || !stuck) {
+        throw new ShrinkError("That change is no longer waiting to be sent.");
+      }
+
+      const asset = await db.getAsset(`${workspace.id}::${stuck.path}`);
+      if (!asset) {
+        throw new ShrinkError(
+          "The picture itself is not on this device any more, so there is nothing left to resize.",
+        );
+      }
+
+      const before = assetBlob(asset);
+      const shrunk = await shrinkImage(before, targetBytes);
+      const data = await blobAsBase64(shrunk.blob);
+
+      await db.putAsset({ ...asset, data });
+      await engine.replaceContent(id, data, "base64");
+
+      // The note is showing the old bytes through an object URL made from
+      // them. Without this the picture on screen stays the big one until the
+      // tab is reloaded, which makes it look as though nothing happened.
+      const stale = assetUrlCache.current.get(asset.id);
+      if (stale) {
+        URL.revokeObjectURL(stale);
+        assetUrlCache.current.delete(asset.id);
+      }
+      const url = urlForAsset({ ...asset, data });
+      setAssetUrls((current) => ({ ...current, [asset.path]: url }));
+
+      return { before: before.size, after: shrunk.blob.size, ...shrunk };
+    },
+    [state.activeWorkspace, state.sync.unpushed, urlForAsset],
+  );
+
   /** Remembers which folders are open, for the next visit. */
   const setExpandedFolders = useCallback(
     (paths: string[]) => {
@@ -1809,6 +1903,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       pendingChanges,
       discardPending,
       discardChange,
+      shrinkChange,
       setSyncMode,
       resolveConflict,
       allNotes,
@@ -1867,6 +1962,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       pendingChanges,
       discardPending,
       discardChange,
+      shrinkChange,
       setSyncMode,
       resolveConflict,
       allNotes,

@@ -2466,6 +2466,7 @@ export function EditorWorkspace() {
         onShowConflicts={() => setConflictsDismissed(false)}
         onSignIn={signInAgain}
         onDiscardChange={(id) => void notebook.discardChange(id)}
+        onShrinkChange={notebook.shrinkChange}
         onLocateChange={(path) => void locateUnsynced(path)}
       />
 
