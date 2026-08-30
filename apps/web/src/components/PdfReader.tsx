@@ -72,6 +72,14 @@ export interface PdfReaderProps {
    */
   onOpenInTab?: (() => void) | null;
   /**
+   * Starts a note about this paper, with its headings already in it.
+   *
+   * Absent while the document is still opening: the title and the contents are
+   * the whole point of the button, and a note made before they arrive would be
+   * called "untitled" and be empty.
+   */
+  onStartNote?: (() => void) | null;
+  /**
    * Commits this document into the repository, so it can be linked to.
    *
    * Absent when there is nowhere to put it. `saveHint` explains why, in words,
@@ -154,6 +162,7 @@ export function PdfReader({
   onSave,
   saveHint,
   saving = false,
+  onStartNote = null,
   mentions = null,
   onOpenMention = null,
   titleForNote,
@@ -553,6 +562,15 @@ export function PdfReader({
                   onClick={() => setPanel(panel === "notes" ? null : "notes")}
                 >
                   {`Notes ${mentions.length}`}
+                </ToolButton>
+              ) : null}
+
+              {onStartNote ? (
+                <ToolButton
+                  label="Start a note about this paper, with its headings in it"
+                  onClick={onStartNote}
+                >
+                  Write about this
                 </ToolButton>
               ) : null}
 

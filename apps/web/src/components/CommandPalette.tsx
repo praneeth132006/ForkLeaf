@@ -49,6 +49,15 @@ export interface CommandPaletteProps {
   documents?: readonly PdfTextEntry[];
   /** Opens a document at the page a phrase was found on. */
   onOpenDocument?: (pdfPath: string, page: number) => void;
+  /**
+   * The notes around the one being written, by path, with their distance.
+   *
+   * What makes a search know where it is being made from: "setup" typed while
+   * writing about a project finds that project's setup rather than the other
+   * five. Absent when no note is open, which is when there is nowhere to be
+   * near.
+   */
+  nearby?: ReadonlyMap<string, number>;
   commands: Command[];
 }
 
@@ -60,6 +69,7 @@ export function CommandPalette({
   onOpenNote,
   documents = [],
   onOpenDocument,
+  nearby,
   commands,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
@@ -89,8 +99,9 @@ export function CommandPalette({
   }, [tree, openNotes, workspace]);
 
   const noteResults = useMemo(
-    () => queryIndex(noteEntries, { query, sort: "recent" }).slice(0, 8),
-    [noteEntries, query],
+    () =>
+      queryIndex(noteEntries, { query, sort: "recent", ...(nearby ? { nearby } : {}) }).slice(0, 8),
+    [noteEntries, query, nearby],
   );
 
   /**

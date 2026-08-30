@@ -99,3 +99,30 @@ describe("CommandPalette — searching inside documents", () => {
     expect(screen.queryByText("Documents")).toBeNull();
   });
 });
+
+describe("CommandPalette — knowing what you are working on", () => {
+  const tree = [
+    { kind: "file" as const, name: "setup.md", path: "projects/website/setup.md" },
+    { kind: "file" as const, name: "setup.md", path: "old/setup.md" },
+  ];
+
+  it("puts the connected note first among equals", () => {
+    open({
+      tree,
+      documents: [],
+      nearby: new Map([["projects/website/setup.md", 1]]),
+    });
+    search("setup");
+
+    const rows = screen.getAllByRole("option");
+    expect(rows[0]?.textContent).toContain("projects/website/setup.md");
+  });
+
+  it("ranks the same way as before when no note is open", () => {
+    open({ tree, documents: [] });
+    search("setup");
+
+    // Nothing to be near, so the usual order stands and nothing is lost.
+    expect(screen.getAllByRole("option")).toHaveLength(2);
+  });
+});

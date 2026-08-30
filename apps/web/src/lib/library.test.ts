@@ -220,6 +220,70 @@ describe("queryIndex", () => {
     ]);
   });
 
+  /**
+   * "Setup" typed in the middle of a project should find that project's setup,
+   * not the other five. The notebook already knows which notes belong
+   * together, because somebody linked them.
+   */
+  describe("knowing what you are working on", () => {
+    const setups = buildIndex(
+      workspace,
+      ["projects/website/setup.md", "projects/api/setup.md", "old/setup.md"],
+      [
+        note("projects/website/setup.md", "# Setup\n\nWebsite.", "2026-01-01T00:00:00.000Z"),
+        note("projects/api/setup.md", "# Setup\n\nApi.", "2026-03-01T00:00:00.000Z"),
+        note("old/setup.md", "# Setup\n\nOld.", "2026-02-01T00:00:00.000Z"),
+      ],
+    );
+
+    it("floats a connected note above one that merely matches as well", () => {
+      const nearby = new Map([["projects/website/setup.md", 1]]);
+
+      const [first] = queryIndex(setups, { query: "setup", nearby });
+      expect(first!.path).toBe("projects/website/setup.md");
+    });
+
+    it("prefers the nearer of two connected notes", () => {
+      const nearby = new Map([
+        ["old/setup.md", 2],
+        ["projects/api/setup.md", 1],
+      ]);
+
+      expect(queryIndex(setups, { query: "setup", nearby }).map((entry) => entry.path)).toEqual([
+        "projects/api/setup.md",
+        "old/setup.md",
+        "projects/website/setup.md",
+      ]);
+    });
+
+    it("never lets nearness beat a better kind of match", () => {
+      const mixed = buildIndex(
+        workspace,
+        ["planning.md", "notes/mentions-planning.md"],
+        [
+          note("planning.md", "# Planning", "2026-01-01T00:00:00.000Z"),
+          note(
+            "notes/mentions-planning.md",
+            "# Elsewhere\n\nAbout planning.",
+            "2026-02-01T00:00:00.000Z",
+          ),
+        ],
+      );
+
+      // The nearby note only mentions the word; the far one is called it.
+      const nearby = new Map([["notes/mentions-planning.md", 1]]);
+      const [first] = queryIndex(mixed, { query: "planning", nearby });
+
+      expect(first!.path).toBe("planning.md");
+    });
+
+    it("changes nothing when there is nowhere to be near", () => {
+      expect(queryIndex(setups, { query: "setup" }).map((entry) => entry.path)).toEqual(
+        queryIndex(setups, { query: "setup", nearby: new Map() }).map((entry) => entry.path),
+      );
+    });
+  });
+
   it("sorts unread notes last rather than treating a missing date as 1970", () => {
     const mixed = buildIndex(
       workspace,

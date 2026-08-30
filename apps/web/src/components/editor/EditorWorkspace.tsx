@@ -49,6 +49,7 @@ import { insertionFor, quoteMarkdown } from "@/lib/pdf-quote";
 import { mentionsOfPdf, type PdfMention } from "@/lib/pdf-mentions";
 import { pagesOf, readDocumentText } from "@/lib/pdf-index";
 import { withCorrectedPage, type CitationCheck } from "@/lib/citation-audit";
+import { paperNote } from "@/lib/note-from-paper";
 import { CitationsDialog } from "@/components/CitationsDialog";
 import { isPdfPath } from "@/lib/media";
 import { useTheme } from "@/hooks/useTheme";
@@ -705,6 +706,59 @@ export function EditorWorkspace() {
   );
 
   /**
+   * Starts a note about the paper on screen, with its headings already in it.
+   *
+   * Two writes rather than one, deliberately: the note's links are written
+   * relative to *its own* path, and that path is only decided — slugified from
+   * the title, made unique against everything else — once the note exists. So
+   * it is created, and then filled in now that there is somewhere to write
+   * from. The two land in one commit, since the queue coalesces them.
+   */
+  const startNoteFromPaper = useCallback(async () => {
+    if (!reader.info) return;
+
+    const draft = paperNote({
+      metadata: reader.info.metadata,
+      filename: reader.source?.name ?? "Paper",
+      outline: reader.outline,
+      pageCount: reader.info.pageCount,
+      pdfPath: readerPath,
+      // A placeholder: the real path replaces it below, and the links are
+      // rewritten against it.
+      notePath: "",
+    });
+
+    // Beside the note you were last in, not beside the PDF: `papers/` is where
+    // the files live, and a note about a paper is writing, not a file.
+    const created = await notebook.createNote(
+      draft.title,
+      currentFolder,
+      draft.content,
+      draft.frontmatter,
+    );
+    if (!created) return;
+
+    const filled = paperNote({
+      metadata: reader.info.metadata,
+      filename: reader.source?.name ?? "Paper",
+      outline: reader.outline,
+      pageCount: reader.info.pageCount,
+      pdfPath: readerPath,
+      notePath: created.path,
+    });
+    await notebook.rewriteNote(created.path, () => filled.content);
+
+    // The note it just made is what the reader wants to look at, so the
+    // document steps aside from the middle column and reads beside it.
+    // Moved rather than reopened: the document is already parsed and rendered,
+    // and reopening it would fetch and lay out the whole file again to end up
+    // exactly where it is.
+    if (readerLayout === "document") setReaderLayout("beside");
+
+    setNotice(`Started ${created.path} from this paper`);
+  }, [reader, readerPath, readerLayout, notebook, currentFolder]);
+
+  /**
    * What this notebook has already said about the document being read.
    *
    * Null rather than empty for a document with no repository path: a note
@@ -767,6 +821,7 @@ export function EditorWorkspace() {
     hrefFor: hrefForPath,
     repo: workspace && !workspace.isLocal ? workspace.repo : null,
   });
+
 
   /**
    * Creates the note a link points at but that nobody has written yet.
@@ -2017,6 +2072,7 @@ export function EditorWorkspace() {
       onSave={canSavePdf ? () => void savePdfToNotebook() : null}
       saveHint={pdfSaveHint}
       saving={savingPdf}
+      onStartNote={reader.status === "ready" ? () => void startNoteFromPaper() : null}
       mentions={pdfMentions}
       onOpenMention={(path) => {
         notebook.openNote(path);
