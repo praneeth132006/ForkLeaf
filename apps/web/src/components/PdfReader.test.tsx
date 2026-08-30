@@ -58,6 +58,8 @@ const NOTES_TAB = "What your notes say about this document";
 
 const mention = (overrides: Partial<PdfMention> = {}): PdfMention => ({
   notePath: "reading/attention.md",
+  pdfPath: "papers/attention.pdf",
+  citation: { quote: "Attention is all you need.", prefix: "", suffix: "", page: 12 },
   line: 6,
   label: "Attention, p. 12",
   page: 12,

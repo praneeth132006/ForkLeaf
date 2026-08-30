@@ -29,6 +29,7 @@ import { useNotebook } from "@/hooks/useNotebook";
 import { usePublishedPages } from "@/hooks/usePublishedPages";
 import { useLinks } from "@/hooks/useLinks";
 import { useLocalFiles } from "@/hooks/useLocalFiles";
+import type { PdfTextEntry } from "@forkleaf/types";
 import type { LocalFile, LocalPdf } from "@/lib/local-files";
 import { usePdfReader } from "@/hooks/usePdfReader";
 import { PdfReader } from "@/components/PdfReader";
@@ -46,6 +47,9 @@ import { commitToBranch } from "@/lib/gateway";
 import { readDroppedPdf } from "@/lib/local-files";
 import { insertionFor, quoteMarkdown } from "@/lib/pdf-quote";
 import { mentionsOfPdf, type PdfMention } from "@/lib/pdf-mentions";
+import { pagesOf, readDocumentText } from "@/lib/pdf-index";
+import { withCorrectedPage, type CitationCheck } from "@/lib/citation-audit";
+import { CitationsDialog } from "@/components/CitationsDialog";
 import { isPdfPath } from "@/lib/media";
 import { useTheme } from "@/hooks/useTheme";
 import { ColumnResizer } from "@/components/ColumnResizer";
@@ -257,6 +261,7 @@ export function EditorWorkspace() {
     | "capture"
     | "propose"
     | "publish"
+    | "citations"
     | null
   >(null);
   /**
@@ -601,6 +606,103 @@ export function EditorWorkspace() {
       live = false;
     };
   }, [reader.status, readerPath, loadAllNotes]);
+
+  /**
+   * The documents whose text this notebook has kept, for ⌘K to search.
+   *
+   * Loaded when the palette opens rather than held all the time: this is every
+   * word of every paper that has been read, which belongs in memory for as
+   * long as somebody is searching it and no longer.
+   */
+  const [documentTexts, setDocumentTexts] = useState<PdfTextEntry[]>([]);
+
+  const loadDocumentText = notebook.allDocumentText;
+
+  useEffect(() => {
+    if (!paletteOpen) return;
+
+    let live = true;
+    void loadDocumentText()
+      .then((entries) => {
+        if (live) setDocumentTexts(entries);
+      })
+      .catch(() => {
+        // Nothing kept is the same as nothing to search: ⌘K still finds notes.
+        if (live) setDocumentTexts([]);
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [paletteOpen, loadDocumentText]);
+
+  /**
+   * Keeps the text of a document the reader has just finished reading.
+   *
+   * The extraction has already happened — it is what makes find-in-document
+   * work — so this only writes down what was going to be thrown away. Once per
+   * document per open, tracked by a ref, since `pages` changes identity on
+   * every render of a document that is still being read.
+   */
+  const savedText = useRef<string | null>(null);
+  const saveDocumentText = notebook.saveDocumentText;
+
+  useEffect(() => {
+    if (reader.status !== "ready" || reader.indexing || !readerPath) return;
+    if (reader.pages.length === 0) return;
+
+    const key = `${workspaceIdForLinks ?? ""}::${readerPath}`;
+    if (savedText.current === key) return;
+    savedText.current = key;
+
+    void saveDocumentText(
+      readerPath,
+      reader.pages.map((page) => ({ page: page.page, text: page.text })),
+    ).catch(() => {
+      // Not worth telling anybody about: the document is open and readable,
+      // and the only thing lost is that ⌘K will not reach inside it yet.
+      savedText.current = null;
+    });
+  }, [
+    reader.status,
+    reader.indexing,
+    reader.pages,
+    readerPath,
+    workspaceIdForLinks,
+    saveDocumentText,
+  ]);
+
+  /**
+   * A document's text for the citation check: from the cache, or read now.
+   *
+   * Reading it here also fills the cache, so checking your citations is also
+   * what makes those papers searchable from ⌘K.
+   */
+  const pagesForDocument = useCallback(
+    async (pdfPath: string) => {
+      if (!workspace || workspace.isLocal) {
+        throw new Error("This notebook has no repository, so its documents cannot be read.");
+      }
+
+      const cached = await notebook.documentText(pdfPath);
+      if (cached && cached.pages.length > 0) return pagesOf(cached);
+
+      const pages = await readDocumentText(workspace, pdfPath);
+      await notebook.saveDocumentText(pdfPath, pages);
+      return pagesOf({ id: "", workspaceId: workspace.id, path: pdfPath, pages, indexedAt: "" });
+    },
+    [workspace, notebook],
+  );
+
+  /** Writes a corrected page number into the note holding the citation. */
+  const correctCitationPage = useCallback(
+    async (check: CitationCheck) => {
+      await notebook.rewriteNote(check.mention.notePath, (content) =>
+        withCorrectedPage(content, check),
+      );
+    },
+    [notebook],
+  );
 
   /**
    * What this notebook has already said about the document being read.
@@ -1701,6 +1803,18 @@ export function EditorWorkspace() {
       });
     }
 
+    if (workspace && !workspace.isLocal) {
+      list.push({
+        id: "citations",
+        label: "Check my citations against their documents",
+        group: "Notes",
+        hint: "Finds quotations that have moved, and ones that are no longer there",
+        keywords:
+          "citation citations quote quotation check verify audit broken stale page pdf paper source reference sweep",
+        run: () => setDialog("citations"),
+      });
+    }
+
     // All three placements, always, with the current one marked — rather than
     // one command whose label is the *other* state. A toggle reads as an
     // instruction ("open PDFs in their own tab") that gives no hint about
@@ -2601,7 +2715,31 @@ export function EditorWorkspace() {
           openNotes={notebook.openNotes}
           workspace={workspace}
           onOpenNote={notebook.openNote}
+          // A notebook with no repository has no documents to reach: nothing
+          // could have been read from one, and a result that opened nothing
+          // would be worse than no result.
+          documents={workspace && !workspace.isLocal ? documentTexts : []}
+          onOpenDocument={(path, page) => openRepoPdf(path, `page=${page}`)}
           commands={commands}
+        />
+      )}
+
+      {openDialog === "citations" && workspace && !workspace.isLocal && (
+        <CitationsDialog
+          onClose={() => setDialog(null)}
+          loadNotes={async () =>
+            (await notebook.allNotes()).map(({ path, content }) => ({ path, content }))
+          }
+          pagesFor={pagesForDocument}
+          onOpenNote={(path) => {
+            setDialog(null);
+            notebook.openNote(path);
+          }}
+          onOpenDocument={(pdfPath, page) => {
+            setDialog(null);
+            openRepoPdf(pdfPath, `page=${page}`);
+          }}
+          onFix={correctCitationPage}
         />
       )}
 

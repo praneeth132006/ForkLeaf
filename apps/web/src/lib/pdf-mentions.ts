@@ -1,4 +1,4 @@
-import { parseCitation } from "@forkleaf/pdf";
+import { parseCitation, type PdfCitation } from "@forkleaf/pdf";
 import { pdfLinkTarget } from "@/lib/pdf-source";
 
 /**
@@ -22,6 +22,17 @@ import { pdfLinkTarget } from "@/lib/pdf-source";
 export interface PdfMention {
   /** The note the mention was found in. */
   notePath: string;
+  /** The document it points at, repository-relative. */
+  pdfPath: string;
+  /**
+   * The passage this points at, as the link records it.
+   *
+   * Null for a link with no fragment at all — "the paper", rather than a
+   * particular sentence in it. Kept whole rather than reduced to a page
+   * number, because checking whether a citation still holds means matching the
+   * words, and the page is only ever a hint about where to start looking.
+   */
+  citation: PdfCitation | null;
   /** 1-based, so it can be reported and jumped to. */
   line: number;
   /** The link's own text — usually "Title, p. 12". */
@@ -57,6 +68,21 @@ export interface MentionSource {
 }
 
 export function mentionsOfPdf(notes: readonly MentionSource[], pdfPath: string): PdfMention[] {
+  return scan(notes, (path) => path === pdfPath);
+}
+
+/**
+ * Every mention of every document, across the whole notebook.
+ *
+ * The same scan without the filter, for the sweep that checks all of them at
+ * once. One pass over the notes rather than one pass per document: a notebook
+ * with forty papers in it would otherwise be read forty times.
+ */
+export function allPdfMentions(notes: readonly MentionSource[]): PdfMention[] {
+  return scan(notes, () => true);
+}
+
+function scan(notes: readonly MentionSource[], wanted: (pdfPath: string) => boolean): PdfMention[] {
   const found: PdfMention[] = [];
 
   for (const note of notes) {
@@ -71,12 +97,14 @@ export function mentionsOfPdf(notes: readonly MentionSource[], pdfPath: string):
       for (const match of line.matchAll(LINK)) {
         const [, rawLabel = "", href = ""] = match;
         const target = pdfLinkTarget(note.path, href);
-        if (!target || target.path !== pdfPath) continue;
+        if (!target || !wanted(target.path)) continue;
 
         const citation = target.fragment ? parseCitation(target.fragment) : null;
 
         found.push({
           notePath: note.path,
+          pdfPath: target.path,
+          citation,
           line: index + 1,
           label: unescapeLinkText(rawLabel),
           page: citation?.page ?? pageFromFragment(target.fragment),
@@ -92,6 +120,7 @@ export function mentionsOfPdf(notes: readonly MentionSource[], pdfPath: string):
   // the passage is, so reading down the list is reading through the paper —
   // mentions with no page at all go last rather than pretending to be page 0.
   return found.sort((a, b) => {
+    if (a.pdfPath !== b.pdfPath) return a.pdfPath.localeCompare(b.pdfPath);
     if (a.page !== b.page) return (a.page ?? Infinity) - (b.page ?? Infinity);
     if (a.notePath !== b.notePath) return a.notePath.localeCompare(b.notePath);
     return a.line - b.line;

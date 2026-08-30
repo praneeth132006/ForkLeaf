@@ -58,6 +58,31 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### Citations that check themselves
+
+Every other tool stores a page number, and a page number quietly stops being
+true: the author adds a figure to page 4 and every citation after it points one
+page short. Nothing tells you. A ForkLeaf citation records the sentence, so the
+question has an answer — and now there is somewhere to ask it.
+
+- **Check my citations against their documents** in the palette reads every
+  paper you have quoted and reports what it found: quotations that have moved
+  to another page, quotations that matched only loosely, and the ones that are
+  no longer in the document at all
+- A moved quotation can have its page number corrected in place, one press per
+  citation. The words, the context and the path are left exactly as they were —
+  it is the page hint beside them that had gone stale
+- A document that could not be read is reported as unread, never as a document
+  full of broken citations
+
+### ⌘K searches inside your documents
+
+The reader has always extracted every page's text — that is what makes
+find-in-document work through hyphenation and ligatures — and then threw it
+away when the document closed. It is now kept beside the notebook, so ⌘K
+searches the papers as well as the notes and jumps straight to the page. A
+document is indexed the first time it is opened, and by the citation check.
+
 ### A picture too big to send can be resized instead of deleted
 
 When an image cannot be pushed — a screenshot is larger than GitHub will take
