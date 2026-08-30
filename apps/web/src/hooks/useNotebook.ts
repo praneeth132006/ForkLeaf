@@ -32,7 +32,13 @@ import {
   onSessionExpired,
   type SessionResponse,
 } from "@/lib/gateway";
-import { LOCAL_WORKSPACE, collapseBranchDuplicates } from "@/lib/workspaces";
+import {
+  LOCAL_WORKSPACE,
+  claimUnowned,
+  collapseBranchDuplicates,
+  ownedBy,
+  visibleWorkspaces,
+} from "@/lib/workspaces";
 import { forgetLock, isPathLocked, lockedKey, renameLock, toggleLock } from "@/lib/locks";
 import { assetFrom, assetObjectUrl } from "@/lib/assets";
 import {
@@ -321,11 +327,21 @@ export function useNotebook(request: NotebookRequest = {}) {
 
     const boot = async () => {
       try {
-        const session = await fetchSession().catch((): SessionResponse => ({
-          mode: "local",
-          user: null,
-          githubAvailable: false,
-        }));
+        /**
+         * Whether the server actually answered.
+         *
+         * Being offline is not the same as being signed out, and the notebook
+         * filter below depends on telling them apart: the cookie may be
+         * perfectly valid and simply unaskable. Treating a failed request as
+         * "nobody is signed in" would empty somebody's own notebook the moment
+         * their train went into a tunnel, which is the opposite of what a
+         * local-first app is for.
+         */
+        let sessionKnown = true;
+        const session = await fetchSession().catch((): SessionResponse => {
+          sessionKnown = false;
+          return { mode: "local", user: null, githubAvailable: false };
+        });
         if (cancelled) return;
         sessionRef.current = session;
 
@@ -364,6 +380,42 @@ export function useNotebook(request: NotebookRequest = {}) {
 
         // Restore known workspaces, or set one up on first run.
         let workspaces = await notes.listWorkspaces();
+
+        /**
+         * Hand this browser's notebook to the account that owns it, and to
+         * nobody else.
+         *
+         * IndexedDB belongs to a browser rather than to a person, so signing
+         * out and signing in as somebody else used to leave every workspace
+         * and every cached note from the previous account in place — their
+         * repository names, their folders, the text of every note they had
+         * opened, and an editor happy to let the new arrival type into them.
+         *
+         * GitHub was never exposed: each request is authorised server-side by
+         * the session cookie, which is why a repository the new account cannot
+         * read reported "Not Found" rather than handing over its contents. The
+         * leak was the local copy — and the local copy is where the words are.
+         *
+         * Filtering here rather than at each screen because this is the one
+         * place every workspace list starts from; a filter applied per view is
+         * a filter somebody forgets to apply to the next view.
+         */
+        const claimedAt = await db.getMeta<number>("notebookClaimedBy");
+        // Signed out on purpose hides the notebook; unable to ask falls back to
+        // whoever this browser's notebook belongs to, so it still opens offline.
+        const accountId = session.user?.id ?? (sessionKnown ? null : (claimedAt ?? null));
+
+        const claimed = claimUnowned(workspaces, accountId, claimedAt != null);
+        if (claimed.length > 0) {
+          for (const workspace of claimed) await notes.addWorkspace(workspace);
+          const byId = new Map(claimed.map((workspace) => [workspace.id, workspace]));
+          workspaces = workspaces.map((workspace) => byId.get(workspace.id) ?? workspace);
+        }
+        if (accountId != null && claimedAt == null) {
+          await db.putMeta("notebookClaimedBy", accountId);
+        }
+
+        workspaces = visibleWorkspaces(workspaces, accountId);
 
         if (session.mode === "github" && gateway instanceof GitHubGateway) {
           for (const workspace of workspaces) gateway.register(workspace);
@@ -1422,14 +1474,16 @@ export function useNotebook(request: NotebookRequest = {}) {
       const notes = repoRef.current;
       if (!notes) return;
 
-      await notes.addWorkspace(workspace);
+      const owned = ownedBy(workspace, sessionRef.current?.user?.id ?? null);
+
+      await notes.addWorkspace(owned);
       if (gatewayRef.current instanceof GitHubGateway) {
-        gatewayRef.current.register(workspace);
+        gatewayRef.current.register(owned);
       }
 
       patch({
-        workspaces: [...state.workspaces.filter((w) => w.id !== workspace.id), workspace],
-        activeWorkspace: workspace,
+        workspaces: [...state.workspaces.filter((w) => w.id !== owned.id), owned],
+        activeWorkspace: owned,
         openNotes: [],
         activePath: null,
         tree: [],

@@ -64,6 +64,27 @@ All repository paths are normalised server-side before reaching the GitHub API:
 `..` segments are dropped, leading slashes removed, and owner/repo names are
 pattern-checked. Writes are capped at 5 MB per file and 100 changes per commit.
 
+### Local storage and accounts
+
+IndexedDB belongs to a browser, not to a person, and two people can share one.
+So a repository workspace records the GitHub account that connected it, and is
+listed only for that account: the workspace list, the note bodies cached in it,
+the search index built from them and the storage summary on the profile page
+are all scoped to whoever is signed in.
+
+Nothing is deleted when the account changes — a notebook is hidden from other
+accounts and comes back intact when its own account signs in again. The account
+is matched on GitHub's numeric id rather than the login, because a login is a
+display name that can be changed and reused.
+
+Being offline is treated as "we could not ask", not as "signed out", so a
+notebook still opens without a network. Signing out deliberately hides it.
+
+**A way to read another account's cached notes through the application is a
+vulnerability.** Reading them out of IndexedDB with developer tools is not:
+local storage is protected by the operating system's own user accounts, and
+anyone with the browser profile can read the browser profile.
+
 ### Commit history
 
 Commit squashing force-updates a git ref. It is deliberately constrained: it

@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { EditorViewMode, SessionUser, SyncPreference, Workspace } from "@forkleaf/types";
+import { visibleWorkspaces } from "@/lib/workspaces";
 import { DEFAULT_SYNC_PREFERENCE } from "@forkleaf/types";
 import { openLocalDatabase, type LocalDatabase } from "@forkleaf/store";
 import { documentStats } from "@forkleaf/markdown-engine";
@@ -88,7 +89,15 @@ export function ProfilePanel({ user, githubAvailable }: ProfilePanelProps) {
           return;
         }
 
-        const workspaces = await database.listWorkspaces();
+        /**
+         * Only this account's notebooks.
+         *
+         * This panel reports every workspace's name, note count and word
+         * count, which is precisely the summary that must not be shown to
+         * somebody else — IndexedDB belongs to the browser, and two accounts
+         * can share one. See `visibleWorkspaces`.
+         */
+        const workspaces = visibleWorkspaces(await database.listWorkspaces(), user?.id ?? null);
         const queue = await database.listQueue();
 
         const summaries = await Promise.all(
@@ -141,7 +150,9 @@ export function ProfilePanel({ user, githubAvailable }: ProfilePanelProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // Re-read when the account changes: the summary below is per account, and
+    // an effect that ran once would keep showing the previous one's figures.
+  }, [user?.id]);
 
   const handleSignOut = useCallback(async () => {
     // Forgotten before the session goes, so the next person on this

@@ -21,7 +21,7 @@ import {
 } from "@/lib/gateway";
 import { buildIndex, flattenTree, isMarkdown, orphanedNotes, type IndexEntry } from "@/lib/library";
 import { deriveTitle, extractTags } from "@forkleaf/markdown-engine";
-import { LOCAL_WORKSPACE } from "@/lib/workspaces";
+import { LOCAL_WORKSPACE, claimUnowned, ownedBy, visibleWorkspaces } from "@/lib/workspaces";
 
 /**
  * Reads the whole library — every connected repository and every note in it —
@@ -213,11 +213,13 @@ export function useLibrary() {
 
     const load = async () => {
       try {
-        const session = await fetchSession().catch((): SessionResponse => ({
-          mode: "local",
-          user: null,
-          githubAvailable: false,
-        }));
+        // See `useNotebook`: being offline is not the same as being signed
+        // out, and the notebook filter below has to tell them apart.
+        let sessionKnown = true;
+        const session = await fetchSession().catch((): SessionResponse => {
+          sessionKnown = false;
+          return { mode: "local", user: null, githubAvailable: false };
+        });
         if (cancelled) return;
 
         // Never throws: a browser that refuses IndexedDB gets an in-memory
@@ -242,6 +244,26 @@ export function useLibrary() {
         repoRef.current = notes;
 
         let workspaces = await db.listWorkspaces();
+
+        // The dashboard lists workspaces on its own rather than through the
+        // editor's hook, so the account filter has to be applied here too —
+        // and this screen is the one that shows a repository's name, its note
+        // count and its word count, which is exactly what must not be visible
+        // to somebody else's account. See `visibleWorkspaces`.
+        const claimedAt = await db.getMeta<number>("notebookClaimedBy");
+        const accountId = session.user?.id ?? (sessionKnown ? null : (claimedAt ?? null));
+
+        const claimed = claimUnowned(workspaces, accountId, claimedAt != null);
+        if (claimed.length > 0) {
+          for (const workspace of claimed) await notes.addWorkspace(workspace);
+          const byId = new Map(claimed.map((workspace) => [workspace.id, workspace]));
+          workspaces = workspaces.map((workspace) => byId.get(workspace.id) ?? workspace);
+        }
+        if (accountId != null && claimedAt == null) {
+          await db.putMeta("notebookClaimedBy", accountId);
+        }
+
+        workspaces = visibleWorkspaces(workspaces, accountId);
 
         // First visit, from either direction: there is always somewhere to
         // write, even before a repository has been chosen.
@@ -379,11 +401,12 @@ export function useLibrary() {
       const gateway = gatewayRef.current;
       if (!db || !notes || !gateway) return;
 
-      await notes.addWorkspace(workspace);
-      if (gateway instanceof GitHubGateway) gateway.register(workspace);
+      const owned = ownedBy(workspace, state.session?.user?.id ?? null);
+      await notes.addWorkspace(owned);
+      if (gateway instanceof GitHubGateway) gateway.register(owned);
 
       const queue = await db.listQueue();
-      const slice = await readWorkspace(db, workspace, queue);
+      const slice = await readWorkspace(db, owned, queue);
 
       setState((current) => ({
         ...current,
@@ -400,7 +423,7 @@ export function useLibrary() {
       forgetNotes(fresh.dropped);
       patchWorkspace(workspace.id, { entries: fresh.entries, error: fresh.error });
     },
-    [patchWorkspace, forgetNotes],
+    [patchWorkspace, forgetNotes, state.session?.user?.id],
   );
 
   /**

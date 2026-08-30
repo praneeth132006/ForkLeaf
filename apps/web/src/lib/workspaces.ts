@@ -87,3 +87,81 @@ export async function collapseBranchDuplicates(options: {
 
   return workspaces.filter((workspace) => !removed.has(workspace.id));
 }
+
+// ─── Whose notebook is this? ────────────────────────────────────────────────
+
+/**
+ * Which of these workspaces the signed-in account is allowed to see.
+ *
+ * IndexedDB is per-browser, not per-person. Before this, signing out and
+ * signing in as somebody else left every workspace and every cached note from
+ * the previous account sitting there: their repository names, their folder
+ * structure, the full text of every note they had opened, and an editor
+ * perfectly willing to let the new arrival type into them.
+ *
+ * GitHub itself was never exposed — every request is authorised server-side by
+ * the session cookie, which is why a repository the new account cannot read
+ * showed "Not Found" rather than its contents. The leak was the local copy,
+ * and the local copy is where the words are.
+ *
+ * So a repository workspace now belongs to the account that connected it, and
+ * is listed for nobody else. The on-device workspace is deliberately exempt:
+ * it belongs to the browser, has no account behind it, and hiding it from a
+ * signed-in user would hide notes that exist nowhere else.
+ */
+export function visibleWorkspaces(
+  workspaces: readonly Workspace[],
+  /** GitHub's numeric account id, or null when signed out. */
+  accountId: number | null,
+): Workspace[] {
+  return workspaces.filter((workspace) => {
+    if (workspace.isLocal) return true;
+    // Unowned rows are pre-migration and are handled by `claimUnowned`, which
+    // runs before this. Anything still unowned here belongs to a signed-out
+    // browser, and a repository workspace is not usable signed out anyway.
+    if (workspace.ownerId == null) return false;
+    return workspace.ownerId === accountId;
+  });
+}
+
+/**
+ * Stamps the workspaces an upgrade left without an owner.
+ *
+ * Everything connected before this field existed has no `ownerId`, and there
+ * is no way to work out from the data which account connected it. Refusing to
+ * show them would mean everybody losing their notebooks on upgrade, so they
+ * are claimed once, by the first account to open the app afterwards.
+ *
+ * `alreadyClaimed` is what keeps that "once" honest: after the first signed-in
+ * boot the database records who claimed it, and a later, different account
+ * claims nothing. The one-time window is real and unavoidable — it is the
+ * upgrade itself — and it is far narrower than the behaviour it replaces,
+ * which was every account seeing every other account's notes for ever.
+ */
+export function claimUnowned(
+  workspaces: readonly Workspace[],
+  accountId: number | null,
+  alreadyClaimed: boolean,
+): Workspace[] {
+  if (accountId == null || alreadyClaimed) return [];
+
+  return workspaces
+    .filter((workspace) => !workspace.isLocal && workspace.ownerId == null)
+    .map((workspace) => ({ ...workspace, ownerId: accountId }));
+}
+
+/**
+ * Stamps a workspace with the account connecting it.
+ *
+ * Applied at the one place each screen adds a workspace, rather than asked of
+ * every caller that builds one: the connect dialog, the repository chooser and
+ * the branch switcher all construct `Workspace` objects, and an ownership
+ * field that three call sites have to remember is a field that will be missing
+ * from the fourth.
+ *
+ * The on-device workspace is returned untouched — it belongs to the browser.
+ */
+export function ownedBy(workspace: Workspace, accountId: number | null): Workspace {
+  if (workspace.isLocal || accountId == null) return workspace;
+  return { ...workspace, ownerId: accountId };
+}
