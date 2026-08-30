@@ -134,7 +134,7 @@ describe("openLocalDatabase", () => {
       const request = indexedDB.open(DB_NAME, 99);
       request.onupgradeneeded = () => {
         const db = request.result;
-        for (const name of ["notes", "queue", "assets"]) {
+        for (const name of ["notes", "queue", "assets", "pdftext"]) {
           db.createObjectStore(name, { keyPath: "id" }).createIndex("by-workspace", "workspaceId");
         }
         db.createObjectStore("workspaces", { keyPath: "id" });

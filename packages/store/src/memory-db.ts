@@ -1,4 +1,11 @@
-import type { LocalAsset, Note, PendingChange, TreeNode, Workspace } from "@forkleaf/types";
+import type {
+  LocalAsset,
+  Note,
+  PdfTextEntry,
+  PendingChange,
+  TreeNode,
+  Workspace,
+} from "@forkleaf/types";
 import type { LocalDatabase } from "./ports";
 
 /**
@@ -17,6 +24,7 @@ export class MemoryDatabase implements LocalDatabase {
   private queue = new Map<string, PendingChange>();
   private trees = new Map<string, TreeNode[]>();
   private assets = new Map<string, LocalAsset>();
+  private pdfText = new Map<string, PdfTextEntry>();
   private meta = new Map<string, unknown>();
 
   async getNote(id: string): Promise<Note | undefined> {
@@ -95,6 +103,22 @@ export class MemoryDatabase implements LocalDatabase {
 
   async listAssets(workspaceId: string): Promise<LocalAsset[]> {
     return [...this.assets.values()].filter((asset) => asset.workspaceId === workspaceId);
+  }
+
+  async getPdfText(id: string): Promise<PdfTextEntry | undefined> {
+    return clone(this.pdfText.get(id));
+  }
+
+  async putPdfText(entry: PdfTextEntry): Promise<void> {
+    this.pdfText.set(entry.id, clone(entry)!);
+  }
+
+  async deletePdfText(id: string): Promise<void> {
+    this.pdfText.delete(id);
+  }
+
+  async listPdfText(workspaceId: string): Promise<PdfTextEntry[]> {
+    return [...this.pdfText.values()].filter((entry) => entry.workspaceId === workspaceId);
   }
 
   async getMeta<T>(key: string): Promise<T | undefined> {
