@@ -42,6 +42,7 @@ export {
   resolveWikilink,
   wikilinkToPath,
   buildLinkGraph,
+  neighbourhood,
   remarkWikilink,
   type WikiLink,
   type LinkCandidate,

@@ -15,6 +15,7 @@ import {
   DEFAULT_SYNC_PREFERENCE,
   type LocalAsset,
   type Note,
+  type NoteFrontmatter,
   type PendingChange,
   type RepoRef,
   type SyncMode,
@@ -945,7 +946,7 @@ export function useNotebook(request: NotebookRequest = {}) {
   );
 
   const createNote = useCallback(
-    async (title: string, folder = "", content?: string) => {
+    async (title: string, folder = "", content?: string, frontmatter?: NoteFrontmatter) => {
       const workspace = state.activeWorkspace;
       const notes = repoRef.current;
       if (!workspace || !notes) return;
@@ -957,8 +958,10 @@ export function useNotebook(request: NotebookRequest = {}) {
         title,
         existingPaths: existing,
         // Given for a note that comes from somewhere else — a file opened from
-        // this machine — rather than one being started from nothing.
+        // this machine, a paper being written about — rather than one being
+        // started from nothing.
         ...(content !== undefined ? { content } : {}),
+        ...(frontmatter !== undefined ? { frontmatter } : {}),
       });
 
       const open = [...state.openNotes, note].slice(-MAX_OPEN_NOTES);

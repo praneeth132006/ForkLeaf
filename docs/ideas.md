@@ -34,9 +34,9 @@ Ticked entries link to nothing; the git history is the record.
       freshness check already exists; this is the notebook-wide roll-up
 - [ ] **Borrow somebody else's notebook** — Big. Link into their notes, pinned
       to a version, rather than copying and going stale
-- [ ] **Search that knows what you are working on** — Small. Notes connected to
-      the one you are in float to the top. The link graph is already built for
-      backlinks; this uses it for ranking
+- [x] **Search that knows what you are working on** — Small. Notes linked to
+      the one you are in float to the top of ⌘K, by however many hops away
+      they are
 - [ ] **Diagrams you can click through** — Medium. A box in a diagram can be a
       note, so a diagram becomes a map of the notebook
 
@@ -56,8 +56,9 @@ Ticked entries link to nothing; the git history is the record.
       say whether the page you quoted is one of the ones that changed
 - [ ] **Highlights that are just text files** — Medium. A highlight is an
       ordinary file beside the PDF, drawn over the page when you read
-- [ ] **Start a note from a paper** — Small. Title, author and date fill
-      themselves in; the paper's headings become the note's headings
+- [x] **Start a note from a paper** — Small. Title, author and date fill
+      themselves in; the paper's headings become the note's headings, each
+      linked to the page it starts on
 - [ ] **Read scanned documents** — Big. Recognise the text once and keep it
       beside the file, so the work is shared with every device
 - [ ] **Publish your reading, not just your notes** — Big. A public page of

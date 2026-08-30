@@ -58,6 +58,25 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### Start a note from a paper
+
+**Write about this** in the reader makes a note that is already about the
+document: its title, its author and the date it was published in the
+frontmatter, and its own table of contents as the note's headings — each one
+linked to the page that section starts on. The document then moves aside and
+sits beside the note you are writing.
+
+Nothing is invented. A paper with no contents list of its own gets a single
+"Notes" heading rather than a structure somebody would have to argue with.
+
+### Search knows what you are working on
+
+⌘K now weighs which notes are connected to the one you are in. Searching
+"setup" in the middle of a project finds that project's setup rather than the
+other five. A note you linked to and a note that linked to you count the same,
+and the effect fades with distance — but it never beats a better kind of match,
+so a note actually called what you typed still wins.
+
 ### Citations that check themselves
 
 Every other tool stores a page number, and a page number quietly stops being

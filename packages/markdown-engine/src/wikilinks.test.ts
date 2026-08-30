@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildLinkGraph,
+  neighbourhood,
   extractWikilinks,
   resolveWikilink,
   wikilinkTargets,
@@ -148,5 +149,63 @@ describe("rendering", () => {
       resolveWikilink: () => ({ href: "javascript:alert(1)", exists: true }),
     });
     expect(html).not.toContain("javascript:");
+  });
+});
+
+/**
+ * The graph exists for backlinks and answers a second question for free:
+ * which notes are about the same thing as this one?
+ */
+describe("neighbourhood", () => {
+  const graph = () =>
+    buildLinkGraph([
+      { path: "project.md", title: "Project", content: "See [[Setup]] and [[Deploy]]." },
+      { path: "setup.md", title: "Setup", content: "Uses [[Postgres]]." },
+      { path: "deploy.md", title: "Deploy", content: "Nothing yet." },
+      { path: "postgres.md", title: "Postgres", content: "A database." },
+      { path: "mentions.md", title: "Mentions", content: "About [[Project]]." },
+      { path: "elsewhere.md", title: "Elsewhere", content: "Unrelated." },
+    ]);
+
+  it("counts a note you linked to as one hop away", () => {
+    expect(neighbourhood(graph(), "project.md").get("setup.md")).toBe(1);
+  });
+
+  it("counts a note that linked to you as just as near", () => {
+    // Both directions mean the same thing: somebody decided these belonged
+    // together.
+    expect(neighbourhood(graph(), "project.md").get("mentions.md")).toBe(1);
+  });
+
+  it("reaches the second ring, and knows it is further away", () => {
+    expect(neighbourhood(graph(), "project.md").get("postgres.md")).toBe(2);
+  });
+
+  it("stops where it is told to", () => {
+    expect(neighbourhood(graph(), "project.md", 1).has("postgres.md")).toBe(false);
+  });
+
+  it("leaves out a note nothing connects to", () => {
+    expect(neighbourhood(graph(), "project.md").has("elsewhere.md")).toBe(false);
+  });
+
+  it("does not report the note as near itself", () => {
+    expect(neighbourhood(graph(), "project.md").has("project.md")).toBe(false);
+  });
+
+  it("takes the shortest way round, not the first one found", () => {
+    // `c` is reachable in two hops through `b` and in one directly; the
+    // shorter distance is the true one.
+    const small = buildLinkGraph([
+      { path: "a.md", title: "A", content: "[[B]] and [[C]]." },
+      { path: "b.md", title: "B", content: "[[C]]." },
+      { path: "c.md", title: "C", content: "." },
+    ]);
+
+    expect(neighbourhood(small, "a.md").get("c.md")).toBe(1);
+  });
+
+  it("says nothing about a note with no links at all", () => {
+    expect(neighbourhood(graph(), "elsewhere.md").size).toBe(0);
   });
 });
