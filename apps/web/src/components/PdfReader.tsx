@@ -12,6 +12,8 @@ import {
 } from "@forkleaf/pdf";
 import type { PdfReaderState } from "@/hooks/usePdfReader";
 import { PdfPage, type PdfHighlight } from "@/components/PdfPage";
+import { ColumnResizer } from "@/components/ColumnResizer";
+import { useColumnWidth } from "@/hooks/useColumnWidth";
 
 /**
  * The reader.
@@ -77,7 +79,24 @@ export interface PdfReaderProps {
   onSave?: (() => void) | null;
   saveHint?: string | null;
   saving?: boolean;
+  /**
+   * How much room the reader has, and therefore where the contents list goes.
+   *
+   * `"panel"` is the reader sharing a window with a note: the contents slide
+   * over the page and go away again, because a column of headings taken out of
+   * an already-halved window leaves nothing to read.
+   *
+   * `"document"` is the reader *being* the window — the case this was built
+   * for, since a PDF is not a note and there is no reason to keep an empty
+   * editor beside one. There the contents are pinned open on the right, where
+   * every reader has looked for them since Acrobat, and the seam between them
+   * and the page can be dragged.
+   */
+  layout?: "panel" | "document";
 }
+
+/** Where the docked contents list may be dragged to, and where it starts. */
+const INDEX_WIDTH = { key: "forkleaf:width:pdf-index", start: 288, min: 200, max: 520 };
 
 const ZOOM_STEPS = [0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 3];
 
@@ -122,6 +141,7 @@ export function PdfReader({
   onSave,
   saveHint,
   saving = false,
+  layout = "panel",
 }: PdfReaderProps) {
   const { status, info, source, session, outline, pages, indexing, error } = reader;
 
@@ -155,7 +175,17 @@ export function PdfReader({
   const [fitWidth, setFitWidth] = useState(true);
   const [current, setCurrent] = useState(1);
   const [visible, setVisible] = useState<ReadonlySet<number>>(new Set([1]));
-  const [panel, setPanel] = useState<"outline" | "search" | null>(null);
+  const [panel, setPanel] = useState<"outline" | "search" | null>(
+    // Reading a document full width, the contents are part of the furniture
+    // and start open. Beside a note they start out of the way.
+    layout === "document" ? "outline" : null,
+  );
+  const [indexWidth, setIndexWidth, resetIndexWidth] = useColumnWidth(
+    INDEX_WIDTH.key,
+    INDEX_WIDTH.start,
+    INDEX_WIDTH.min,
+    INDEX_WIDTH.max,
+  );
   const [query, setQuery] = useState("");
   /**
    * Which search result the reader is on, and which query it belongs to.
@@ -404,6 +434,27 @@ export function PdfReader({
     [outline, current],
   );
 
+  /** Whether the contents sit beside the page rather than sliding over it. */
+  const docked = layout === "document" && !compact;
+
+  // One definition, rendered in whichever of the two places the contents are
+  // living. Two copies would be two components, both mounted, racing to be the
+  // one whose "go to page 12" the scroll container hears.
+  const panelBody =
+    panel === "outline" ? (
+      <Outline outline={outline} current={current} onGo={goToPage} />
+    ) : (
+      <Search
+        query={query}
+        onQuery={setQuery}
+        hits={hits}
+        index={hitIndex}
+        onGo={goToHit}
+        ready={pages.length > 0}
+        indexing={indexing}
+      />
+    );
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
@@ -507,7 +558,7 @@ export function PdfReader({
       {/* `relative` so a panel can overlay the pages when there is no room to
           sit beside them. */}
       <div className="relative flex min-h-0 flex-1">
-        {panel ? (
+        {panel && !docked ? (
           <aside
             className={
               compact
@@ -515,19 +566,7 @@ export function PdfReader({
                 : "w-64 shrink-0 overflow-y-auto border-r border-[var(--fl-border)] bg-[var(--fl-surface)] p-2"
             }
           >
-            {panel === "outline" ? (
-              <Outline outline={outline} current={current} onGo={goToPage} />
-            ) : (
-              <Search
-                query={query}
-                onQuery={setQuery}
-                hits={hits}
-                index={hitIndex}
-                onGo={goToHit}
-                ready={pages.length > 0}
-                indexing={indexing}
-              />
-            )}
+            {panelBody}
           </aside>
         ) : null}
 
@@ -591,6 +630,56 @@ export function PdfReader({
             />
           ) : null}
         </div>
+
+        {/* The contents, pinned to the right of the page.
+            Only when the reader is the window and there is room for it —
+            docking a 16rem list inside a 26rem panel leaves about a hundred
+            and sixty pixels for the page, which is not a width anybody reads
+            a book at, so in that case the same list slides over instead. */}
+        {docked && panel ? (
+          <>
+            <ColumnResizer
+              label="Contents"
+              width={indexWidth}
+              min={INDEX_WIDTH.min}
+              max={INDEX_WIDTH.max}
+              side="right"
+              onChange={setIndexWidth}
+              onReset={resetIndexWidth}
+            />
+            <aside
+              aria-label="Contents and search"
+              className="flex w-[var(--fl-col)] shrink-0 flex-col overflow-hidden border-l border-[var(--fl-border)] bg-[var(--fl-surface)]"
+              style={{ "--fl-col": `${indexWidth}px` } as React.CSSProperties}
+            >
+              {/* Two tabs rather than two buttons in the toolbar. Docked, the
+                  column is always showing one of them, so the question is
+                  which — not whether. */}
+              <div className="flex shrink-0 items-center gap-1 border-b border-[var(--fl-border)] px-2 py-1.5">
+                <ToolButton
+                  label="The document's own table of contents"
+                  pressed={panel === "outline"}
+                  onClick={() => setPanel("outline")}
+                >
+                  Contents
+                </ToolButton>
+                <ToolButton
+                  label="Find in document"
+                  pressed={panel === "search"}
+                  onClick={() => setPanel("search")}
+                >
+                  Find
+                </ToolButton>
+                <span className="flex-1" />
+                <ToolButton label="Hide the contents" onClick={() => setPanel(null)}>
+                  Hide
+                </ToolButton>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto p-2">{panelBody}</div>
+            </aside>
+          </>
+        ) : null}
       </div>
     </section>
   );
@@ -676,6 +765,17 @@ function Outline({
 }) {
   const rows = useMemo(() => flattenOutline(outline), [outline]);
   const here = useMemo(() => outlineEntryForPage(outline, current)?.key, [outline, current]);
+
+  // Plenty of PDFs carry no table of contents at all — scans especially. The
+  // list is pinned open when the reader is the window, so it has to say that
+  // rather than be a blank column the reader is left to interpret.
+  if (rows.length === 0) {
+    return (
+      <p className="px-2 py-1 text-xs text-[var(--fl-muted)]">
+        This document has no contents list of its own. Find searches its text instead.
+      </p>
+    );
+  }
 
   return (
     <nav aria-label="Contents" className="flex flex-col">

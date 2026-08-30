@@ -44,6 +44,31 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
 - Nothing is ever written back to the PDF. The file in your repository stays
   exactly as it was committed
 
+### Reading PDFs — in the window you are already in
+
+- Clicking a PDF in the file tree now opens it **here**, in the middle of the
+  editor, with the document's contents pinned open on the right. It used to
+  throw you into a second browser tab, which is a strange thing for a notes
+  app to do with a file that lives in the notebook you are looking at
+- The contents column is a real column: **Contents** and **Find** as two tabs
+  of it, and a seam you can drag. Documents with no table of contents of their
+  own say so rather than showing an empty list
+- Where PDFs open is now a choice of three rather than a toggle — in this
+  window, beside the note, or in a browser tab — and the command palette shows
+  all three with the current one marked, so it answers "where do they open
+  now?" as well as changing it
+
+### The columns are the width you want them
+
+Every panel in the editor was a width somebody chose once. Each seam between
+panels is now a handle: drag it and the column follows, double-click it and it
+goes back to where it started. The widths are remembered on this device.
+
+The handles are real separator widgets, so arrow keys move them, shift moves
+them further, and Home and End take them to their limits. Nothing moves for
+anyone who never touches a seam — the defaults are the widths the panels
+already had.
+
 ### Reading PDFs — a tab of their own
 
 - A PDF from your repository now opens in **its own tab**, full width. Half a
