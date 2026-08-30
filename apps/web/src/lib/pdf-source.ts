@@ -1,7 +1,9 @@
-import type { Workspace } from "@forkleaf/types";
-import { isPdfTarget, splitTarget } from "@forkleaf/pdf";
+import { workspaceId, type Workspace } from "@forkleaf/types";
+import { isPdfTarget, serializeCitation, splitTarget, type PdfCitation } from "@forkleaf/pdf";
 import { resolveAgainstNote, isRepoRelative } from "@/lib/assets";
-import { isPdfPath, MAX_PDF_BYTES } from "@/lib/media";
+import { isPdfPath, MAX_COMMITTABLE_BYTES, MAX_PDF_BYTES } from "@/lib/media";
+import { dirname, stripExtension, uniquePath } from "@forkleaf/markdown-engine";
+import { safeAssetName } from "@/lib/media";
 
 /**
  * Where a PDF's bytes come from.
@@ -62,6 +64,39 @@ export function localSource(name: string, bytes: Uint8Array): PdfSource {
   return { kind: "local", id: `local:${localCounter}:${name}`, name, bytes };
 }
 
+/** The repository coordinates a document is addressed by, as query parameters. */
+function repoParams(workspace: Workspace, path: string): URLSearchParams {
+  const params = new URLSearchParams({
+    owner: workspace.repo.owner,
+    repo: workspace.repo.repo,
+    branch: workspace.repo.branch,
+    path,
+  });
+  if (workspace.repo.directory) params.set("dir", workspace.repo.directory);
+  return params;
+}
+
+/**
+ * A link to the reader tab for a document in the repository.
+ *
+ * The whole address goes in the URL — which repository, which branch, which
+ * file, and which passage — rather than a workspace id that only means
+ * something to the database on this device. So the tab opens without touching
+ * IndexedDB at all, the link survives being bookmarked, and it still works for
+ * a colleague with access to the same repository. A workspace id would have
+ * been shorter and would have meant nothing anywhere else.
+ */
+export function readerUrl(
+  workspace: Workspace,
+  path: string,
+  citation?: PdfCitation | null,
+): string {
+  const params = repoParams(workspace, path);
+  const fragment = citation ? serializeCitation(citation) : "";
+
+  return `/reader?${params.toString()}${fragment ? `#${fragment}` : ""}`;
+}
+
 /**
  * The URL the reader should fetch a repository PDF from.
  *
@@ -70,15 +105,45 @@ export function localSource(name: string, bytes: Uint8Array): PdfSource {
  * the token needed to read it never leaves the server.
  */
 export function pdfFetchUrl(workspace: Workspace, path: string): string {
-  const params = new URLSearchParams({
-    owner: workspace.repo.owner,
-    repo: workspace.repo.repo,
-    branch: workspace.repo.branch,
-    path,
-  });
-  if (workspace.repo.directory) params.set("dir", workspace.repo.directory);
+  return `/api/gh/raw?${repoParams(workspace, path).toString()}`;
+}
 
-  return `/api/gh/raw?${params.toString()}`;
+/**
+ * Reads the repository coordinates back out of a reader URL's parameters.
+ *
+ * Returns null when anything required is missing, which is the reader tab
+ * being opened with a hand-edited or truncated link — a case worth saying
+ * something about rather than showing an empty viewer.
+ */
+export function workspaceFromParams(params: URLSearchParams): {
+  workspace: Workspace;
+  path: string;
+} | null {
+  const owner = params.get("owner");
+  const repo = params.get("repo");
+  const branch = params.get("branch");
+  const path = params.get("path");
+  if (!owner || !repo || !branch || !path) return null;
+
+  const directory = params.get("dir") ?? "";
+  const ref = { owner, repo, branch, directory };
+
+  // A workspace shaped from a URL rather than read from storage. Only the
+  // repository reference is ever used downstream — the reader neither writes
+  // notes nor syncs — so the presentation fields are filled in honestly rather
+  // than invented from a database this tab has not opened.
+  return {
+    workspace: {
+      id: workspaceId(ref),
+      name: `${owner}/${repo}`,
+      repo: ref,
+      isDefault: false,
+      isLocal: false,
+      createdAt: "",
+      lastOpenedAt: "",
+    },
+    path,
+  };
 }
 
 /**
@@ -128,4 +193,76 @@ export function pdfLinkTarget(
   const resolved = resolveAgainstNote(notePath, path);
 
   return isPdfPath(resolved) ? { path: resolved, fragment } : null;
+}
+
+// ─── Keeping a PDF ──────────────────────────────────────────────────────────
+
+/**
+ * Folder, relative to the note using it, that saved documents are filed under.
+ *
+ * `papers` rather than `assets`, which is where images go. They are different
+ * kinds of thing to a reader looking at the repository on github.com: an image
+ * is part of a note's presentation, and a paper is a source the note is
+ * *about*. Filing them together would make both folders harder to read.
+ */
+const PAPER_FOLDER = "papers";
+
+/**
+ * Where a PDF should be committed, given the note it is being read beside.
+ *
+ * Beside that note, for the reason images are: a folder you are reading holds
+ * the things that folder uses, deleting a project takes its sources with it,
+ * and the relative link in the note is short and obviously correct.
+ *
+ * The name is kept close to the one the file already had — a paper called
+ * `1706.03762v7.pdf` should not become `document-3.pdf` — but slugified,
+ * because it came from somebody's disk and can contain anything at all,
+ * including `../`.
+ */
+export function pdfPathFor(
+  workspace: Workspace,
+  fileName: string,
+  taken: Iterable<string>,
+  notePath?: string,
+): string {
+  const noteFolder = notePath ? dirname(notePath) : "";
+  const base = noteFolder || workspace.repo.directory || "";
+  const folder = base ? `${base}/${PAPER_FOLDER}` : PAPER_FOLDER;
+
+  // `safeAssetName` falls back to "image" for a name that slugifies to
+  // nothing, which is the right word for the thing it was written for and the
+  // wrong one here — a paper called `image.pdf` helps nobody.
+  const slug = stripExtension(safeAssetName(fileName, "pdf"));
+  const named = !slug || slug === "image" ? "paper" : slug;
+
+  return uniquePath(`${folder}/${named}.pdf`, taken);
+}
+
+/** Why a PDF cannot be saved into the notebook, or null when it can. */
+export function whyCannotSave(workspace: Workspace | null, bytes: number): string | null {
+  if (!workspace || workspace.isLocal) {
+    return "Connect a GitHub repository to keep documents in your notebook.";
+  }
+  if (bytes > MAX_COMMITTABLE_BYTES) {
+    return `This PDF is ${(bytes / (1024 * 1024)).toFixed(1)} MB. ForkLeaf can read it, but GitHub commits from the browser are capped at ${MAX_COMMITTABLE_BYTES / (1024 * 1024)} MB — so it cannot be saved here.`;
+  }
+  return null;
+}
+
+/**
+ * The bytes of a PDF as base64, for the commit route.
+ *
+ * Built in chunks. `String.fromCharCode(...bytes)` is the obvious way to do
+ * this and blows the call-stack argument limit somewhere above a megabyte,
+ * which is most of the documents anybody would want to keep.
+ */
+export function toBase64(bytes: Uint8Array): string {
+  const CHUNK = 0x8000;
+  let binary = "";
+
+  for (let at = 0; at < bytes.length; at += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(at, at + CHUNK));
+  }
+
+  return btoa(binary);
 }

@@ -51,6 +51,11 @@ export interface FileTreeProps {
   onResetOrder?: (parent: string) => void;
   /** Folders whose contents somebody has arranged by hand. */
   manualFolders?: readonly string[];
+  /**
+   * Opens a PDF in the panel beside the note, rather than wherever the
+   * reader's own preference sends it. Absent when nothing can show one.
+   */
+  onOpenBeside?: (path: string) => void;
   /** Pins a note to the top of the sidebar, or unpins one already there. */
   onTogglePin?: (path: string) => void;
   /** Paths currently pinned, so the menu can say which way it will go. */
@@ -85,6 +90,7 @@ export function FileTree({
   nodes,
   activePath,
   onOpen,
+  onOpenBeside,
   onDelete,
   onRename,
   onCreateIn,
@@ -367,6 +373,12 @@ export function FileTree({
 
     return [
       { label: "Open", onSelect: () => onOpen(node.path) },
+      // A PDF has two useful ways to open, and which one somebody wants
+      // depends on what they are about to do — read it, or write from it. The
+      // row click takes the default; the menu offers the other one.
+      ...(isPdf(node.path) && onOpenBeside
+        ? [{ label: "Open beside this note", onSelect: () => onOpenBeside(node.path) }]
+        : []),
       ...(onTogglePin
         ? [
             {
@@ -388,6 +400,7 @@ export function FileTree({
     onRenameFolder,
     onDeleteFolder,
     onOpen,
+    onOpenBeside,
     onRename,
     onDelete,
     onTogglePin,

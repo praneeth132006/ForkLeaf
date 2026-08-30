@@ -46,7 +46,7 @@ import { THEME_INIT_HASH } from "@/lib/theme-script-hash";
  * pull-request diagram review, which injects SVG built from a repository
  * anyone may have opened a request against.
  */
-const NONCED_ROUTES = ["/editor", "/dashboard", "/diagram", "/diagram-diff"];
+const NONCED_ROUTES = ["/editor", "/dashboard", "/diagram", "/diagram-diff", "/reader"];
 
 /** Methods that can change something. Everything else is a read. */
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);

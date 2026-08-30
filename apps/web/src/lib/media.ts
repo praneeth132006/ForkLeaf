@@ -62,6 +62,20 @@ export const DOCUMENT_TYPES: Record<string, string> = {
  */
 export const MAX_PDF_BYTES = 100 * 1024 * 1024;
 
+/**
+ * Largest file ForkLeaf can commit to a repository.
+ *
+ * Deliberately far below `MAX_PDF_BYTES`, and for a reason that has nothing to
+ * do with PDFs: a file travels to the commit route as base64 inside a JSON
+ * body, which is a third larger again than the file, and the host in front of
+ * that route refuses a body over 4.5 MB before any of our code runs.
+ *
+ * So ForkLeaf can *read* a 90 MB scan happily and cannot *save* one. Saying so
+ * at the moment somebody asks to save it is the honest version of that limit —
+ * the alternative is a button that fails with a 413 nobody can interpret.
+ */
+export const MAX_COMMITTABLE_BYTES = 3 * 1024 * 1024;
+
 /** Extension of a path, lowercased and without the dot. */
 export function extensionOf(path: string): string {
   const name = path.split("/").pop() ?? path;

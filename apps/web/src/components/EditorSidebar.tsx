@@ -27,6 +27,10 @@ export interface EditorSidebarProps {
   tree: TreeNode[];
   activePath: string | null;
   onOpenNote: (path: string) => void;
+  /** Opens a PDF in the panel beside the note, rather than in its own tab. */
+  onOpenPdfBeside?: (path: string) => void;
+  /** Opens a PDF from this computer. Absent where the browser cannot. */
+  onOpenPdfFile?: () => void;
   onCreateNote: (folder: string) => void;
   /**
    * The folder a new note belongs in when nobody has said otherwise — the
@@ -385,6 +389,35 @@ export function EditorSidebar(props: EditorSidebarProps) {
           New Note
         </button>
 
+        {/* Opening a PDF was reachable only from the command palette, which
+            means it was reachable only by people who already knew it existed.
+            It sits beside "New note" because it is the same kind of act: the
+            other way a document gets into the notebook. */}
+        {props.onOpenPdfFile && (
+          <button
+            type="button"
+            onClick={props.onOpenPdfFile}
+            title="Open a PDF from this computer"
+            aria-label="Open a PDF from this computer"
+            className="flex w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--fl-border)] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)]"
+          >
+            <svg
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            >
+              <path d="M3.4 2.4h5.2l3.5 3.5v7.2a.9.9 0 0 1-.9.9H3.4a.9.9 0 0 1-.9-.9V3.3a.9.9 0 0 1 .9-.9Z" />
+              <path d="M8.6 2.4v3.5h3.5" />
+              <path d="M5 8.4h5.6M5 10.4h5.6M5 12.3h3.4" />
+            </svg>
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => props.onCreateFolder(props.currentFolder)}
@@ -636,6 +669,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
           nodes={props.tree}
           activePath={props.activePath}
           onOpen={props.onOpenNote}
+          {...(props.onOpenPdfBeside ? { onOpenBeside: props.onOpenPdfBeside } : {})}
           onDelete={props.onDeleteNote}
           onRename={props.onRenameNote}
           onCreateIn={props.onCreateNote}
