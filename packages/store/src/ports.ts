@@ -1,4 +1,11 @@
-import type { LocalAsset, Note, PendingChange, TreeNode, Workspace } from "@forkleaf/types";
+import type {
+  LocalAsset,
+  Note,
+  PdfTextEntry,
+  PendingChange,
+  TreeNode,
+  Workspace,
+} from "@forkleaf/types";
 
 /**
  * Ports the sync engine depends on.
@@ -40,6 +47,11 @@ export interface LocalDatabase {
   putAsset(asset: LocalAsset): Promise<void>;
   deleteAsset(id: string): Promise<void>;
   listAssets(workspaceId: string): Promise<LocalAsset[]>;
+
+  getPdfText(id: string): Promise<PdfTextEntry | undefined>;
+  putPdfText(entry: PdfTextEntry): Promise<void>;
+  deletePdfText(id: string): Promise<void>;
+  listPdfText(workspaceId: string): Promise<PdfTextEntry[]>;
 
   getMeta<T>(key: string): Promise<T | undefined>;
   putMeta<T>(key: string, value: T): Promise<void>;
