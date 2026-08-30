@@ -55,6 +55,23 @@ export interface Workspace {
   /** True for the offline-only workspace used in local mode. */
   isLocal: boolean;
   /**
+   * The GitHub account this workspace was connected by.
+   *
+   * IndexedDB belongs to a browser, not to a person, so without this a
+   * notebook cached by one account stays readable — and writable — by the next
+   * account to sign in on the same machine. The repository itself was always
+   * safe, because every request is authorised server-side by the session
+   * cookie; what leaked was the *local cache* of it, which is the note bodies.
+   *
+   * GitHub's numeric id rather than the login, because a login is a display
+   * name someone can change and reuse. The numeric id is the account.
+   *
+   * Absent on the on-device workspace, which belongs to the browser rather
+   * than to an account, and on workspaces connected before this field existed
+   * — see `claimUnowned`.
+   */
+  ownerId?: number;
+  /**
    * Where published pages go, when that is not this workspace's own repository.
    *
    * Absent on every workspace that has not been split, which is all of them

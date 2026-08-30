@@ -5,6 +5,24 @@ full record.
 
 ## Unreleased
 
+### Fixed — another account could read this browser's notebook
+
+Signing out and signing in as a different GitHub account on the same browser
+left the previous account's workspaces and notes in place: their repository
+names, their folder structure, the full text of every note they had opened,
+and an editor willing to let the new arrival type into them.
+
+GitHub itself was never exposed — every request is authorised server-side by
+the session cookie, which is why a repository the new account could not read
+reported "Not Found" rather than handing over its contents. What leaked was the
+local cache, which is where the words are.
+
+A repository workspace now records the account that connected it and is listed
+for nobody else, across the editor, the dashboard and the profile page. Nothing
+is deleted: a notebook is hidden from other accounts and comes back intact when
+its own account signs in. Being offline is treated as "could not ask" rather
+than "signed out", so a notebook still opens without a network.
+
 ### Reading PDFs
 
 ForkLeaf opens PDFs, beside the note you are writing from them.
