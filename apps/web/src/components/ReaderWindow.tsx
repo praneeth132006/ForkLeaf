@@ -118,6 +118,9 @@ export function ReaderWindow() {
   return (
     <div className="h-screen bg-[var(--fl-bg)]" data-theme={theme}>
       <PdfReader
+        // This window is the document, so the contents belong beside the page
+        // rather than behind a button.
+        layout="document"
         reader={reader}
         initialCitation={citation}
         onCite={copyCitation}

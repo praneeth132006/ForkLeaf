@@ -60,6 +60,11 @@ export interface EditorStatusBarProps {
   onSignIn: () => void;
   /** Removes one change that can never be pushed, and the file behind it. */
   onDiscardChange: (id: string) => void;
+  /** Resizes an image too big to send, and pushes it again. */
+  onShrinkChange: (
+    id: string,
+    targetBytes: number,
+  ) => Promise<{ before: number; after: number; width: number; height: number }>;
   /** Opens the note an unsynced file lives in, so it can be dealt with. */
   onLocateChange: (path: string) => void;
 }
@@ -87,6 +92,7 @@ export function EditorStatusBar({
   onPropose,
   onSignIn,
   onDiscardChange,
+  onShrinkChange,
   onLocateChange,
   sessionExpired = false,
 }: EditorStatusBarProps) {
@@ -126,6 +132,7 @@ export function EditorStatusBar({
           onShowConflicts={onShowConflicts}
           onPropose={onPropose}
           onDiscard={onDiscardChange}
+          onShrink={onShrinkChange}
           onLocate={onLocateChange}
         />
       ) : (

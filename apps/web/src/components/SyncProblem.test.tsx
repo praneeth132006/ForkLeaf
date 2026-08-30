@@ -48,6 +48,7 @@ function view(sync: SyncState, over: Partial<React.ComponentProps<typeof SyncPro
     onShowConflicts: vi.fn(),
     onPropose: vi.fn(),
     onDiscard: vi.fn(),
+    onShrink: vi.fn(async () => ({ before: 4_400_000, after: 780_000, width: 1280, height: 720 })),
     onLocate: vi.fn(),
     ...over,
   };
@@ -152,9 +153,9 @@ describe("SyncProblem — the reason, not just the failure", () => {
     open();
     fireEvent.click(screen.getByRole("button", { name: /Remove assets\/screenshot\.png/ }));
     expect(props.onDiscard).toHaveBeenCalledWith("w::assets/screenshot.png");
-    // And says what it did and did not touch, since "remove" beside a filename
-    // could be read as deleting the note.
-    expect(screen.getByText(/notes and their text are untouched/)).toBeTruthy();
+    // And says what it does and does not touch, since "remove" beside a
+    // filename could be read as deleting the note.
+    expect(screen.getByText(/out of the notes that showed it/)).toBeTruthy();
   });
 });
 
@@ -261,5 +262,92 @@ describe("SyncProblem — offering the thing that would work", () => {
     fireEvent.click(screen.getByRole("button", { name: /Resolve conflicts/ }));
     expect(props.onShowConflicts).toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /Try again now/ })).toBeNull();
+  });
+});
+
+/**
+ * The picture is fine. There is simply more of it than one request will take,
+ * and "remove it" was the only thing on offer for that.
+ */
+describe("SyncProblem — making a picture fit rather than deleting it", () => {
+  const oversized = (path: string) =>
+    state({
+      status: "blocked",
+      lastErrorCode: "too-large",
+      blockedCount: 1,
+      unpushed: [
+        {
+          id: `w::${path}`,
+          path,
+          bytes: 6.2 * 1024 * 1024,
+          tooLarge: true,
+          blocked: true,
+          error: "6.2 MB",
+        },
+      ],
+    });
+
+  it("offers to resize a screenshot, and asks how small", () => {
+    view(oversized("assets/screenshot.png"));
+    open();
+
+    fireEvent.click(screen.getByRole("button", { name: /Resize assets\/screenshot\.png/ }));
+    expect(screen.getByText(/Make it fit under/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /As large as will send/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^1 MB$/ })).toBeTruthy();
+  });
+
+  it("resizes to the size that was asked for, and says what it did", async () => {
+    const props = view(oversized("assets/screenshot.png"));
+    open();
+
+    fireEvent.click(screen.getByRole("button", { name: /Resize assets\/screenshot\.png/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^1 MB$/ }));
+
+    expect(props.onShrink).toHaveBeenCalledWith("w::assets/screenshot.png", 1024 * 1024);
+    expect(await screen.findByText(/4\.2 MB → 762 KB at 1280×720/)).toBeTruthy();
+  });
+
+  it("keeps the choices open and explains itself when it cannot be done", async () => {
+    const props = view(oversized("assets/screenshot.png"), {
+      onShrink: vi.fn(async () => {
+        throw new Error("Even at 600×450 this image is 3.4 MB.");
+      }),
+    });
+    open();
+
+    fireEvent.click(screen.getByRole("button", { name: /Resize assets\/screenshot\.png/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^500 KB$/ }));
+
+    expect(await screen.findByText(/Even at 600×450 this image is 3\.4 MB\./)).toBeTruthy();
+    expect(props.onShrink).toHaveBeenCalled();
+    // Still open, because the next thing to try is a smaller size.
+    expect(screen.getByText(/Make it fit under/)).toBeTruthy();
+  });
+
+  it("does not offer to resize an animation, which would lose every frame but one", () => {
+    view(oversized("assets/loop.gif"));
+    open();
+    expect(screen.queryByRole("button", { name: /Resize/ })).toBeNull();
+  });
+
+  it("does not offer to resize a note", () => {
+    view(
+      state({
+        status: "blocked",
+        unpushed: [
+          {
+            id: "w::notes/big.md",
+            path: "notes/big.md",
+            bytes: 4e6,
+            tooLarge: true,
+            blocked: true,
+            error: null,
+          },
+        ],
+      }),
+    );
+    open();
+    expect(screen.queryByRole("button", { name: /Resize/ })).toBeNull();
   });
 });

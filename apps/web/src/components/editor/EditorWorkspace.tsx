@@ -45,8 +45,11 @@ import {
 import { commitToBranch } from "@/lib/gateway";
 import { readDroppedPdf } from "@/lib/local-files";
 import { insertionFor, quoteMarkdown } from "@/lib/pdf-quote";
+import { mentionsOfPdf, type PdfMention } from "@/lib/pdf-mentions";
 import { isPdfPath } from "@/lib/media";
 import { useTheme } from "@/hooks/useTheme";
+import { ColumnResizer } from "@/components/ColumnResizer";
+import { useColumnWidth } from "@/hooks/useColumnWidth";
 import { EditorSidebar } from "@/components/EditorSidebar";
 import { EditorRightPanel } from "@/components/EditorRightPanel";
 import { EditorStatusBar } from "@/components/EditorStatusBar";
@@ -99,6 +102,11 @@ const MarkdownEditor = dynamic(
 /**
  * Where this device prefers to open a PDF.
  *
+ * Three answers, because there are three genuinely different things people do
+ * with a document: read it (here, full width, in the window they are already
+ * in), write from it (beside the note), or keep it open while working on
+ * something else (a browser tab of its own).
+ *
  * Read through `useSyncExternalStore` rather than copied into state by an
  * effect. `localStorage` is exactly what that hook is for — a value owned by
  * the browser rather than by React — and it gets two things for free: the
@@ -106,34 +114,79 @@ const MarkdownEditor = dynamic(
  * ForkLeaf tab reaches the others, so the setting does not drift between two
  * windows of the same notebook.
  */
+type PdfPlacement = "document" | "beside" | "tab";
+
+const PDF_PLACEMENT_KEY = "forkleaf:pdf-placement";
+/** The old two-way setting, still read so nobody's choice is thrown away. */
 const PDF_BESIDE_KEY = "forkleaf:pdf-beside-note";
 
-function readPdfBeside(): boolean {
+function readPdfPlacement(): PdfPlacement {
   try {
-    return window.localStorage.getItem(PDF_BESIDE_KEY) === "1";
+    const stored = window.localStorage.getItem(PDF_PLACEMENT_KEY);
+    if (stored === "document" || stored === "beside" || stored === "tab") return stored;
+    // Somebody who asked for "beside the note" back when this was a toggle
+    // still means it.
+    if (window.localStorage.getItem(PDF_BESIDE_KEY) === "1") return "beside";
   } catch {
     // Storage can be blocked outright; the default is a fine answer.
-    return false;
   }
+  return "document";
 }
 
-function writePdfBeside(value: boolean): void {
+function writePdfPlacement(value: PdfPlacement): void {
   try {
-    window.localStorage.setItem(PDF_BESIDE_KEY, value ? "1" : "0");
-    // `storage` only fires in *other* tabs, so this tab is told by hand.
-    window.dispatchEvent(new StorageEvent("storage", { key: PDF_BESIDE_KEY }));
+    window.localStorage.setItem(PDF_PLACEMENT_KEY, value);
+    // The old key would otherwise keep overriding a "document" choice, since
+    // it is consulted whenever the new one is missing.
+    window.localStorage.removeItem(PDF_BESIDE_KEY);
   } catch {
     // Not worth surfacing; the reader still opens, just in the other place.
   }
+  // `storage` only fires in *other* tabs, so this tab is told by hand.
+  window.dispatchEvent(new StorageEvent("storage", { key: PDF_PLACEMENT_KEY }));
 }
 
-function subscribeToPdfBeside(onChange: () => void): () => void {
+function subscribeToPdfPlacement(onChange: () => void): () => void {
   const handle = (event: StorageEvent) => {
-    if (event.key === null || event.key === PDF_BESIDE_KEY) onChange();
+    if (event.key === null || event.key === PDF_PLACEMENT_KEY) onChange();
   };
   window.addEventListener("storage", handle);
   return () => window.removeEventListener("storage", handle);
 }
+
+const PLACEMENTS: { value: PdfPlacement; label: string; hint: string }[] = [
+  {
+    value: "document",
+    label: "Open PDFs in this window",
+    hint: "Full width, with the contents beside them",
+  },
+  {
+    value: "beside",
+    label: "Open PDFs beside the note",
+    hint: "Half the window each, for writing straight from a source",
+  },
+  {
+    value: "tab",
+    label: "Open PDFs in their own browser tab",
+    hint: "A real link: bookmark it, or read two documents side by side",
+  },
+];
+
+/**
+ * How wide each side column may be dragged, and where it starts.
+ *
+ * Bounds rather than free rein: a file tree narrower than about eleven
+ * characters of filename is not a file tree, and one wide enough to leave the
+ * note forty characters across is a way to make the app useless with one
+ * accidental drag. The defaults are the widths the columns had when they were
+ * fixed, so nobody who never touches a seam sees any change at all.
+ */
+const COLUMNS = {
+  sidebar: { key: "forkleaf:width:sidebar", start: 256, min: 180, max: 520 },
+  panel: { key: "forkleaf:width:panel", start: 288, min: 240, max: 560 },
+  reader: { key: "forkleaf:width:reader", start: 640, min: 360, max: 1120 },
+  index: { key: "forkleaf:width:pdf-index", start: 288, min: 200, max: 520 },
+} as const;
 
 const MODES: { value: EditorViewMode; label: string; hint: string }[] = [
   { value: "wysiwyg", label: "Rich", hint: "Format as you type" },
@@ -160,6 +213,27 @@ export function EditorWorkspace() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+
+  // The widths of the three columns that are not the document, each dragged by
+  // the seam beside it and remembered on this device.
+  const [sidebarWidth, setSidebarWidth, resetSidebarWidth] = useColumnWidth(
+    COLUMNS.sidebar.key,
+    COLUMNS.sidebar.start,
+    COLUMNS.sidebar.min,
+    COLUMNS.sidebar.max,
+  );
+  const [panelWidth, setPanelWidth, resetPanelWidth] = useColumnWidth(
+    COLUMNS.panel.key,
+    COLUMNS.panel.start,
+    COLUMNS.panel.min,
+    COLUMNS.panel.max,
+  );
+  const [readerWidth, setReaderWidth, resetReaderWidth] = useColumnWidth(
+    COLUMNS.reader.key,
+    COLUMNS.reader.start,
+    COLUMNS.reader.min,
+    COLUMNS.reader.max,
+  );
   /**
    * Which panel is open over the document on a narrow screen.
    *
@@ -346,23 +420,46 @@ export function EditorWorkspace() {
   /** A PDF that could not even be read off the disk, before the reader saw it. */
   const [readerError, setReaderError] = useState<string | null>(null);
   /**
-   * Whether a repository PDF opens beside the note rather than in its own tab.
+   * Where a PDF opens by default on this device.
    *
-   * Remembered on this device, and off by default. It is a reading preference
-   * — like which side the sidebar is on — not something worth writing into a
-   * repository and committing.
+   * A reading preference, like which side the sidebar is on — not something
+   * worth writing into a repository and committing.
    */
-  const pdfBeside = useSyncExternalStore(subscribeToPdfBeside, readPdfBeside, () => false);
+  const pdfPlacement = useSyncExternalStore(
+    subscribeToPdfPlacement,
+    readPdfPlacement,
+    () => "document" as PdfPlacement,
+  );
+  /**
+   * How the document open *right now* is laid out.
+   *
+   * Kept apart from the preference so that changing the preference mid-read
+   * does not rearrange the window around the page somebody is looking at, and
+   * so "Open beside this note" can mean it for one document without meaning it
+   * for every document after.
+   */
+  const [readerLayout, setReaderLayout] = useState<"document" | "beside">("document");
   const [savingPdf, setSavingPdf] = useState(false);
-
-  const togglePdfBeside = useCallback(() => {
-    writePdfBeside(!readPdfBeside());
-  }, []);
+  /**
+   * Every note in the notebook, read once when a document is opened.
+   *
+   * Only then: this is the whole notebook off IndexedDB, which is not
+   * something to be doing on every keystroke for a panel nobody has opened.
+   * The notes open in tabs are folded back in at render, so a passage quoted a
+   * moment ago and not yet flushed to storage still appears in the list.
+   */
+  const [storedNotes, setStoredNotes] = useState<{ path: string; content: string }[]>([]);
 
   const openInReader = useCallback(
-    (next: PdfSource, citation: PdfCitation | null, path: string | null) => {
+    (
+      next: PdfSource,
+      citation: PdfCitation | null,
+      path: string | null,
+      layout: "document" | "beside" = "document",
+    ) => {
       setReaderCitation(citation);
       setReaderPath(path);
+      setReaderLayout(layout);
       reader.open(next);
       // The reader shares the width with the note, so on a narrow screen the
       // panels beside them have to give way or there is nothing left for
@@ -393,9 +490,21 @@ export function EditorWorkspace() {
     [workspace],
   );
 
+  /**
+   * A PDF from this machine. It has no repository path, so a browser tab is
+   * not one of the places it can go — "beside the note" or here.
+   */
   const openLocalPdf = useCallback(
-    (pdf: LocalPdf) => openInReader(localSource(pdf.name, pdf.bytes), null, null),
-    [openInReader],
+    // Only the name and the bytes: a PDF dropped on the window has no file
+    // handle, and nothing here needs one.
+    (pdf: Omit<LocalPdf, "handle">) =>
+      openInReader(
+        localSource(pdf.name, pdf.bytes),
+        null,
+        null,
+        pdfPlacement === "beside" ? "beside" : "document",
+      ),
+    [openInReader, pdfPlacement],
   );
 
   /**
@@ -429,7 +538,7 @@ export function EditorWorkspace() {
 
       event.preventDefault();
       void readDroppedPdf(file)
-        .then((pdf) => openInReader(localSource(pdf.name, pdf.bytes), null, null))
+        .then((pdf) => openLocalPdf(pdf))
         .catch((problem: unknown) => {
           setReaderError(
             problem instanceof Error ? problem.message : "That PDF could not be opened.",
@@ -443,7 +552,7 @@ export function EditorWorkspace() {
       window.removeEventListener("dragover", onDragOver);
       window.removeEventListener("drop", onDrop);
     };
-  }, [openInReader]);
+  }, [openLocalPdf]);
 
   /**
    * Opens a PDF that lives in the repository, at a passage if one was asked for.
@@ -451,23 +560,69 @@ export function EditorWorkspace() {
   /**
    * Opens a repository PDF, wherever the reader prefers to see one.
    *
-   * `beside` overrides the preference for the one call — used by the sidebar's
+   * `where` overrides the preference for the one call — used by the sidebar's
    * "Open beside this note", which is an explicit request rather than a
    * default.
    */
   const openRepoPdf = useCallback(
-    (path: string, fragment: string, beside?: boolean) => {
+    (path: string, fragment: string, where?: PdfPlacement) => {
       if (!workspace) return;
       const citation = fragment ? parseCitation(fragment) : null;
 
-      if (beside ?? pdfBeside) {
-        openInReader(repoSource(workspace, path), citation, path);
+      const placement = where ?? pdfPlacement;
+      if (placement === "tab") {
+        openPdfTab(path, citation);
         return;
       }
-      openPdfTab(path, citation);
+      openInReader(repoSource(workspace, path), citation, path, placement);
     },
-    [workspace, openInReader, openPdfTab, pdfBeside],
+    [workspace, openInReader, openPdfTab, pdfPlacement],
   );
+
+  const loadAllNotes = notebook.allNotes;
+
+  useEffect(() => {
+    // Nothing to look up for a document with no path in the repository, and
+    // nothing to look up when no document is open.
+    if (reader.status === "idle" || !readerPath) return;
+
+    let live = true;
+    void loadAllNotes()
+      .then((all) => {
+        if (live) setStoredNotes(all.map(({ path, content }) => ({ path, content })));
+      })
+      .catch(() => {
+        // A notebook that cannot be read is a notebook with nothing to say
+        // about this document. The reader still reads.
+        if (live) setStoredNotes([]);
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [reader.status, readerPath, loadAllNotes]);
+
+  /**
+   * What this notebook has already said about the document being read.
+   *
+   * Null rather than empty for a document with no repository path: a note
+   * cannot link to a file that is not in the notebook, so "nothing points at
+   * this yet" would be advice nobody can act on.
+   */
+  const pdfMentions = useMemo<PdfMention[] | null>(() => {
+    if (!readerPath) return null;
+
+    const open = new Map(notebook.openNotes.map((item) => [item.path, item.content]));
+    const merged = storedNotes.map((item) => ({
+      path: item.path,
+      content: open.get(item.path) ?? item.content,
+    }));
+    for (const [path, content] of open) {
+      if (!merged.some((item) => item.path === path)) merged.push({ path, content });
+    }
+
+    return mentionsOfPdf(merged, readerPath);
+  }, [readerPath, storedNotes, notebook.openNotes]);
 
   /**
    * Writes a cited passage into the note being read alongside.
@@ -1546,16 +1701,23 @@ export function EditorWorkspace() {
       });
     }
 
-    list.push({
-      id: "pdf-where",
-      label: pdfBeside ? "Open PDFs in their own tab" : "Open PDFs beside the note instead",
-      group: "View",
-      hint: pdfBeside
-        ? "Full width, which is how most documents want to be read"
-        : "Half the window each, for writing straight from a source",
-      keywords: "pdf tab window pane beside split side preference where open reader layout",
-      run: togglePdfBeside,
-    });
+    // All three placements, always, with the current one marked — rather than
+    // one command whose label is the *other* state. A toggle reads as an
+    // instruction ("open PDFs in their own tab") that gives no hint about
+    // where they open now, which is the question somebody opening the palette
+    // to change it is actually asking.
+    for (const placement of PLACEMENTS) {
+      const current = placement.value === pdfPlacement;
+      list.push({
+        id: `pdf-where-${placement.value}`,
+        label: current ? `${placement.label} · current` : placement.label,
+        group: "View",
+        hint: placement.hint,
+        keywords:
+          "pdf tab window pane beside split side preference where open reader layout placement",
+        run: () => writePdfPlacement(placement.value),
+      });
+    }
 
     if (reader.status !== "idle") {
       list.push({
@@ -1602,8 +1764,7 @@ export function EditorWorkspace() {
     repairImages,
     localFiles,
     reader,
-    pdfBeside,
-    togglePdfBeside,
+    pdfPlacement,
     canSavePdf,
     savePdfToNotebook,
   ]);
@@ -1709,6 +1870,57 @@ export function EditorWorkspace() {
 
   if (!notebook.ready) return <BootScreen message={notebook.busy ?? undefined} />;
 
+  /** Puts the reader away and forgets which document it was showing. */
+  const closeReader = () => {
+    reader.close();
+    setReaderCitation(null);
+    setReaderPath(null);
+  };
+
+  /**
+   * The reader, wherever it is going.
+   *
+   * One definition for both placements. Two would both mount — a `hidden`
+   * class hides a component, it does not stop it existing — so every page of
+   * the document would be parsed, laid out and drawn to a canvas twice, and
+   * the copy nobody can see would win half the races for the scroll container
+   * that "go to page 12" looks up by selector.
+   */
+  const readerPane = (layout: "panel" | "document") => (
+    <PdfReader
+      layout={layout}
+      reader={reader}
+      initialCitation={readerCitation}
+      {...(note ? { onCite: citeIntoNote } : {})}
+      onOpenInTab={
+        readerPath
+          ? () => {
+              openPdfTab(readerPath, readerCitation);
+              closeReader();
+            }
+          : null
+      }
+      onSave={canSavePdf ? () => void savePdfToNotebook() : null}
+      saveHint={pdfSaveHint}
+      saving={savingPdf}
+      mentions={pdfMentions}
+      onOpenMention={(path) => {
+        notebook.openNote(path);
+        // Beside the note, the reader stays; it is the other half of the
+        // window. Reading full width, the note it opened has nowhere to
+        // appear until the document steps aside.
+        if (readerLayout === "document") closeReader();
+      }}
+      titleForNote={links.titleFor}
+      onClose={closeReader}
+    />
+  );
+
+  /** The document has the window; the note is behind it, not beside it. */
+  const readingHere = reader.status !== "idle" && readerLayout === "document";
+  /** The document has half the window, with the note in the other half. */
+  const readingBeside = reader.status !== "idle" && readerLayout === "beside";
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
       {/* The gap and the padding are what make the three panels read as
@@ -1729,9 +1941,10 @@ export function EditorWorkspace() {
         <div
           className={`fl-panel ${
             drawer === "files"
-              ? "fixed inset-y-2 left-2 z-40 flex w-[min(19rem,85vw)] shadow-[var(--fl-shadow-lg)] md:static md:z-auto md:w-auto md:shadow-none"
+              ? "fixed inset-y-2 left-2 z-40 flex w-[min(19rem,85vw)] shadow-[var(--fl-shadow-lg)] md:static md:z-auto md:shadow-none"
               : "hidden md:flex"
-          }`}
+          } ${sidebarCollapsed ? "md:w-auto" : "md:w-[var(--fl-col)]"}`}
+          style={{ "--fl-col": `${sidebarWidth}px` } as React.CSSProperties}
         >
           <EditorSidebar
             collapsed={sidebarCollapsed}
@@ -1753,7 +1966,7 @@ export function EditorWorkspace() {
               setDrawer(null);
             }}
             {...(workspace && !workspace.isLocal
-              ? { onOpenPdfBeside: (path: string) => openRepoPdf(path, "", true) }
+              ? { onOpenPdfBeside: (path: string) => openRepoPdf(path, "", "beside") }
               : {})}
             {...(localFiles.supported ? { onOpenPdfFile: () => void localFiles.openPdf() } : {})}
             onCreateNote={handleCreate}
@@ -1785,293 +1998,318 @@ export function EditorWorkspace() {
           />
         </div>
 
-        <main className="fl-panel flex min-w-0 flex-1 flex-col">
-          {/* ── Header ────────────────────────────────────────────────── */}
-          {/* One row: which notes are open, how this one is being viewed, and
+        {/* The seam between the file tree and the document. Hidden on a phone,
+            where the tree is a drawer over the document and has no edge to
+            share with it. */}
+        {!sidebarCollapsed && (
+          <ColumnResizer
+            label="Notes and folders"
+            width={sidebarWidth}
+            min={COLUMNS.sidebar.min}
+            max={COLUMNS.sidebar.max}
+            side="left"
+            onChange={setSidebarWidth}
+            onReset={resetSidebarWidth}
+            className="hidden md:block"
+          />
+        )}
+
+        {/* A PDF opened on its own takes the middle column outright, rather
+            than squeezing in beside an editor with no note in it. Clicking a
+            document in the file tree used to throw the reader into a second
+            browser tab, which is a strange thing for a notes app to do with a
+            file that lives in the notebook you are already looking at. */}
+        {readingHere ? (
+          <main className="fl-panel flex min-w-0 flex-1 flex-col">{readerPane("document")}</main>
+        ) : (
+          <main className="fl-panel flex min-w-0 flex-1 flex-col">
+            {/* ── Header ────────────────────────────────────────────────── */}
+            {/* One row: which notes are open, how this one is being viewed, and
               the handful of controls that act on the window rather than on the
               document. The note's title used to sit here too, duplicating the
               one in the properties panel; there is now one place to edit it. */}
-          {/* Flex, not a three-column grid: the grid gave the tab strip a fixed
+            {/* Flex, not a three-column grid: the grid gave the tab strip a fixed
               third of the row, so the seventh open note was clipped while the
               controls beside it sat in empty space. Now the tabs take whatever
               is left after the controls have what they need, and scroll when
               that is not enough — which is what makes this fit every width. */}
-          <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-2">
-            {/* The way into the file tree — and therefore into the
+            <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-2">
+              {/* The way into the file tree — and therefore into the
                 dashboard, the repository picker and everything else that
                 lives in it — on a screen too narrow to show it beside the
                 document. */}
-            <button
-              type="button"
-              onClick={() => setDrawer((open) => (open === "files" ? null : "files"))}
-              aria-expanded={drawer === "files"}
-              aria-label="Notes and folders"
-              className="shrink-0 rounded-lg p-1.5 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] md:hidden"
-            >
-              <svg
-                viewBox="0 0 16 16"
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M1.75 4.25c0-.83.67-1.5 1.5-1.5h2.4c.5 0 .96.24 1.25.65l.6.85h5.25c.83 0 1.5.67 1.5 1.5v6.5c0 .83-.67 1.5-1.5 1.5H3.25c-.83 0-1.5-.67-1.5-1.5z" />
-              </svg>
-            </button>
-
-            <EditorTabs
-              notes={notebook.openNotes}
-              activePath={notebook.activePath}
-              onSelect={notebook.openNote}
-              onClose={notebook.closeNote}
-              className="h-9 flex-1"
-            />
-
-            {note ? (
-              <div
-                role="tablist"
-                aria-label="Editor mode"
-                className="flex shrink-0 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] p-0.5"
-              >
-                {MODES.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="tab"
-                    aria-selected={mode === option.value}
-                    title={option.hint}
-                    onClick={() => notebook.setViewMode(option.value)}
-                    className={`rounded-[6px] px-2 py-1 text-[12.5px] font-medium transition-colors sm:px-3 ${
-                      mode === option.value
-                        ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
-                        : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="flex shrink-0 items-center justify-end gap-1">
-              {/* Search reads as the way into everything, which it is: notes
-                  first, then every command in the editor. */}
               <button
                 type="button"
-                onClick={() => setPaletteOpen(true)}
-                title="Search notes and commands (⌘K)"
-                className="hidden items-center gap-2 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] py-1.5 pl-2.5 pr-2 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)] sm:inline-flex"
+                onClick={() => setDrawer((open) => (open === "files" ? null : "files"))}
+                aria-expanded={drawer === "files"}
+                aria-label="Notes and folders"
+                className="shrink-0 rounded-lg p-1.5 text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] md:hidden"
               >
-                <SearchGlyph />
-                <span>Search</span>
-                <kbd className="rounded border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-1 py-0.5 font-sans text-[10.5px]">
-                  ⌘K
-                </kbd>
-              </button>
-
-              {/* Beside the note it applies to, not in a menu: the whole
-                  point is to be able to see at a glance whether the thing you
-                  are about to type into will accept it. Absent with no note
-                  open, since there would be nothing to lock. */}
-              {note && (
-                <IconButton
-                  onClick={() => notebook.toggleLocked(note.path)}
-                  label={
-                    noteLocked
-                      ? "Unlock this note so it can be edited (⌘⇧L)"
-                      : "Lock this note against editing (⌘⇧L)"
-                  }
-                  className={
-                    noteLocked
-                      ? "inline-flex bg-[var(--fl-accent-soft)] text-[var(--fl-accent)]"
-                      : ""
-                  }
-                >
-                  {noteLocked ? <LockedGlyph /> : <UnlockedGlyph />}
-                </IconButton>
-              )}
-
-              <IconButton onClick={() => setDialog("help")} label="Help (⌘⇧?)">
                 <svg
                   viewBox="0 0 16 16"
-                  className="h-4 w-4"
+                  className="h-5 w-5"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.6"
                   strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
-                  <circle cx="8" cy="8" r="6.25" />
-                  <path d="M6.2 6.2a1.9 1.9 0 1 1 2.3 2.2v1.1M8.5 12h.01" />
+                  <path d="M1.75 4.25c0-.83.67-1.5 1.5-1.5h2.4c.5 0 .96.24 1.25.65l.6.85h5.25c.83 0 1.5.67 1.5 1.5v6.5c0 .83-.67 1.5-1.5 1.5H3.25c-.83 0-1.5-.67-1.5-1.5z" />
                 </svg>
-              </IconButton>
-
-              <IconButton
-                onClick={toggleTheme}
-                label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-              >
-                {theme === "dark" ? <SunGlyph /> : <MoonGlyph />}
-              </IconButton>
-
-              {/* Export, publish, history and the note's properties all live
-                  in the document panel, so below `lg` this button is the only
-                  route to any of them. */}
-              <IconButton
-                onClick={() => setDrawer((open) => (open === "document" ? null : "document"))}
-                label="Document, export and history"
-                className="inline-flex lg:hidden"
-              >
-                <svg
-                  viewBox="0 0 16 16"
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                >
-                  <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" />
-                  <path d="M10 2.75v10.5" />
-                </svg>
-              </IconButton>
-
-              <IconButton
-                onClick={() => setPanelCollapsed((value) => !value)}
-                label="Toggle document panel"
-                className="hidden lg:inline-flex"
-              >
-                <svg
-                  viewBox="0 0 16 16"
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                >
-                  <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" />
-                  <path d="M10 2.75v10.5" />
-                </svg>
-              </IconButton>
-            </div>
-          </header>
-
-          {/* ── Banners ──────────────────────────────────────────────── */}
-          {notice && (
-            <div
-              role="status"
-              className="flex items-center gap-2 border-b border-[var(--fl-border)] bg-[var(--fl-elevated)] px-4 py-2 text-sm text-[var(--fl-text)]"
-            >
-              <span className="flex-1">{notice}</span>
-              <button
-                type="button"
-                onClick={() => setNotice(null)}
-                aria-label="Dismiss"
-                className="shrink-0 px-2 text-[var(--fl-muted)]"
-              >
-                ✕
               </button>
-            </div>
-          )}
 
-          {[
-            { text: notebook.error, dismiss: notebook.dismissError },
-            { text: localFiles.error, dismiss: localFiles.clearError },
-            { text: readerError, dismiss: () => setReaderError(null) },
-          ]
-            .filter((banner) => banner.text)
-            .map((banner) => (
-              <div
-                key={banner.text}
-                role="alert"
-                className="flex items-center gap-2 border-b border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/8 px-4 py-2 text-sm text-[var(--fl-danger)]"
-              >
-                <span className="flex-1">{banner.text}</span>
+              <EditorTabs
+                notes={notebook.openNotes}
+                activePath={notebook.activePath}
+                onSelect={notebook.openNote}
+                onClose={notebook.closeNote}
+                className="h-9 flex-1"
+              />
+
+              {note ? (
+                <div
+                  role="tablist"
+                  aria-label="Editor mode"
+                  className="flex shrink-0 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] p-0.5"
+                >
+                  {MODES.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="tab"
+                      aria-selected={mode === option.value}
+                      title={option.hint}
+                      onClick={() => notebook.setViewMode(option.value)}
+                      className={`rounded-[6px] px-2 py-1 text-[12.5px] font-medium transition-colors sm:px-3 ${
+                        mode === option.value
+                          ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
+                          : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="flex shrink-0 items-center justify-end gap-1">
+                {/* Search reads as the way into everything, which it is: notes
+                  first, then every command in the editor. */}
                 <button
                   type="button"
-                  onClick={banner.dismiss}
+                  onClick={() => setPaletteOpen(true)}
+                  title="Search notes and commands (⌘K)"
+                  className="hidden items-center gap-2 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] py-1.5 pl-2.5 pr-2 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)] sm:inline-flex"
+                >
+                  <SearchGlyph />
+                  <span>Search</span>
+                  <kbd className="rounded border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-1 py-0.5 font-sans text-[10.5px]">
+                    ⌘K
+                  </kbd>
+                </button>
+
+                {/* Beside the note it applies to, not in a menu: the whole
+                  point is to be able to see at a glance whether the thing you
+                  are about to type into will accept it. Absent with no note
+                  open, since there would be nothing to lock. */}
+                {note && (
+                  <IconButton
+                    onClick={() => notebook.toggleLocked(note.path)}
+                    label={
+                      noteLocked
+                        ? "Unlock this note so it can be edited (⌘⇧L)"
+                        : "Lock this note against editing (⌘⇧L)"
+                    }
+                    className={
+                      noteLocked
+                        ? "inline-flex bg-[var(--fl-accent-soft)] text-[var(--fl-accent)]"
+                        : ""
+                    }
+                  >
+                    {noteLocked ? <LockedGlyph /> : <UnlockedGlyph />}
+                  </IconButton>
+                )}
+
+                <IconButton onClick={() => setDialog("help")} label="Help (⌘⇧?)">
+                  <svg
+                    viewBox="0 0 16 16"
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                  >
+                    <circle cx="8" cy="8" r="6.25" />
+                    <path d="M6.2 6.2a1.9 1.9 0 1 1 2.3 2.2v1.1M8.5 12h.01" />
+                  </svg>
+                </IconButton>
+
+                <IconButton
+                  onClick={toggleTheme}
+                  label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+                >
+                  {theme === "dark" ? <SunGlyph /> : <MoonGlyph />}
+                </IconButton>
+
+                {/* Export, publish, history and the note's properties all live
+                  in the document panel, so below `lg` this button is the only
+                  route to any of them. */}
+                <IconButton
+                  onClick={() => setDrawer((open) => (open === "document" ? null : "document"))}
+                  label="Document, export and history"
+                  className="inline-flex lg:hidden"
+                >
+                  <svg
+                    viewBox="0 0 16 16"
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                  >
+                    <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" />
+                    <path d="M10 2.75v10.5" />
+                  </svg>
+                </IconButton>
+
+                <IconButton
+                  onClick={() => setPanelCollapsed((value) => !value)}
+                  label="Toggle document panel"
+                  className="hidden lg:inline-flex"
+                >
+                  <svg
+                    viewBox="0 0 16 16"
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                  >
+                    <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" />
+                    <path d="M10 2.75v10.5" />
+                  </svg>
+                </IconButton>
+              </div>
+            </header>
+
+            {/* ── Banners ──────────────────────────────────────────────── */}
+            {notice && (
+              <div
+                role="status"
+                className="flex items-center gap-2 border-b border-[var(--fl-border)] bg-[var(--fl-elevated)] px-4 py-2 text-sm text-[var(--fl-text)]"
+              >
+                <span className="flex-1">{notice}</span>
+                <button
+                  type="button"
+                  onClick={() => setNotice(null)}
                   aria-label="Dismiss"
-                  className="shrink-0 px-2"
+                  className="shrink-0 px-2 text-[var(--fl-muted)]"
                 >
                   ✕
                 </button>
               </div>
-            ))}
+            )}
 
-          {/* An expired sign-in gets a banner rather than only a line in the
+            {[
+              { text: notebook.error, dismiss: notebook.dismissError },
+              { text: localFiles.error, dismiss: localFiles.clearError },
+              { text: readerError, dismiss: () => setReaderError(null) },
+            ]
+              .filter((banner) => banner.text)
+              .map((banner) => (
+                <div
+                  key={banner.text}
+                  role="alert"
+                  className="flex items-center gap-2 border-b border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/8 px-4 py-2 text-sm text-[var(--fl-danger)]"
+                >
+                  <span className="flex-1">{banner.text}</span>
+                  <button
+                    type="button"
+                    onClick={banner.dismiss}
+                    aria-label="Dismiss"
+                    className="shrink-0 px-2"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+
+            {/* An expired sign-in gets a banner rather than only a line in the
               status bar. It stops every push until it is dealt with, and the
               fix is one button — so the button is where the reader is looking,
               not eight point type at the bottom of the window. */}
-          {/* Either half of the same fact: a push GitHub refused, or a read
+            {/* Either half of the same fact: a push GitHub refused, or a read
               that came back 401 and ended the session. The second is the more
               common one by far — reading a note full of images is dozens of
               calls, pushing one is a handful — and it used to produce no
               banner at all. */}
-          {(notebook.sync.lastErrorCode === "unauthorized" || notebook.sessionExpired) && (
-            <div
-              role="alert"
-              className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/8 px-4 py-2.5 text-[13px]"
-            >
-              <p className="w-full min-w-0 text-[var(--fl-text)] sm:w-auto sm:flex-1">
-                <strong className="font-semibold">Your GitHub sign-in has expired.</strong>{" "}
-                <span className="text-[var(--fl-muted)]">
-                  {notebook.sync.pendingCount > 0
-                    ? `${notebook.sync.pendingCount} change${notebook.sync.pendingCount === 1 ? "" : "s"} are saved on this device and will push as soon as you are back in.`
-                    : "Your notes are safe on this device. Images in them are served from GitHub, so they will not load until you sign in again."}
-                </span>
-              </p>
-
-              <button
-                type="button"
-                onClick={signInAgain}
-                className="shrink-0 rounded-lg bg-[var(--fl-accent)] px-3 py-1.5 text-[12.5px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
+            {(notebook.sync.lastErrorCode === "unauthorized" || notebook.sessionExpired) && (
+              <div
+                role="alert"
+                className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--fl-danger)]/30 bg-[var(--fl-danger)]/8 px-4 py-2.5 text-[13px]"
               >
-                Sign in again
-              </button>
-            </div>
-          )}
+                <p className="w-full min-w-0 text-[var(--fl-text)] sm:w-auto sm:flex-1">
+                  <strong className="font-semibold">Your GitHub sign-in has expired.</strong>{" "}
+                  <span className="text-[var(--fl-muted)]">
+                    {notebook.sync.pendingCount > 0
+                      ? `${notebook.sync.pendingCount} change${notebook.sync.pendingCount === 1 ? "" : "s"} are saved on this device and will push as soon as you are back in.`
+                      : "Your notes are safe on this device. Images in them are served from GitHub, so they will not load until you sign in again."}
+                  </span>
+                </p>
 
-          {/* Not while the sign-in has just expired: "you are working locally"
+                <button
+                  type="button"
+                  onClick={signInAgain}
+                  className="shrink-0 rounded-lg bg-[var(--fl-accent)] px-3 py-1.5 text-[12.5px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
+                >
+                  Sign in again
+                </button>
+              </div>
+            )}
+
+            {/* Not while the sign-in has just expired: "you are working locally"
               is true but is the wrong sentence to lead with, and the banner
               above it already says the useful half. */}
-          {!user && !notebook.sessionExpired && (
-            <LocalOnlyBanner
-              githubAvailable={notebook.session?.githubAvailable ?? false}
-              onSignIn={signIn}
-              onLearnMore={() => setDialog("help")}
-            />
-          )}
-
-          {/* ── Canvas ───────────────────────────────────────────────── */}
-          <div ref={canvasRef} className="flex min-h-0 flex-1 flex-col">
-            {note ? (
-              <MarkdownEditor
-                key={note.id}
-                readOnly={noteLocked}
-                extraActions={editorExtras}
-                onExtraAction={(id) => setDialog(id === "link-file" ? "link-file" : "capture")}
-                value={note.content}
-                onChange={notebook.saveNote}
-                mode={mode}
-                theme={theme}
-                onCursorChange={setCursor}
-                images={images}
-                links={linkBridge}
-                imageDestination={
-                  workspace && !workspace.isLocal
-                    ? `Committed to ${workspace.repo.owner}/${workspace.repo.repo}`
-                    : "Saved to assets/ on this device"
-                }
-                hideModeSwitcher
-                placeholder="Type / for headings, lists, tables and diagrams…"
-                className="min-h-0 flex-1"
-              />
-            ) : (
-              <EmptyState
-                onCreate={() => handleCreate("")}
-                onHelp={() => setDialog("help")}
-                hasNotes={notebook.tree.length > 0}
+            {!user && !notebook.sessionExpired && (
+              <LocalOnlyBanner
+                githubAvailable={notebook.session?.githubAvailable ?? false}
+                onSignIn={signIn}
+                onLearnMore={() => setDialog("help")}
               />
             )}
-          </div>
-        </main>
+
+            {/* ── Canvas ───────────────────────────────────────────────── */}
+            <div ref={canvasRef} className="flex min-h-0 flex-1 flex-col">
+              {note ? (
+                <MarkdownEditor
+                  key={note.id}
+                  readOnly={noteLocked}
+                  extraActions={editorExtras}
+                  onExtraAction={(id) => setDialog(id === "link-file" ? "link-file" : "capture")}
+                  value={note.content}
+                  onChange={notebook.saveNote}
+                  mode={mode}
+                  theme={theme}
+                  onCursorChange={setCursor}
+                  images={images}
+                  links={linkBridge}
+                  imageDestination={
+                    workspace && !workspace.isLocal
+                      ? `Committed to ${workspace.repo.owner}/${workspace.repo.repo}`
+                      : "Saved to assets/ on this device"
+                  }
+                  hideModeSwitcher
+                  placeholder="Type / for headings, lists, tables and diagrams…"
+                  className="min-h-0 flex-1"
+                />
+              ) : (
+                <EmptyState
+                  onCreate={() => handleCreate("")}
+                  onHelp={() => setDialog("help")}
+                  hasNotes={notebook.tree.length > 0}
+                />
+              )}
+            </div>
+          </main>
+        )}
 
         {/*
           The reader, beside the note.
@@ -2094,41 +2332,49 @@ export function EditorWorkspace() {
           the copy nobody can see would win half the races for the scroll
           container that `goToPage` looks up by selector.
         */}
-        {reader.status !== "idle" && (
-          <div className="fl-panel fixed inset-2 z-40 flex overflow-hidden shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:w-[min(46rem,45vw)] lg:shrink-0 lg:shadow-none">
-            <PdfReader
-              reader={reader}
-              initialCitation={readerCitation}
-              {...(note ? { onCite: citeIntoNote } : {})}
-              onOpenInTab={
-                readerPath
-                  ? () => {
-                      openPdfTab(readerPath, readerCitation);
-                      reader.close();
-                      setReaderCitation(null);
-                      setReaderPath(null);
-                    }
-                  : null
-              }
-              onSave={canSavePdf ? () => void savePdfToNotebook() : null}
-              saveHint={pdfSaveHint}
-              saving={savingPdf}
-              onClose={() => {
-                reader.close();
-                setReaderCitation(null);
-                setReaderPath(null);
-              }}
-            />
+        {readingBeside && (
+          <ColumnResizer
+            label="Reader"
+            width={readerWidth}
+            min={COLUMNS.reader.min}
+            max={COLUMNS.reader.max}
+            side="right"
+            onChange={setReaderWidth}
+            onReset={resetReaderWidth}
+            className="hidden lg:block"
+          />
+        )}
+
+        {readingBeside && (
+          <div
+            className="fl-panel fixed inset-2 z-40 flex overflow-hidden shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:w-[var(--fl-col)] lg:max-w-[70vw] lg:shrink-0 lg:shadow-none"
+            style={{ "--fl-col": `${readerWidth}px` } as React.CSSProperties}
+          >
+            {readerPane("panel")}
           </div>
         )}
 
         {(!panelCollapsed || drawer === "document") && reader.status === "idle" && (
+          <ColumnResizer
+            label="Document panel"
+            width={panelWidth}
+            min={COLUMNS.panel.min}
+            max={COLUMNS.panel.max}
+            side="right"
+            onChange={setPanelWidth}
+            onReset={resetPanelWidth}
+            className="hidden lg:block"
+          />
+        )}
+
+        {(!panelCollapsed || drawer === "document") && reader.status === "idle" && (
           <div
-            className={`fl-panel ${
+            className={`fl-panel lg:w-[var(--fl-col)] ${
               drawer === "document"
-                ? "fixed inset-y-2 right-2 z-40 flex w-[min(21rem,88vw)] shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:w-auto lg:shadow-none"
+                ? "fixed inset-y-2 right-2 z-40 flex w-[min(21rem,88vw)] shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:shadow-none"
                 : "hidden lg:flex"
             }`}
+            style={{ "--fl-col": `${panelWidth}px` } as React.CSSProperties}
           >
             <EditorRightPanel
               collapsed={false}
@@ -2220,6 +2466,7 @@ export function EditorWorkspace() {
         onShowConflicts={() => setConflictsDismissed(false)}
         onSignIn={signInAgain}
         onDiscardChange={(id) => void notebook.discardChange(id)}
+        onShrinkChange={notebook.shrinkChange}
         onLocateChange={(path) => void locateUnsynced(path)}
       />
 

@@ -472,6 +472,38 @@ describe("a failure reported to the reader", () => {
     expect(ctx.engine.state.lastErrorCode).toBeNull();
   });
 
+  /**
+   * The other way out of a file that is too big: make it smaller. Removing it
+   * was the only thing on offer, which is a strange demand to make about a
+   * screenshot that is perfectly good and merely larger than one request.
+   */
+  it("takes smaller bytes for a stuck change and sends them", async () => {
+    const ctx = setup();
+    const huge = "x".repeat(4 * 1024 * 1024);
+
+    await ctx.engine.recordAssetUpsert("w", "assets/shot.png", huge);
+    await ctx.timers.tick();
+
+    const [stuck] = ctx.engine.state.unpushed;
+    expect(stuck?.tooLarge).toBe(true);
+
+    expect(await ctx.engine.replaceContent(stuck!.id, "small", "base64")).toBe(true);
+
+    // The failure was earned by bytes that no longer exist. Leaving it would
+    // park the new ones beside the old error and never send them.
+    expect(ctx.engine.state.unpushed[0]?.tooLarge).toBe(false);
+    expect(ctx.engine.state.unpushed[0]?.blocked).toBe(false);
+    expect(ctx.engine.state.lastErrorCode).toBeNull();
+
+    await ctx.timers.tick();
+    expect(ctx.engine.state.unpushed).toEqual([]);
+  });
+
+  it("has nothing to replace for a change that has already gone", async () => {
+    const ctx = setup();
+    expect(await ctx.engine.replaceContent("w::nothing.png", "small", "base64")).toBe(false);
+  });
+
   it("forgets the failure once a push succeeds", async () => {
     const ctx = setup();
     ctx.gateway.failNext = 1;

@@ -212,7 +212,7 @@ export function EditorRightPanel({
   const hasHistory = Boolean(workspace && !workspace.isLocal && note);
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col">
+    <aside className="flex w-full min-w-0 shrink-0 flex-col">
       {/* ── Header: the one thing people check without looking away ─────── */}
       <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-3">
         <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[12px]">

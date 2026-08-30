@@ -258,13 +258,38 @@ export async function assetFrom(options: {
  * must revoke it — `URL.revokeObjectURL` — when the note it belongs to closes.
  */
 export function assetObjectUrl(asset: LocalAsset): string {
+  return URL.createObjectURL(assetBlob(asset));
+}
+
+/** A stored image back as a file, for anything that wants to work on it. */
+export function assetBlob(asset: LocalAsset): Blob {
   const binary = atob(asset.data);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.charCodeAt(index);
   }
 
-  return URL.createObjectURL(new Blob([bytes], { type: asset.mimeType }));
+  return new Blob([bytes], { type: asset.mimeType });
+}
+
+/**
+ * A blob as base64, the form everything stored and queued here is kept in.
+ *
+ * `readAsBase64` takes a `File` because that is what a paste and a file picker
+ * hand over. This one is for bytes the app made itself — a resized image on
+ * its way back into storage.
+ */
+export function blobAsBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("That image could not be read."));
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      const comma = result.indexOf(",");
+      resolve(comma === -1 ? result : result.slice(comma + 1));
+    };
+    reader.readAsDataURL(blob);
+  });
 }
 
 /** True when a path is one of the image types we serve. */

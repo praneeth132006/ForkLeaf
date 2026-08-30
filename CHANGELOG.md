@@ -44,6 +44,68 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
 - Nothing is ever written back to the PDF. The file in your repository stays
   exactly as it was committed
 
+### Reading PDFs — in the window you are already in
+
+- Clicking a PDF in the file tree now opens it **here**, in the middle of the
+  editor, with the document's contents pinned open on the right. It used to
+  throw you into a second browser tab, which is a strange thing for a notes
+  app to do with a file that lives in the notebook you are looking at
+- The contents column is a real column: **Contents** and **Find** as two tabs
+  of it, and a seam you can drag. Documents with no table of contents of their
+  own say so rather than showing an empty list
+- Where PDFs open is now a choice of three rather than a toggle — in this
+  window, beside the note, or in a browser tab — and the command palette shows
+  all three with the current one marked, so it answers "where do they open
+  now?" as well as changing it
+
+### A picture too big to send can be resized instead of deleted
+
+When an image cannot be pushed — a screenshot is larger than GitHub will take
+in one request — the panel offered exactly one way out: remove it. The picture
+was fine; there was simply more of it than the wire would carry.
+
+- **Resize** now sits beside Remove for any PNG, JPEG or WebP that is stuck.
+  Pick how small — as large as will still send, 1 MB, or 500 KB — and the
+  picture is re-encoded, replaces the copy on this device, and is pushed again.
+  Your notes keep showing it, at the same path, in the same format
+- Quality comes down before size does, so a photograph stays full-size where it
+  can; a screenshot comes down in scale, which is what actually makes it small
+- Animated GIFs are not offered: a canvas holds one frame, so "resizing" one
+  would silently throw away every frame but the first
+
+### Fixed — removing a stuck image left the note pointing at nothing
+
+**Remove** took the file out of the queue and off this device and left the
+markdown in place, so a note that used to show a chart showed a broken-image
+icon instead — with no file left anywhere to put back. It now takes the image
+out of every note that used it, in every form a reference can take. A link to
+the file keeps its words and loses the link; a line that held nothing but the
+image goes with it.
+
+### Everything you have written about a paper, on the paper
+
+Open a PDF from your repository and the contents column has a third tab:
+every note that quotes this document, each one showing the passage it took and
+the page it came from, in the document's own order. Click the passage to go to
+that page, or the note to open it.
+
+Nothing new is stored to make this work. ForkLeaf already writes a citation as
+an ordinary markdown link, so the notebook always knew which notes quote which
+paper — it had no way of being asked. Months after reading something, that
+list is the useful artefact: your own argument, assembled out of notes written
+weeks apart, with the paper's words set into it.
+
+### The columns are the width you want them
+
+Every panel in the editor was a width somebody chose once. Each seam between
+panels is now a handle: drag it and the column follows, double-click it and it
+goes back to where it started. The widths are remembered on this device.
+
+The handles are real separator widgets, so arrow keys move them, shift moves
+them further, and Home and End take them to their limits. Nothing moves for
+anyone who never touches a seam — the defaults are the widths the panels
+already had.
+
 ### Reading PDFs — a tab of their own
 
 - A PDF from your repository now opens in **its own tab**, full width. Half a

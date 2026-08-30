@@ -230,7 +230,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
   }
 
   return (
-    <nav className="flex w-64 shrink-0 flex-col">
+    <nav className="flex w-full min-w-0 shrink-0 flex-col">
       {/* ── Workspace switcher ────────────────────────────────────────── */}
       <div className="relative border-b border-[var(--fl-border)] p-2" ref={workspacesRef}>
         <div className="flex items-center gap-1">

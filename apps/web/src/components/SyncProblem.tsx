@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { remedyFor, MAX_REQUEST_BYTES } from "@forkleaf/store";
 import type { SyncState, Workspace } from "@forkleaf/types";
+import { canShrink, describe, fittingBytes } from "@/lib/shrink-image";
 
 export interface SyncProblemProps {
   sync: SyncState;
@@ -28,6 +29,17 @@ export interface SyncProblemProps {
    * it does, it is holding it — it can be the one to remove it.
    */
   onDiscard: (id: string) => void;
+  /**
+   * Resizes a picture that is too big to send, and pushes it again.
+   *
+   * Resolves with what it weighed before and after, so the panel can say what
+   * it did rather than only that it did something. Rejects with a message
+   * written to be read when the picture cannot be made to fit.
+   */
+  onShrink: (
+    id: string,
+    targetBytes: number,
+  ) => Promise<{ before: number; after: number; width: number; height: number }>;
   /**
    * Opens the note a stuck file lives in.
    *
@@ -68,10 +80,17 @@ export function SyncProblem({
   onShowConflicts,
   onPropose,
   onDiscard,
+  onShrink,
   onLocate,
 }: SyncProblemProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  /** Which oversized file is showing its size choices, if any. */
+  const [resizing, setResizing] = useState<string | null>(null);
+  /** The file being re-encoded right now. One at a time; it is CPU work. */
+  const [working, setWorking] = useState<string | null>(null);
+  /** What became of the last resize, kept per file so the row can report it. */
+  const [outcome, setOutcome] = useState<Record<string, string>>({});
   const root = useRef<HTMLDivElement>(null);
 
   // Click-away and Escape, matching the menus beside it in this bar.
@@ -318,10 +337,27 @@ export function SyncProblem({
                           >
                             Find
                           </button>
+                          {/* Offered before "Remove", and worded as the thing
+                              that keeps the picture: for a screenshot that is
+                              simply larger than one request will carry,
+                              deleting it was never the reader's actual
+                              intention. */}
+                          {change.tooLarge && canShrink(change.path) && (
+                            <button
+                              type="button"
+                              onClick={() => setResizing(resizing === change.id ? null : change.id)}
+                              aria-expanded={resizing === change.id}
+                              title={`Make ${change.path} small enough to send`}
+                              aria-label={`Resize ${change.path}`}
+                              className="rounded border border-[var(--fl-border)] px-1.5 py-0.5 text-[10.5px] font-medium text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
+                            >
+                              Resize
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => onDiscard(change.id)}
-                            title={`Remove ${change.path} from the queue`}
+                            title={`Remove ${change.path} from the queue and from the notes that use it`}
                             // Several files mean several buttons reading
                             // "Remove", which tells a screen reader nothing
                             // about which file it is about to remove.
@@ -332,6 +368,57 @@ export function SyncProblem({
                           </button>
                         </span>
                       </div>
+
+                      {resizing === change.id && (
+                        <div className="mt-1.5 rounded border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-1.5">
+                          <p className="text-[10.5px] text-[var(--fl-muted)]">Make it fit under…</p>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {targetsFor(change.path).map((target) => (
+                              <button
+                                key={target.label}
+                                type="button"
+                                disabled={working !== null}
+                                onClick={async () => {
+                                  setWorking(change.id);
+                                  setOutcome((current) => ({ ...current, [change.id]: "" }));
+                                  try {
+                                    const result = await onShrink(change.id, target.bytes);
+                                    setOutcome((current) => ({
+                                      ...current,
+                                      [change.id]: `${size(result.before)} → ${size(result.after)} at ${result.width}×${result.height}. Sending it again.`,
+                                    }));
+                                    setResizing(null);
+                                  } catch (problem: unknown) {
+                                    setOutcome((current) => ({
+                                      ...current,
+                                      [change.id]:
+                                        problem instanceof Error
+                                          ? problem.message
+                                          : "That image could not be resized.",
+                                    }));
+                                  } finally {
+                                    setWorking(null);
+                                  }
+                                }}
+                                title={`No more than ${size(target.bytes)}`}
+                                className="rounded border border-[var(--fl-border)] bg-[var(--fl-surface)] px-1.5 py-0.5 text-[10.5px] font-medium text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)] disabled:opacity-60"
+                              >
+                                {working === change.id ? "Resizing…" : target.label}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="mt-1 text-[10px] leading-relaxed text-[var(--fl-muted)]">
+                            The picture is re-encoded in the same format and replaces the copy on
+                            this device. Your notes keep showing it.
+                          </p>
+                        </div>
+                      )}
+
+                      {outcome[change.id] && (
+                        <span className="mt-0.5 block text-[var(--fl-muted)]">
+                          {outcome[change.id]}
+                        </span>
+                      )}
                       {change.error && (
                         <span className="mt-0.5 block text-[var(--fl-muted)]">{change.error}</span>
                       )}
@@ -344,13 +431,19 @@ export function SyncProblem({
                 </p>
               )}
               {/* Said plainly, because "remove" beside a filename could
-                  reasonably be read as deleting the note it sits in. */}
+                  reasonably be read as deleting the note it sits in — and
+                  because removing a picture now does edit the notes that
+                  showed it, which is a thing to say before it happens rather
+                  than after. */}
               <p className="mt-2 text-[11px] leading-relaxed text-[var(--fl-muted)]">
                 <strong className="font-semibold text-[var(--fl-text)]">Find</strong> opens the note
                 the file is in and rings it.{" "}
+                <strong className="font-semibold text-[var(--fl-text)]">Resize</strong> makes a
+                picture small enough to send and keeps it.{" "}
                 <strong className="font-semibold text-[var(--fl-text)]">Remove</strong> takes it out
-                of the queue so everything behind it can push — your notes and their text are
-                untouched.
+                of the queue so everything behind it can push — and, for a picture, out of the notes
+                that showed it, so nothing is left pointing at a file that has gone. Your writing
+                stays.
               </p>
             </div>
           )}
@@ -447,11 +540,24 @@ function Detail({ term, children }: { term: string; children: React.ReactNode })
 }
 
 /** A byte count as somebody would say it. */
-function size(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${bytes} bytes`;
+/**
+ * The sizes on offer, largest first.
+ *
+ * The first one is not a round number and is not meant to be read as one: it
+ * is as much picture as this repository will accept in a single request, once
+ * base64 has made the file a third bigger on the way. The other two are for
+ * somebody who would rather the repository stayed small — a notebook is not an
+ * asset CDN, and a screenshot at 500 KB is still perfectly readable.
+ */
+function targetsFor(path: string): { label: string; bytes: number }[] {
+  return [
+    { label: "As large as will send", bytes: fittingBytes(path) },
+    { label: "1 MB", bytes: 1024 * 1024 },
+    { label: "500 KB", bytes: 512 * 1024 },
+  ].filter((target) => target.bytes > 0);
 }
+
+const size = describe;
 
 function when(iso: string): string {
   const seconds = Math.round((Date.now() - new Date(iso).getTime()) / 1000);

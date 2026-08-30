@@ -354,6 +354,46 @@ export class SyncEngine {
     if (this.pushable().length > 0) this.scheduleFlush();
   }
 
+  /**
+   * Swaps the bytes of a queued file, and lets it try again.
+   *
+   * For the picture that is too big to send. Removing it was the only thing on
+   * offer, which is a strange demand to make of somebody whose screenshot is
+   * perfectly good and merely larger than one request will take — so the app
+   * can now resize it, and this is where the smaller version goes.
+   *
+   * The attempt count and the block are cleared with it: they were earned by
+   * a file that no longer exists, and leaving them would park the new bytes
+   * next to the old failure and never send them. Deliberately narrow — the
+   * path, the operation and the queue position are untouched, so this cannot
+   * become a way to rewrite a change into a different change.
+   */
+  async replaceContent(id: string, content: string, encoding: "utf8" | "base64"): Promise<boolean> {
+    const change = this.queue.find((item) => item.id === id);
+    if (!change || change.op !== "upsert") return false;
+
+    change.content = content;
+    change.encoding = encoding;
+    change.attempts = 0;
+    delete change.blocked;
+    delete change.lastError;
+    await this.db.putQueueItem(change);
+
+    // The reported failure was about the size of what has just been replaced.
+    // Keeping it would leave "a file is too big to send" on screen beside a
+    // file that is not.
+    if (this.blocked().length === 0) {
+      this.lastError = null;
+      this.lastErrorDetail = null;
+      this.lastErrorCode = null;
+    }
+
+    this.setStatus(this.restingStatus());
+    this.emit();
+    this.scheduleFlush();
+    return true;
+  }
+
   // ─── Recording changes ────────────────────────────────────────────────────
 
   /**
