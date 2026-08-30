@@ -2,7 +2,7 @@ import { type NextRequest } from "next/server";
 import type { FileChange } from "@forkleaf/github-client";
 import { handle, requireClient, readRepoRefFromBody, normalize, ApiError } from "@/lib/api-helpers";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { imageTypeFor, MAX_IMAGE_BYTES } from "@/lib/media";
+import { imageTypeFor, servableTypeFor, MAX_IMAGE_BYTES } from "@/lib/media";
 
 /**
  * Largest single note we will accept, to keep one bad paste from wedging a
@@ -67,9 +67,10 @@ export async function POST(request: NextRequest) {
           const content = change.content ?? "";
 
           // An image travels through the same queue as a note, so it arrives
-          // here too — as bytes rather than text.
+          // here too — as bytes rather than text. So does a PDF somebody has
+          // asked to keep in their notebook.
           if (change.encoding === "base64") {
-            assertImage(content, path);
+            assertBinary(content, path);
             return { op: "upsert", path, content, encoding: "base64" };
           }
 
@@ -112,31 +113,38 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Checks an image the same way the single-image route always has.
+ * Checks a file arriving as bytes rather than text.
  *
- * The extension decides how the file is served back, so an unsupported one is
- * refused here rather than becoming a file nothing can render — and base64 is
- * verified as base64 before it is handed to GitHub.
+ * The allowlist is the same one the raw-asset route serves from, and that is
+ * the point of sharing it: a file this route will accept is a file that route
+ * will hand back, so there is no way to commit something through here that
+ * then cannot be read — and no way to smuggle in a type neither of them
+ * intended to handle.
+ *
+ * base64 is verified as base64 before it is handed to GitHub, and the size is
+ * read from the encoded length rather than by decoding it.
  */
-function assertImage(content: string, path: string): void {
-  if (!imageTypeFor(path)) {
-    throw new ApiError(
-      400,
-      "validation",
-      "Only PNG, JPEG, GIF, WebP, AVIF, BMP and ICO images can be uploaded.",
-    );
+function assertBinary(content: string, path: string): void {
+  if (!servableTypeFor(path)) {
+    throw new ApiError(400, "validation", "Only images and PDFs can be uploaded as files.");
   }
 
   const packed = content.replace(/\s/g, "");
-  if (!packed) throw new ApiError(400, "validation", "The image is empty.");
+  if (!packed) throw new ApiError(400, "validation", `${path} is empty.`);
   if (!/^[A-Za-z0-9+/]+={0,2}$/.test(packed)) {
-    throw new ApiError(400, "validation", "The image is not valid base64.");
+    throw new ApiError(400, "validation", `${path} is not valid base64.`);
   }
 
   // Base64 carries three bytes in every four characters; no need to decode to
   // know whether it is over the limit.
-  if (Math.floor((packed.length * 3) / 4) > MAX_IMAGE_BYTES) {
-    throw new ApiError(413, "too-large", `${path} is larger than 3 MB.`);
+  const bytes = Math.floor((packed.length * 3) / 4);
+  if (bytes > MAX_IMAGE_BYTES) {
+    const what = imageTypeFor(path) ? "Images" : "Files";
+    throw new ApiError(
+      413,
+      "too-large",
+      `${path} is larger than 3 MB. ${what} have to be smaller.`,
+    );
   }
 }
 

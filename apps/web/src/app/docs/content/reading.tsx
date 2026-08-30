@@ -120,12 +120,13 @@ export function Reading() {
       <H3 id="pdf-open">Four ways in</H3>
       <UL>
         <LI>
-          <strong>Drag one onto the window.</strong> Works in every browser.
+          <strong>The document button</strong> beside <strong>New Note</strong> in the sidebar, or{" "}
+          <strong>Open a PDF…</strong> in the command palette (<Code>⌘K</Code>). Chromium browsers
+          only — Firefox and Safari have no file picker ForkLeaf can use, which is why the next one
+          exists.
         </LI>
         <LI>
-          <strong>Open a PDF…</strong> from the command palette (<Code>⌘K</Code>). Chromium browsers
-          only — Firefox and Safari have no file picker ForkLeaf can use, which is why the drag
-          target exists.
+          <strong>Drag one onto the window.</strong> Works in every browser.
         </LI>
         <LI>
           <strong>Click one in the sidebar.</strong> A PDF committed to your repository sits in the
@@ -142,6 +143,50 @@ export function Reading() {
         Install ForkLeaf and <Code>.pdf</Code> joins <Code>.md</Code> in your operating
         system&rsquo;s <strong>Open with</strong> list. ForkLeaf does not make itself your default
         PDF viewer and should not; that is your setting to make.
+      </P>
+
+      <H3 id="pdf-where">A tab, or beside the note</H3>
+      <P>
+        A PDF from your repository opens in a <strong>tab of its own</strong>, because a typeset
+        page squeezed into half a laptop screen is not a width anybody reads a book at. That tab is
+        a real link: bookmark it, open two of them side by side, or send it to somebody with access
+        to the same repository and it opens on the same page.
+      </P>
+      <P>
+        When you are writing <em>from</em> a document rather than reading it, you want both at once.
+        Two ways to get that:
+      </P>
+      <UL>
+        <LI>
+          <strong>Open beside this note</strong> from the right-click menu on a PDF in the sidebar —
+          just this once.
+        </LI>
+        <LI>
+          <strong>Open PDFs beside the note instead</strong> in the command palette — from now on.
+          The setting is remembered on this device, and <strong>Open in tab</strong> in the
+          reader&rsquo;s own header gives the room back when you want it.
+        </LI>
+      </UL>
+      <P>
+        The reader tab has no note to write into, so selecting a passage there offers{" "}
+        <strong>Copy quotation</strong> instead: the same markdown the panel would have inserted,
+        ready to paste into whichever note you want it in.
+      </P>
+
+      <H3 id="pdf-save">Keeping a PDF in your notebook</H3>
+      <P>
+        A PDF dragged in from your desktop can be read and quoted, but the quotation cannot{" "}
+        <em>link</em> back to it — there is no path in your repository for a link to point at, so it
+        gets a plain attribution instead. <strong>Save to notebook</strong> in the reader&rsquo;s
+        header commits the file into a <Code>papers/</Code> folder beside the note you are reading
+        it with, exactly as an image is filed beside the note that uses it. Every citation of it
+        becomes a real link from then on.
+      </P>
+      <P>
+        ForkLeaf can read a document far larger than it can save one. A commit from the browser
+        carries the file as text inside a request the host caps at a few megabytes, so anything over
+        3 MB can be read all day and cannot be committed — the reader says so rather than letting
+        the save fail.
       </P>
 
       <H3 id="pdf-reader">In the reader</H3>

@@ -26,6 +26,27 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
 - Nothing is ever written back to the PDF. The file in your repository stays
   exactly as it was committed
 
+### Reading PDFs — a tab of their own
+
+- A PDF from your repository now opens in **its own tab**, full width. Half a
+  laptop screen is not a width anybody reads a typeset page at. The tab is a
+  real link — bookmark it, open two side by side, or send it to somebody with
+  access to the same repository
+- Reading _beside_ the note is still there and is now a choice rather than the
+  only option: **Open beside this note** on a PDF in the sidebar for once, or
+  **Open PDFs beside the note instead** in the palette for good
+- **Save to notebook** commits a PDF opened from your desktop into a `papers/`
+  folder beside the note you are reading it with, so its citations become real
+  links. Documents too large for a browser commit say so rather than failing
+- Opening a PDF has a button beside **New Note** — it used to be reachable only
+  from the command palette, which meant only by people who already knew
+- The reader's contents and find panels now slide over the page in a narrow
+  window instead of taking a column from it, which had left about a hundred and
+  sixty pixels for the document
+- The header wraps rather than pushing **Close** off its own right edge
+- Fitting to width uses the document's most common page size rather than its
+  widest, so one fold-out no longer shrinks every ordinary page to suit it
+
 ## 1.0.0 — 2026-08-26
 
 The first release.

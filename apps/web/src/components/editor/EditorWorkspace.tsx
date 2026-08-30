@@ -1,6 +1,13 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import type { CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
@@ -25,7 +32,17 @@ import { useLocalFiles } from "@/hooks/useLocalFiles";
 import type { LocalFile, LocalPdf } from "@/lib/local-files";
 import { usePdfReader } from "@/hooks/usePdfReader";
 import { PdfReader } from "@/components/PdfReader";
-import { localSource, pdfLinkTarget, repoSource, type PdfSource } from "@/lib/pdf-source";
+import {
+  localSource,
+  pdfLinkTarget,
+  pdfPathFor,
+  readerUrl,
+  repoSource,
+  toBase64,
+  whyCannotSave,
+  type PdfSource,
+} from "@/lib/pdf-source";
+import { commitToBranch } from "@/lib/gateway";
 import { readDroppedPdf } from "@/lib/local-files";
 import { insertionFor, quoteMarkdown } from "@/lib/pdf-quote";
 import { isPdfPath } from "@/lib/media";
@@ -78,6 +95,45 @@ const MarkdownEditor = dynamic(
     ),
   },
 );
+
+/**
+ * Where this device prefers to open a PDF.
+ *
+ * Read through `useSyncExternalStore` rather than copied into state by an
+ * effect. `localStorage` is exactly what that hook is for — a value owned by
+ * the browser rather than by React — and it gets two things for free: the
+ * server render agrees with the first client render, and a change made in one
+ * ForkLeaf tab reaches the others, so the setting does not drift between two
+ * windows of the same notebook.
+ */
+const PDF_BESIDE_KEY = "forkleaf:pdf-beside-note";
+
+function readPdfBeside(): boolean {
+  try {
+    return window.localStorage.getItem(PDF_BESIDE_KEY) === "1";
+  } catch {
+    // Storage can be blocked outright; the default is a fine answer.
+    return false;
+  }
+}
+
+function writePdfBeside(value: boolean): void {
+  try {
+    window.localStorage.setItem(PDF_BESIDE_KEY, value ? "1" : "0");
+    // `storage` only fires in *other* tabs, so this tab is told by hand.
+    window.dispatchEvent(new StorageEvent("storage", { key: PDF_BESIDE_KEY }));
+  } catch {
+    // Not worth surfacing; the reader still opens, just in the other place.
+  }
+}
+
+function subscribeToPdfBeside(onChange: () => void): () => void {
+  const handle = (event: StorageEvent) => {
+    if (event.key === null || event.key === PDF_BESIDE_KEY) onChange();
+  };
+  window.addEventListener("storage", handle);
+  return () => window.removeEventListener("storage", handle);
+}
 
 const MODES: { value: EditorViewMode; label: string; hint: string }[] = [
   { value: "wysiwyg", label: "Rich", hint: "Format as you type" },
@@ -289,6 +345,19 @@ export function EditorWorkspace() {
   const [readerPath, setReaderPath] = useState<string | null>(null);
   /** A PDF that could not even be read off the disk, before the reader saw it. */
   const [readerError, setReaderError] = useState<string | null>(null);
+  /**
+   * Whether a repository PDF opens beside the note rather than in its own tab.
+   *
+   * Remembered on this device, and off by default. It is a reading preference
+   * — like which side the sidebar is on — not something worth writing into a
+   * repository and committing.
+   */
+  const pdfBeside = useSyncExternalStore(subscribeToPdfBeside, readPdfBeside, () => false);
+  const [savingPdf, setSavingPdf] = useState(false);
+
+  const togglePdfBeside = useCallback(() => {
+    writePdfBeside(!readPdfBeside());
+  }, []);
 
   const openInReader = useCallback(
     (next: PdfSource, citation: PdfCitation | null, path: string | null) => {
@@ -301,6 +370,27 @@ export function EditorWorkspace() {
       setDrawer(null);
     },
     [reader],
+  );
+
+  /**
+   * Opens a document from the repository in a tab of its own.
+   *
+   * The default, and the reason it is: a typeset page beside a note on a
+   * laptop is around four hundred pixels wide, which is too narrow to read a
+   * book at however carefully the panel is laid out. Reading full-width is the
+   * common case; reading *beside the note you are writing* is the deliberate
+   * one, and is a click away rather than the other way round.
+   *
+   * `noopener` because the opened tab has no business reaching back into this
+   * one, and because without it the new tab's `window.opener` is a handle to
+   * an editor holding somebody's notes.
+   */
+  const openPdfTab = useCallback(
+    (path: string, citation: PdfCitation | null) => {
+      if (!workspace || workspace.isLocal) return;
+      window.open(readerUrl(workspace, path, citation), "_blank", "noopener,noreferrer");
+    },
+    [workspace],
   );
 
   const openLocalPdf = useCallback(
@@ -358,12 +448,25 @@ export function EditorWorkspace() {
   /**
    * Opens a PDF that lives in the repository, at a passage if one was asked for.
    */
+  /**
+   * Opens a repository PDF, wherever the reader prefers to see one.
+   *
+   * `beside` overrides the preference for the one call — used by the sidebar's
+   * "Open beside this note", which is an explicit request rather than a
+   * default.
+   */
   const openRepoPdf = useCallback(
-    (path: string, fragment: string) => {
+    (path: string, fragment: string, beside?: boolean) => {
       if (!workspace) return;
-      openInReader(repoSource(workspace, path), fragment ? parseCitation(fragment) : null, path);
+      const citation = fragment ? parseCitation(fragment) : null;
+
+      if (beside ?? pdfBeside) {
+        openInReader(repoSource(workspace, path), citation, path);
+        return;
+      }
+      openPdfTab(path, citation);
     },
-    [workspace, openInReader],
+    [workspace, openInReader, openPdfTab, pdfBeside],
   );
 
   /**
@@ -468,6 +571,65 @@ export function EditorWorkspace() {
     }),
     [links, notebook, createLinked, workspace, notePath, openRepoPdf],
   );
+
+  /**
+   * Whether the open document is one that could be kept, and why not.
+   *
+   * Only a document opened from this machine is offered — one already in the
+   * repository is already kept, and offering to save it again would be a
+   * button that commits an identical file.
+   */
+  const pdfSaveHint = useMemo(() => {
+    const open = reader.source;
+    if (!open || open.kind !== "local" || readerPath) return null;
+    return whyCannotSave(workspace, open.bytes.length);
+  }, [reader.source, readerPath, workspace]);
+
+  const canSavePdf =
+    reader.source?.kind === "local" && !readerPath && pdfSaveHint === null && !savingPdf;
+
+  /**
+   * Keeps a PDF opened from this machine in the repository.
+   *
+   * Until this exists, a document dragged in from the desktop can be read and
+   * quoted but not *linked* — there is no path in the repository for a link to
+   * point at, so the quotation gets a plain attribution instead. Committing
+   * the file turns every citation of it into a real link, and turns a paper
+   * somebody happened to have in Downloads into part of the notebook, with
+   * history, on every device.
+   *
+   * It goes in beside the note being read from it, in a `papers/` folder, for
+   * the same reason images go beside the note that uses them.
+   */
+  const savePdfToNotebook = useCallback(async () => {
+    const open = reader.source;
+    if (!workspace || !open || open.kind !== "local") return;
+
+    setSavingPdf(true);
+    try {
+      const path = pdfPathFor(workspace, open.name, takenPaths, note?.path);
+
+      await commitToBranch({
+        owner: workspace.repo.owner,
+        repo: workspace.repo.repo,
+        branch: workspace.repo.branch,
+        directory: workspace.repo.directory,
+        message: `add ${path.split("/").pop()}`,
+        changes: [{ op: "upsert", path, content: toBase64(open.bytes), encoding: "base64" }],
+      });
+
+      // The reader keeps showing the same bytes — re-fetching them through the
+      // proxy to display what it is already displaying would be a round trip
+      // for nothing. What changes is that the document now has an address, so
+      // citing it can write a link.
+      setReaderPath(path);
+      await notebook.refreshTree();
+    } catch (problem) {
+      setReaderError(problem instanceof Error ? problem.message : "That PDF could not be saved.");
+    } finally {
+      setSavingPdf(false);
+    }
+  }, [reader.source, workspace, takenPaths, note, notebook]);
 
   /**
    * Takes a file from this machine into the notebook.
@@ -1384,6 +1546,17 @@ export function EditorWorkspace() {
       });
     }
 
+    list.push({
+      id: "pdf-where",
+      label: pdfBeside ? "Open PDFs in their own tab" : "Open PDFs beside the note instead",
+      group: "View",
+      hint: pdfBeside
+        ? "Full width, which is how most documents want to be read"
+        : "Half the window each, for writing straight from a source",
+      keywords: "pdf tab window pane beside split side preference where open reader layout",
+      run: togglePdfBeside,
+    });
+
     if (reader.status !== "idle") {
       list.push({
         id: "close-pdf",
@@ -1392,6 +1565,17 @@ export function EditorWorkspace() {
         keywords: "pdf close reader hide document",
         run: () => reader.close(),
       });
+
+      if (canSavePdf) {
+        list.push({
+          id: "save-pdf",
+          label: "Save this PDF into my notebook",
+          group: "Notes",
+          hint: "Commits it beside your note, so citations become real links",
+          keywords: "pdf save keep commit notebook repository store add paper document",
+          run: () => void savePdfToNotebook(),
+        });
+      }
     }
 
     return list;
@@ -1418,6 +1602,10 @@ export function EditorWorkspace() {
     repairImages,
     localFiles,
     reader,
+    pdfBeside,
+    togglePdfBeside,
+    canSavePdf,
+    savePdfToNotebook,
   ]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
@@ -1564,6 +1752,10 @@ export function EditorWorkspace() {
               // On a phone the drawer covers the note it just opened.
               setDrawer(null);
             }}
+            {...(workspace && !workspace.isLocal
+              ? { onOpenPdfBeside: (path: string) => openRepoPdf(path, "", true) }
+              : {})}
+            {...(localFiles.supported ? { onOpenPdfFile: () => void localFiles.openPdf() } : {})}
             onCreateNote={handleCreate}
             currentFolder={currentFolder}
             onDeleteNote={handleDelete}
@@ -1908,6 +2100,19 @@ export function EditorWorkspace() {
               reader={reader}
               initialCitation={readerCitation}
               {...(note ? { onCite: citeIntoNote } : {})}
+              onOpenInTab={
+                readerPath
+                  ? () => {
+                      openPdfTab(readerPath, readerCitation);
+                      reader.close();
+                      setReaderCitation(null);
+                      setReaderPath(null);
+                    }
+                  : null
+              }
+              onSave={canSavePdf ? () => void savePdfToNotebook() : null}
+              saveHint={pdfSaveHint}
+              saving={savingPdf}
               onClose={() => {
                 reader.close();
                 setReaderCitation(null);

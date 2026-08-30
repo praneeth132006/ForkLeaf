@@ -339,6 +339,11 @@ export async function commitToBranch(options: {
     path: string;
     toPath?: string;
     content?: string;
+    /**
+     * How `content` is encoded. Text by default; `base64` for a file that is
+     * bytes rather than characters, such as a PDF being kept in the notebook.
+     */
+    encoding?: "utf8" | "base64";
   }[];
 }): Promise<{ sha: string }> {
   const { owner, repo, branch, directory, message, changes } = options;

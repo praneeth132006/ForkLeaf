@@ -43,15 +43,114 @@ export interface PdfReaderProps {
    * rather than a disabled button with no explanation.
    */
   onCite?: (citation: PdfCitation, quote: boolean) => void;
-  onClose: () => void;
+  /**
+   * What the two citing actions are called.
+   *
+   * The panel beside a note puts the passage *into* the note; the standalone
+   * tab has no note to reach and copies it to the clipboard instead. Same
+   * action, two truthful descriptions of it — and a button that said "Quote
+   * into note" in a window with no note would be lying about what it does.
+   */
+  citeLabels?: { quote: string; reference: string };
+  /** Why citing is unavailable, when it is. Shown in place of the buttons. */
+  noCiteReason?: string | null;
+  /**
+   * Closes the reader. Null in the standalone window, where there is nothing
+   * to close back to — the browser's own tab control is the close button, and
+   * offering a second one that does nothing is worse than offering none.
+   */
+  onClose: (() => void) | null;
+  /**
+   * Opens this document in a tab of its own.
+   *
+   * Absent for a document that has no address — one opened from the user's
+   * disk, which a second tab could not load, since the bytes live only in this
+   * window's memory.
+   */
+  onOpenInTab?: (() => void) | null;
+  /**
+   * Commits this document into the repository, so it can be linked to.
+   *
+   * Absent when there is nowhere to put it. `saveHint` explains why, in words,
+   * rather than leaving a disabled button with nothing to say for itself.
+   */
+  onSave?: (() => void) | null;
+  saveHint?: string | null;
+  saving?: boolean;
 }
 
 const ZOOM_STEPS = [0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 3];
 
-export function PdfReader({ reader, initialCitation, onCite, onClose }: PdfReaderProps) {
+/**
+ * The width to fit the document to.
+ *
+ * The most common page width, not the widest. A book with one fold-out map in
+ * it has 417 pages of one size and a single page of another, and fitting to
+ * the widest shrinks every ordinary page to make room for a page the reader
+ * may never reach. The odd page simply overflows and can be scrolled to, which
+ * is what a reader expects of a fold-out.
+ */
+function typicalPageWidth(sizes: readonly { width: number }[]): number {
+  const counts = new Map<number, number>();
+  for (const size of sizes) {
+    // Rounded, because a document generated page by page can differ by a
+    // fraction of a point between otherwise identical pages.
+    const width = Math.round(size.width);
+    counts.set(width, (counts.get(width) ?? 0) + 1);
+  }
+
+  let best = 0;
+  let seen = 0;
+  for (const [width, count] of counts) {
+    if (count > seen) {
+      seen = count;
+      best = width;
+    }
+  }
+
+  return best;
+}
+
+export function PdfReader({
+  reader,
+  initialCitation,
+  onCite,
+  citeLabels = { quote: "Quote into note", reference: "Reference only" },
+  noCiteReason = "Open a note to cite into it",
+  onClose,
+  onOpenInTab,
+  onSave,
+  saveHint,
+  saving = false,
+}: PdfReaderProps) {
   const { status, info, source, session, outline, pages, indexing, error } = reader;
 
+  const frameRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Whether the reader is too narrow to give a panel a column of its own.
+   *
+   * Measured from the reader itself rather than the window, because the same
+   * component is both a full-width tab and a panel beside a note — and it is
+   * the space it actually has that decides the layout, not the size of the
+   * screen it is on. Docking a 16rem contents list inside a 26rem panel left
+   * about a hundred and sixty pixels for the page, which is not a width
+   * anybody can read a book at.
+   */
+  const [compact, setCompact] = useState(false);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+
+    const measure = () => setCompact(frame.clientWidth < 720);
+    measure();
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
   const [scale, setScale] = useState(1);
   const [fitWidth, setFitWidth] = useState(true);
   const [current, setCurrent] = useState(1);
@@ -97,11 +196,14 @@ export function PdfReader({ reader, initialCitation, onCite, onClose }: PdfReade
     const container = scrollRef.current;
     if (!container || !fitWidth || !info || info.sizes.length === 0) return;
 
+    const width = typicalPageWidth(info.sizes);
+
     const fit = () => {
-      const widest = Math.max(...info.sizes.map((size) => size.width));
-      // The gutter keeps the page off the scrollbar and off the panel edge.
-      const available = container.clientWidth - 48;
-      if (widest > 0 && available > 0) setScale(available / widest);
+      // The gutter keeps the page off the scrollbar and off the panel edge,
+      // and is smaller when there is less room to give away.
+      const gutter = container.clientWidth < 520 ? 16 : 48;
+      const available = container.clientWidth - gutter;
+      if (width > 0 && available > 0) setScale(available / width);
     };
 
     fit();
@@ -255,11 +357,19 @@ export function PdfReader({ reader, initialCitation, onCite, onClose }: PdfReade
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        // Escape backs out of the innermost thing first: a selection, then a
+        // panel, then the reader itself. In the standalone window there is no
+        // reader to close, so Escape simply stops there rather than doing
+        // something surprising to the tab.
         if (selection) {
           setSelection(null);
           return;
         }
-        onClose();
+        if (panel) {
+          setPanel(null);
+          return;
+        }
+        onClose?.();
         return;
       }
 
@@ -278,7 +388,7 @@ export function PdfReader({ reader, initialCitation, onCite, onClose }: PdfReade
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [current, goToPage, onClose, selection]);
+  }, [current, goToPage, onClose, panel, selection]);
 
   const zoomBy = useCallback((direction: -1 | 1) => {
     setFitWidth(false);
@@ -298,11 +408,17 @@ export function PdfReader({ reader, initialCitation, onCite, onClose }: PdfReade
 
   return (
     <section
+      ref={frameRef}
       aria-label={`Reading ${title}`}
       className="flex h-full min-h-0 flex-col bg-[var(--fl-elevated)]"
     >
-      <header className="flex shrink-0 items-center gap-2 border-b border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-2">
-        <div className="min-w-0 flex-1">
+      {/* Wraps rather than scrolls or clips. The reader is a full window in
+          one place and a panel beside a note in another, so the header has no
+          fixed width to design against — and the previous single row put
+          "Close" past the right edge the moment the panel was narrower than
+          about 700 pixels. */}
+      <header className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-2">
+        <div className="min-w-0 flex-1 basis-48">
           <p className="truncate text-sm font-medium text-[var(--fl-text)]" title={title}>
             {title}
           </p>
@@ -313,59 +429,92 @@ export function PdfReader({ reader, initialCitation, onCite, onClose }: PdfReade
           </p>
         </div>
 
-        {status === "ready" && info ? (
-          <>
-            <PageJump current={current} total={info.pageCount} onGo={goToPage} />
+        <div className="flex items-center gap-x-1 gap-y-1">
+          {status === "ready" && info ? (
+            <>
+              <PageJump current={current} total={info.pageCount} onGo={goToPage} />
 
-            <div className="flex items-center gap-px">
-              <ToolButton label="Zoom out" onClick={() => zoomBy(-1)}>
-                −
-              </ToolButton>
+              <div className="flex items-center gap-px">
+                <ToolButton label="Zoom out" onClick={() => zoomBy(-1)}>
+                  −
+                </ToolButton>
+                <ToolButton
+                  label={fitWidth ? "Zoom to 100%" : "Fit to width"}
+                  onClick={() => {
+                    if (fitWidth) {
+                      setFitWidth(false);
+                      setScale(1);
+                    } else {
+                      setFitWidth(true);
+                    }
+                  }}
+                >
+                  {fitWidth ? "Fit" : `${Math.round(scale * 100)}%`}
+                </ToolButton>
+                <ToolButton label="Zoom in" onClick={() => zoomBy(1)}>
+                  +
+                </ToolButton>
+              </div>
+
               <ToolButton
-                label={fitWidth ? "Zoom to 100%" : "Fit to width"}
-                onClick={() => {
-                  if (fitWidth) {
-                    setFitWidth(false);
-                    setScale(1);
-                  } else {
-                    setFitWidth(true);
-                  }
-                }}
+                label="Find in document"
+                pressed={panel === "search"}
+                onClick={() => setPanel(panel === "search" ? null : "search")}
               >
-                {fitWidth ? "Fit" : `${Math.round(scale * 100)}%`}
+                Find
               </ToolButton>
-              <ToolButton label="Zoom in" onClick={() => zoomBy(1)}>
-                +
-              </ToolButton>
-            </div>
+              {outline.length > 0 ? (
+                <ToolButton
+                  label="Contents"
+                  pressed={panel === "outline"}
+                  onClick={() => setPanel(panel === "outline" ? null : "outline")}
+                >
+                  Contents
+                </ToolButton>
+              ) : null}
 
-            <ToolButton
-              label="Find in document"
-              pressed={panel === "search"}
-              onClick={() => setPanel(panel === "search" ? null : "search")}
-            >
-              Find
+              {onOpenInTab ? (
+                <ToolButton label="Open this document in its own tab" onClick={onOpenInTab}>
+                  Open in tab
+                </ToolButton>
+              ) : null}
+
+              {onSave ? (
+                <ToolButton
+                  label="Keep this PDF in your notebook, so notes can link to it"
+                  onClick={onSave}
+                >
+                  {saving ? "Saving…" : "Save to notebook"}
+                </ToolButton>
+              ) : null}
+            </>
+          ) : null}
+
+          {onClose ? (
+            <ToolButton label="Close the reader" onClick={onClose}>
+              Close
             </ToolButton>
-            {outline.length > 0 ? (
-              <ToolButton
-                label="Contents"
-                pressed={panel === "outline"}
-                onClick={() => setPanel(panel === "outline" ? null : "outline")}
-              >
-                Contents
-              </ToolButton>
-            ) : null}
-          </>
-        ) : null}
-
-        <ToolButton label="Close the reader" onClick={onClose}>
-          Close
-        </ToolButton>
+          ) : null}
+        </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      {saveHint ? (
+        <p className="shrink-0 border-b border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-1.5 text-xs text-[var(--fl-muted)]">
+          {saveHint}
+        </p>
+      ) : null}
+
+      {/* `relative` so a panel can overlay the pages when there is no room to
+          sit beside them. */}
+      <div className="relative flex min-h-0 flex-1">
         {panel ? (
-          <aside className="w-64 shrink-0 overflow-y-auto border-r border-[var(--fl-border)] bg-[var(--fl-surface)] p-2">
+          <aside
+            className={
+              compact
+                ? "absolute inset-y-0 left-0 z-20 w-[min(17rem,80%)] overflow-y-auto border-r border-[var(--fl-border)] bg-[var(--fl-surface)] p-2 shadow-[var(--fl-shadow-lg)]"
+                : "w-64 shrink-0 overflow-y-auto border-r border-[var(--fl-border)] bg-[var(--fl-surface)] p-2"
+            }
+          >
             {panel === "outline" ? (
               <Outline outline={outline} current={current} onGo={goToPage} />
             ) : (
@@ -380,6 +529,17 @@ export function PdfReader({ reader, initialCitation, onCite, onClose }: PdfReade
               />
             )}
           </aside>
+        ) : null}
+
+        {/* Dismisses an overlaying panel by tapping the page beside it, which
+            is what every drawer on a small screen does. */}
+        {panel && compact ? (
+          <button
+            type="button"
+            aria-label="Close panel"
+            onClick={() => setPanel(null)}
+            className="absolute inset-0 z-10 bg-black/30"
+          />
         ) : null}
 
         <div ref={scrollRef} className="relative min-w-0 flex-1 overflow-auto p-4">
@@ -417,6 +577,8 @@ export function PdfReader({ reader, initialCitation, onCite, onClose }: PdfReade
           {selection ? (
             <CiteBar
               canCite={Boolean(onCite)}
+              labels={citeLabels}
+              reason={noCiteReason}
               copied={copied}
               onCite={cite}
               onCopy={async () => {
@@ -468,12 +630,16 @@ function highlightsFor(
  */
 function CiteBar({
   canCite,
+  labels,
+  reason,
   copied,
   onCite,
   onCopy,
   onDismiss,
 }: {
   canCite: boolean;
+  labels: { quote: string; reference: string };
+  reason: string | null;
   copied: boolean;
   onCite: (withQuote: boolean) => void;
   onCopy: () => void | Promise<void>;
@@ -484,12 +650,12 @@ function CiteBar({
       <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-[var(--fl-border-strong)] bg-[var(--fl-surface)] px-1.5 py-1 shadow-[var(--fl-shadow-lg)]">
         {canCite ? (
           <>
-            <BarButton onClick={() => onCite(true)}>Quote into note</BarButton>
-            <BarButton onClick={() => onCite(false)}>Reference only</BarButton>
+            <BarButton onClick={() => onCite(true)}>{labels.quote}</BarButton>
+            <BarButton onClick={() => onCite(false)}>{labels.reference}</BarButton>
           </>
-        ) : (
-          <span className="px-2 text-xs text-[var(--fl-muted)]">Open a note to cite into it</span>
-        )}
+        ) : reason ? (
+          <span className="px-2 text-xs text-[var(--fl-muted)]">{reason}</span>
+        ) : null}
         <BarButton onClick={() => void onCopy()}>{copied ? "Copied" : "Copy"}</BarButton>
         <BarButton onClick={onDismiss} aria-label="Dismiss">
           ×
