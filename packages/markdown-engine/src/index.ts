@@ -52,7 +52,7 @@ export {
   type WikilinkResolver,
 } from "./wikilinks";
 
-export { referencedPaths } from "./references";
+export { referencedPaths, removeReferencesTo } from "./references";
 
 export {
   normalizePath,
