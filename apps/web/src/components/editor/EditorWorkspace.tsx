@@ -45,6 +45,7 @@ import {
 import { commitToBranch } from "@/lib/gateway";
 import { readDroppedPdf } from "@/lib/local-files";
 import { insertionFor, quoteMarkdown } from "@/lib/pdf-quote";
+import { mentionsOfPdf, type PdfMention } from "@/lib/pdf-mentions";
 import { isPdfPath } from "@/lib/media";
 import { useTheme } from "@/hooks/useTheme";
 import { ColumnResizer } from "@/components/ColumnResizer";
@@ -439,6 +440,15 @@ export function EditorWorkspace() {
    */
   const [readerLayout, setReaderLayout] = useState<"document" | "beside">("document");
   const [savingPdf, setSavingPdf] = useState(false);
+  /**
+   * Every note in the notebook, read once when a document is opened.
+   *
+   * Only then: this is the whole notebook off IndexedDB, which is not
+   * something to be doing on every keystroke for a panel nobody has opened.
+   * The notes open in tabs are folded back in at render, so a passage quoted a
+   * moment ago and not yet flushed to storage still appears in the list.
+   */
+  const [storedNotes, setStoredNotes] = useState<{ path: string; content: string }[]>([]);
 
   const openInReader = useCallback(
     (
@@ -568,6 +578,51 @@ export function EditorWorkspace() {
     },
     [workspace, openInReader, openPdfTab, pdfPlacement],
   );
+
+  const loadAllNotes = notebook.allNotes;
+
+  useEffect(() => {
+    // Nothing to look up for a document with no path in the repository, and
+    // nothing to look up when no document is open.
+    if (reader.status === "idle" || !readerPath) return;
+
+    let live = true;
+    void loadAllNotes()
+      .then((all) => {
+        if (live) setStoredNotes(all.map(({ path, content }) => ({ path, content })));
+      })
+      .catch(() => {
+        // A notebook that cannot be read is a notebook with nothing to say
+        // about this document. The reader still reads.
+        if (live) setStoredNotes([]);
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [reader.status, readerPath, loadAllNotes]);
+
+  /**
+   * What this notebook has already said about the document being read.
+   *
+   * Null rather than empty for a document with no repository path: a note
+   * cannot link to a file that is not in the notebook, so "nothing points at
+   * this yet" would be advice nobody can act on.
+   */
+  const pdfMentions = useMemo<PdfMention[] | null>(() => {
+    if (!readerPath) return null;
+
+    const open = new Map(notebook.openNotes.map((item) => [item.path, item.content]));
+    const merged = storedNotes.map((item) => ({
+      path: item.path,
+      content: open.get(item.path) ?? item.content,
+    }));
+    for (const [path, content] of open) {
+      if (!merged.some((item) => item.path === path)) merged.push({ path, content });
+    }
+
+    return mentionsOfPdf(merged, readerPath);
+  }, [readerPath, storedNotes, notebook.openNotes]);
 
   /**
    * Writes a cited passage into the note being read alongside.
@@ -1848,6 +1903,15 @@ export function EditorWorkspace() {
       onSave={canSavePdf ? () => void savePdfToNotebook() : null}
       saveHint={pdfSaveHint}
       saving={savingPdf}
+      mentions={pdfMentions}
+      onOpenMention={(path) => {
+        notebook.openNote(path);
+        // Beside the note, the reader stays; it is the other half of the
+        // window. Reading full width, the note it opened has nowhere to
+        // appear until the document steps aside.
+        if (readerLayout === "document") closeReader();
+      }}
+      titleForNote={links.titleFor}
       onClose={closeReader}
     />
   );

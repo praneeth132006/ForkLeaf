@@ -13,6 +13,7 @@ import {
 import type { PdfReaderState } from "@/hooks/usePdfReader";
 import { PdfPage, type PdfHighlight } from "@/components/PdfPage";
 import { ColumnResizer } from "@/components/ColumnResizer";
+import type { PdfMention } from "@/lib/pdf-mentions";
 import { useColumnWidth } from "@/hooks/useColumnWidth";
 
 /**
@@ -80,6 +81,18 @@ export interface PdfReaderProps {
   saveHint?: string | null;
   saving?: boolean;
   /**
+   * Everything the notebook has said about this document.
+   *
+   * Absent for a document with no repository path — one opened from a desktop
+   * — since a note cannot link to a file that is not in the notebook, so there
+   * is nothing to find and an empty "Notes" tab would be a lie about that.
+   */
+  mentions?: readonly PdfMention[] | null;
+  /** Opens the note a mention was written in. */
+  onOpenMention?: ((notePath: string) => void) | null;
+  /** Names a note by path, so the list can read as prose. */
+  titleForNote?: (path: string) => string;
+  /**
    * How much room the reader has, and therefore where the contents list goes.
    *
    * `"panel"` is the reader sharing a window with a note: the contents slide
@@ -141,6 +154,9 @@ export function PdfReader({
   onSave,
   saveHint,
   saving = false,
+  mentions = null,
+  onOpenMention = null,
+  titleForNote,
   layout = "panel",
 }: PdfReaderProps) {
   const { status, info, source, session, outline, pages, indexing, error } = reader;
@@ -175,7 +191,7 @@ export function PdfReader({
   const [fitWidth, setFitWidth] = useState(true);
   const [current, setCurrent] = useState(1);
   const [visible, setVisible] = useState<ReadonlySet<number>>(new Set([1]));
-  const [panel, setPanel] = useState<"outline" | "search" | null>(
+  const [panel, setPanel] = useState<"outline" | "search" | "notes" | null>(
     // Reading a document full width, the contents are part of the furniture
     // and start open. Beside a note they start out of the way.
     layout === "document" ? "outline" : null,
@@ -441,7 +457,14 @@ export function PdfReader({
   // living. Two copies would be two components, both mounted, racing to be the
   // one whose "go to page 12" the scroll container hears.
   const panelBody =
-    panel === "outline" ? (
+    panel === "notes" ? (
+      <Mentions
+        mentions={mentions ?? []}
+        onOpen={onOpenMention}
+        onGo={goToPage}
+        titleFor={titleForNote}
+      />
+    ) : panel === "outline" ? (
       <Outline outline={outline} current={current} onGo={goToPage} />
     ) : (
       <Search
@@ -521,6 +544,15 @@ export function PdfReader({
                   onClick={() => setPanel(panel === "outline" ? null : "outline")}
                 >
                   Contents
+                </ToolButton>
+              ) : null}
+              {mentions && mentions.length > 0 ? (
+                <ToolButton
+                  label="What your notes say about this document"
+                  pressed={panel === "notes"}
+                  onClick={() => setPanel(panel === "notes" ? null : "notes")}
+                >
+                  {`Notes ${mentions.length}`}
                 </ToolButton>
               ) : null}
 
@@ -670,6 +702,15 @@ export function PdfReader({
                 >
                   Find
                 </ToolButton>
+                {mentions ? (
+                  <ToolButton
+                    label="What your notes say about this document"
+                    pressed={panel === "notes"}
+                    onClick={() => setPanel("notes")}
+                  >
+                    {mentions.length > 0 ? `Notes ${mentions.length}` : "Notes"}
+                  </ToolButton>
+                ) : null}
                 <span className="flex-1" />
                 <ToolButton label="Hide the contents" onClick={() => setPanel(null)}>
                   Hide
@@ -797,6 +838,79 @@ function Outline({
         </button>
       ))}
     </nav>
+  );
+}
+
+/**
+ * What the notebook has already said about this document.
+ *
+ * The quotation first and the note second, because the passage is what you
+ * recognise — "the bit about attention", not "reading/2026-03-14.md". Months
+ * after reading a paper this list is the useful artefact: your own argument,
+ * assembled out of notes written weeks apart, with the paper's words set into
+ * it. No other reader can show you this, because no other reader's highlights
+ * are links in files it can read back.
+ */
+function Mentions({
+  mentions,
+  onOpen,
+  onGo,
+  titleFor,
+}: {
+  mentions: readonly PdfMention[];
+  onOpen: ((notePath: string) => void) | null;
+  onGo: (page: number) => void;
+  titleFor?: (path: string) => string;
+}) {
+  if (mentions.length === 0) {
+    return (
+      <p className="px-2 py-1 text-xs text-[var(--fl-muted)]">
+        Nothing in your notes points at this document yet. Select a passage and quote it into a
+        note, and it will be listed here.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {mentions.map((mention) => (
+        <article
+          key={`${mention.notePath}:${mention.line}:${mention.label}`}
+          className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-2"
+        >
+          {mention.quote ? (
+            <blockquote className="mb-1.5 border-l-2 border-[var(--fl-accent)] pl-2 text-xs leading-relaxed text-[var(--fl-text)]">
+              {mention.quote}
+            </blockquote>
+          ) : (
+            <p className="mb-1.5 text-xs leading-relaxed text-[var(--fl-text)]">
+              {mention.context}
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--fl-muted)]">
+            <button
+              type="button"
+              disabled={!onOpen}
+              onClick={() => onOpen?.(mention.notePath)}
+              className="min-w-0 max-w-full truncate rounded text-left underline decoration-dotted underline-offset-2 hover:text-[var(--fl-text)] disabled:cursor-default disabled:no-underline"
+            >
+              {titleFor?.(mention.notePath) ?? mention.notePath}
+            </button>
+
+            {mention.page != null ? (
+              <button
+                type="button"
+                onClick={() => mention.page != null && onGo(mention.page)}
+                className="shrink-0 rounded tabular-nums underline decoration-dotted underline-offset-2 hover:text-[var(--fl-text)]"
+              >
+                p. {mention.page}
+              </button>
+            ) : null}
+          </div>
+        </article>
+      ))}
+    </div>
   );
 }
 

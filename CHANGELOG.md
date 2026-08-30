@@ -58,6 +58,19 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### Everything you have written about a paper, on the paper
+
+Open a PDF from your repository and the contents column has a third tab:
+every note that quotes this document, each one showing the passage it took and
+the page it came from, in the document's own order. Click the passage to go to
+that page, or the note to open it.
+
+Nothing new is stored to make this work. ForkLeaf already writes a citation as
+an ordinary markdown link, so the notebook always knew which notes quote which
+paper — it had no way of being asked. Months after reading something, that
+list is the useful artefact: your own argument, assembled out of notes written
+weeks apart, with the paper's words set into it.
+
 ### The columns are the width you want them
 
 Every panel in the editor was a width somebody chose once. Each seam between
