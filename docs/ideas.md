@@ -44,14 +44,13 @@ Ticked entries link to nothing; the git history is the record.
 
 - [x] **Save this PDF into my notebook** — shipped before this list existed
 - [x] **Open a PDF and see everything you have written about it** — Small
-- [ ] **Search inside your PDFs from ⌘K** — Small. The text is already
-      extracted for find-in-document; it just is not kept
+- [x] **Search inside your PDFs from ⌘K** — Small. The text is kept the first
+      time a document is read, so ⌘K reaches inside the papers as well
 - [ ] **Scroll one pane, the other follows** — Small. Scroll the note and the
       document moves to the page you are writing about, and back again
-- [ ] **A list of citations that have broken** — Medium. Check every quotation
-      in the notebook against the document as it stands now. The hard part —
-      finding the sentence again — already works and is already tested. If one
-      thing on this list gets built, it should be this one
+- [x] **A list of citations that have broken** — Medium. Every quotation in the
+      notebook, checked against the document as it stands now: what has moved,
+      what is gone, and a one-press fix for a stale page number
 - [ ] **See what changed between two versions of a PDF** — Medium. The file is
       in a repository, so old versions are kept: show page 12 then and now, and
       say whether the page you quoted is one of the ones that changed

@@ -41,6 +41,7 @@ import {
 } from "@/lib/workspaces";
 import { forgetLock, isPathLocked, lockedKey, renameLock, toggleLock } from "@/lib/locks";
 import { assetBlob, assetFrom, assetObjectUrl, blobAsBase64, isImagePath } from "@/lib/assets";
+import { entryFrom, pdfTextId } from "@/lib/pdf-index";
 import { shrinkImage, ShrinkError } from "@/lib/shrink-image";
 import {
   DEFAULT_TREE_ORDER,
@@ -1624,6 +1625,34 @@ export function useNotebook(request: NotebookRequest = {}) {
   );
 
   /**
+   * Rewrites any note in this workspace, whether or not it is open.
+   *
+   * `saveNote` writes the note the editor is showing and `replaceNoteContent`
+   * writes one that happens to be in a tab. Repairing a link means writing to
+   * a note nobody has looked at today, which is neither of those — so the note
+   * is read from storage first, and any tab holding it is brought along.
+   */
+  const rewriteNote = useCallback(
+    async (path: string, change: (content: string) => string): Promise<boolean> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace) return false;
+
+      const open = state.openNotes.find((note) => note.path === path);
+      const note = open ?? (await notes.openNote(workspace.id, path));
+      if (!note) return false;
+
+      const next = change(note.content);
+      if (next === note.content) return false;
+
+      await notes.saveNote(note, next);
+      patchOpenNote(path, { content: next, dirty: true });
+      return true;
+    },
+    [state.activeWorkspace, state.openNotes, patchOpenNote],
+  );
+
+  /**
    * Drops one stuck change, so the queue behind it can move.
    *
    * The way out of a change that can never be pushed. Needs a refresh of the
@@ -1840,6 +1869,46 @@ export function useNotebook(request: NotebookRequest = {}) {
     [state.activeWorkspace, state.sync.unpushed, urlForAsset],
   );
 
+  // ── The words documents are made of ─────────────────────────────────────
+
+  /**
+   * Keeps a document's text after it has been read once.
+   *
+   * The reader extracts it anyway — that is what makes find-in-document work —
+   * and used to throw it away when the document closed, so the words were
+   * searchable for exactly as long as somebody was looking at them. Kept, they
+   * are what ⌘K searches and what a citation is checked against.
+   */
+  const saveDocumentText = useCallback(
+    async (path: string, pages: { page: number; text: string }[]) => {
+      const db = dbRef.current;
+      const workspace = state.activeWorkspace;
+      if (!db || !workspace || workspace.isLocal) return;
+
+      await db.putPdfText(entryFrom(workspace.id, path, pages));
+    },
+    [state.activeWorkspace],
+  );
+
+  const documentText = useCallback(
+    async (path: string) => {
+      const db = dbRef.current;
+      const workspace = state.activeWorkspace;
+      if (!db || !workspace) return undefined;
+
+      return db.getPdfText(pdfTextId(workspace.id, path));
+    },
+    [state.activeWorkspace],
+  );
+
+  const allDocumentText = useCallback(async () => {
+    const db = dbRef.current;
+    const workspace = state.activeWorkspace;
+    if (!db || !workspace) return [];
+
+    return db.listPdfText(workspace.id);
+  }, [state.activeWorkspace]);
+
   /** Remembers which folders are open, for the next visit. */
   const setExpandedFolders = useCallback(
     (paths: string[]) => {
@@ -1904,6 +1973,10 @@ export function useNotebook(request: NotebookRequest = {}) {
       discardPending,
       discardChange,
       shrinkChange,
+      rewriteNote,
+      saveDocumentText,
+      documentText,
+      allDocumentText,
       setSyncMode,
       resolveConflict,
       allNotes,
@@ -1962,6 +2035,10 @@ export function useNotebook(request: NotebookRequest = {}) {
       pendingChanges,
       discardPending,
       discardChange,
+      allDocumentText,
+      documentText,
+      saveDocumentText,
+      rewriteNote,
       shrinkChange,
       setSyncMode,
       resolveConflict,
