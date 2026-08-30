@@ -18,6 +18,7 @@ import {
   dirname,
   documentStats,
   joinPath,
+  neighbourhood,
   parseRepoTarget,
   referencedPaths,
   type RepoTarget,
@@ -822,6 +823,17 @@ export function EditorWorkspace() {
     repo: workspace && !workspace.isLocal ? workspace.repo : null,
   });
 
+  /**
+   * The notes around the one being written, for ⌘K to weigh.
+   *
+   * The link graph is built for backlinks and answers this for free: a note
+   * you linked to and a note that linked to you are equally near, because in
+   * both cases somebody decided they belonged together.
+   */
+  const nearbyNotes = useMemo(
+    () => (note && links.ready ? neighbourhood(links.graph, note.path) : null),
+    [note, links.ready, links.graph],
+  );
 
   /**
    * Creates the note a link points at but that nobody has written yet.
@@ -2774,6 +2786,7 @@ export function EditorWorkspace() {
           // A notebook with no repository has no documents to reach: nothing
           // could have been read from one, and a result that opened nothing
           // would be worse than no result.
+          {...(nearbyNotes ? { nearby: nearbyNotes } : {})}
           documents={workspace && !workspace.isLocal ? documentTexts : []}
           onOpenDocument={(path, page) => openRepoPdf(path, `page=${page}`)}
           commands={commands}
