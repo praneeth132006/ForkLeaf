@@ -340,6 +340,18 @@ export function HelpDialog({
             }
           />
           <Feature
+            title="Let readers send corrections back"
+            what="Programmers have had “here is a fix for what you wrote” for twenty years. Nobody has offered it to people writing notes."
+            doThis={
+              <>
+                Publish a note. Every published page carries <strong>Suggest an edit</strong>; to
+                see what has come in, <Mono>⌘K</Mono> →{" "}
+                <strong>See what other people have suggested</strong>.
+              </>
+            }
+            then="The reader fixes the note in GitHub's editor and their change arrives in your list. Read what changed on GitHub, and accept it here — the next sync brings it down to this device."
+          />
+          <Feature
             title="What did my notebook look like in March?"
             what="Not one note's history — the whole notebook, on a day you choose."
             doThis={

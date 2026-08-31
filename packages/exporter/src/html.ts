@@ -136,6 +136,7 @@ export async function toHtml(
     options.title,
     forPrinting(withoutRepeatedTitle(body, options.title)),
     options.theme,
+    options.suggestUrl ?? null,
   );
 }
 
@@ -159,6 +160,28 @@ function withoutRepeatedTitle(html: string, title: string): string {
   return html.replace(/^\s*<h1\b[^>]*>([\s\S]*?)<\/h1>/i, (whole, inner: string) =>
     normaliseHeading(stripTags(inner)) === wanted ? "" : whole,
   );
+}
+
+/**
+ * The invitation at the foot of a published page.
+ *
+ * Programmers have had "suggest a change to what I wrote" for twenty years and
+ * call it a pull request. Nobody has ever offered it to people writing notes —
+ * a published page is something you read, and that is where it ends.
+ *
+ * The link goes to the note's own file in the repository it came from, where
+ * GitHub's editor forks, commits and opens the request without the reader
+ * having to understand that any of that is happening. Said plainly underneath,
+ * because "suggest an edit" should not be a euphemism for "you are about to
+ * need a GitHub account".
+ */
+function suggestion(url: string | null): string {
+  if (!url) return "";
+
+  return `<aside class="doc-suggest">
+  <a class="doc-suggest-link" href="${escapeHtml(url)}" rel="noopener">Suggest an edit</a>
+  <span class="doc-suggest-note">Opens this note on GitHub. Your change is sent to the author as a suggestion — nothing here changes until they accept it.</span>
+</aside>`;
 }
 
 function stripTags(html: string): string {
@@ -204,7 +227,12 @@ function forPrinting(html: string): string {
  */
 const BRAND_MARK = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21v-7"/><path d="M12 14 6.5 8.5A4 4 0 0 1 5.4 5.7L5 3l2.7.4a4 4 0 0 1 2.8 1.1L12 6"/><path d="m12 14 5.5-5.5a4 4 0 0 0 1.1-2.8L19 3l-2.7.4a4 4 0 0 0-2.8 1.1L12 6"/></svg>`;
 
-function document(title: string, body: string, theme: "light" | "dark"): string {
+function document(
+  title: string,
+  body: string,
+  theme: "light" | "dark",
+  suggestUrl: string | null,
+): string {
   const dark = theme === "dark";
   const colors = dark
     ? {
@@ -302,6 +330,29 @@ function document(title: string, body: string, theme: "light" | "dark"): string 
   /* The body's own leading H1 would repeat the title block. */
   .doc-head + h1:first-of-type { margin-top: 0; }
 
+  /* ── The invitation to suggest a change ───────────────────────────────
+     Set apart from the note and quiet about it: a reader has come to read,
+     and this is an offer, not a call to action. Never printed — a sheet of
+     paper is not a thing anybody can suggest an edit to. */
+  .doc-suggest {
+    margin-top: 4rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+  }
+  .doc-suggest-link {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+  .doc-suggest-note { color: var(--muted); }
+  @media print { .doc-suggest { display: none; } }
+
   /* ── The footer ──────────────────────────────────────────────────────
      Hidden on screen, where the app's own chrome is already saying all of
      this, and shown on paper where nothing else is. */
@@ -371,6 +422,7 @@ function document(title: string, body: string, theme: "light" | "dark"): string 
   <p class="doc-meta">${escapeHtml(printedOn())}</p>
 </header>
 ${body}
+${suggestion(suggestUrl)}
 </main>
 <footer class="doc-foot" aria-hidden="true">
   <span class="doc-foot-title">${escapeHtml(title)}</span>

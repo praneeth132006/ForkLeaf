@@ -58,6 +58,25 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### Readers can suggest a change to your notes
+
+Programmers have had &ldquo;here is a fix for what you wrote&rdquo; for twenty
+years and call it a pull request. Nobody has ever offered it to people writing
+notes: a published page is something you read, and that is where it ends.
+
+- Every page you publish now carries **Suggest an edit**. A reader who spots a
+  mistake follows it, fixes the note in GitHub's own editor, and their change
+  becomes a suggestion — GitHub does the forking and the pull request, and
+  neither of you has to say those words
+- ⌘K → **See what other people have suggested** lists what has come in: who,
+  what, and when. **Read what changed** opens the diff and the conversation on
+  GitHub, which is a thing GitHub does very well; **Accept** merges it into your
+  notes from here, and the next sync brings it down to this device
+
+The link points at the note in the repository it came from, never at the
+published copy — a suggestion against a copy is one you could not accept
+without hand-copying it back.
+
 ### The paper and the note stay on the same page
 
 Read a document beside a note and the two follow each other: move the cursor

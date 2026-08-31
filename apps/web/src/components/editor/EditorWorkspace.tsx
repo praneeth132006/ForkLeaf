@@ -54,6 +54,7 @@ import { paperNote } from "@/lib/note-from-paper";
 import { anchorsFor, lineForPage, pageForLine } from "@/lib/pdf-follow";
 import { FreshnessDialog } from "@/components/FreshnessDialog";
 import { TimeMachineDialog } from "@/components/TimeMachineDialog";
+import { SuggestionsDialog } from "@/components/SuggestionsDialog";
 import { CitationsDialog } from "@/components/CitationsDialog";
 import { isPdfPath } from "@/lib/media";
 import { useTheme } from "@/hooks/useTheme";
@@ -304,6 +305,7 @@ export function EditorWorkspace() {
     | "citations"
     | "freshness"
     | "time-machine"
+    | "suggestions"
     | null
   >(null);
   /**
@@ -1990,6 +1992,18 @@ export function EditorWorkspace() {
 
     if (workspace && !workspace.isLocal) {
       list.push({
+        id: "suggestions",
+        label: "See what other people have suggested",
+        group: "Notes",
+        hint: "Corrections readers have sent back from your published pages",
+        keywords:
+          "suggestion suggestions pull request pr incoming reader correction fix accept merge contribute proposed change",
+        run: () => setDialog("suggestions"),
+      });
+    }
+
+    if (workspace && !workspace.isLocal) {
+      list.push({
         id: "time-machine",
         label: "Show me my notebook as it was on…",
         group: "View",
@@ -2952,6 +2966,14 @@ export function EditorWorkspace() {
           documents={workspace && !workspace.isLocal ? documentTexts : []}
           onOpenDocument={(path, page) => openRepoPdf(path, `page=${page}`)}
           commands={commands}
+        />
+      )}
+
+      {openDialog === "suggestions" && workspace && !workspace.isLocal && (
+        <SuggestionsDialog
+          onClose={() => setDialog(null)}
+          repo={workspace.repo}
+          onAccepted={() => void notebook.pullRemote()}
         />
       )}
 

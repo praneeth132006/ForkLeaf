@@ -525,6 +525,38 @@ export interface PullRequestDto {
   base: string;
 }
 
+export interface SuggestionDto extends PullRequestDto {
+  author: string | null;
+  /** ISO 8601 — when it was last touched, which is how they are ordered. */
+  updatedAt: string;
+}
+
+/**
+ * The suggestions open on this notebook.
+ *
+ * Open pull requests, which for a notebook is what a suggestion is: somebody
+ * read a page and sent a correction back.
+ */
+export async function listSuggestions(owner: string, repo: string): Promise<SuggestionDto[]> {
+  const { pulls } = await call<{ pulls: SuggestionDto[] }>(
+    `/api/gh/suggestions?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`,
+  );
+  return pulls;
+}
+
+/** Accepts a suggestion, squashed, the way every other merge here is done. */
+export async function acceptSuggestion(options: {
+  owner: string;
+  repo: string;
+  number: number;
+  title?: string;
+}): Promise<{ merged: boolean; sha: string | null }> {
+  return call("/api/gh/review", {
+    method: "POST",
+    body: JSON.stringify({ ...options, action: "merge", method: "squash" }),
+  });
+}
+
 export async function listBranches(owner: string, repo: string): Promise<BranchSummaryDto[]> {
   const { branches } = await call<{ branches: BranchSummaryDto[] }>(
     `/api/gh/branches?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`,

@@ -65,6 +65,8 @@ interface ApiPullRequest {
   head: { ref: string; sha?: string };
   base: { ref: string; sha?: string };
   user?: { login: string } | null;
+  updated_at?: string;
+  created_at?: string;
   merged?: boolean;
   mergeable?: boolean | null;
   mergeable_state?: string | null;
@@ -638,6 +640,34 @@ export class GitHubClient {
     );
 
     return pulls[0] ? toPullRequest(pulls[0]) : null;
+  }
+
+  /**
+   * Every open pull request on a repository, newest first.
+   *
+   * For the author's side of "suggest an edit": a reader who spotted a mistake
+   * has opened one of these from a fork, and until now the only place to find
+   * out was github.com. Summaries only — a list is a list, and reading one
+   * costs a request of its own.
+   */
+  async listOpenPullRequests(
+    owner: string,
+    repo: string,
+    limit = 30,
+  ): Promise<(PullRequestSummary & { author: string | null; updatedAt: string })[]> {
+    const pulls = await this.transport.paginate<ApiPullRequest>(
+      `/repos/${owner}/${repo}/pulls?state=open&sort=updated&direction=desc` +
+        `&per_page=${Math.min(Math.max(limit, 1), 100)}`,
+    );
+
+    // Capped here rather than by asking for fewer: `paginate` follows every
+    // `Link: rel="next"` it is given, and a repository with four hundred open
+    // requests is not a list anybody reads to the end of.
+    return pulls.slice(0, limit).map((pull) => ({
+      ...toPullRequest(pull),
+      author: pull.user?.login ?? null,
+      updatedAt: pull.updated_at ?? pull.created_at ?? "",
+    }));
   }
 
   /**

@@ -978,3 +978,62 @@ describe("listTree at a ref", () => {
     expect(calls.some((call) => call.url.includes("git/ref/heads/main"))).toBe(true);
   });
 });
+
+/**
+ * The author's side of "suggest an edit": a reader has opened one of these
+ * from a fork, and until now the only place to find out was github.com.
+ */
+describe("listOpenPullRequests", () => {
+  const listing = [
+    {
+      number: 7,
+      html_url: "https://github.com/octo/notes/pull/7",
+      state: "open",
+      title: "Fix the version in the runbook",
+      draft: false,
+      head: { ref: "reader:patch-1" },
+      base: { ref: "main" },
+      user: { login: "a-reader" },
+      updated_at: "2026-08-30T10:00:00Z",
+    },
+  ];
+
+  it("asks for what is open, most recently touched first", async () => {
+    const { calls, fetchImpl } = fakeGitHub({
+      "GET /repos/octo/notes/pulls?state=open&sort=updated&direction=desc&per_page=30": listing,
+    });
+
+    const pulls = await new GitHubClient({ token: "t", fetch: fetchImpl }).listOpenPullRequests(
+      "octo",
+      "notes",
+    );
+
+    expect(pulls[0]).toMatchObject({
+      number: 7,
+      title: "Fix the version in the runbook",
+      author: "a-reader",
+      updatedAt: "2026-08-30T10:00:00Z",
+    });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("stops at the number asked for, however many pages GitHub offers", async () => {
+    const many = Array.from({ length: 30 }, (_, index) => ({
+      ...listing[0]!,
+      number: index + 1,
+    }));
+    const { fetchImpl } = fakeGitHub({
+      "GET /repos/octo/notes/pulls?state=open&sort=updated&direction=desc&per_page=3": many,
+    });
+
+    const pulls = await new GitHubClient({ token: "t", fetch: fetchImpl }).listOpenPullRequests(
+      "octo",
+      "notes",
+      3,
+    );
+
+    // A repository with four hundred open requests is not a list anybody
+    // reads to the end of.
+    expect(pulls).toHaveLength(3);
+  });
+});

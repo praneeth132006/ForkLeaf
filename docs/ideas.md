@@ -24,10 +24,10 @@ Ticked entries link to nothing; the git history is the record.
 - [x] **Ask a sentence where it came from** — Medium. Pointing at a paragraph
       now says what it used to say, taken from the revision before the change
       that produced it
-- [ ] **Suggest a change to someone else's notes** — Big. A reader of a
-      published page fixes a mistake and you get a suggestion to accept or
-      decline, without either of you touching GitHub. This is the single most
-      distinctive thing ForkLeaf could ship
+- [x] **Suggest a change to someone else's notes** — Big. Published pages carry
+      **Suggest an edit**; suggestions arrive in a list you can accept from.
+      Reading the diff still happens on GitHub, and the reader still needs a
+      GitHub account — the half that would remove that is still to do
 - [x] **Notes that tell you when they have gone stale** — Medium. A list that
       comes to you, across the notebook: notes pointing at files that have
       gone, links matching no note, and claims that have aged

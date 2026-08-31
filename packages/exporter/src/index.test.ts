@@ -281,3 +281,43 @@ describe("the document's title block", () => {
     expect(html).toContain(">Introduction</h1>");
   });
 });
+
+/**
+ * The other half of "suggest a change to someone else's notes": the page that
+ * invites it. Programmers have had this for twenty years; nobody has offered
+ * it to people writing notes.
+ */
+describe("toHtml — inviting a correction", () => {
+  const url = "https://github.com/me/notes/edit/main/notes/runbook.md";
+
+  it("offers the reader a way to send a fix back", async () => {
+    const html = await toHtml("# Runbook\n\nNeeds v14.", {}, { ...options(), suggestUrl: url });
+
+    expect(html).toContain(url);
+    expect(html).toContain("Suggest an edit");
+    // Said plainly, because "suggest an edit" should not be a euphemism for
+    // "you are about to need a GitHub account".
+    expect(html).toContain("Opens this note on GitHub");
+  });
+
+  it("says nothing of the kind in an ordinary export", async () => {
+    // A PDF in somebody's inbox has no author to reach and no repository
+    // behind it.
+    const html = await toHtml("# Runbook", {}, options());
+
+    expect(html).not.toContain("Suggest an edit");
+    // The rules for it stay in the stylesheet either way; what must not be
+    // there is the block itself.
+    expect(html).not.toContain('<aside class="doc-suggest"');
+  });
+
+  it("escapes the address rather than injecting it", async () => {
+    const html = await toHtml(
+      "# x",
+      {},
+      { ...options(), suggestUrl: '"><script>alert(1)</script>' },
+    );
+
+    expect(html).not.toContain("<script>alert(1)</script>");
+  });
+});

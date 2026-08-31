@@ -11,6 +11,7 @@ import {
   isSplitPublishing,
   parseTarget,
   publishTargetOf,
+  suggestEditUrl,
   targetWarning,
 } from "@/lib/publish-target";
 
@@ -120,6 +121,9 @@ export function PublishDialog({
           includeFrontmatter: false,
           renderDiagrams: true,
           theme: "light",
+          // The reader's way to send a correction back. Points at the note in
+          // the repository it came from, never at the published copy.
+          suggestUrl: suggestEditUrl(workspace.repo, note.path),
         });
 
         setStep("Committing it to your repository…");
@@ -133,7 +137,7 @@ export function PublishDialog({
         setStage("idle");
       }
     },
-    [note, title, slug, onChanged],
+    [note, title, slug, onChanged, workspace.repo],
   );
 
   const publish = useCallback(() => publishTo(target), [publishTo, target]);
