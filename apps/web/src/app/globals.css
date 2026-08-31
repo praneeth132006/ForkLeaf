@@ -827,6 +827,32 @@ mark.fl-hl-orange {
   outline-color: var(--fl-border);
 }
 
+/*
+ * A box in a diagram that stands for a note.
+ *
+ * Underlined rather than coloured: the diagram already uses colour to mean
+ * something — the author's own something — and repainting a box because it
+ * happens to be a link would be overwriting what they said with what we know.
+ * The dotted underline is the same one a `[[wikilink]]` wears in prose.
+ */
+.fl-diagram-link {
+  cursor: pointer;
+}
+
+.fl-diagram-link .nodeLabel,
+.fl-diagram-link text {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+
+.fl-diagram-link:hover rect,
+.fl-diagram-link:hover circle,
+.fl-diagram-link:hover polygon,
+.fl-diagram-link:hover path {
+  filter: brightness(1.12);
+}
+
 /* Shown while a diagram is still rendering or its source is mid-edit. */
 .fl-diagram-pending {
   opacity: 0.6;

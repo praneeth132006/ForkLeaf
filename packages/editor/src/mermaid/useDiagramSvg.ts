@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { renderDiagram, LIGHT_THEME, DARK_THEME, type DiagramError } from "@forkleaf/diagrams";
+import {
+  renderDiagram,
+  extractDiagramLinks,
+  LIGHT_THEME,
+  DARK_THEME,
+  type DiagramError,
+} from "@forkleaf/diagrams";
 import { useDocumentTheme } from "../useDocumentTheme";
 
 /**
@@ -34,7 +40,13 @@ export function useDiagramSvg(
     setPending(true);
 
     const timer = setTimeout(async () => {
-      const result = await renderDiagram(code, resolved === "dark" ? DARK_THEME : LIGHT_THEME);
+      // A `[[wikilink]]` in a label is a link to a note, and mermaid has
+      // never heard of one: left in, it draws the brackets. Taken out here as
+      // well as in the preview so a box reads the same wherever it is drawn,
+      // whether or not this particular surface can be clicked through.
+      const { code: source } = extractDiagramLinks(code);
+
+      const result = await renderDiagram(source, resolved === "dark" ? DARK_THEME : LIGHT_THEME);
       if (cancelled) return;
 
       setError(result.error);

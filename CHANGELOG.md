@@ -58,6 +58,33 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### A diagram can be a map of your notebook
+
+Write a `[[wikilink]]` in a box's label — `A["[[Deploy runbook]]"]` — and the
+box becomes the way to that note. The label reads as the words you wrote, and
+clicking it in the preview opens the note.
+
+It stays plain text in the file: an ordinary mermaid label, so the diagram
+still renders on github.com and in every other mermaid tool, showing the
+brackets exactly as a `[[wikilink]]` in prose does there. Aliases work
+(`[[deploy/runbook|The runbook]]`), and so do anchors.
+
+In the rich editor a click on a diagram still opens it for editing, which is
+what a click there has always meant — but the labels read correctly there too,
+and in exports and published pages.
+
+### What has gone stale, across the whole notebook
+
+The freshness panel beside a note answers the question for the note you happen
+to have open. **Check which of my notes have gone stale** answers it for all of
+them: notes pointing at a file that is not in the repository, `[[links]]`
+matching no note, and datable claims — version numbers, CVEs,
+&ldquo;currently&rdquo; — in a note nobody has touched in a long time.
+
+The first two are facts and are labelled as such; the third is an inference and
+is reported as one. Nothing is changed: every row opens the note and gets out
+of the way. **It is fine** takes a note off the list until it is edited again.
+
 ### Start a note from a paper
 
 **Write about this** in the reader makes a note that is already about the

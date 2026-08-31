@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import { markdownToHtml, extractMermaidBlocks } from "@forkleaf/markdown-engine";
-import { renderDiagram, LIGHT_THEME, DARK_THEME } from "@forkleaf/diagrams";
+import {
+  renderDiagram,
+  extractDiagramLinks,
+  markLinkedNodes,
+  LIGHT_THEME,
+  DARK_THEME,
+  type DiagramLink,
+} from "@forkleaf/diagrams";
 import { useDocumentTheme } from "./useDocumentTheme";
 import { handleLinkClick, type LinkBridge } from "./links";
 
@@ -59,6 +66,14 @@ export function Preview({
   const documentTheme = useDocumentTheme();
   const resolved = theme ?? documentTheme;
   const [diagrams, setDiagrams] = useState<Map<number, string>>(new Map());
+  /**
+   * The notes each diagram's boxes stand for, by block.
+   *
+   * Held beside the rendered SVG rather than inside it: the marking is done
+   * against the live DOM once the SVG is on the page, because matching on
+   * mermaid's own element ids would be matching on an implementation detail.
+   */
+  const [diagramLinks, setDiagramLinks] = useState<Map<number, DiagramLink[]>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
 
   const blocks = useMemo(() => extractMermaidBlocks(markdown), [markdown]);
@@ -105,13 +120,24 @@ export function Preview({
       const palette = resolved === "dark" ? DARK_THEME : LIGHT_THEME;
       const rendered = new Map<number, string>();
 
+      const links = new Map<number, DiagramLink[]>();
+
       for (const [index, block] of blocks.entries()) {
-        const { svg } = await renderDiagram(block.code, palette);
+        // The wikilinks come out before mermaid sees the source: it has no
+        // idea what `[[…]]` means and would render the brackets, or read them
+        // as one of its own shapes.
+        const linked = extractDiagramLinks(block.code);
+        if (linked.links.length > 0) links.set(index, linked.links);
+
+        const { svg } = await renderDiagram(linked.code, palette);
         if (cancelled) return;
         if (svg) rendered.set(index, svg);
       }
 
-      if (!cancelled) setDiagrams(rendered);
+      if (!cancelled) {
+        setDiagrams(rendered);
+        setDiagramLinks(links);
+      }
     };
 
     void run();
@@ -142,6 +168,24 @@ export function Preview({
     });
   }, [html, diagrams, blocks]);
 
+  /**
+   * Finds the boxes that stand for notes, once they are drawn.
+   *
+   * After the paint rather than during it, because the SVG arrives through
+   * `dangerouslySetInnerHTML` and there is no React element to hang this on.
+   * Runs whenever the drawn diagrams change, which is also when a label could
+   * have changed under a mark.
+   */
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || diagramLinks.size === 0) return;
+
+    for (const [index, links] of diagramLinks) {
+      const figure = container.querySelector(`[data-diagram-index="${index}"]`);
+      if (figure) markLinkedNodes(figure, links);
+    }
+  }, [finalHtml, diagramLinks]);
+
   // Diagram and wikilink clicks are both delegated from the container: the
   // HTML is injected raw, so there is no React element to attach a handler to.
   useEffect(() => {
@@ -150,6 +194,17 @@ export function Preview({
 
     const handler = (event: MouseEvent) => {
       if (handleLinkClick(event, links)) return;
+
+      // A box that stands for a note goes to the note, and does not also open
+      // the diagram editor underneath it.
+      const box = (event.target as HTMLElement).closest?.("[data-fl-note]");
+      if (box && links) {
+        event.preventDefault();
+        event.stopPropagation();
+        links.open(box.getAttribute("data-fl-note") ?? "", box.getAttribute("data-fl-anchor"));
+        return;
+      }
+
       if (!onDiagramClick) return;
 
       const figure = (event.target as HTMLElement).closest<HTMLElement>("[data-diagram-index]");

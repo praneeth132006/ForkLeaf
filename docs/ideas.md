@@ -28,17 +28,18 @@ Ticked entries link to nothing; the git history is the record.
       published page fixes a mistake and you get a suggestion to accept or
       decline, without either of you touching GitHub. This is the single most
       distinctive thing ForkLeaf could ship
-- [ ] **Notes that tell you when they have gone stale** — Medium. A list that
-      comes to you, across the notebook: four notes link to a file that has
-      been deleted, two mention a version that has moved on. The per-note
-      freshness check already exists; this is the notebook-wide roll-up
+- [x] **Notes that tell you when they have gone stale** — Medium. A list that
+      comes to you, across the notebook: notes pointing at files that have
+      gone, links matching no note, and claims that have aged
 - [ ] **Borrow somebody else's notebook** — Big. Link into their notes, pinned
       to a version, rather than copying and going stale
 - [x] **Search that knows what you are working on** — Small. Notes linked to
       the one you are in float to the top of ⌘K, by however many hops away
       they are
-- [ ] **Diagrams you can click through** — Medium. A box in a diagram can be a
-      note, so a diagram becomes a map of the notebook
+- [x] **Diagrams you can click through** — Medium. A `[[wikilink]]` in a box's
+      label makes the box a way to the note. Clickable wherever a diagram is
+      read; in the rich editor a click still opens the diagram for editing,
+      which is what a click there has always meant
 
 ## PDFs
 

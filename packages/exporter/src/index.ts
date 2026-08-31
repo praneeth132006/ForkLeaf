@@ -1,6 +1,12 @@
 import type { ExportFormat, ExportOptions, Note } from "@forkleaf/types";
 import { serializeDocument, documentStats } from "@forkleaf/markdown-engine";
-import { renderDiagram, toStandaloneSvg, LIGHT_THEME, DARK_THEME } from "@forkleaf/diagrams";
+import {
+  renderDiagram,
+  extractDiagramLinks,
+  toStandaloneSvg,
+  LIGHT_THEME,
+  DARK_THEME,
+} from "@forkleaf/diagrams";
 import { toHtml, type ImageResolver } from "./html";
 import { toDocx } from "./docx";
 
@@ -273,7 +279,9 @@ export async function exportDiagram(
   options: { theme?: "light" | "dark"; scale?: number; filename?: string } = {},
 ): Promise<ExportResult> {
   const palette = options.theme === "dark" ? DARK_THEME : LIGHT_THEME;
-  const { svg, error } = await renderDiagram(code, palette);
+  // The picture leaves the notebook, so its links cannot come with it; the
+  // labels do, as the words they read.
+  const { svg, error } = await renderDiagram(extractDiagramLinks(code).code, palette);
 
   if (!svg) throw new Error(error?.message ?? "This diagram could not be rendered");
 
