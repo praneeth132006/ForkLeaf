@@ -1656,6 +1656,63 @@ export function useNotebook(request: NotebookRequest = {}) {
   );
 
   /**
+   * Writes a file in the notebook whether or not it exists yet.
+   *
+   * `rewriteNote` needs a note to already be there. This is for the files the
+   * app makes on somebody's behalf — a document's highlights, kept beside it —
+   * where "there is not one yet" is the ordinary first case rather than an
+   * error. It goes through the note repository like everything else, so the
+   * file gets the same offline queue, the same commit and the same history as
+   * anything typed by hand.
+   */
+  const upsertNote = useCallback(
+    async (path: string, change: (content: string) => string): Promise<string | null> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace) return null;
+
+      const existing = await notes.openNote(workspace.id, path).catch(() => null);
+      const note: Note = existing ?? {
+        id: `${workspace.id}::${path}`,
+        workspaceId: workspace.id,
+        path,
+        content: "",
+        frontmatter: {},
+        baseSha: null,
+        updatedAt: null,
+        dirty: true,
+      };
+
+      const next = change(note.content);
+      if (next === note.content) return note.content;
+
+      await notes.saveNote(note, next);
+      patchOpenNote(path, { content: next, dirty: true });
+
+      // A file made this way is a file in the notebook, so the sidebar has to
+      // know about it — otherwise it appears at the next refresh from GitHub
+      // and looks like something somebody else committed.
+      if (!existing) patch({ tree: insertIntoTree(state.tree, path) });
+
+      return next;
+    },
+    [state.activeWorkspace, state.tree, patch, patchOpenNote],
+  );
+
+  /** Reads a file in the notebook, or null when there is not one. */
+  const readNote = useCallback(
+    async (path: string): Promise<string | null> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace) return null;
+
+      const note = await notes.openNote(workspace.id, path).catch(() => null);
+      return note?.content ?? null;
+    },
+    [state.activeWorkspace],
+  );
+
+  /**
    * Drops one stuck change, so the queue behind it can move.
    *
    * The way out of a change that can never be pushed. Needs a refresh of the
@@ -1977,6 +2034,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       discardChange,
       shrinkChange,
       rewriteNote,
+      upsertNote,
+      readNote,
       saveDocumentText,
       documentText,
       allDocumentText,
@@ -2042,6 +2101,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       documentText,
       saveDocumentText,
       rewriteNote,
+      upsertNote,
+      readNote,
       shrinkChange,
       setSyncMode,
       resolveConflict,

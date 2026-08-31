@@ -117,3 +117,16 @@ describe("mentionsOfPdf — labels", () => {
     expect(mentionsOfPdf(notes, "papers/x.pdf")[0]?.label).toBe("Results [draft], p. 3");
   });
 });
+
+describe("mentionsOfPdf — a document's own highlights", () => {
+  it("leaves the highlights file out, since the page already shows it", () => {
+    const notes = [
+      {
+        path: "papers/attention.highlights.md",
+        content: "- [p. 12](attention.pdf#page=12&q=marked) — marked",
+      },
+    ];
+
+    expect(mentionsOfPdf(notes, "papers/attention.pdf")).toEqual([]);
+  });
+});

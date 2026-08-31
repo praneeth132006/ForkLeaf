@@ -217,6 +217,23 @@ export function HelpDialog({
             }
           />
           <Feature
+            title="Highlight a passage, and keep it as a text file"
+            what="Everybody else locks a highlight inside the PDF, or inside their own app, where you can never get it out."
+            doThis={
+              <>
+                Select text in the document, then <strong>Highlight</strong>. Selecting it again
+                offers <strong>Unhighlight</strong>.
+              </>
+            }
+            then={
+              <>
+                A line in <Mono>attention.highlights.md</Mono>, committed beside the document, drawn
+                in green over the page when you read it. The PDF itself is never touched, and the
+                marks open in Notepad.
+              </>
+            }
+          />
+          <Feature
             title="See everything you have written about a paper"
             what="Months later this list is the useful thing, not the paper."
             doThis={

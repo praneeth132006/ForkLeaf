@@ -59,6 +59,12 @@ import { withCorrectedPage, type CitationCheck } from "@/lib/citation-audit";
 import { paperNote } from "@/lib/note-from-paper";
 import { anchorsFor, lineForPage, pageForLine } from "@/lib/pdf-follow";
 import { describeTry, parseTryBranch, tryBranchFor } from "@/lib/try-branch";
+import {
+  highlightsPathFor,
+  parseHighlights,
+  withHighlight,
+  withoutHighlight,
+} from "@/lib/pdf-highlights";
 import { FreshnessDialog } from "@/components/FreshnessDialog";
 import { TimeMachineDialog } from "@/components/TimeMachineDialog";
 import { SuggestionsDialog } from "@/components/SuggestionsDialog";
@@ -983,6 +989,74 @@ export function EditorWorkspace() {
 
     return mentionsOfPdf(merged, readerPath);
   }, [readerPath, storedNotes, notebook.openNotes]);
+
+  // ── Highlights ──────────────────────────────────────────────────────────
+  //
+  // Kept in a markdown file beside the document rather than written into the
+  // PDF. The file in the repository stays exactly as it was committed, and the
+  // marks — the part that is actually yours — stay readable without this app.
+
+  /**
+   * The highlights file, tagged with the document it belongs to.
+   *
+   * Tagged rather than cleared when the document changes: clearing means
+   * writing state from inside an effect, which is a render spent undoing the
+   * last one — and leaves a window in which one paper's marks are drawn over
+   * another's pages. Reading it back through the current path gives the same
+   * "nothing yet" with neither problem.
+   */
+  const [highlightFile, setHighlightFile] = useState<{ path: string; content: string } | null>(
+    null,
+  );
+  const highlightPath = useMemo(
+    () => (readerPath ? highlightsPathFor(readerPath) : null),
+    [readerPath],
+  );
+
+  const readNote = notebook.readNote;
+
+  useEffect(() => {
+    if (!highlightPath) return;
+
+    let live = true;
+    void readNote(highlightPath)
+      .then((content) => {
+        if (live) setHighlightFile({ path: highlightPath, content: content ?? "" });
+      })
+      .catch(() => {
+        // No highlights file yet, or it could not be read. Either way there is
+        // nothing to draw, and the next highlight makes one.
+        if (live) setHighlightFile({ path: highlightPath, content: "" });
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [highlightPath, readNote]);
+
+  const highlights = useMemo(() => {
+    const content = highlightFile?.path === highlightPath ? highlightFile.content : "";
+    return parseHighlights(content).map((held) => held.citation);
+  }, [highlightFile, highlightPath]);
+
+  const toggleHighlight = useCallback(
+    async (citation: PdfCitation, marked: boolean) => {
+      if (!highlightPath || !readerPath) return;
+
+      const title = reader.info
+        ? displayTitle(reader.info.metadata, reader.source?.name ?? "")
+        : (reader.source?.name ?? "document");
+
+      const next = await notebook.upsertNote(highlightPath, (content) =>
+        marked
+          ? withHighlight(content, { pdfPath: readerPath, title, citation })
+          : withoutHighlight(content, { pdfPath: readerPath, title, quote: citation.quote }),
+      );
+
+      if (next !== null) setHighlightFile({ path: highlightPath, content: next });
+    },
+    [highlightPath, readerPath, reader, notebook],
+  );
 
   // ── Following along ─────────────────────────────────────────────────────
   //
@@ -2395,6 +2469,8 @@ export function EditorWorkspace() {
       saveHint={pdfSaveHint}
       saving={savingPdf}
       path={readerPath}
+      highlights={highlights}
+      onHighlight={readerPath ? (citation, marked) => void toggleHighlight(citation, marked) : null}
       showPage={followPage}
       onPageChange={setReaderPage}
       onStartNote={reader.status === "ready" ? () => void startNoteFromPaper() : null}

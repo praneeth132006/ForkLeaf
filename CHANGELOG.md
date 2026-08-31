@@ -58,6 +58,23 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### Highlights that are just text files
+
+Everybody else locks a highlight inside the PDF — a binary annotation only a
+PDF reader can see — or inside their own app, where you can never get it out.
+Both mean the marks you made on a paper are worth nothing away from the tool
+you made them in, which is a strange fate for the part that is actually yours.
+
+Select a passage and press **Highlight**. It becomes a line in
+`attention.highlights.md`, committed beside the document, and is drawn in green
+over the page when you read it. The file renders on github.com, opens in
+Notepad, greps and diffs.
+
+The PDF is never touched. And because each line records the words rather than a
+page number, a highlight made against last year's version of a paper is still
+drawn in the right place after the author adds a figure to page 4 — one that has
+genuinely gone is simply not drawn, rather than drawn somewhere wrong.
+
 ### Try a rewrite without losing what you had
 
 Rewriting a note you care about is a small act of courage: the old version goes

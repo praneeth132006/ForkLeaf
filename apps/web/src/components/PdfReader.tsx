@@ -73,6 +73,16 @@ export interface PdfReaderProps {
    */
   onOpenInTab?: (() => void) | null;
   /**
+   * The passages this reader has marked and kept, drawn over the page.
+   *
+   * Resolved against the document as it is now rather than trusted: a
+   * highlight records the words, so one made against last year's version of a
+   * paper is still drawn in the right place after the author adds a figure.
+   */
+  highlights?: readonly PdfCitation[];
+  /** Marks the selected passage, or unmarks it if it is already marked. */
+  onHighlight?: ((citation: PdfCitation, marked: boolean) => void) | null;
+  /**
    * A page to turn to, when the note beside the document moves to it.
    *
    * Watched rather than called, so the caller can say "page 12" as often as it
@@ -180,6 +190,8 @@ export function PdfReader({
   onSave,
   saveHint,
   saving = false,
+  highlights = [],
+  onHighlight = null,
   showPage = null,
   onPageChange = null,
   path = null,
@@ -514,6 +526,40 @@ export function PdfReader({
     });
   }, []);
 
+  /**
+   * Every kept highlight, located in the document on screen.
+   *
+   * Recomputed when the text arrives rather than when the file is read: the
+   * words cannot be looked for until the pages have been extracted, and a
+   * highlight that could not be found is simply not drawn — the file still
+   * has it, and saying "this passage has gone" is the citation check's job.
+   */
+  const marked = useMemo(() => {
+    if (highlights.length === 0 || pages.length === 0) return [];
+
+    const found: { page: number; range: [number, number] }[] = [];
+
+    for (const citation of highlights) {
+      const match = reader.locate(citation);
+      // A passage no longer in the document is simply not drawn. The file
+      // still holds it, and saying "this has gone" is the citation check's
+      // job rather than the page's.
+      if (match?.page != null && match.range != null) {
+        found.push({ page: match.page, range: match.range });
+      }
+    }
+
+    return found;
+  }, [highlights, pages, reader]);
+
+  /** Whether the passage selected right now is one already kept. */
+  const selectionMarked = useMemo(() => {
+    const citation = citationFor();
+    if (!citation) return false;
+    const wanted = citation.quote.replace(/\s+/g, " ").trim();
+    return highlights.some((held) => held.quote.replace(/\s+/g, " ").trim() === wanted);
+  }, [citationFor, highlights]);
+
   const section = useMemo(
     () => (outline.length > 0 ? outlineEntryForPage(outline, current) : null),
     [outline, current],
@@ -715,7 +761,7 @@ export function PdfReader({
                     scale={scale}
                     text={pageText(page)}
                     visible={visible.has(page)}
-                    highlights={highlightsFor(page, located, hits, hitIndex)}
+                    highlights={highlightsFor(page, located, hits, hitIndex, marked)}
                     onSelect={onSelect}
                   />
                 );
@@ -730,6 +776,18 @@ export function PdfReader({
               reason={noCiteReason}
               copied={copied}
               onCite={cite}
+              onHighlight={
+                onHighlight
+                  ? () => {
+                      const citation = citationFor();
+                      if (!citation) return;
+                      onHighlight(citation, !selectionMarked);
+                      setSelection(null);
+                      window.getSelection()?.removeAllRanges();
+                    }
+                  : null
+              }
+              highlightLabel={selectionMarked ? "Unhighlight" : "Highlight"}
               onCopyLink={path ? () => void copyLink() : null}
               onCopy={async () => {
                 const text = pageText(selection.page)?.text.slice(selection.start, selection.end);
@@ -811,8 +869,13 @@ function highlightsFor(
   located: { page: number; range: [number, number] } | null,
   hits: readonly PdfSearchHit[],
   hitIndex: number,
+  marked: readonly { page: number; range: [number, number] }[] = [],
 ): PdfHighlight[] {
   const highlights: PdfHighlight[] = [];
+
+  for (const held of marked) {
+    if (held.page === page) highlights.push({ range: held.range, kind: "highlight" });
+  }
 
   if (located?.page === page) {
     highlights.push({ range: located.range, kind: "citation" });
@@ -843,6 +906,8 @@ function CiteBar({
   reason,
   copied,
   onCite,
+  onHighlight,
+  highlightLabel,
   onCopyLink,
   onCopy,
   onDismiss,
@@ -852,6 +917,9 @@ function CiteBar({
   reason: string | null;
   copied: boolean;
   onCite: (withQuote: boolean) => void;
+  /** Marks the passage, in a text file beside the document. */
+  onHighlight: (() => void) | null;
+  highlightLabel: string;
   /** Puts a plain web link to this passage on the clipboard. */
   onCopyLink: (() => void) | null;
   onCopy: () => void | Promise<void>;
@@ -867,6 +935,14 @@ function CiteBar({
           </>
         ) : reason ? (
           <span className="px-2 text-xs text-[var(--fl-muted)]">{reason}</span>
+        ) : null}
+        {onHighlight ? (
+          <BarButton
+            onClick={onHighlight}
+            title="Keeps this passage in a text file beside the document"
+          >
+            {highlightLabel}
+          </BarButton>
         ) : null}
         {onCopyLink ? (
           <BarButton

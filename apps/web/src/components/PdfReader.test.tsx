@@ -266,3 +266,30 @@ describe("PdfReader — following the note", () => {
     expect(onPageChange).toHaveBeenCalledWith(1);
   });
 });
+
+/**
+ * Everybody else locks a highlight inside the PDF or inside their own app.
+ * Here it is a line in a text file, and the page draws what the file says.
+ */
+describe("PdfReader — marking a passage", () => {
+  it("offers no marking for a document the notebook cannot keep marks beside", () => {
+    // From a desktop: there is nowhere to write the file.
+    render(<PdfReader reader={loading} layout="document" onHighlight={null} onClose={null} />);
+    expect(screen.queryByRole("button", { name: /Highlight/ })).toBeNull();
+  });
+
+  it("draws nothing for a document whose text has not been read yet", () => {
+    // The words cannot be looked for until the pages have been extracted, and
+    // a highlight is found by its words rather than trusted to a page number.
+    render(
+      <PdfReader
+        reader={loading}
+        layout="document"
+        highlights={[{ page: 1, quote: "a passage", prefix: "", suffix: "" }]}
+        onClose={null}
+      />,
+    );
+
+    expect(document.querySelectorAll("[data-pdf-page]")).toHaveLength(0);
+  });
+});

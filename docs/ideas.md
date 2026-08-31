@@ -55,8 +55,9 @@ Ticked entries link to nothing; the git history is the record.
 - [ ] **See what changed between two versions of a PDF** — Medium. The file is
       in a repository, so old versions are kept: show page 12 then and now, and
       say whether the page you quoted is one of the ones that changed
-- [ ] **Highlights that are just text files** — Medium. A highlight is an
-      ordinary file beside the PDF, drawn over the page when you read
+- [x] **Highlights that are just text files** — Medium. A line in
+      `<document>.highlights.md` beside the PDF, drawn over the page when you
+      read, found again by its words rather than by a page number
 - [x] **Start a note from a paper** — Small. Title, author and date fill
       themselves in; the paper's headings become the note's headings, each
       linked to the page it starts on
