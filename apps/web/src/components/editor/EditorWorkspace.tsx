@@ -30,7 +30,7 @@ import { useNotebook } from "@/hooks/useNotebook";
 import { usePublishedPages } from "@/hooks/usePublishedPages";
 import { useLinks } from "@/hooks/useLinks";
 import { useLocalFiles } from "@/hooks/useLocalFiles";
-import type { PdfTextEntry } from "@forkleaf/types";
+import type { PdfTextEntry, TreeNode } from "@forkleaf/types";
 import type { LocalFile, LocalPdf } from "@/lib/local-files";
 import { usePdfReader } from "@/hooks/usePdfReader";
 import { PdfReader } from "@/components/PdfReader";
@@ -51,6 +51,7 @@ import { mentionsOfPdf, type PdfMention } from "@/lib/pdf-mentions";
 import { pagesOf, readDocumentText } from "@/lib/pdf-index";
 import { withCorrectedPage, type CitationCheck } from "@/lib/citation-audit";
 import { paperNote } from "@/lib/note-from-paper";
+import { FreshnessDialog } from "@/components/FreshnessDialog";
 import { CitationsDialog } from "@/components/CitationsDialog";
 import { isPdfPath } from "@/lib/media";
 import { useTheme } from "@/hooks/useTheme";
@@ -83,7 +84,7 @@ import { postHogReset } from "@/lib/posthog";
 import { assetPathFor, relativeSrc, resolveImageSrc } from "@/lib/assets";
 import { revealAsset } from "@/lib/reveal-asset";
 import { imageTypeFor } from "@/lib/media";
-import { collectFolders } from "@/lib/tree";
+import { collectFilePaths, collectFolders } from "@/lib/tree";
 import { hasRelativeImages, repairNoteLinks } from "@/lib/repair-links";
 import { flattenTree, isMarkdown } from "@/lib/library";
 import { track } from "@/lib/firebase/analytics";
@@ -264,6 +265,7 @@ export function EditorWorkspace() {
     | "propose"
     | "publish"
     | "citations"
+    | "freshness"
     | null
   >(null);
   /**
@@ -705,6 +707,43 @@ export function EditorWorkspace() {
     },
     [notebook],
   );
+
+  /**
+   * Every path that exists, so a note pointing at nothing can be spotted.
+   *
+   * The repository's whole file list — pictures and PDFs included, since those
+   * are what notes point at — plus everything written here that has not been
+   * pushed yet, so a picture pasted five minutes ago is not reported as
+   * missing. A notebook with no repository has only the second half, which is
+   * all of it.
+   */
+  const knownFiles = useCallback(async (): Promise<string[]> => {
+    const local = [
+      ...collectFilePaths(notebook.tree),
+      ...notebook.openNotes.map((note) => note.path),
+      ...Object.keys(notebook.assetUrls),
+    ];
+
+    if (!workspace || workspace.isLocal) return local;
+
+    const params = new URLSearchParams({
+      owner: workspace.repo.owner,
+      repo: workspace.repo.repo,
+      branch: workspace.repo.branch,
+      all: "1",
+    });
+    if (workspace.repo.directory) params.set("dir", workspace.repo.directory);
+
+    const response = await fetch(`/api/gh/tree?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(
+        "The repository's file list could not be read, so nothing was checked. Without it every picture would look deleted.",
+      );
+    }
+
+    const { tree } = (await response.json()) as { tree: TreeNode[] };
+    return [...local, ...collectFilePaths(tree)];
+  }, [workspace, notebook.tree, notebook.openNotes, notebook.assetUrls]);
 
   /**
    * Starts a note about the paper on screen, with its headings already in it.
@@ -1870,6 +1909,18 @@ export function EditorWorkspace() {
       });
     }
 
+    if (workspace) {
+      list.push({
+        id: "freshness",
+        label: "Check which of my notes have gone stale",
+        group: "Notes",
+        hint: "Links pointing at nothing, and claims nobody has looked at in years",
+        keywords:
+          "stale fresh freshness rot decay old outdated broken link missing file check audit sweep review",
+        run: () => setDialog("freshness"),
+      });
+    }
+
     if (workspace && !workspace.isLocal) {
       list.push({
         id: "citations",
@@ -2790,6 +2841,26 @@ export function EditorWorkspace() {
           documents={workspace && !workspace.isLocal ? documentTexts : []}
           onOpenDocument={(path, page) => openRepoPdf(path, `page=${page}`)}
           commands={commands}
+        />
+      )}
+
+      {openDialog === "freshness" && workspace && (
+        <FreshnessDialog
+          onClose={() => setDialog(null)}
+          loadNotes={async () =>
+            (await notebook.allNotes()).map((entry) => ({
+              path: entry.path,
+              content: entry.content,
+              updatedAt: entry.updatedAt,
+              frontmatterTitle: entry.frontmatter.title,
+            }))
+          }
+          loadFiles={knownFiles}
+          onOpenNote={(path) => {
+            setDialog(null);
+            notebook.openNote(path);
+          }}
+          workspaceId={workspace.id}
         />
       )}
 
