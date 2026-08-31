@@ -2149,6 +2149,7 @@ export function EditorWorkspace() {
       onSave={canSavePdf ? () => void savePdfToNotebook() : null}
       saveHint={pdfSaveHint}
       saving={savingPdf}
+      path={readerPath}
       onStartNote={reader.status === "ready" ? () => void startNoteFromPaper() : null}
       mentions={pdfMentions}
       onOpenMention={(path) => {

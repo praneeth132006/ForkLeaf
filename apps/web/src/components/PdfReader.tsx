@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  citationLink,
   createCitation,
   displayTitle,
   serializeCitation,
@@ -71,6 +72,13 @@ export interface PdfReaderProps {
    * window's memory.
    */
   onOpenInTab?: (() => void) | null;
+  /**
+   * Where this document lives, so a link to a passage can name it.
+   *
+   * Null for one opened from a desktop: there is no path for a link to point
+   * at, and a link naming a file nobody else has is not a link.
+   */
+  path?: string | null;
   /**
    * Starts a note about this paper, with its headings already in it.
    *
@@ -162,6 +170,7 @@ export function PdfReader({
   onSave,
   saveHint,
   saving = false,
+  path = null,
   onStartNote = null,
   mentions = null,
   onOpenMention = null,
@@ -406,6 +415,26 @@ export function PdfReader({
     },
     [citationFor, onCite],
   );
+
+  /**
+   * The passage as a link anything can follow.
+   *
+   * Not a ForkLeaf address: `papers/x.pdf#page=12&q=…` is a relative path plus
+   * a fragment, which is a plain web link. Every PDF reader has understood
+   * `#page=` for twenty years, and the rest is the W3C Web Annotation text
+   * selector spelled into a query string — so a tool that has never heard of
+   * this app can still open the right page, and one that reads the quotation
+   * can find the right sentence. See /docs/citation-links.
+   */
+  const copyLink = useCallback(async () => {
+    const citation = citationFor();
+    if (!citation || !path) return;
+
+    await navigator.clipboard.writeText(citationLink(path, citation));
+    setCopied(true);
+    setSelection(null);
+    window.getSelection()?.removeAllRanges();
+  }, [citationFor, path]);
 
   // ─── Keyboard ─────────────────────────────────────────────────────────────
 
@@ -670,6 +699,7 @@ export function PdfReader({
               reason={noCiteReason}
               copied={copied}
               onCite={cite}
+              onCopyLink={path ? () => void copyLink() : null}
               onCopy={async () => {
                 const text = pageText(selection.page)?.text.slice(selection.start, selection.end);
                 if (!text) return;
@@ -782,6 +812,7 @@ function CiteBar({
   reason,
   copied,
   onCite,
+  onCopyLink,
   onCopy,
   onDismiss,
 }: {
@@ -790,6 +821,8 @@ function CiteBar({
   reason: string | null;
   copied: boolean;
   onCite: (withQuote: boolean) => void;
+  /** Puts a plain web link to this passage on the clipboard. */
+  onCopyLink: (() => void) | null;
   onCopy: () => void | Promise<void>;
   onDismiss: () => void;
 }) {
@@ -803,6 +836,14 @@ function CiteBar({
           </>
         ) : reason ? (
           <span className="px-2 text-xs text-[var(--fl-muted)]">{reason}</span>
+        ) : null}
+        {onCopyLink ? (
+          <BarButton
+            onClick={onCopyLink}
+            title="A plain link to this passage, for anything outside ForkLeaf"
+          >
+            Copy link
+          </BarButton>
         ) : null}
         <BarButton onClick={() => void onCopy()}>{copied ? "Copied" : "Copy"}</BarButton>
         <BarButton onClick={onDismiss} aria-label="Dismiss">

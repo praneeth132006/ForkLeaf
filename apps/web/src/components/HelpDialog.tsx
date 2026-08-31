@@ -226,6 +226,23 @@ export function HelpDialog({
             then="Matches from every document you have opened, under Documents, with the sentence they were found in. Opening one goes straight to the page."
           />
           <Feature
+            title="Send a passage to something that is not ForkLeaf"
+            what="The citation format is a relative path plus a standard fragment, so other tools can follow it."
+            doThis={
+              <>
+                Select a passage, then <strong>Copy link</strong>.
+              </>
+            }
+            then={
+              <>
+                <Mono>papers/attention.pdf#page=12&amp;q=…</Mono> on the clipboard. Any PDF reader
+                opens the right page; one that reads the quotation finds the right sentence even
+                after the paper is revised.{" "}
+                <DocLink href="/docs/citation-links">The format, written down</DocLink>.
+              </>
+            }
+          />
+          <Feature
             title="Keep a PDF from your desktop"
             what="A dropped file has no path in the repository, so nothing can link to it."
             doThis={<strong>Save to notebook</strong>}

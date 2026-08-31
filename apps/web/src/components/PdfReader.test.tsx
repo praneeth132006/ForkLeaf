@@ -203,3 +203,41 @@ describe("PdfReader — starting a note from the paper", () => {
     expect(screen.queryByRole("button", { name: /Start a note about this paper/ })).toBeNull();
   });
 });
+
+/**
+ * The one thing here that could outlive ForkLeaf: a citation is a relative
+ * path plus a standard fragment, and anything can follow it.
+ */
+describe("PdfReader — a link anything can follow", () => {
+  const withText: PdfReaderState = {
+    ...loading,
+    status: "ready",
+    pages: [
+      {
+        page: 1,
+        text: "We show that attention is all you need, and the rest is engineering.",
+        runs: [],
+      },
+    ],
+    info: {
+      pageCount: 1,
+      metadata: {
+        title: null,
+        author: null,
+        subject: null,
+        keywords: [],
+        createdAt: null,
+        modifiedAt: null,
+        producer: null,
+      },
+      sizes: [],
+      encrypted: false,
+    },
+  };
+
+  it("offers no link for a document that has no path to link to", () => {
+    // A PDF from a desktop: a link naming a file nobody else has is not a link.
+    render(<PdfReader reader={withText} layout="document" path={null} onClose={null} />);
+    expect(screen.queryByRole("button", { name: /Copy link/ })).toBeNull();
+  });
+});

@@ -65,6 +65,6 @@ Ticked entries link to nothing; the git history is the record.
 - [ ] **Publish your reading, not just your notes** — Big. A public page of
       your commentary with the quoted passages set into it, each linking back
       to the exact page
-- [ ] **Let other apps understand ForkLeaf's links** — Big. The link format is
-      a web standard plus the `#page=` every reader has understood for twenty
-      years. Write it up and invite Obsidian and Zotero plugins to use it
+- [x] **Let other apps understand ForkLeaf's links** — Big. The format is
+      written down at `/docs/citation-links`, and **Copy link** puts one on the
+      clipboard. Inviting the plugin authors is the half that is still to do
