@@ -69,6 +69,7 @@ import { FreshnessDialog } from "@/components/FreshnessDialog";
 import { TimeMachineDialog } from "@/components/TimeMachineDialog";
 import { SuggestionsDialog } from "@/components/SuggestionsDialog";
 import { DocumentVersionsDialog } from "@/components/DocumentVersionsDialog";
+import { BorrowDialog } from "@/components/BorrowDialog";
 import { CitationsDialog } from "@/components/CitationsDialog";
 import { isPdfPath } from "@/lib/media";
 import { useTheme } from "@/hooks/useTheme";
@@ -321,6 +322,7 @@ export function EditorWorkspace() {
     | "time-machine"
     | "suggestions"
     | "document-versions"
+    | "borrow"
     | null
   >(null);
   /**
@@ -2203,6 +2205,18 @@ export function EditorWorkspace() {
       });
     }
 
+    if (note && workspace && !workspace.isLocal) {
+      list.push({
+        id: "borrow",
+        label: "Borrow a note from another notebook",
+        group: "Notes",
+        hint: "Link into somebody else's, pinned to the version you read",
+        keywords:
+          "borrow link somebody else other notebook repository shared reuse reference pin theirs copy",
+        run: () => setDialog("borrow"),
+      });
+    }
+
     if (note && workspace && !workspace.isLocal && !experiment) {
       list.push({
         id: "try-rewrite",
@@ -3253,6 +3267,30 @@ export function EditorWorkspace() {
           documents={workspace && !workspace.isLocal ? documentTexts : []}
           onOpenDocument={(path, page) => openRepoPdf(path, `page=${page}`)}
           commands={commands}
+        />
+      )}
+
+      {openDialog === "borrow" && note && workspace && !workspace.isLocal && (
+        <BorrowDialog
+          onClose={() => setDialog(null)}
+          loadTree={async (owner, repo, branch) => {
+            const params = new URLSearchParams({ owner, repo, branch });
+            const response = await fetch(`/api/gh/tree?${params.toString()}`);
+            if (!response.ok) {
+              throw new Error("That notebook could not be read. It may be private, or not exist.");
+            }
+            const { tree } = (await response.json()) as { tree: TreeNode[] };
+            return tree;
+          }}
+          onBorrow={(link) => {
+            setDialog(null);
+            // At the end of the note, like a cited passage: the caret has not
+            // been in the editor since the dialog opened, so its last recorded
+            // position is wherever it was several minutes ago.
+            const { text } = insertionFor(note.content, note.content.length, link);
+            void notebook.saveNote(text);
+            setNotice("Borrowed. The link reads their note from their repository.");
+          }}
         />
       )}
 

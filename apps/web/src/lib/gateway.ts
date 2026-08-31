@@ -488,6 +488,19 @@ export async function readNotebookAt(
   );
 }
 
+/**
+ * One repository, whoever it belongs to.
+ *
+ * For borrowing: reading somebody else's notebook needs to know which branch
+ * they keep it on, which is a fact about their repository and not about yours.
+ */
+export async function describeRepo(owner: string, repo: string): Promise<RepoSummaryDto> {
+  const { repo: found } = await call<{ repo: RepoSummaryDto }>(
+    `/api/gh/repos?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`,
+  );
+  return found;
+}
+
 export async function listRepos(): Promise<RepoSummaryDto[]> {
   const { repos } = await call<{ repos: RepoSummaryDto[] }>("/api/gh/repos");
   return repos;

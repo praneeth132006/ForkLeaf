@@ -30,8 +30,9 @@ Ticked entries link to nothing; the git history is the record.
 - [x] **Notes that tell you when they have gone stale** — Medium. A list that
       comes to you, across the notebook: notes pointing at files that have
       gone, links matching no note, and claims that have aged
-- [ ] **Borrow somebody else's notebook** — Big. Link into their notes, pinned
-      to a version, rather than copying and going stale
+- [x] **Borrow somebody else's notebook** — Big. Browse another repository's
+      notes and write a pinned link into yours. Reading one still opens it in a
+      dialog rather than as a note of your own, which is the honest shape
 - [x] **Search that knows what you are working on** — Small. Notes linked to
       the one you are in float to the top of ⌘K, by however many hops away
       they are
@@ -61,8 +62,14 @@ Ticked entries link to nothing; the git history is the record.
 - [x] **Start a note from a paper** — Small. Title, author and date fill
       themselves in; the paper's headings become the note's headings, each
       linked to the page it starts on
-- [ ] **Read scanned documents** — Big. Recognise the text once and keep it
-      beside the file, so the work is shared with every device
+- [ ] **Read scanned documents** — Big, and blocked rather than unstarted.
+      Every browser OCR engine needs WebAssembly, and this app deliberately
+      refuses `wasm-unsafe-eval` in the CSP that guards the route rendering
+      markdown from repositories you do not control (see `packages/pdf`'s
+      `document.ts`). Recognising the text on a server instead would mean
+      sending somebody's documents to us, which is the other thing this app
+      is built not to do. It needs a decision about one of those two, not more
+      code
 - [x] **Publish your reading, not just your notes** — Big. Publishing a note
       now rewrites its citations to the document in your repository, so the
       quotations on the page link back to the pages they came from

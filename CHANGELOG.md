@@ -58,6 +58,21 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### Borrow a note from somebody else's notebook
+
+When a friend writes a good note, what people do is copy and paste it. Now
+there are two copies, one is already out of date, and neither of you can tell
+which. Installing a library solved this for code thirty years ago and nobody
+has solved it for the things people know.
+
+⌘K → **Borrow a note from another notebook** takes a repository as
+`owner/name`, lists the notes in it, and writes a link into yours —
+`[[repo:ada/notes:runbook.md@a1b2c3d]]` — pinned to the revision you read.
+Theirs stays theirs, nothing is copied here, and the link keeps working after
+they change it, because it names the version you actually read rather than
+&ldquo;whatever is there now&rdquo;. Unpin it if following along is what you
+wanted.
+
 ### See what changed between two versions of a document
 
 A paper in your repository has every version of itself kept beside it, which no

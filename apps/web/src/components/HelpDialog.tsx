@@ -143,6 +143,23 @@ export function HelpDialog({
             then="The widths are remembered on this device, and bounded so nothing can be dragged into uselessness."
           />
           <Feature
+            title="Borrow a note instead of copying it"
+            what="Copying a friend's note makes a second copy that is already going out of date, and neither of you can tell which is which."
+            doThis={
+              <>
+                <Mono>⌘K</Mono> → <strong>Borrow a note from another notebook</strong>, then give
+                their repository as <Mono>owner/name</Mono>.
+              </>
+            }
+            then={
+              <>
+                A link written into your note — <Mono>[[repo:ada/notes:runbook.md@a1b2c3d]]</Mono> —
+                pinned to the version you read. Theirs stays theirs, nothing is copied, and the link
+                keeps working after they change it.
+              </>
+            }
+          />
+          <Feature
             title="Try a rewrite without losing what you had"
             what="Rewriting a note you care about is a small act of courage. It should not be."
             doThis={
