@@ -68,6 +68,7 @@ import {
 import { FreshnessDialog } from "@/components/FreshnessDialog";
 import { TimeMachineDialog } from "@/components/TimeMachineDialog";
 import { SuggestionsDialog } from "@/components/SuggestionsDialog";
+import { DocumentVersionsDialog } from "@/components/DocumentVersionsDialog";
 import { CitationsDialog } from "@/components/CitationsDialog";
 import { isPdfPath } from "@/lib/media";
 import { useTheme } from "@/hooks/useTheme";
@@ -319,6 +320,7 @@ export function EditorWorkspace() {
     | "freshness"
     | "time-machine"
     | "suggestions"
+    | "document-versions"
     | null
   >(null);
   /**
@@ -1005,6 +1007,19 @@ export function EditorWorkspace() {
    * another's pages. Reading it back through the current path gives the same
    * "nothing yet" with neither problem.
    */
+  /**
+   * A page something outside the reader has asked it to turn to.
+   *
+   * Carries an id rather than being a bare number, so asking for the same page
+   * twice is two requests — pressing "p. 12" again plainly means "take me back
+   * there".
+   */
+  const [pageRequest, setPageRequest] = useState<{ page: number; id: number } | null>(null);
+  const requestPage = useCallback(
+    (page: number) => setPageRequest((last) => ({ page, id: (last?.id ?? 0) + 1 })),
+    [],
+  );
+
   const [highlightFile, setHighlightFile] = useState<{ path: string; content: string } | null>(
     null,
   );
@@ -2248,6 +2263,18 @@ export function EditorWorkspace() {
       });
     }
 
+    if (readerPath && workspace && !workspace.isLocal) {
+      list.push({
+        id: "document-versions",
+        label: "See what changed in this document",
+        group: "View",
+        hint: "Compares it with an earlier version, and says whether a page you quoted moved",
+        keywords:
+          "version versions changed diff compare document pdf revision earlier older history updated paper",
+        run: () => setDialog("document-versions"),
+      });
+    }
+
     if (reader.status !== "idle") {
       list.push({
         id: "pdf-follow",
@@ -2327,6 +2354,7 @@ export function EditorWorkspace() {
     localFiles,
     reader,
     pdfPlacement,
+    readerPath,
     following,
     experiment,
     startExperiment,
@@ -2472,6 +2500,7 @@ export function EditorWorkspace() {
       highlights={highlights}
       onHighlight={readerPath ? (citation, marked) => void toggleHighlight(citation, marked) : null}
       showPage={followPage}
+      jumpTo={pageRequest}
       onPageChange={setReaderPage}
       onStartNote={reader.status === "ready" ? () => void startNoteFromPaper() : null}
       mentions={pdfMentions}
@@ -3224,6 +3253,26 @@ export function EditorWorkspace() {
           documents={workspace && !workspace.isLocal ? documentTexts : []}
           onOpenDocument={(path, page) => openRepoPdf(path, `page=${page}`)}
           commands={commands}
+        />
+      )}
+
+      {openDialog === "document-versions" && workspace && !workspace.isLocal && readerPath && (
+        <DocumentVersionsDialog
+          onClose={() => setDialog(null)}
+          workspace={workspace}
+          path={readerPath}
+          // The pages this notebook has an opinion about: what it quotes, and
+          // what it has marked.
+          cited={[
+            ...new Set([
+              ...(pdfMentions ?? []).flatMap((mention) => (mention.page ? [mention.page] : [])),
+              ...highlights.map((held) => held.page),
+            ]),
+          ]}
+          onGoToPage={(page) => {
+            setDialog(null);
+            requestPage(page);
+          }}
         />
       )}
 

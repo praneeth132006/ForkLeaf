@@ -58,6 +58,22 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### See what changed between two versions of a document
+
+A paper in your repository has every version of itself kept beside it, which no
+other reading app can say. ⌘K → **See what changed in this document** picks an
+earlier version and reports which pages changed — and whether one of them is a
+page you quoted.
+
+Compared as text, not as bytes: a paper re-exported from the same source
+differs in every byte while saying exactly the same thing, and a comparison
+that reported four hundred changed pages every time somebody re-saved it would
+be one nobody reads twice. Hyphenation across a line break, ligatures and runs
+of spaces are not edits.
+
+Whether the words you quoted survived is a different question, and one **Check
+my citations against their documents** already answers.
+
 ### Publish your reading, not just your notes
 
 A note written from a paper is commentary with the passages set into it, each

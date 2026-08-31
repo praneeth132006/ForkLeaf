@@ -93,6 +93,16 @@ export interface PdfReaderProps {
   /** Reports the page now on screen, so the note can follow it back. */
   onPageChange?: ((page: number) => void) | null;
   /**
+   * A one-off request to turn to a page, from somewhere outside the reader.
+   *
+   * Separate from `showPage`, which is a value derived from where the note's
+   * cursor is and may therefore be the same number twice in a row without
+   * meaning "go there again". This carries an id so that asking for the same
+   * page a second time is a second request — which is what a reader pressing
+   * "p. 12" twice plainly means.
+   */
+  jumpTo?: { page: number; id: number } | null;
+  /**
    * Where this document lives, so a link to a passage can name it.
    *
    * Null for one opened from a desktop: there is no path for a link to point
@@ -194,6 +204,7 @@ export function PdfReader({
   onHighlight = null,
   showPage = null,
   onPageChange = null,
+  jumpTo = null,
   path = null,
   onStartNote = null,
   mentions = null,
@@ -369,6 +380,15 @@ export function PdfReader({
   useEffect(() => {
     onPageChange?.(current);
   }, [current, onPageChange]);
+
+  /** The last one-off request acted on, so it is acted on exactly once. */
+  const jumpedTo = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!jumpTo || jumpedTo.current === jumpTo.id) return;
+    jumpedTo.current = jumpTo.id;
+    goToPage(jumpTo.page);
+  }, [jumpTo, goToPage]);
 
   // ─── Search ───────────────────────────────────────────────────────────────
 

@@ -397,6 +397,17 @@ export function HelpDialog({
             then="The reader fixes the note in GitHub's editor and their change arrives in your list. Read what changed on GitHub, and accept it here — the next sync brings it down to this device."
           />
           <Feature
+            title="What changed in this paper since I read it?"
+            what="The document is in a repository, so every version of it is kept — which no other reading app can say."
+            doThis={
+              <>
+                Open the document, then <Mono>⌘K</Mono> →{" "}
+                <strong>See what changed in this document</strong> and pick an earlier version.
+              </>
+            }
+            then="Which pages changed, comparing the words rather than the bytes — and, if one of them is a page you quoted, it says so. Whether your quotation itself survived is what the citation check answers."
+          />
+          <Feature
             title="What did my notebook look like in March?"
             what="Not one note's history — the whole notebook, on a day you choose."
             doThis={

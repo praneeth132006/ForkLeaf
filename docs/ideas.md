@@ -52,9 +52,9 @@ Ticked entries link to nothing; the git history is the record.
 - [x] **A list of citations that have broken** — Medium. Every quotation in the
       notebook, checked against the document as it stands now: what has moved,
       what is gone, and a one-press fix for a stale page number
-- [ ] **See what changed between two versions of a PDF** — Medium. The file is
-      in a repository, so old versions are kept: show page 12 then and now, and
-      say whether the page you quoted is one of the ones that changed
+- [x] **See what changed between two versions of a PDF** — Medium. Which pages
+      changed, compared as text rather than bytes, and whether one of them is a
+      page you quoted. Rendering the two pages side by side is still to do
 - [x] **Highlights that are just text files** — Medium. A line in
       `<document>.highlights.md` beside the PDF, drawn over the page when you
       read, found again by its words rather than by a page number
