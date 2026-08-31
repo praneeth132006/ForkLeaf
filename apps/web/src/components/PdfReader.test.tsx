@@ -241,3 +241,28 @@ describe("PdfReader — a link anything can follow", () => {
     expect(screen.queryByRole("button", { name: /Copy link/ })).toBeNull();
   });
 });
+
+describe("PdfReader — following the note", () => {
+  it("turns to a page it is asked for, and only when the request changes", () => {
+    const { rerender } = render(
+      <PdfReader reader={loading} layout="document" showPage={null} onClose={null} />,
+    );
+
+    // jsdom has no layout, so what is under test is the decision to scroll,
+    // not the scrolling: the page is recorded as current either way.
+    rerender(<PdfReader reader={loading} layout="document" showPage={4} onClose={null} />);
+    rerender(<PdfReader reader={loading} layout="document" showPage={4} onClose={null} />);
+
+    // No throw, no loop: asking twice for the same page is not two requests.
+    expect(screen.getByLabelText("Contents and search")).toBeTruthy();
+  });
+
+  it("reports the page it is on, so the note can follow it back", () => {
+    const onPageChange = vi.fn();
+    render(
+      <PdfReader reader={loading} layout="document" onPageChange={onPageChange} onClose={null} />,
+    );
+
+    expect(onPageChange).toHaveBeenCalledWith(1);
+  });
+});

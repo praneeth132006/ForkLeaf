@@ -226,6 +226,18 @@ export function HelpDialog({
             then="Matches from every document you have opened, under Documents, with the sentence they were found in. Opening one goes straight to the page."
           />
           <Feature
+            title="Keep the paper and the note on the same page"
+            what="What people open two windows to fake: write about page 12, scroll the document to page 12, over and over."
+            doThis={
+              <>
+                Read the document <strong>beside the note</strong>, in Split or Source view, with at
+                least one passage already quoted. <Mono>⌘K</Mono> →{" "}
+                <strong>Stop the document following the note</strong> switches it off.
+              </>
+            }
+            then="Moving the cursor past a citation turns the document to that page; turning to a page scrolls the note to what you wrote about it. Your citations are the map, so nothing is guessed."
+          />
+          <Feature
             title="Send a passage to something that is not ForkLeaf"
             what="The citation format is a relative path plus a standard fragment, so other tools can follow it."
             doThis={

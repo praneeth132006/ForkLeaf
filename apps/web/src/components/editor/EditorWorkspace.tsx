@@ -51,6 +51,7 @@ import { mentionsOfPdf, type PdfMention } from "@/lib/pdf-mentions";
 import { pagesOf, readDocumentText } from "@/lib/pdf-index";
 import { withCorrectedPage, type CitationCheck } from "@/lib/citation-audit";
 import { paperNote } from "@/lib/note-from-paper";
+import { anchorsFor, lineForPage, pageForLine } from "@/lib/pdf-follow";
 import { FreshnessDialog } from "@/components/FreshnessDialog";
 import { TimeMachineDialog } from "@/components/TimeMachineDialog";
 import { CitationsDialog } from "@/components/CitationsDialog";
@@ -157,6 +158,41 @@ function writePdfPlacement(value: PdfPlacement): void {
 function subscribeToPdfPlacement(onChange: () => void): () => void {
   const handle = (event: StorageEvent) => {
     if (event.key === null || event.key === PDF_PLACEMENT_KEY) onChange();
+  };
+  window.addEventListener("storage", handle);
+  return () => window.removeEventListener("storage", handle);
+}
+
+/**
+ * Whether the document follows the note, and the note the document.
+ *
+ * On by default. The mapping is not a guess — every citation in the note
+ * records the page it came from — so following is right far more often than it
+ * is wrong, and the one case it is wrong in (you are reading ahead of what you
+ * have written) is one keystroke from being switched off.
+ */
+const FOLLOW_KEY = "forkleaf:pdf-follow";
+
+function readFollow(): boolean {
+  try {
+    return window.localStorage.getItem(FOLLOW_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function writeFollow(value: boolean): void {
+  try {
+    window.localStorage.setItem(FOLLOW_KEY, value ? "1" : "0");
+  } catch {
+    // The setting still holds for this session.
+  }
+  window.dispatchEvent(new StorageEvent("storage", { key: FOLLOW_KEY }));
+}
+
+function subscribeToFollow(onChange: () => void): () => void {
+  const handle = (event: StorageEvent) => {
+    if (event.key === null || event.key === FOLLOW_KEY) onChange();
   };
   window.addEventListener("storage", handle);
   return () => window.removeEventListener("storage", handle);
@@ -821,6 +857,47 @@ export function EditorWorkspace() {
 
     return mentionsOfPdf(merged, readerPath);
   }, [readerPath, storedNotes, notebook.openNotes]);
+
+  // ── Following along ─────────────────────────────────────────────────────
+  //
+  // The document and the note kept on the same page: write about page twelve
+  // and the paper turns to page twelve, read page twelve and the note scrolls
+  // to what you said about it. This is what people open two windows to fake.
+
+  const following = useSyncExternalStore(subscribeToFollow, readFollow, () => true);
+  /** The page the reader is showing, so the note can follow it back. */
+  const [readerPage, setReaderPage] = useState(1);
+
+  /** This note's citations of the document being read, in note order. */
+  const followAnchors = useMemo(
+    () => (note && pdfMentions ? anchorsFor(pdfMentions, note.path) : []),
+    [note, pdfMentions],
+  );
+
+  /**
+   * Only beside the note, and only when the mapping exists.
+   *
+   * A document filling the middle column has no note next to it to follow, and
+   * a note with no citations of it has nothing to say about where it is.
+   */
+  const canFollow = following && readerLayout === "beside" && followAnchors.length > 0;
+
+  const followPage = useMemo(
+    () => (canFollow && cursor ? pageForLine(followAnchors, cursor.line) : null),
+    [canFollow, cursor, followAnchors],
+  );
+
+  /**
+   * The line to scroll the note to, for the page now on screen.
+   *
+   * Suppressed while the caret is what moved: the two directions would
+   * otherwise take turns nudging each other, and a reader who put their cursor
+   * somewhere would watch it scroll away from them.
+   */
+  const followLine = useMemo(
+    () => (canFollow && followPage === null ? lineForPage(followAnchors, readerPage) : null),
+    [canFollow, followPage, followAnchors, readerPage],
+  );
 
   /**
    * Writes a cited passage into the note being read alongside.
@@ -1947,6 +2024,21 @@ export function EditorWorkspace() {
       });
     }
 
+    if (reader.status !== "idle") {
+      list.push({
+        id: "pdf-follow",
+        label: following
+          ? "Stop the document following the note"
+          : "Let the document follow the note",
+        group: "View",
+        hint: following
+          ? "The paper and the note stop moving with each other"
+          : "Write about page 12 and the paper turns to page 12, and back again",
+        keywords: "follow sync scroll page together beside link caret cursor track document paper",
+        run: () => writeFollow(!following),
+      });
+    }
+
     // All three placements, always, with the current one marked — rather than
     // one command whose label is the *other* state. A toggle reads as an
     // instruction ("open PDFs in their own tab") that gives no hint about
@@ -2011,6 +2103,7 @@ export function EditorWorkspace() {
     localFiles,
     reader,
     pdfPlacement,
+    following,
     canSavePdf,
     savePdfToNotebook,
   ]);
@@ -2150,6 +2243,8 @@ export function EditorWorkspace() {
       saveHint={pdfSaveHint}
       saving={savingPdf}
       path={readerPath}
+      showPage={followPage}
+      onPageChange={setReaderPage}
       onStartNote={reader.status === "ready" ? () => void startNoteFromPaper() : null}
       mentions={pdfMentions}
       onOpenMention={(path) => {
@@ -2537,6 +2632,7 @@ export function EditorWorkspace() {
                   mode={mode}
                   theme={theme}
                   onCursorChange={setCursor}
+                  revealLine={followLine}
                   images={images}
                   links={linkBridge}
                   imageDestination={

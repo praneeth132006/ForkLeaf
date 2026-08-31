@@ -47,8 +47,9 @@ Ticked entries link to nothing; the git history is the record.
 - [x] **Open a PDF and see everything you have written about it** — Small
 - [x] **Search inside your PDFs from ⌘K** — Small. The text is kept the first
       time a document is read, so ⌘K reaches inside the papers as well
-- [ ] **Scroll one pane, the other follows** — Small. Scroll the note and the
-      document moves to the page you are writing about, and back again
+- [x] **Scroll one pane, the other follows** — Small. The cursor and the page
+      follow each other, mapped by the note's own citations. Split and Source
+      view, where there is a cursor to follow
 - [x] **A list of citations that have broken** — Medium. Every quotation in the
       notebook, checked against the document as it stands now: what has moved,
       what is gone, and a one-press fix for a stale page number

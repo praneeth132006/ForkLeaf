@@ -56,6 +56,14 @@ export interface SourceEditorProps {
   /** Reports where the caret is, for a status bar. Both numbers are 1-based. */
   onCursorChange?: (position: CursorPosition) => void;
   /**
+   * A 1-based line to bring into view.
+   *
+   * For following something outside the editor — a document being read beside
+   * the note. Only ever scrolls: the caret is not moved, because the reader is
+   * looking at a page, not asking to type somewhere.
+   */
+  revealLine?: number | null;
+  /**
    * Handles images pasted or dropped into the raw markdown.
    *
    * Raw markdown is still markdown: dropping a screenshot into it should write
@@ -151,6 +159,7 @@ export function SourceEditor({
   ariaLabel = "Markdown source",
   handleRef,
   onCursorChange,
+  revealLine,
   onImageFiles,
   slashActions,
   readOnly = false,
@@ -350,6 +359,23 @@ export function SourceEditor({
     // The history above describes a document that no longer exists.
     emitted.current = [];
   }, [value]);
+
+  /**
+   * Brings a line into view without touching what is selected.
+   *
+   * `scrollIntoView` on a position rather than a selection change: moving the
+   * caret would take focus and the note's own selection away from somebody who
+   * is reading, which is the opposite of following along quietly.
+   */
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || revealLine == null) return;
+
+    const line = Math.min(Math.max(revealLine, 1), view.state.doc.lines);
+    view.dispatch({
+      effects: EditorView.scrollIntoView(view.state.doc.line(line).from, { y: "center" }),
+    });
+  }, [revealLine]);
 
   /**
    * The live view, but only when it may be written to.
