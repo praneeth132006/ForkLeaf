@@ -15,12 +15,14 @@ export interface HelpDialogProps {
   onConnectRepo: () => void;
 }
 
-type Tab = "start" | "writing" | "diagrams" | "sync" | "keys";
+type Tab = "start" | "writing" | "papers" | "diagrams" | "checks" | "sync" | "keys";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "start", label: "Getting started" },
   { id: "writing", label: "Writing" },
+  { id: "papers", label: "Papers & PDFs" },
   { id: "diagrams", label: "Diagrams" },
+  { id: "checks", label: "Checks & history" },
   { id: "sync", label: "GitHub & sync" },
   { id: "keys", label: "Shortcuts" },
 ];
@@ -134,11 +136,106 @@ export function HelpDialog({
             block at the top. That is why notes written here open correctly in Obsidian, Jekyll and
             Hugo.
           </Item>
+          <Feature
+            title="Make the columns the width you want"
+            what="Every panel here can be resized, including the reader."
+            doThis="Drag the seam between two panels. Double-click it to put it back; arrow keys move it too."
+            then="The widths are remembered on this device, and bounded so nothing can be dragged into uselessness."
+          />
+          <Feature
+            title="Search that knows what you are working on"
+            what="Typing “setup” in the middle of a project should find that project's setup."
+            doThis={
+              <>
+                <Mono>⌘K</Mono> with a note open.
+              </>
+            }
+            then="Notes linked to the one you are in float to the top — both the ones you linked to and the ones that linked to you. A note actually called what you typed still wins."
+          />
           <Item title="Export">
             <Mono>Export</Mono> in the header produces Markdown, PDF, HTML, Word or plain text.
             Everything is generated in your browser — the note is never uploaded anywhere to become
             a file.
           </Item>
+        </Section>
+      )}
+
+      {tab === "papers" && (
+        <Section>
+          <Feature
+            title="Read a paper in the notebook it belongs to"
+            what="A PDF in your repository is part of the notebook, not an attachment to it."
+            doThis={
+              <>
+                Click a <Mono>.pdf</Mono> in the sidebar, or drop one onto the window.
+              </>
+            }
+            then="It opens in the middle column, with its own table of contents beside it. Drag the seam between them to give either more room."
+          />
+          <Feature
+            title="Choose where PDFs open"
+            what="Three different things people do with a document, so three answers."
+            doThis={
+              <>
+                <Mono>⌘K</Mono> → <strong>Open PDFs in this window</strong>,{" "}
+                <strong>beside the note</strong>, or <strong>in their own browser tab</strong>.
+              </>
+            }
+            then="The one you pick is marked, and remembered on this device."
+          />
+          <Feature
+            title="Quote a passage into a note"
+            what="A citation that records the sentence, not just the page it was on."
+            doThis={
+              <>
+                Select text in the document, then <strong>Quote into note</strong>.
+              </>
+            }
+            then={
+              <>
+                A blockquote and an ordinary Markdown link —{" "}
+                <Mono>[On Attention, p. 12](paper.pdf#page=12…)</Mono> — that renders on github.com
+                and still finds the passage after the paper is revised.
+              </>
+            }
+          />
+          <Feature
+            title="See everything you have written about a paper"
+            what="Months later this list is the useful thing, not the paper."
+            doThis={
+              <>
+                Open the document and choose the <strong>Notes</strong> tab beside it.
+              </>
+            }
+            then="Every note quoting it, each with the passage it took and the page, in the document's own order. Click a passage to go to that page, or the note to open it."
+          />
+          <Feature
+            title="Start a note from a paper"
+            what="A page that already has the paper's shape, instead of a blank one."
+            doThis={<strong>Write about this</strong>}
+            then="A new note with the title, author and publication date filled in, and the paper's sections as headings — each linked to the page it starts on. The document moves aside and sits beside it."
+          />
+          <Feature
+            title="Search inside your documents"
+            what="The words in your papers, not only the words in your notes."
+            doThis={
+              <>
+                <Mono>⌘K</Mono> and type a phrase.
+              </>
+            }
+            then="Matches from every document you have opened, under Documents, with the sentence they were found in. Opening one goes straight to the page."
+          />
+          <Feature
+            title="Keep a PDF from your desktop"
+            what="A dropped file has no path in the repository, so nothing can link to it."
+            doThis={<strong>Save to notebook</strong>}
+            then={
+              <>
+                It is committed to a <Mono>papers/</Mono> folder beside your note, and its citations
+                become real links.
+              </>
+            }
+          />
         </Section>
       )}
 
@@ -161,10 +258,79 @@ export function HelpDialog({
             messages that point at the offending line, and a <strong>Syntax help</strong> panel you
             can click snippets out of. Both write the same code, and the preview updates as you go.
           </Item>
+          <Feature
+            title="A box can be a note"
+            what="Which turns a diagram into a map of the notebook rather than a picture of one."
+            doThis={
+              <>
+                Put a wikilink in the label: <Mono>A[&quot;[[Deploy runbook]]&quot;]</Mono>. An
+                alias works too — <Mono>[[deploy/runbook|The runbook]]</Mono>.
+              </>
+            }
+            then={
+              <>
+                The box reads <strong>Deploy runbook</strong> and opens that note when clicked in
+                the preview. It is still an ordinary Mermaid label, so the diagram renders on
+                github.com exactly as before.
+              </>
+            }
+          />
           <Item title="They are not locked in">
             A diagram is stored as an ordinary <Mono>```mermaid</Mono> code fence, so GitHub renders
             it natively when you view the file there, and so does anything else that speaks Mermaid.
           </Item>
+        </Section>
+      )}
+
+      {tab === "checks" && (
+        <Section>
+          <Feature
+            title="Are my quotations still true?"
+            what="Every other tool stores a page number, which quietly stops being right when a paper is revised."
+            doThis={
+              <>
+                <Mono>⌘K</Mono> → <strong>Check my citations against their documents</strong>
+              </>
+            }
+            then="Which quotations moved to another page, which matched only loosely, and which are no longer in the document at all. A moved one can have its page number corrected in place, one press per citation."
+          />
+          <Feature
+            title="What has gone stale?"
+            what="Notes rot quietly. Nobody opens a note to find out that it did."
+            doThis={
+              <>
+                <Mono>⌘K</Mono> → <strong>Check which of my notes have gone stale</strong>
+              </>
+            }
+            then={
+              <>
+                Notes pointing at a file that is not in the repository, <Mono>[[links]]</Mono>{" "}
+                matching no note, and datable claims nobody has looked at in years. Nothing is
+                changed — <strong>It is fine</strong> hides one until the note is edited again.
+              </>
+            }
+          />
+          <Feature
+            title="What did my notebook look like in March?"
+            what="Not one note's history — the whole notebook, on a day you choose."
+            doThis={
+              <>
+                <Mono>⌘K</Mono> → <strong>Show me my notebook as it was on…</strong>
+              </>
+            }
+            then="The files that existed that day, and any of them readable as it stood. Read-only: nothing here can change what you have now."
+          />
+          <Feature
+            title="Where did this paragraph come from?"
+            what="When you wrote it, and — more usefully — what it said before."
+            doThis={
+              <>
+                Properties panel → <strong>When each paragraph was written</strong>, then point at a
+                paragraph.
+              </>
+            }
+            then="The date it last changed, the commit and what else that commit touched, and the wording it replaced. Nothing is claimed for a paragraph that was added rather than rewritten."
+          />
         </Section>
       )}
 
@@ -234,6 +400,23 @@ export function HelpDialog({
               </>
             )}
           </Item>
+          <Feature
+            title="When an image is too big to send"
+            what="GitHub will not take more than about 3 MB in one request. The picture is fine; there is just more of it than the wire will carry."
+            doThis={
+              <>
+                Click the sync status in the bar at the bottom, then <strong>Resize</strong> beside
+                the file — as large as will still send, 1 MB, or 500 KB.
+              </>
+            }
+            then={
+              <>
+                It is re-encoded in the same format, replaces the copy on this device, and is pushed
+                again. <strong>Remove</strong> is still there, and now also takes the image out of
+                the notes that showed it, so nothing is left pointing at a file that has gone.
+              </>
+            }
+          />
           <Item title="Working across devices">
             Sign in with the same GitHub account on another machine and ForkLeaf pulls the
             repository down. Both devices commit to the same branch.
@@ -321,6 +504,47 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
         <h3 className="mb-1 text-[14px] font-semibold text-[var(--fl-text)]">{title}</h3>
         <div className="text-[13.5px] leading-relaxed text-[var(--fl-muted)]">{children}</div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * One feature, in three beats: what it is, what to do, what happens.
+ *
+ * The shape exists because a paragraph of prose about a feature is a paragraph
+ * people skim and then still do not know which button to press. Somebody
+ * opening help has one question — "how do I do the thing?" — and the answer is
+ * a command name and a sentence about the result. Anything longer belongs in
+ * the documentation, which is linked at the bottom of every tab.
+ */
+function Feature({
+  title,
+  what,
+  doThis,
+  then,
+}: {
+  title: string;
+  what: React.ReactNode;
+  /** The exact words on the button or in the palette, so it can be found. */
+  doThis: React.ReactNode;
+  then: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-[var(--fl-border)] px-3 py-2.5">
+      <h3 className="text-[14px] font-semibold text-[var(--fl-text)]">{title}</h3>
+      <p className="mt-0.5 text-[13px] leading-relaxed text-[var(--fl-muted)]">{what}</p>
+
+      <dl className="mt-2 grid grid-cols-[3.75rem_1fr] gap-x-3 gap-y-1">
+        <dt className="pt-[3px] text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--fl-muted)]">
+          Do
+        </dt>
+        <dd className="text-[13px] leading-relaxed text-[var(--fl-text)]">{doThis}</dd>
+
+        <dt className="pt-[3px] text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--fl-muted)]">
+          You get
+        </dt>
+        <dd className="text-[13px] leading-relaxed text-[var(--fl-muted)]">{then}</dd>
+      </dl>
     </div>
   );
 }
