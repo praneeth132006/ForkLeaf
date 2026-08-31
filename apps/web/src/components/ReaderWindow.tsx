@@ -122,6 +122,7 @@ export function ReaderWindow() {
         // rather than behind a button.
         layout="document"
         reader={reader}
+        path={target?.path ?? null}
         initialCitation={citation}
         onCite={copyCitation}
         citeLabels={{

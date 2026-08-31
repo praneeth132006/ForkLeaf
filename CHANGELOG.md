@@ -58,6 +58,27 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### The citation format, written down
+
+A ForkLeaf citation was always an ordinary Markdown link — a relative path plus
+the `#page=` fragment every PDF reader has understood for twenty years, with the
+W3C Web Annotation text selector spelled into a query string. That is only
+useful to anybody else if it is written down, so it now is:
+[the citation link format](/docs/citation-links), field by field, with what a
+tool has to do to read one.
+
+**Copy link** on a selected passage puts exactly that form on the clipboard, for
+pasting into anything that is not ForkLeaf.
+
+### Help knows about all of it
+
+Ten features have gone in lately and the help dialog had not heard of any of
+them. It now covers every one, in the same three beats: what it is in one line,
+the exact words to press, and what happens when you do. Two new topics —
+**Papers & PDFs** and **Checks & history** — and the existing ones gained the
+resizable columns, the search that weighs what you are working on, diagram boxes
+that are notes, and what to do about an image too big to send.
+
 ### Your notebook, on a day you choose
 
 **Show me my notebook as it was on…** in the palette takes the whole notebook

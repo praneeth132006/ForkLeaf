@@ -61,6 +61,12 @@ export const DOC_SECTIONS: DocSection[] = [
           "Following links, the hover card that says where they go, reading a linked file, reading and citing a PDF, and locking a note so reading it cannot change it.",
       },
       {
+        slug: "citation-links",
+        title: "The citation link format",
+        summary:
+          "How a quotation from a PDF is written into a note, field by field — a relative path plus a standard fragment, so other tools can read and write the same links.",
+      },
+      {
         slug: "export",
         title: "Exporting",
         summary: "Markdown, PDF, HTML, Word, plain text and JSON — all produced in your browser.",
