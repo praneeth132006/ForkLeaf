@@ -472,6 +472,22 @@ export async function readNoteAtCommit(
   return content;
 }
 
+/**
+ * The notebook as it stood on a given day.
+ *
+ * The commit that was current at the end of that day, and the file tree at it.
+ * `commit: null` means the repository did not exist yet, which is a true
+ * answer rather than a failure.
+ */
+export async function readNotebookAt(
+  repo: RepoRef,
+  date: string,
+): Promise<{ commit: NoteCommitDto | null; tree: TreeNode[] }> {
+  return await call<{ commit: NoteCommitDto | null; tree: TreeNode[] }>(
+    `/api/gh/at?${repoParams(repo)}&until=${encodeURIComponent(date)}`,
+  );
+}
+
 export async function listRepos(): Promise<RepoSummaryDto[]> {
   const { repos } = await call<{ repos: RepoSummaryDto[] }>("/api/gh/repos");
   return repos;

@@ -209,3 +209,44 @@ describe("BlameView", () => {
     expect(revisions.prefetch).toHaveBeenCalledWith(["ccc", "bbb", "aaa"]);
   });
 });
+
+/**
+ * "When did I write this?" is the way in. "What did it say before?" is what
+ * somebody re-reading their own notes actually wants — a paragraph you
+ * rewrote is a paragraph you changed your mind about.
+ */
+describe("BlameView — what a paragraph used to say", () => {
+  const REWRITTEN = {
+    aaa: "# Kickoff\n\nSMB signing looks fine everywhere.",
+    bbb: "# Kickoff\n\nSMB signing is off on three hosts.",
+  };
+
+  it("shows the previous wording of a rewritten paragraph", async () => {
+    view({
+      commits: [commit("bbb", 10), commit("aaa", 1)],
+      revisions: cache(REWRITTEN),
+    });
+
+    fireEvent.mouseEnter(
+      paragraphs().find((row) => row.textContent?.includes("off on three hosts"))!,
+    );
+
+    expect(await screen.findByText(/Until .* it said/)).toBeTruthy();
+    expect(screen.getByText("SMB signing looks fine everywhere.")).toBeTruthy();
+  });
+
+  it("says nothing of the kind for a paragraph that was added, not rewritten", () => {
+    view();
+
+    // "You wrote this in March" and "in March you replaced something with
+    // this" are different facts about the same paragraph.
+    fireEvent.mouseEnter(paragraphs().find((row) => row.textContent?.includes("Kerberoasted"))!);
+    expect(screen.queryByText(/it said/)).toBeNull();
+  });
+
+  it("claims nothing about text older than the history it can read", () => {
+    view();
+    fireEvent.mouseEnter(paragraphs()[0]!);
+    expect(screen.queryByText(/it said/)).toBeNull();
+  });
+});

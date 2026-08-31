@@ -282,3 +282,79 @@ export function ageRatio(date: string, oldest: string, newest: string): number {
   if (to <= from) return 1;
   return Math.min(1, Math.max(0, (timeOf(date) - from) / (to - from)));
 }
+
+/**
+ * What a paragraph said before the change that produced it.
+ *
+ * Blame answers "when did I write this?". The more interesting question, and
+ * the one people actually ask of their own notes, is the one after it: what
+ * did it say before? A paragraph you rewrote in March is a paragraph you
+ * changed your mind about, and seeing what you changed your mind *from* is
+ * usually the most interesting thing on the page.
+ *
+ * Null when this block was added rather than rewritten. That is a real
+ * distinction and worth keeping: "you wrote this in March" and "in March you
+ * replaced something else with this" are different facts about the same
+ * paragraph, and inventing a previous wording for the first would be a lie.
+ */
+export interface PriorWording {
+  text: string;
+  /** The revision it said that in. */
+  sha: string;
+  date: string;
+}
+
+export function priorWording(
+  input: readonly BlameRevision[],
+  currentText: string,
+  block: Pick<BlameBlock, "start" | "end" | "newest">,
+): PriorWording | null {
+  const revisions = [...input]
+    .filter((revision) => revision.text !== null)
+    .sort((a, b) => timeOf(a.date) - timeOf(b.date));
+
+  const changed = revisions.findIndex((revision) => revision.sha === block.newest.sha);
+  // Either the commit that wrote this block is outside the window of history
+  // we can see, or it is the oldest thing in it — in both cases there is no
+  // "before" to show, and guessing at one is exactly the wrong move.
+  if (changed <= 0) return null;
+
+  const previous = revisions[changed - 1];
+  if (!previous?.text) return null;
+
+  const replaced = replacedWithin(previous.text, currentText, block);
+  return replaced === null ? null : { text: replaced, sha: previous.sha, date: previous.date };
+}
+
+/**
+ * The lines the block replaced, from a diff of the two revisions.
+ *
+ * A deletion belongs to the block when it sits inside the block's span in the
+ * *new* text — tracked by the last new line number the walk has passed, since
+ * a deleted line has no new number of its own. Anything deleted elsewhere in
+ * the note is somebody else's paragraph and none of this block's business.
+ */
+export function replacedWithin(
+  previousText: string,
+  currentText: string,
+  block: { start: number; end: number },
+): string | null {
+  const removed: string[] = [];
+  // Deletions before the first new line still belong to a block that starts at
+  // line 1, so the walk begins just above it rather than at it.
+  let at = 0;
+
+  for (const line of diffLines(previousText, currentText)) {
+    if (line.newNumber !== null) {
+      at = line.newNumber;
+      continue;
+    }
+
+    // A deletion sitting at the top edge of the block counts: the lines it
+    // replaced were above the first line the block now occupies.
+    if (at >= block.start - 1 && at <= block.end) removed.push(line.text);
+  }
+
+  const text = removed.join("\n").trim();
+  return text === "" ? null : text;
+}

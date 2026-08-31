@@ -1,5 +1,5 @@
 import { markdownToHtml, extractMermaidBlocks, serializeDocument } from "@forkleaf/markdown-engine";
-import { renderDiagram, LIGHT_THEME, DARK_THEME } from "@forkleaf/diagrams";
+import { renderDiagram, extractDiagramLinks, LIGHT_THEME, DARK_THEME } from "@forkleaf/diagrams";
 import type { ExportOptions } from "@forkleaf/types";
 
 /**
@@ -76,7 +76,12 @@ async function inlineDiagrams(markdown: string, theme: "light" | "dark"): Promis
   for (const block of blocks) {
     result += markdown.slice(cursor, block.start);
 
-    const { svg } = await renderDiagram(block.code, palette);
+    // A `[[wikilink]]` in a label is a link to a note. Exported, there is no
+    // notebook to click through to — but the box should still read as the
+    // words somebody wrote rather than showing the brackets.
+    const { code } = extractDiagramLinks(block.code);
+
+    const { svg } = await renderDiagram(code, palette);
     result += svg
       ? // Blank lines keep the raw HTML as its own markdown block.
         `\n\n<div class="diagram">${svg}</div>\n\n`

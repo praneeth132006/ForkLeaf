@@ -21,6 +21,21 @@ beforeAll(() => {
     },
   );
 
+  // A ready document watches its pages to know which are on screen. jsdom has
+  // no IntersectionObserver either, and the reader wires one up as soon as it
+  // has pages to watch.
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    },
+  );
+
   // Every element in jsdom is nought pixels wide, and the reader reads that as
   // "too narrow to dock anything" — so without a width the docked layout can
   // never be under test. A laptop's worth of room.
@@ -58,6 +73,8 @@ const NOTES_TAB = "What your notes say about this document";
 
 const mention = (overrides: Partial<PdfMention> = {}): PdfMention => ({
   notePath: "reading/attention.md",
+  pdfPath: "papers/attention.pdf",
+  citation: { quote: "Attention is all you need.", prefix: "", suffix: "", page: 12 },
   line: 6,
   label: "Attention, p. 12",
   page: 12,
@@ -144,5 +161,45 @@ describe("PdfReader — what the notebook says about this document", () => {
     render(<PdfReader reader={loading} layout="document" mentions={null} onClose={null} />);
 
     expect(screen.queryByRole("button", { name: NOTES_TAB })).toBeNull();
+  });
+});
+
+describe("PdfReader — starting a note from the paper", () => {
+  const ready: PdfReaderState = {
+    ...loading,
+    status: "ready",
+    info: {
+      pageCount: 15,
+      metadata: {
+        title: "Attention Is All You Need",
+        author: "Vaswani et al.",
+        subject: null,
+        keywords: [],
+        createdAt: null,
+        modifiedAt: null,
+        producer: null,
+      },
+      // No sizes, so no page is drawn to a canvas jsdom does not have.
+      sizes: [],
+      encrypted: false,
+    },
+  };
+
+  it("offers to write about the paper, and says so in the reader's own words", () => {
+    const onStartNote = vi.fn();
+    render(<PdfReader reader={ready} layout="document" onStartNote={onStartNote} onClose={null} />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Start a note about this paper, with its headings/ }),
+    );
+    expect(onStartNote).toHaveBeenCalled();
+  });
+
+  it("offers nothing of the kind while the document is still opening", () => {
+    // The title and the contents are the whole point of the button, and a note
+    // made before they arrive would be called "untitled" and be empty.
+    render(<PdfReader reader={loading} layout="document" onStartNote={vi.fn()} onClose={null} />);
+
+    expect(screen.queryByRole("button", { name: /Start a note about this paper/ })).toBeNull();
   });
 });

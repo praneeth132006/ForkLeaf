@@ -297,6 +297,14 @@ export class NoteRepository {
     folder: string;
     title: string;
     content?: string;
+    /**
+     * Fields to record beside the ones every note gets.
+     *
+     * For a note that is *about* something — a paper's author and the date it
+     * was published — where the facts are known at the moment of creation and
+     * would otherwise have to be typed in again by hand.
+     */
+    frontmatter?: NoteFrontmatter;
     existingPaths: string[];
   }): Promise<Note> {
     const filename = `${slugifyFilename(options.title)}.md`;
@@ -308,6 +316,10 @@ export class NoteRepository {
     const frontmatter: NoteFrontmatter = this.stamp({
       title: options.title,
       created: timestamp,
+      // Merged over the defaults rather than under them, so a caller that
+      // knows the note's real title — a paper's, rather than the filename it
+      // was created from — is the one that wins.
+      ...options.frontmatter,
     });
     const content = options.content ?? `# ${options.title}\n\n`;
 

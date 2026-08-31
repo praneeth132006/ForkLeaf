@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import {
   buildBlame,
   ageRatio,
+  priorWording,
   type BlameBlock,
   type BlameRevision,
+  type PriorWording,
 } from "@forkleaf/markdown-engine";
 import type { RepoRef } from "@forkleaf/types";
 import type { NoteCommitDto, CommitFileDto } from "@/lib/gateway";
@@ -82,6 +84,23 @@ export function BlameView({ commits, revisions, repo, path }: BlameViewProps) {
     [blame.blocks, active],
   );
 
+  /**
+   * What the paragraph under the cursor said before it was last changed.
+   *
+   * The question people actually ask of their own notes. "When did I write
+   * this?" is the way in; "what did it say before?" is what they wanted, and
+   * a paragraph you rewrote is one you changed your mind about.
+   *
+   * Computed from revisions already fetched for the blame itself, so it costs
+   * nothing extra — and is null, honestly, for a paragraph that was added
+   * rather than rewritten.
+   */
+  const wasSaying = useMemo(() => {
+    const current = input.find((revision) => revision.text !== null)?.text;
+    if (!activeBlock || !current) return null;
+    return priorWording(input, current, activeBlock);
+  }, [input, activeBlock]);
+
   // Nothing has arrived yet — the first frame of a note whose history is still
   // loading. Distinct from a note with no attributable content.
   if (loadedCount === 0 && commits.length > 0) {
@@ -138,7 +157,7 @@ export function BlameView({ commits, revisions, repo, path }: BlameViewProps) {
       </div>
 
       {/* ── The commit behind whatever is under the cursor ───────────────── */}
-      <CommitCard block={activeBlock} repo={repo} notePath={path} />
+      <CommitCard block={activeBlock} was={wasSaying} repo={repo} notePath={path} />
 
       {/* ── The note, with its dates in the margin ──────────────────────── */}
       <div
@@ -265,10 +284,13 @@ function BlockRow({
  */
 function CommitCard({
   block,
+  was,
   repo,
   notePath,
 }: {
   block: BlameBlock | null;
+  /** What this paragraph said before, when it replaced something. */
+  was: PriorWording | null;
   repo: RepoRef;
   notePath: string;
 }) {
@@ -361,6 +383,19 @@ function CommitCard({
           This text was already here in the oldest revision ForkLeaf can read, so it may be older
           than the commit named.
         </p>
+      )}
+
+      {/* Usually the most interesting thing on the page: not that you wrote a
+          paragraph in March, but what it said until you did. */}
+      {was && (
+        <div className="mt-2 border-t border-[var(--fl-border)] pt-2">
+          <p className="text-[11px] text-[var(--fl-muted)]">
+            Until {new Date(was.date).toLocaleDateString()} it said
+          </p>
+          <blockquote className="mt-1 max-h-24 overflow-y-auto whitespace-pre-wrap border-l-2 border-[var(--fl-border-strong)] pl-2 text-[12px] leading-relaxed text-[var(--fl-text)]">
+            {was.text}
+          </blockquote>
+        </div>
       )}
 
       {/* The part that turns a date into a memory. */}

@@ -1,5 +1,12 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { LocalAsset, Note, PendingChange, TreeNode, Workspace } from "@forkleaf/types";
+import type {
+  LocalAsset,
+  Note,
+  PdfTextEntry,
+  PendingChange,
+  TreeNode,
+  Workspace,
+} from "@forkleaf/types";
 import type { LocalDatabase } from "./ports";
 import { tabChannel, type TabChannel } from "./tab-channel";
 
@@ -38,11 +45,16 @@ interface ForkLeafSchema extends DBSchema {
     key: string;
     value: { key: string; value: unknown };
   };
+  pdftext: {
+    key: string;
+    value: PdfTextEntry;
+    indexes: { "by-workspace": string };
+  };
 }
 
 const DB_NAME = "forkleaf";
 /**
- * Bumped to 2 for the `assets` store.
+ * Bumped to 3 for the `pdftext` store, and to 2 before that for `assets`.
  *
  * Every store is created behind a `contains` check rather than in a
  * version-numbered branch, so an existing database gains the new store and
@@ -53,7 +65,7 @@ const DB_NAME = "forkleaf";
  * make a second tab briefly unable to open it. Only bump it when a new store
  * actually requires it.
  */
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 /**
  * How long to wait for the database to open before giving up on it.
@@ -72,7 +84,15 @@ const OPEN_TIMEOUT_MS = 8_000;
 const RELEASE_TIMEOUT_MS = 1_500;
 
 /** Every store the code below reads from. Checked when no upgrade can run. */
-const REQUIRED_STORES = ["notes", "workspaces", "queue", "trees", "assets", "meta"] as const;
+const REQUIRED_STORES = [
+  "notes",
+  "workspaces",
+  "queue",
+  "trees",
+  "assets",
+  "meta",
+  "pdftext",
+] as const;
 
 export class IndexedDbDatabase implements LocalDatabase {
   readonly persistent = true;
@@ -187,7 +207,7 @@ export class IndexedDbDatabase implements LocalDatabase {
          */
         upgrade(db, _oldVersion, _newVersion, tx) {
           const store = <
-            Name extends "notes" | "queue" | "assets" | "workspaces" | "trees" | "meta",
+            Name extends "notes" | "queue" | "assets" | "workspaces" | "trees" | "meta" | "pdftext",
           >(
             name: Name,
             keyPath: string,
@@ -196,7 +216,7 @@ export class IndexedDbDatabase implements LocalDatabase {
               ? tx.objectStore(name)
               : db.createObjectStore(name, { keyPath });
 
-          for (const name of ["notes", "queue", "assets"] as const) {
+          for (const name of ["notes", "queue", "assets", "pdftext"] as const) {
             const created = store(name, "id");
             if (!created.indexNames.contains("by-workspace")) {
               created.createIndex("by-workspace", "workspaceId");
@@ -393,6 +413,22 @@ export class IndexedDbDatabase implements LocalDatabase {
 
   async listAssets(workspaceId: string): Promise<LocalAsset[]> {
     return (await this.db).getAllFromIndex("assets", "by-workspace", workspaceId);
+  }
+
+  async getPdfText(id: string): Promise<PdfTextEntry | undefined> {
+    return (await this.db).get("pdftext", id);
+  }
+
+  async putPdfText(entry: PdfTextEntry): Promise<void> {
+    await (await this.db).put("pdftext", entry);
+  }
+
+  async deletePdfText(id: string): Promise<void> {
+    await (await this.db).delete("pdftext", id);
+  }
+
+  async listPdfText(workspaceId: string): Promise<PdfTextEntry[]> {
+    return (await this.db).getAllFromIndex("pdftext", "by-workspace", workspaceId);
   }
 
   async getMeta<T>(key: string): Promise<T | undefined> {

@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { Note, TreeNode, Workspace } from "@forkleaf/types";
+import type { Note, PdfTextEntry, TreeNode, Workspace } from "@forkleaf/types";
 import { entryFromNote, entryFromPath, queryIndex } from "@/lib/library";
+import { searchDocuments } from "@/lib/pdf-index";
 
 /**
  * ⌘K — go anywhere, do anything.
@@ -37,6 +38,26 @@ export interface CommandPaletteProps {
   openNotes: Note[];
   workspace: Workspace | null;
   onOpenNote: (path: string) => void;
+  /**
+   * The documents whose text this notebook has kept, for searching inside.
+   *
+   * A PDF's text is extracted the first time it is read and stored beside the
+   * notebook, so ⌘K can look inside the papers as well as at the notes. Empty
+   * until something has been read, which is honest: a document nobody has
+   * opened has not been read by anybody, this app included.
+   */
+  documents?: readonly PdfTextEntry[];
+  /** Opens a document at the page a phrase was found on. */
+  onOpenDocument?: (pdfPath: string, page: number) => void;
+  /**
+   * The notes around the one being written, by path, with their distance.
+   *
+   * What makes a search know where it is being made from: "setup" typed while
+   * writing about a project finds that project's setup rather than the other
+   * five. Absent when no note is open, which is when there is nowhere to be
+   * near.
+   */
+  nearby?: ReadonlyMap<string, number>;
   commands: Command[];
 }
 
@@ -46,6 +67,9 @@ export function CommandPalette({
   openNotes,
   workspace,
   onOpenNote,
+  documents = [],
+  onOpenDocument,
+  nearby,
   commands,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
@@ -75,8 +99,21 @@ export function CommandPalette({
   }, [tree, openNotes, workspace]);
 
   const noteResults = useMemo(
-    () => queryIndex(noteEntries, { query, sort: "recent" }).slice(0, 8),
-    [noteEntries, query],
+    () =>
+      queryIndex(noteEntries, { query, sort: "recent", ...(nearby ? { nearby } : {}) }).slice(0, 8),
+    [noteEntries, query, nearby],
+  );
+
+  /**
+   * What the papers say, not only what the notes about them say.
+   *
+   * Only once something has been typed: an empty query would otherwise list
+   * the first few pages of every document that has ever been opened, above the
+   * commands, for no reason.
+   */
+  const documentResults = useMemo(
+    () => (onOpenDocument ? searchDocuments(documents, query) : []),
+    [documents, query, onOpenDocument],
   );
 
   const commandResults = useMemo(() => {
@@ -92,9 +129,10 @@ export function CommandPalette({
   const rows = useMemo(
     () => [
       ...noteResults.map((entry) => ({ kind: "note" as const, entry })),
+      ...documentResults.map((hit) => ({ kind: "document" as const, hit })),
       ...commandResults.map((command) => ({ kind: "command" as const, command })),
     ],
-    [noteResults, commandResults],
+    [noteResults, documentResults, commandResults],
   );
 
   // Clamped rather than reset: typing narrows the list, and snapping the
@@ -109,11 +147,13 @@ export function CommandPalette({
       onClose();
       if (row.kind === "note") {
         onOpenNote(row.entry.path);
+      } else if (row.kind === "document") {
+        onOpenDocument?.(row.hit.path, row.hit.page);
       } else {
         await row.command.run();
       }
     },
-    [rows, onClose, onOpenNote],
+    [rows, onClose, onOpenNote, onOpenDocument],
   );
 
   // Keep the highlighted row in view when it moves past the fold.
@@ -167,8 +207,12 @@ export function CommandPalette({
           aria-expanded
           aria-controls="command-palette-list"
           aria-activedescendant={rows[selected] ? `palette-row-${selected}` : undefined}
-          placeholder="Search notes, or type a command…"
-          aria-label="Search notes and commands"
+          placeholder={
+            documents.length > 0
+              ? "Search notes and documents, or type a command…"
+              : "Search notes, or type a command…"
+          }
+          aria-label="Search notes, documents and commands"
           className="w-full border-b border-[var(--fl-border)] bg-transparent px-4 py-3.5 text-[15px] text-[var(--fl-text)] outline-none placeholder:text-[var(--fl-muted)]"
         />
 
@@ -187,12 +231,11 @@ export function CommandPalette({
           {rows.map((row, index) => {
             const isActive = index === selected;
             const previous = rows[index - 1];
-            const group = row.kind === "note" ? "Notes" : row.command.group;
-            const previousGroup =
-              previous == null ? null : previous.kind === "note" ? "Notes" : previous.command.group;
+            const group = groupOf(row);
+            const previousGroup = previous == null ? null : groupOf(previous);
 
             return (
-              <li key={row.kind === "note" ? row.entry.id : row.command.id}>
+              <li key={keyOf(row, index)}>
                 {group !== previousGroup && (
                   <p className="px-2.5 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-[0.13em] text-[var(--fl-muted)]">
                     {group}
@@ -215,10 +258,21 @@ export function CommandPalette({
 
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[14px] text-[var(--fl-text)]">
-                      {row.kind === "note" ? row.entry.title : row.command.label}
+                      {row.kind === "note"
+                        ? row.entry.title
+                        : row.kind === "document"
+                          ? `${filename(row.hit.path)} · p. ${row.hit.page}`
+                          : row.command.label}
                     </span>
                     <span className="block truncate text-[11.5px] text-[var(--fl-muted)]">
-                      {row.kind === "note" ? row.entry.path : (row.command.hint ?? "")}
+                      {row.kind === "note"
+                        ? row.entry.path
+                        : row.kind === "document"
+                          ? // The sentence it was found in, not the path: the
+                            // path is in the line above and the words are what
+                            // tell you whether this is the passage you meant.
+                            row.hit.snippet
+                          : (row.command.hint ?? "")}
                     </span>
                   </span>
                 </button>
@@ -237,6 +291,25 @@ export function CommandPalette({
   );
 }
 
+type Row =
+  | { kind: "note"; entry: { id: string; path: string; title: string } }
+  | { kind: "document"; hit: { path: string; page: number; snippet: string } }
+  | { kind: "command"; command: Command };
+
+function groupOf(row: Row): string {
+  if (row.kind === "note") return "Notes";
+  if (row.kind === "document") return "Documents";
+  return row.command.group;
+}
+
+function keyOf(row: Row, index: number): string {
+  if (row.kind === "note") return row.entry.id;
+  if (row.kind === "document") return `${row.hit.path}:${row.hit.page}:${index}`;
+  return row.command.id;
+}
+
+const filename = (path: string) => path.split("/").pop() ?? path;
+
 function Key({ children }: { children: ReactNode }) {
   return (
     <span className="inline-flex items-center gap-1">
@@ -247,7 +320,7 @@ function Key({ children }: { children: ReactNode }) {
   );
 }
 
-function Glyph({ kind }: { kind: "note" | "command" }) {
+function Glyph({ kind }: { kind: "note" | "document" | "command" }) {
   return (
     <svg
       viewBox="0 0 16 16"
@@ -262,6 +335,13 @@ function Glyph({ kind }: { kind: "note" | "command" }) {
         <>
           <path d="M3.25 2.75h6l3.5 3.5v7a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5Z" />
           <path d="M9 2.75v3.5h3.5" />
+        </>
+      ) : kind === "document" ? (
+        // A page with lines of type on it: a document, as against a note,
+        // which is the same outline with a folded corner.
+        <>
+          <rect x="2.75" y="2.75" width="10.5" height="10.5" rx="1.25" />
+          <path d="M5.25 6h5.5M5.25 8.5h5.5M5.25 11h3" />
         </>
       ) : (
         <path d="M5.5 6 3 8l2.5 2M10.5 6 13 8l-2.5 2M9.25 4l-2.5 8" />

@@ -42,6 +42,7 @@ export {
   resolveWikilink,
   wikilinkToPath,
   buildLinkGraph,
+  neighbourhood,
   remarkWikilink,
   type WikiLink,
   type LinkCandidate,
@@ -91,12 +92,15 @@ export {
 
 export {
   buildBlame,
+  priorWording,
+  replacedWithin,
   toBlocks,
   ageRatio,
   type Blame,
   type BlameBlock,
   type BlameLine,
   type BlameRevision,
+  type PriorWording,
 } from "./blame";
 
 export {

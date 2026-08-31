@@ -148,3 +148,12 @@ export {
   type DiagramImport,
   type ImportKind,
 } from "./import";
+
+export {
+  extractDiagramLinks,
+  hasDiagramLinks,
+  markLinkedNodes,
+  normalizeLabel,
+  type DiagramLink,
+  type LinkedDiagram,
+} from "./links";

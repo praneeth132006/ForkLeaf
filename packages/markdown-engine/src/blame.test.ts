@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { buildBlame, toBlocks, ageRatio, type BlameRevision } from "./blame";
+import {
+  buildBlame,
+  priorWording,
+  replacedWithin,
+  toBlocks,
+  ageRatio,
+  type BlameRevision,
+} from "./blame";
 
 const at = (day: number) => `2026-03-${String(day).padStart(2, "0")}T10:00:00.000Z`;
 
@@ -284,5 +291,93 @@ describe("ageRatio", () => {
 
   it("does not produce NaN for an unparseable date", () => {
     expect(Number.isFinite(ageRatio("nonsense", OLD, NEW))).toBe(true);
+  });
+});
+
+/**
+ * The question after "when did I write this?", and the more interesting one:
+ * what did it say before? A paragraph rewritten in March is one you changed
+ * your mind about, and what you changed it *from* is usually the point.
+ */
+describe("priorWording", () => {
+  const revisions = (texts: [sha: string, date: string, text: string | null][]): BlameRevision[] =>
+    texts.map(([sha, date, text]) => ({ sha, date, text }));
+
+  it("shows what a rewritten paragraph used to say", () => {
+    const before = "# Title\n\nThe answer is obviously yes.\n";
+    const after = "# Title\n\nThe answer is obviously no.\n";
+
+    const input = revisions([
+      ["a", "2026-01-01T00:00:00Z", before],
+      ["b", "2026-03-01T00:00:00Z", after],
+    ]);
+    const blame = buildBlame(input);
+    const block = blame.blocks.find((candidate) => candidate.text.includes("obviously no"))!;
+
+    const prior = priorWording(input, after, block);
+
+    expect(prior?.text).toBe("The answer is obviously yes.");
+    expect(prior?.sha).toBe("a");
+  });
+
+  it("says nothing for a paragraph that was added rather than rewritten", () => {
+    const before = "# Title\n\nOne.\n";
+    const after = "# Title\n\nOne.\n\nTwo, which is new.\n";
+
+    const input = revisions([
+      ["a", "2026-01-01T00:00:00Z", before],
+      ["b", "2026-03-01T00:00:00Z", after],
+    ]);
+    const blame = buildBlame(input);
+    const block = blame.blocks.find((candidate) => candidate.text.includes("Two"))!;
+
+    // "You wrote this in March" and "in March you replaced something with
+    // this" are different facts, and inventing the second would be a lie.
+    expect(priorWording(input, after, block)).toBeNull();
+  });
+
+  it("says nothing when the change is older than the history we can see", () => {
+    const text = "# Title\n\nAs it has always been.\n";
+    const input = revisions([["a", "2026-01-01T00:00:00Z", text]]);
+    const blame = buildBlame(input);
+
+    expect(priorWording(input, text, blame.blocks[0]!)).toBeNull();
+  });
+
+  it("skips a revision that could not be read rather than diffing against nothing", () => {
+    const first = "# Title\n\nOriginal wording.\n";
+    const second = "# Title\n\nReplaced wording.\n";
+
+    const input = revisions([
+      ["a", "2026-01-01T00:00:00Z", first],
+      ["b", "2026-02-01T00:00:00Z", null],
+      ["c", "2026-03-01T00:00:00Z", second],
+    ]);
+    const blame = buildBlame(input);
+    const block = blame.blocks.find((candidate) => candidate.text.includes("Replaced"))!;
+
+    expect(priorWording(input, second, block)?.text).toBe("Original wording.");
+  });
+});
+
+describe("replacedWithin", () => {
+  it("takes only the lines this paragraph replaced, not the note's others", () => {
+    const before = ["First para, old.", "", "Second para, old."].join("\n");
+    const after = ["First para, new.", "", "Second para, new."].join("\n");
+
+    expect(replacedWithin(before, after, { start: 1, end: 1 })).toBe("First para, old.");
+    expect(replacedWithin(before, after, { start: 3, end: 3 })).toBe("Second para, old.");
+  });
+
+  it("joins the lines of a paragraph that was several", () => {
+    const before = "One.\nTwo.\nThree.";
+    const after = "Rewritten.";
+
+    expect(replacedWithin(before, after, { start: 1, end: 1 })).toBe("One.\nTwo.\nThree.");
+  });
+
+  it("returns nothing when the two revisions are the same", () => {
+    const text = "Unchanged.";
+    expect(replacedWithin(text, text, { start: 1, end: 1 })).toBeNull();
   });
 });

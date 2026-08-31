@@ -58,6 +58,103 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### Your notebook, on a day you choose
+
+**Show me my notebook as it was on…** in the palette takes the whole notebook
+back to a date: the files that existed that day, and any of them readable as it
+stood. The per-note history answers "how did this page come to be?"; this
+answers "what did I know when I made that decision?", which is a question about
+the shape of the notebook rather than about one file in it.
+
+Read-only, deliberately. Restoring one note is something the history panel does
+well; a button that rolled a whole notebook back to March would be the most
+dangerous control in the app.
+
+Nothing new is stored. Git already holds every version of every file — a tree
+read at an old commit is the same call as a tree read at the newest one.
+
+### What a paragraph used to say
+
+Pointing at a paragraph in the blame view now shows the wording it replaced,
+taken from the revision before the commit that last changed it. A paragraph you
+rewrote in March is one you changed your mind about, and what you changed it
+_from_ is usually the most interesting thing on the page.
+
+Nothing is shown for a paragraph that was added rather than rewritten, or for a
+change older than the history that can be read — those are different facts, and
+inventing a previous wording for them would be a lie.
+
+### A diagram can be a map of your notebook
+
+Write a `[[wikilink]]` in a box's label — `A["[[Deploy runbook]]"]` — and the
+box becomes the way to that note. The label reads as the words you wrote, and
+clicking it in the preview opens the note.
+
+It stays plain text in the file: an ordinary mermaid label, so the diagram
+still renders on github.com and in every other mermaid tool, showing the
+brackets exactly as a `[[wikilink]]` in prose does there. Aliases work
+(`[[deploy/runbook|The runbook]]`), and so do anchors.
+
+In the rich editor a click on a diagram still opens it for editing, which is
+what a click there has always meant — but the labels read correctly there too,
+and in exports and published pages.
+
+### What has gone stale, across the whole notebook
+
+The freshness panel beside a note answers the question for the note you happen
+to have open. **Check which of my notes have gone stale** answers it for all of
+them: notes pointing at a file that is not in the repository, `[[links]]`
+matching no note, and datable claims — version numbers, CVEs,
+&ldquo;currently&rdquo; — in a note nobody has touched in a long time.
+
+The first two are facts and are labelled as such; the third is an inference and
+is reported as one. Nothing is changed: every row opens the note and gets out
+of the way. **It is fine** takes a note off the list until it is edited again.
+
+### Start a note from a paper
+
+**Write about this** in the reader makes a note that is already about the
+document: its title, its author and the date it was published in the
+frontmatter, and its own table of contents as the note's headings — each one
+linked to the page that section starts on. The document then moves aside and
+sits beside the note you are writing.
+
+Nothing is invented. A paper with no contents list of its own gets a single
+"Notes" heading rather than a structure somebody would have to argue with.
+
+### Search knows what you are working on
+
+⌘K now weighs which notes are connected to the one you are in. Searching
+"setup" in the middle of a project finds that project's setup rather than the
+other five. A note you linked to and a note that linked to you count the same,
+and the effect fades with distance — but it never beats a better kind of match,
+so a note actually called what you typed still wins.
+
+### Citations that check themselves
+
+Every other tool stores a page number, and a page number quietly stops being
+true: the author adds a figure to page 4 and every citation after it points one
+page short. Nothing tells you. A ForkLeaf citation records the sentence, so the
+question has an answer — and now there is somewhere to ask it.
+
+- **Check my citations against their documents** in the palette reads every
+  paper you have quoted and reports what it found: quotations that have moved
+  to another page, quotations that matched only loosely, and the ones that are
+  no longer in the document at all
+- A moved quotation can have its page number corrected in place, one press per
+  citation. The words, the context and the path are left exactly as they were —
+  it is the page hint beside them that had gone stale
+- A document that could not be read is reported as unread, never as a document
+  full of broken citations
+
+### ⌘K searches inside your documents
+
+The reader has always extracted every page's text — that is what makes
+find-in-document work through hyphenation and ligatures — and then threw it
+away when the document closed. It is now kept beside the notebook, so ⌘K
+searches the papers as well as the notes and jumps straight to the page. A
+document is indexed the first time it is opened, and by the citation check.
+
 ### A picture too big to send can be resized instead of deleted
 
 When an image cannot be pushed — a screenshot is larger than GitHub will take

@@ -18,6 +18,7 @@ import {
   dirname,
   documentStats,
   joinPath,
+  neighbourhood,
   parseRepoTarget,
   referencedPaths,
   type RepoTarget,
@@ -29,6 +30,7 @@ import { useNotebook } from "@/hooks/useNotebook";
 import { usePublishedPages } from "@/hooks/usePublishedPages";
 import { useLinks } from "@/hooks/useLinks";
 import { useLocalFiles } from "@/hooks/useLocalFiles";
+import type { PdfTextEntry, TreeNode } from "@forkleaf/types";
 import type { LocalFile, LocalPdf } from "@/lib/local-files";
 import { usePdfReader } from "@/hooks/usePdfReader";
 import { PdfReader } from "@/components/PdfReader";
@@ -46,6 +48,12 @@ import { commitToBranch } from "@/lib/gateway";
 import { readDroppedPdf } from "@/lib/local-files";
 import { insertionFor, quoteMarkdown } from "@/lib/pdf-quote";
 import { mentionsOfPdf, type PdfMention } from "@/lib/pdf-mentions";
+import { pagesOf, readDocumentText } from "@/lib/pdf-index";
+import { withCorrectedPage, type CitationCheck } from "@/lib/citation-audit";
+import { paperNote } from "@/lib/note-from-paper";
+import { FreshnessDialog } from "@/components/FreshnessDialog";
+import { TimeMachineDialog } from "@/components/TimeMachineDialog";
+import { CitationsDialog } from "@/components/CitationsDialog";
 import { isPdfPath } from "@/lib/media";
 import { useTheme } from "@/hooks/useTheme";
 import { ColumnResizer } from "@/components/ColumnResizer";
@@ -77,7 +85,7 @@ import { postHogReset } from "@/lib/posthog";
 import { assetPathFor, relativeSrc, resolveImageSrc } from "@/lib/assets";
 import { revealAsset } from "@/lib/reveal-asset";
 import { imageTypeFor } from "@/lib/media";
-import { collectFolders } from "@/lib/tree";
+import { collectFilePaths, collectFolders } from "@/lib/tree";
 import { hasRelativeImages, repairNoteLinks } from "@/lib/repair-links";
 import { flattenTree, isMarkdown } from "@/lib/library";
 import { track } from "@/lib/firebase/analytics";
@@ -257,6 +265,9 @@ export function EditorWorkspace() {
     | "capture"
     | "propose"
     | "publish"
+    | "citations"
+    | "freshness"
+    | "time-machine"
     | null
   >(null);
   /**
@@ -603,6 +614,193 @@ export function EditorWorkspace() {
   }, [reader.status, readerPath, loadAllNotes]);
 
   /**
+   * The documents whose text this notebook has kept, for ⌘K to search.
+   *
+   * Loaded when the palette opens rather than held all the time: this is every
+   * word of every paper that has been read, which belongs in memory for as
+   * long as somebody is searching it and no longer.
+   */
+  const [documentTexts, setDocumentTexts] = useState<PdfTextEntry[]>([]);
+
+  const loadDocumentText = notebook.allDocumentText;
+
+  useEffect(() => {
+    if (!paletteOpen) return;
+
+    let live = true;
+    void loadDocumentText()
+      .then((entries) => {
+        if (live) setDocumentTexts(entries);
+      })
+      .catch(() => {
+        // Nothing kept is the same as nothing to search: ⌘K still finds notes.
+        if (live) setDocumentTexts([]);
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [paletteOpen, loadDocumentText]);
+
+  /**
+   * Keeps the text of a document the reader has just finished reading.
+   *
+   * The extraction has already happened — it is what makes find-in-document
+   * work — so this only writes down what was going to be thrown away. Once per
+   * document per open, tracked by a ref, since `pages` changes identity on
+   * every render of a document that is still being read.
+   */
+  const savedText = useRef<string | null>(null);
+  const saveDocumentText = notebook.saveDocumentText;
+
+  useEffect(() => {
+    if (reader.status !== "ready" || reader.indexing || !readerPath) return;
+    if (reader.pages.length === 0) return;
+
+    const key = `${workspaceIdForLinks ?? ""}::${readerPath}`;
+    if (savedText.current === key) return;
+    savedText.current = key;
+
+    void saveDocumentText(
+      readerPath,
+      reader.pages.map((page) => ({ page: page.page, text: page.text })),
+    ).catch(() => {
+      // Not worth telling anybody about: the document is open and readable,
+      // and the only thing lost is that ⌘K will not reach inside it yet.
+      savedText.current = null;
+    });
+  }, [
+    reader.status,
+    reader.indexing,
+    reader.pages,
+    readerPath,
+    workspaceIdForLinks,
+    saveDocumentText,
+  ]);
+
+  /**
+   * A document's text for the citation check: from the cache, or read now.
+   *
+   * Reading it here also fills the cache, so checking your citations is also
+   * what makes those papers searchable from ⌘K.
+   */
+  const pagesForDocument = useCallback(
+    async (pdfPath: string) => {
+      if (!workspace || workspace.isLocal) {
+        throw new Error("This notebook has no repository, so its documents cannot be read.");
+      }
+
+      const cached = await notebook.documentText(pdfPath);
+      if (cached && cached.pages.length > 0) return pagesOf(cached);
+
+      const pages = await readDocumentText(workspace, pdfPath);
+      await notebook.saveDocumentText(pdfPath, pages);
+      return pagesOf({ id: "", workspaceId: workspace.id, path: pdfPath, pages, indexedAt: "" });
+    },
+    [workspace, notebook],
+  );
+
+  /** Writes a corrected page number into the note holding the citation. */
+  const correctCitationPage = useCallback(
+    async (check: CitationCheck) => {
+      await notebook.rewriteNote(check.mention.notePath, (content) =>
+        withCorrectedPage(content, check),
+      );
+    },
+    [notebook],
+  );
+
+  /**
+   * Every path that exists, so a note pointing at nothing can be spotted.
+   *
+   * The repository's whole file list — pictures and PDFs included, since those
+   * are what notes point at — plus everything written here that has not been
+   * pushed yet, so a picture pasted five minutes ago is not reported as
+   * missing. A notebook with no repository has only the second half, which is
+   * all of it.
+   */
+  const knownFiles = useCallback(async (): Promise<string[]> => {
+    const local = [
+      ...collectFilePaths(notebook.tree),
+      ...notebook.openNotes.map((note) => note.path),
+      ...Object.keys(notebook.assetUrls),
+    ];
+
+    if (!workspace || workspace.isLocal) return local;
+
+    const params = new URLSearchParams({
+      owner: workspace.repo.owner,
+      repo: workspace.repo.repo,
+      branch: workspace.repo.branch,
+      all: "1",
+    });
+    if (workspace.repo.directory) params.set("dir", workspace.repo.directory);
+
+    const response = await fetch(`/api/gh/tree?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(
+        "The repository's file list could not be read, so nothing was checked. Without it every picture would look deleted.",
+      );
+    }
+
+    const { tree } = (await response.json()) as { tree: TreeNode[] };
+    return [...local, ...collectFilePaths(tree)];
+  }, [workspace, notebook.tree, notebook.openNotes, notebook.assetUrls]);
+
+  /**
+   * Starts a note about the paper on screen, with its headings already in it.
+   *
+   * Two writes rather than one, deliberately: the note's links are written
+   * relative to *its own* path, and that path is only decided — slugified from
+   * the title, made unique against everything else — once the note exists. So
+   * it is created, and then filled in now that there is somewhere to write
+   * from. The two land in one commit, since the queue coalesces them.
+   */
+  const startNoteFromPaper = useCallback(async () => {
+    if (!reader.info) return;
+
+    const draft = paperNote({
+      metadata: reader.info.metadata,
+      filename: reader.source?.name ?? "Paper",
+      outline: reader.outline,
+      pageCount: reader.info.pageCount,
+      pdfPath: readerPath,
+      // A placeholder: the real path replaces it below, and the links are
+      // rewritten against it.
+      notePath: "",
+    });
+
+    // Beside the note you were last in, not beside the PDF: `papers/` is where
+    // the files live, and a note about a paper is writing, not a file.
+    const created = await notebook.createNote(
+      draft.title,
+      currentFolder,
+      draft.content,
+      draft.frontmatter,
+    );
+    if (!created) return;
+
+    const filled = paperNote({
+      metadata: reader.info.metadata,
+      filename: reader.source?.name ?? "Paper",
+      outline: reader.outline,
+      pageCount: reader.info.pageCount,
+      pdfPath: readerPath,
+      notePath: created.path,
+    });
+    await notebook.rewriteNote(created.path, () => filled.content);
+
+    // The note it just made is what the reader wants to look at, so the
+    // document steps aside from the middle column and reads beside it.
+    // Moved rather than reopened: the document is already parsed and rendered,
+    // and reopening it would fetch and lay out the whole file again to end up
+    // exactly where it is.
+    if (readerLayout === "document") setReaderLayout("beside");
+
+    setNotice(`Started ${created.path} from this paper`);
+  }, [reader, readerPath, readerLayout, notebook, currentFolder]);
+
+  /**
    * What this notebook has already said about the document being read.
    *
    * Null rather than empty for a document with no repository path: a note
@@ -665,6 +863,18 @@ export function EditorWorkspace() {
     hrefFor: hrefForPath,
     repo: workspace && !workspace.isLocal ? workspace.repo : null,
   });
+
+  /**
+   * The notes around the one being written, for ⌘K to weigh.
+   *
+   * The link graph is built for backlinks and answers this for free: a note
+   * you linked to and a note that linked to you are equally near, because in
+   * both cases somebody decided they belonged together.
+   */
+  const nearbyNotes = useMemo(
+    () => (note && links.ready ? neighbourhood(links.graph, note.path) : null),
+    [note, links.ready, links.graph],
+  );
 
   /**
    * Creates the note a link points at but that nobody has written yet.
@@ -1701,6 +1911,42 @@ export function EditorWorkspace() {
       });
     }
 
+    if (workspace && !workspace.isLocal) {
+      list.push({
+        id: "time-machine",
+        label: "Show me my notebook as it was on…",
+        group: "View",
+        hint: "Every note as it stood on a day you choose, read-only",
+        keywords:
+          "time travel machine history date day past was previous version snapshot notebook whole rewind back then",
+        run: () => setDialog("time-machine"),
+      });
+    }
+
+    if (workspace) {
+      list.push({
+        id: "freshness",
+        label: "Check which of my notes have gone stale",
+        group: "Notes",
+        hint: "Links pointing at nothing, and claims nobody has looked at in years",
+        keywords:
+          "stale fresh freshness rot decay old outdated broken link missing file check audit sweep review",
+        run: () => setDialog("freshness"),
+      });
+    }
+
+    if (workspace && !workspace.isLocal) {
+      list.push({
+        id: "citations",
+        label: "Check my citations against their documents",
+        group: "Notes",
+        hint: "Finds quotations that have moved, and ones that are no longer there",
+        keywords:
+          "citation citations quote quotation check verify audit broken stale page pdf paper source reference sweep",
+        run: () => setDialog("citations"),
+      });
+    }
+
     // All three placements, always, with the current one marked — rather than
     // one command whose label is the *other* state. A toggle reads as an
     // instruction ("open PDFs in their own tab") that gives no hint about
@@ -1903,6 +2149,7 @@ export function EditorWorkspace() {
       onSave={canSavePdf ? () => void savePdfToNotebook() : null}
       saveHint={pdfSaveHint}
       saving={savingPdf}
+      onStartNote={reader.status === "ready" ? () => void startNoteFromPaper() : null}
       mentions={pdfMentions}
       onOpenMention={(path) => {
         notebook.openNote(path);
@@ -2601,7 +2848,56 @@ export function EditorWorkspace() {
           openNotes={notebook.openNotes}
           workspace={workspace}
           onOpenNote={notebook.openNote}
+          // A notebook with no repository has no documents to reach: nothing
+          // could have been read from one, and a result that opened nothing
+          // would be worse than no result.
+          {...(nearbyNotes ? { nearby: nearbyNotes } : {})}
+          documents={workspace && !workspace.isLocal ? documentTexts : []}
+          onOpenDocument={(path, page) => openRepoPdf(path, `page=${page}`)}
           commands={commands}
+        />
+      )}
+
+      {openDialog === "time-machine" && workspace && !workspace.isLocal && (
+        <TimeMachineDialog onClose={() => setDialog(null)} repo={workspace.repo} />
+      )}
+
+      {openDialog === "freshness" && workspace && (
+        <FreshnessDialog
+          onClose={() => setDialog(null)}
+          loadNotes={async () =>
+            (await notebook.allNotes()).map((entry) => ({
+              path: entry.path,
+              content: entry.content,
+              updatedAt: entry.updatedAt,
+              frontmatterTitle: entry.frontmatter.title,
+            }))
+          }
+          loadFiles={knownFiles}
+          onOpenNote={(path) => {
+            setDialog(null);
+            notebook.openNote(path);
+          }}
+          workspaceId={workspace.id}
+        />
+      )}
+
+      {openDialog === "citations" && workspace && !workspace.isLocal && (
+        <CitationsDialog
+          onClose={() => setDialog(null)}
+          loadNotes={async () =>
+            (await notebook.allNotes()).map(({ path, content }) => ({ path, content }))
+          }
+          pagesFor={pagesForDocument}
+          onOpenNote={(path) => {
+            setDialog(null);
+            notebook.openNote(path);
+          }}
+          onOpenDocument={(pdfPath, page) => {
+            setDialog(null);
+            openRepoPdf(pdfPath, `page=${page}`);
+          }}
+          onFix={correctCitationPage}
         />
       )}
 

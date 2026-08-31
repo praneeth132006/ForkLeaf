@@ -263,22 +263,41 @@ export function buildIndex(
  * it. The score itself only orders body matches among themselves, capped so a
  * long note repeating a word cannot climb past a title match.
  */
-export function scoreEntry(entry: IndexEntry, needle: string, textScore?: number): number {
+export function scoreEntry(
+  entry: IndexEntry,
+  needle: string,
+  textScore?: number,
+  /**
+   * How many links away this note is from the one being written, if any.
+   *
+   * Searching "setup" while in the middle of a project should find *that*
+   * project's setup, not the other five — and the notebook already knows which
+   * notes belong together, because somebody linked them. The bonus is smaller
+   * than the gap between any two bands below, so a connected note can win a
+   * tie and can rise within its band, but a note whose title matches never
+   * loses to one whose only claim is being nearby.
+   */
+  nearness?: number,
+): number {
   if (!needle) return 1;
 
   const title = entry.title.toLowerCase();
   const path = entry.path.toLowerCase();
+  const near = nearness === undefined ? 0 : Math.max(0, NEAR_BONUS - (nearness - 1) * 4);
 
-  if (title === needle) return 100;
-  if (title.startsWith(needle)) return 80;
-  if (title.includes(needle)) return 60;
-  if (entry.tags.some((tag) => tag.toLowerCase().includes(needle))) return 50;
-  if (textScore !== undefined) return 45 + Math.min(textScore, 9) / 10;
-  if (path.includes(needle)) return 40;
-  if (entry.excerpt.toLowerCase().includes(needle)) return 20;
+  if (title === needle) return 100 + near;
+  if (title.startsWith(needle)) return 80 + near;
+  if (title.includes(needle)) return 60 + near;
+  if (entry.tags.some((tag) => tag.toLowerCase().includes(needle))) return 50 + near;
+  if (textScore !== undefined) return 45 + Math.min(textScore, 9) / 10 + near;
+  if (path.includes(needle)) return 40 + near;
+  if (entry.excerpt.toLowerCase().includes(needle)) return 20 + near;
 
   return 0;
 }
+
+/** What a directly linked note is worth. Two hops away is worth less. */
+const NEAR_BONUS = 8;
 
 export interface QueryOptions {
   query?: string;
@@ -294,11 +313,19 @@ export interface QueryOptions {
    * indexes what the dashboard knows about a note, not what is in it.
    */
   textScores?: Map<string, number>;
+  /**
+   * Notes connected to the one being written, by path, with their distance.
+   *
+   * From the link graph, which is built for backlinks and answers this for
+   * free. Absent everywhere there is no "current note" to be near — the
+   * dashboard is not standing anywhere in particular.
+   */
+  nearby?: ReadonlyMap<string, number>;
 }
 
 export function queryIndex(entries: IndexEntry[], options: QueryOptions = {}): IndexEntry[] {
   const needle = (options.query ?? "").trim().toLowerCase();
-  const { folder, tag, sort = "recent", textScores } = options;
+  const { folder, tag, sort = "recent", textScores, nearby } = options;
 
   const scored = entries
     .filter((entry) => {
@@ -308,7 +335,10 @@ export function queryIndex(entries: IndexEntry[], options: QueryOptions = {}): I
       if (tag && !entry.tags.includes(tag)) return false;
       return true;
     })
-    .map((entry) => ({ entry, score: scoreEntry(entry, needle, textScores?.get(entry.id)) }))
+    .map((entry) => ({
+      entry,
+      score: scoreEntry(entry, needle, textScores?.get(entry.id), nearby?.get(entry.path)),
+    }))
     .filter((candidate) => candidate.score > 0);
 
   // While searching, relevance leads and the chosen sort breaks ties; with no

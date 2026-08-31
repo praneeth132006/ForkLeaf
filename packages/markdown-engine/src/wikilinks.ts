@@ -362,3 +362,47 @@ function lineAt(content: string, offset: number): string {
   const end = content.indexOf("\n", offset);
   return content.slice(start, end === -1 ? content.length : end).trim();
 }
+
+/**
+ * The notes around one note, and how far away each of them is.
+ *
+ * A link graph is built for backlinks — "what points at this?" — and answers a
+ * second question for free that nothing was asking it: which notes are *about
+ * the same thing* as the one somebody is looking at. Links run both ways here,
+ * because a note you linked to and a note that linked to you are equally near
+ * in the only sense that matters: you decided they belonged together.
+ *
+ * Breadth-first, so the first distance found for a note is its shortest, and
+ * bounded by `hops` because the third ring out of a well-linked notebook is
+ * most of the notebook — at which point "nearby" has stopped meaning anything.
+ *
+ * The starting note is not in the result. It is not near itself; it is itself,
+ * and every caller has it already.
+ */
+export function neighbourhood(graph: LinkGraph, from: string, hops = 2): Map<string, number> {
+  const distances = new Map<string, number>();
+  let frontier = [from];
+
+  for (let distance = 1; distance <= hops && frontier.length > 0; distance += 1) {
+    const next: string[] = [];
+
+    for (const path of frontier) {
+      const linked = [
+        ...(graph.outgoing.get(path) ?? []).map((ref) => ref.to),
+        ...(graph.backlinks.get(path) ?? []).map((ref) => ref.from),
+      ];
+
+      for (const neighbour of linked) {
+        // An unresolved link points at nothing, and a cycle back to the start
+        // is not a discovery about the neighbourhood.
+        if (!neighbour || neighbour === from || distances.has(neighbour)) continue;
+        distances.set(neighbour, distance);
+        next.push(neighbour);
+      }
+    }
+
+    frontier = next;
+  }
+
+  return distances;
+}

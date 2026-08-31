@@ -385,6 +385,33 @@ export interface LocalAsset {
   pushed: boolean;
 }
 
+// ─── Documents ──────────────────────────────────────────────────────────────
+
+/**
+ * The text of a PDF, kept after it has been read once.
+ *
+ * Extracting the text of a three-hundred-page paper takes seconds, and it was
+ * being done on every open and thrown away on every close — so the words were
+ * searchable inside the reader, for as long as the reader was looking at them,
+ * and nowhere else. Keeping them is what lets the notebook's own search reach
+ * inside documents, and what lets a citation be checked without opening the
+ * paper it points at.
+ *
+ * The positioned runs are deliberately not kept. They exist to draw a
+ * highlight on a page and are far larger than the text; anything that needs
+ * them has the document open in front of it.
+ */
+export interface PdfTextEntry {
+  /** `${workspaceId}::${path}`, like every other stored thing here. */
+  id: string;
+  workspaceId: string;
+  /** Repository-relative path of the document the text came out of. */
+  path: string;
+  pages: { page: number; text: string }[];
+  /** When it was read, so a stale copy can be recognised as one. */
+  indexedAt: string;
+}
+
 // ─── Export ─────────────────────────────────────────────────────────────────
 
 export type ExportFormat = "md" | "html" | "pdf" | "docx" | "txt" | "json";
