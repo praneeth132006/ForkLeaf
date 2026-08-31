@@ -52,6 +52,14 @@ export interface MarkdownEditorProps {
    * so this stays silent in wysiwyg mode rather than inventing a number.
    */
   onCursorChange?: (position: CursorPosition | null) => void;
+  /**
+   * A 1-based line to bring into view, in the source and split views.
+   *
+   * For following something outside the editor. Rich text has no lines to
+   * scroll to — the same note is a tree of nodes there — so it is ignored, and
+   * the feature that uses this says so rather than pretending otherwise.
+   */
+  revealLine?: number | null;
   /** Where images pasted, dropped or picked in this note are stored. */
   images?: ImageBridge;
   /** Shown under "Add an image" — usually where the file will be committed. */
@@ -100,6 +108,7 @@ export function MarkdownEditor({
   hideModeSwitcher = false,
   hideToolbar = false,
   onCursorChange,
+  revealLine = null,
   images,
   imageDestination,
   links,
@@ -427,6 +436,7 @@ export function MarkdownEditor({
             readOnly={readOnly}
             handleRef={sourceHandle}
             onCursorChange={handleCursor}
+            revealLine={revealLine}
             slashActions={actionContext}
             {...(canUpload && !readOnly ? { onImageFiles: handleSourceImages } : {})}
             {...(placeholder ? { placeholder } : {})}
@@ -448,6 +458,7 @@ export function MarkdownEditor({
               readOnly={readOnly}
               handleRef={sourceHandle}
               onCursorChange={handleCursor}
+              revealLine={revealLine}
               slashActions={actionContext}
               {...(canUpload && !readOnly ? { onImageFiles: handleSourceImages } : {})}
               {...(placeholder ? { placeholder } : {})}

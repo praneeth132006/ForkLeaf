@@ -58,6 +58,19 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### The paper and the note stay on the same page
+
+Read a document beside a note and the two follow each other: move the cursor
+past a citation and the document turns to that page; turn to a page and the
+note scrolls to what you wrote about it. This is what people open two windows
+to fake.
+
+Nothing is guessed. Every citation already records the page it came from, so
+the mapping is the notebook's own. Above the first citation nothing follows —
+a cursor in a heading is not a statement about any page. ⌘K → **Stop the
+document following the note** switches it off; it works in Split and Source
+view, where there is a cursor to follow.
+
 ### The citation format, written down
 
 A ForkLeaf citation was always an ordinary Markdown link — a relative path plus

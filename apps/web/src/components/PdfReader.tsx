@@ -73,6 +73,16 @@ export interface PdfReaderProps {
    */
   onOpenInTab?: (() => void) | null;
   /**
+   * A page to turn to, when the note beside the document moves to it.
+   *
+   * Watched rather than called, so the caller can say "page 12" as often as it
+   * likes without the reader jumping every time a render happens: the page is
+   * only turned when the number actually changes.
+   */
+  showPage?: number | null;
+  /** Reports the page now on screen, so the note can follow it back. */
+  onPageChange?: ((page: number) => void) | null;
+  /**
    * Where this document lives, so a link to a passage can name it.
    *
    * Null for one opened from a desktop: there is no path for a link to point
@@ -170,6 +180,8 @@ export function PdfReader({
   onSave,
   saveHint,
   saving = false,
+  showPage = null,
+  onPageChange = null,
   path = null,
   onStartNote = null,
   mentions = null,
@@ -326,6 +338,25 @@ export function PdfReader({
     container.scrollTo({ top: target.offsetTop - 16, behavior: "smooth" });
     setCurrent(page);
   }, []);
+
+  /**
+   * Follows the note beside the document.
+   *
+   * Only on a change of the *asked-for* page, never on a change of the page
+   * showing: scrolling the document sets `current`, which would otherwise be
+   * read back as an instruction and scroll it again.
+   */
+  const asked = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (showPage == null || asked.current === showPage) return;
+    asked.current = showPage;
+    goToPage(showPage);
+  }, [showPage, goToPage]);
+
+  useEffect(() => {
+    onPageChange?.(current);
+  }, [current, onPageChange]);
 
   // ─── Search ───────────────────────────────────────────────────────────────
 
