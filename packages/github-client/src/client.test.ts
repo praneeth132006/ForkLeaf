@@ -1037,3 +1037,33 @@ describe("listOpenPullRequests", () => {
     expect(pulls).toHaveLength(3);
   });
 });
+
+/**
+ * The way out of an experiment somebody has decided against. A "throw it
+ * away" that left the branch behind would be a strange kind of throwing away.
+ */
+describe("deleteBranch", () => {
+  it("deletes the ref", async () => {
+    const { calls, fetchImpl } = fakeGitHub({
+      "DELETE /repos/octo/notes/git/refs/heads/try%2Fmain%2Fnotes": {},
+    });
+
+    await new GitHubClient({ token: "t", fetch: fetchImpl }).deleteBranch(
+      "octo",
+      "notes",
+      "try/main/notes",
+    );
+
+    expect(calls[0]?.method).toBe("DELETE");
+  });
+
+  it("treats a branch that has already gone as done", async () => {
+    // Two devices tidying up the same abandoned experiment is an ordinary
+    // race, and the wanted state is the same either way.
+    const { fetchImpl } = fakeGitHub();
+
+    await expect(
+      new GitHubClient({ token: "t", fetch: fetchImpl }).deleteBranch("octo", "notes", "try/x/y"),
+    ).resolves.toBeUndefined();
+  });
+});

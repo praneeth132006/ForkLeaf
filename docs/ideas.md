@@ -14,10 +14,9 @@ Ticked entries link to nothing; the git history is the record.
 
 ## The whole app
 
-- [ ] **Try a rewrite without losing the original** — Medium. A "Try this"
-      button gives you a second copy of a note to experiment on, compared side
-      by side; keep it or throw it away. It is a git branch, which ForkLeaf
-      already has for free
+- [x] **Try a rewrite without losing the original** — Medium. An experiment
+      branch with a bar that says so, and two buttons: keep it, or throw it
+      away. Comparing the two side by side is still to do
 - [x] **Read your notebook as it was on any date** — Small. A date picker that
       takes the _whole notebook_ back: the files that existed that day, and
       each one readable as it stood. Read-only

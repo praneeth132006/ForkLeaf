@@ -577,6 +577,15 @@ export async function createBranch(options: {
   return branch;
 }
 
+/** Throws away an experiment branch, and whatever was tried on it. */
+export async function deleteBranch(options: {
+  owner: string;
+  repo: string;
+  name: string;
+}): Promise<void> {
+  await call("/api/gh/branches", { method: "DELETE", body: JSON.stringify(options) });
+}
+
 /** Forks a repository so the user can write to a project they cannot push to. */
 export async function forkRepo(
   owner: string,

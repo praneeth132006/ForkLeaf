@@ -528,6 +528,29 @@ export class GitHubClient {
     return { name, sha: from.sha, isDefault: false, protected: false };
   }
 
+  /**
+   * Deletes a branch.
+   *
+   * For an experiment somebody has decided against. Abandoned branches are
+   * clutter in everybody else's repository too, and a "throw it away" that
+   * left one behind would be a strange kind of throwing away.
+   *
+   * A branch that is already gone is not an error: two devices tidying up the
+   * same abandoned experiment is an ordinary race, and the wanted state is the
+   * same either way.
+   */
+  async deleteBranch(owner: string, repo: string, name: string): Promise<void> {
+    try {
+      await this.transport.request(
+        `/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(name)}`,
+        { method: "DELETE" },
+      );
+    } catch (error) {
+      if (error instanceof GitHubError && error.code === "not-found") return;
+      throw error;
+    }
+  }
+
   async getBranch(owner: string, repo: string, name: string): Promise<BranchSummary | null> {
     try {
       const { data } = await this.transport.request<{

@@ -44,7 +44,13 @@ import {
   whyCannotSave,
   type PdfSource,
 } from "@/lib/pdf-source";
-import { commitToBranch } from "@/lib/gateway";
+import {
+  commitToBranch,
+  createBranch,
+  deleteBranch,
+  openPullRequest,
+  acceptSuggestion,
+} from "@/lib/gateway";
 import { readDroppedPdf } from "@/lib/local-files";
 import { insertionFor, quoteMarkdown } from "@/lib/pdf-quote";
 import { mentionsOfPdf, type PdfMention } from "@/lib/pdf-mentions";
@@ -52,6 +58,7 @@ import { pagesOf, readDocumentText } from "@/lib/pdf-index";
 import { withCorrectedPage, type CitationCheck } from "@/lib/citation-audit";
 import { paperNote } from "@/lib/note-from-paper";
 import { anchorsFor, lineForPage, pageForLine } from "@/lib/pdf-follow";
+import { describeTry, parseTryBranch, tryBranchFor } from "@/lib/try-branch";
 import { FreshnessDialog } from "@/components/FreshnessDialog";
 import { TimeMachineDialog } from "@/components/TimeMachineDialog";
 import { SuggestionsDialog } from "@/components/SuggestionsDialog";
@@ -784,6 +791,123 @@ export function EditorWorkspace() {
     const { tree } = (await response.json()) as { tree: TreeNode[] };
     return [...local, ...collectFilePaths(tree)];
   }, [workspace, notebook.tree, notebook.openNotes, notebook.assetUrls]);
+
+  // ── Trying a rewrite ────────────────────────────────────────────────────
+  //
+  // Work on a copy, keep it or throw it away, and the original is never in any
+  // danger. That is a branch, which this app has for free; all that was
+  // missing was a name that says what it is and two buttons that do not say
+  // "git".
+
+  /** The experiment this workspace is on, if it is on one. */
+  const experiment = useMemo(
+    () => (workspace && !workspace.isLocal ? parseTryBranch(workspace.repo.branch) : null),
+    [workspace],
+  );
+  const [experimentBusy, setExperimentBusy] = useState<"keeping" | "discarding" | null>(null);
+
+  const startExperiment = useCallback(async () => {
+    if (!workspace || workspace.isLocal || !note) return;
+
+    const name = tryBranchFor(workspace.repo.branch, title);
+    setExperimentBusy("keeping");
+
+    try {
+      await createBranch({
+        owner: workspace.repo.owner,
+        repo: workspace.repo.repo,
+        name,
+        from: workspace.repo.branch,
+      });
+      await notebook.switchBranch(name);
+      setNotice(
+        `Trying a rewrite of ${title}. Nothing you do here touches ${workspace.repo.branch}.`,
+      );
+    } catch (problem: unknown) {
+      notebook.reportError(
+        problem instanceof Error ? problem.message : "That experiment could not be started.",
+      );
+    } finally {
+      setExperimentBusy(null);
+    }
+  }, [workspace, note, title, notebook]);
+
+  /**
+   * Keeps the rewrite: onto the branch it came from, as one change.
+   *
+   * A pull request opened and immediately merged, rather than a direct commit,
+   * because that is what leaves a record of the experiment having happened —
+   * and because merging is the one operation that knows what to do when the
+   * base branch has moved on underneath.
+   */
+  const keepExperiment = useCallback(async () => {
+    if (!workspace || workspace.isLocal || !experiment) return;
+
+    setExperimentBusy("keeping");
+    const branch = workspace.repo.branch;
+
+    try {
+      const { pull } = await openPullRequest({
+        owner: workspace.repo.owner,
+        repo: workspace.repo.repo,
+        base: experiment.base,
+        head: branch,
+        title: `Rewrite of ${describeTry(experiment.slug)}`,
+      });
+
+      await acceptSuggestion({
+        owner: workspace.repo.owner,
+        repo: workspace.repo.repo,
+        number: pull.number,
+        title: `Rewrite of ${describeTry(experiment.slug)}`,
+      });
+
+      await notebook.switchBranch(experiment.base);
+      await deleteBranch({
+        owner: workspace.repo.owner,
+        repo: workspace.repo.repo,
+        name: branch,
+      }).catch(() => {
+        // The work is already on the base branch. A leftover branch is untidy
+        // and is not worth reporting as a failure of the thing that worked.
+      });
+
+      setNotice(`Kept. The rewrite is on ${experiment.base}.`);
+    } catch (problem: unknown) {
+      notebook.reportError(
+        problem instanceof Error ? problem.message : "That rewrite could not be kept.",
+      );
+    } finally {
+      setExperimentBusy(null);
+    }
+  }, [workspace, experiment, notebook]);
+
+  /** Throws the rewrite away, and the branch with it. */
+  const discardExperiment = useCallback(async () => {
+    if (!workspace || workspace.isLocal || !experiment) return;
+
+    setExperimentBusy("discarding");
+    const branch = workspace.repo.branch;
+
+    try {
+      // Back to the original *first*: deleting the branch a workspace is
+      // sitting on would leave the editor pointed at something that no longer
+      // exists.
+      await notebook.switchBranch(experiment.base);
+      await deleteBranch({
+        owner: workspace.repo.owner,
+        repo: workspace.repo.repo,
+        name: branch,
+      });
+      setNotice(`Thrown away. ${experiment.base} is exactly as you left it.`);
+    } catch (problem: unknown) {
+      notebook.reportError(
+        problem instanceof Error ? problem.message : "That experiment could not be thrown away.",
+      );
+    } finally {
+      setExperimentBusy(null);
+    }
+  }, [workspace, experiment, notebook]);
 
   /**
    * Starts a note about the paper on screen, with its headings already in it.
@@ -1990,6 +2114,18 @@ export function EditorWorkspace() {
       });
     }
 
+    if (note && workspace && !workspace.isLocal && !experiment) {
+      list.push({
+        id: "try-rewrite",
+        label: "Try a rewrite of this note",
+        group: "Notes",
+        hint: "Work on a copy. Keep it or throw it away; the original is never at risk",
+        keywords:
+          "try rewrite experiment branch draft copy alternative version safe discard revert what if",
+        run: () => void startExperiment(),
+      });
+    }
+
     if (workspace && !workspace.isLocal) {
       list.push({
         id: "suggestions",
@@ -2118,6 +2254,8 @@ export function EditorWorkspace() {
     reader,
     pdfPlacement,
     following,
+    experiment,
+    startExperiment,
     canSavePdf,
     savePdfToNotebook,
   ]);
@@ -2619,6 +2757,50 @@ export function EditorWorkspace() {
                 >
                   Sign in again
                 </button>
+              </div>
+            )}
+
+            {/* An experiment says so, permanently, wherever you are in it.
+                A branch you have forgotten you are on is how work ends up
+                somewhere nobody looks — and the two ways out belong beside
+                the sentence that explains why they are there. */}
+            {experiment && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--fl-border)] bg-[var(--fl-accent-soft)] px-3 py-2">
+                <p className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-[var(--fl-text)]">
+                  <strong>Trying a rewrite</strong> of {describeTry(experiment.slug)}. Nothing here
+                  touches <span className="font-mono text-[11.5px]">{experiment.base}</span> until
+                  you keep it.
+                </p>
+
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={experimentBusy !== null}
+                    onClick={() => void keepExperiment()}
+                    className="rounded-lg bg-[var(--fl-accent)] px-2.5 py-1 text-[12px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)] disabled:opacity-60"
+                  >
+                    {experimentBusy === "keeping" ? "Keeping…" : "Keep it"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={experimentBusy !== null}
+                    onClick={() =>
+                      setPrompt({
+                        title: "Throw this rewrite away?",
+                        label: "",
+                        initialValue: "",
+                        confirmLabel: "Throw it away",
+                        body: `Everything written on this branch goes, and ${experiment.base} stays exactly as you left it. This cannot be undone.`,
+                        onConfirm: async () => {
+                          await discardExperiment();
+                        },
+                      })
+                    }
+                    className="rounded-lg border border-[var(--fl-border)] px-2.5 py-1 text-[12px] font-medium text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-surface)] disabled:opacity-60"
+                  >
+                    {experimentBusy === "discarding" ? "Throwing away…" : "Throw it away"}
+                  </button>
+                </span>
               </div>
             )}
 

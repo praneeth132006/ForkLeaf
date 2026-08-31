@@ -143,6 +143,23 @@ export function HelpDialog({
             then="The widths are remembered on this device, and bounded so nothing can be dragged into uselessness."
           />
           <Feature
+            title="Try a rewrite without losing what you had"
+            what="Rewriting a note you care about is a small act of courage. It should not be."
+            doThis={
+              <>
+                <Mono>⌘K</Mono> → <strong>Try a rewrite of this note</strong>
+              </>
+            }
+            then={
+              <>
+                You get a copy of the whole notebook to experiment in, and a bar at the top saying
+                so. <strong>Keep it</strong> puts the rewrite back as one change;{" "}
+                <strong>Throw it away</strong> leaves the original exactly as it was. It is a git
+                branch, which is why nothing can be lost either way.
+              </>
+            }
+          />
+          <Feature
             title="Search that knows what you are working on"
             what="Typing “setup” in the middle of a project should find that project's setup."
             doThis={

@@ -58,6 +58,23 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### Try a rewrite without losing what you had
+
+Rewriting a note you care about is a small act of courage: the old version goes
+into the history, where you have to know it exists and how to get it back. In
+practice people either do not try, or paste the original into a second note
+called `runbook-old.md`.
+
+⌘K → **Try a rewrite of this note** gives you a copy of the notebook to
+experiment in, and a bar at the top that says so and never goes away. **Keep
+it** puts the rewrite back onto the branch it came from as one change; **Throw
+it away** deletes the experiment and leaves the original exactly as it was.
+
+It is a git branch — named `try/<branch>/<what>`, so the name itself says what
+it is and where it has to land, and a second device picks the experiment up
+knowing both. Nothing is written down anywhere else, because anything written
+down anywhere else is the thing that gets lost.
+
 ### Readers can suggest a change to your notes
 
 Programmers have had &ldquo;here is a fix for what you wrote&rdquo; for twenty
