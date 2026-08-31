@@ -873,8 +873,16 @@ export class GitHubClient {
    *   - `"all"` is every blob, which the link repair needs: it can only find
    *     the image a broken note meant if it can see the images.
    */
-  async listTree(repo: RepoRef, options: { include?: "notes" | "all" } = {}): Promise<TreeNode[]> {
-    const head = await this.getBranchHead(repo);
+  async listTree(
+    repo: RepoRef,
+    options: { include?: "notes" | "all"; ref?: string } = {},
+  ): Promise<TreeNode[]> {
+    // `ref` is the notebook as it stood at some commit rather than as it
+    // stands now. Everything below is identical either way: a tree is a tree,
+    // and the ETag cache is keyed by the object name, so an old one is cached
+    // as happily as the current one — and never invalidated, because a commit
+    // that has already happened does not change.
+    const head = options.ref ?? (await this.getBranchHead(repo));
     const path = `/repos/${repo.owner}/${repo.repo}/git/trees/${head}?recursive=1`;
 
     const cached = this.etags.get(path);
@@ -1058,6 +1066,40 @@ export class GitHubClient {
       // autosave from an edit someone made elsewhere.
       byForkLeaf: (entry.commit.message ?? "").startsWith(COMMIT_MARKER),
     }));
+  }
+
+  /**
+   * The last commit on this branch at or before a moment.
+   *
+   * The whole of "what did my notebook look like on the third of March": one
+   * commit, and every tree and file read after it hangs off that object name.
+   * Null when the repository did not exist yet, which is a real answer and not
+   * an error — a notebook has a first day.
+   *
+   * `until` is GitHub's own parameter and is inclusive, so a date with no time
+   * on it means "up to the start of that day". The caller decides whether it
+   * meant the end of it.
+   */
+  async commitAt(repo: RepoRef, until: string): Promise<NoteCommit | null> {
+    const url =
+      `/repos/${repo.owner}/${repo.repo}/commits` +
+      `?sha=${encodeURIComponent(repo.branch)}` +
+      `&until=${encodeURIComponent(until)}` +
+      `&per_page=1`;
+
+    const { data } = await this.transport.request<ApiCommitListEntry[]>(url);
+    const entry = data?.[0];
+    if (!entry) return null;
+
+    return {
+      sha: entry.sha,
+      message: (entry.commit.message ?? "").split("\n")[0] ?? "",
+      authorName: entry.commit.author?.name ?? entry.author?.login ?? "Unknown",
+      authorLogin: entry.author?.login ?? null,
+      avatarUrl: entry.author?.avatar_url ?? null,
+      date: entry.commit.author?.date ?? entry.commit.committer?.date ?? "",
+      byForkLeaf: (entry.commit.message ?? "").startsWith(COMMIT_MARKER),
+    };
   }
 
   /**

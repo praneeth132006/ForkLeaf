@@ -895,3 +895,86 @@ describe("listDirectory", () => {
     expect(await client.listDirectory("octo", "notes", "main", "docs")).toEqual([]);
   });
 });
+
+/**
+ * The notebook as it was on a day, which is the whole of "time travel": one
+ * commit, and every tree and file read after it hangs off that object name.
+ */
+describe("commitAt", () => {
+  const listing = [
+    {
+      sha: "old-sha",
+      commit: {
+        message: "Notes from the third\n\nwith a body nobody needs",
+        author: { name: "Ada", date: "2026-03-03T18:00:00Z" },
+      },
+      author: { login: "ada", avatar_url: null },
+    },
+  ];
+
+  it("asks for the newest commit at or before the moment, on this branch", async () => {
+    const { calls, fetchImpl } = fakeGitHub({
+      "GET /repos/octo/notes/commits?sha=main&until=2026-03-03T23%3A59%3A59Z&per_page=1": listing,
+    });
+
+    const commit = await new GitHubClient({ token: "t", fetch: fetchImpl }).commitAt(
+      repo,
+      "2026-03-03T23:59:59Z",
+    );
+
+    expect(commit?.sha).toBe("old-sha");
+    // The subject only: a commit body is not a thing this list has room for.
+    expect(commit?.message).toBe("Notes from the third");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("answers a date before the repository existed with nothing", async () => {
+    const { fetchImpl } = fakeGitHub({
+      "GET /repos/octo/notes/commits?sha=main&until=1999-01-01T00%3A00%3A00Z&per_page=1": [],
+    });
+
+    const commit = await new GitHubClient({ token: "t", fetch: fetchImpl }).commitAt(
+      repo,
+      "1999-01-01T00:00:00Z",
+    );
+
+    // Not an error: a notebook has a first day.
+    expect(commit).toBeNull();
+  });
+});
+
+describe("listTree at a ref", () => {
+  const tree = {
+    sha: "old-tree",
+    truncated: false,
+    tree: [
+      { path: "a.md", type: "blob", sha: "b1", size: 10 },
+      { path: "assets/x.png", type: "blob", sha: "b2", size: 20 },
+    ],
+  };
+
+  it("reads the tree at the commit it is given, without asking what HEAD is", async () => {
+    const { calls, fetchImpl } = fakeGitHub({
+      "GET /repos/octo/notes/git/trees/old-sha?recursive=1": tree,
+    });
+
+    const nodes = await new GitHubClient({ token: "t", fetch: fetchImpl }).listTree(repo, {
+      ref: "old-sha",
+    });
+
+    expect(nodes.map((node) => node.path)).toEqual(["a.md"]);
+    // A commit that has already happened cannot move, so there is no reason to
+    // look up where the branch points now.
+    expect(calls.some((call) => call.url.includes("git/ref/heads"))).toBe(false);
+  });
+
+  it("still follows the branch when no ref is given", async () => {
+    const { calls, fetchImpl } = fakeGitHub({
+      "GET /repos/octo/notes/git/trees/head-sha?recursive=1": tree,
+    });
+
+    await new GitHubClient({ token: "t", fetch: fetchImpl }).listTree(repo);
+
+    expect(calls.some((call) => call.url.includes("git/ref/heads/main"))).toBe(true);
+  });
+});

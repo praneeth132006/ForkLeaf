@@ -18,12 +18,12 @@ Ticked entries link to nothing; the git history is the record.
       button gives you a second copy of a note to experiment on, compared side
       by side; keep it or throw it away. It is a git branch, which ForkLeaf
       already has for free
-- [ ] **Read your notebook as it was on any date** — Small. A date picker that
-      takes the _whole notebook_ back, not one note at a time. The per-note
-      time-travel panel already exists; this is the same idea one level up
-- [ ] **Ask a sentence where it came from** — Medium. Click a sentence: "you
-      wrote this on 12 January, changed it twice, it used to say the
-      opposite." The blame view exists but reads like a developer tool
+- [x] **Read your notebook as it was on any date** — Small. A date picker that
+      takes the _whole notebook_ back: the files that existed that day, and
+      each one readable as it stood. Read-only
+- [x] **Ask a sentence where it came from** — Medium. Pointing at a paragraph
+      now says what it used to say, taken from the revision before the change
+      that produced it
 - [ ] **Suggest a change to someone else's notes** — Big. A reader of a
       published page fixes a mistake and you get a suggestion to accept or
       decline, without either of you touching GitHub. This is the single most

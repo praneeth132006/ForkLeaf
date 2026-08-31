@@ -52,6 +52,7 @@ import { pagesOf, readDocumentText } from "@/lib/pdf-index";
 import { withCorrectedPage, type CitationCheck } from "@/lib/citation-audit";
 import { paperNote } from "@/lib/note-from-paper";
 import { FreshnessDialog } from "@/components/FreshnessDialog";
+import { TimeMachineDialog } from "@/components/TimeMachineDialog";
 import { CitationsDialog } from "@/components/CitationsDialog";
 import { isPdfPath } from "@/lib/media";
 import { useTheme } from "@/hooks/useTheme";
@@ -266,6 +267,7 @@ export function EditorWorkspace() {
     | "publish"
     | "citations"
     | "freshness"
+    | "time-machine"
     | null
   >(null);
   /**
@@ -1909,6 +1911,18 @@ export function EditorWorkspace() {
       });
     }
 
+    if (workspace && !workspace.isLocal) {
+      list.push({
+        id: "time-machine",
+        label: "Show me my notebook as it was on…",
+        group: "View",
+        hint: "Every note as it stood on a day you choose, read-only",
+        keywords:
+          "time travel machine history date day past was previous version snapshot notebook whole rewind back then",
+        run: () => setDialog("time-machine"),
+      });
+    }
+
     if (workspace) {
       list.push({
         id: "freshness",
@@ -2842,6 +2856,10 @@ export function EditorWorkspace() {
           onOpenDocument={(path, page) => openRepoPdf(path, `page=${page}`)}
           commands={commands}
         />
+      )}
+
+      {openDialog === "time-machine" && workspace && !workspace.isLocal && (
+        <TimeMachineDialog onClose={() => setDialog(null)} repo={workspace.repo} />
       )}
 
       {openDialog === "freshness" && workspace && (

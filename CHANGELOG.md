@@ -58,6 +58,32 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### Your notebook, on a day you choose
+
+**Show me my notebook as it was on…** in the palette takes the whole notebook
+back to a date: the files that existed that day, and any of them readable as it
+stood. The per-note history answers "how did this page come to be?"; this
+answers "what did I know when I made that decision?", which is a question about
+the shape of the notebook rather than about one file in it.
+
+Read-only, deliberately. Restoring one note is something the history panel does
+well; a button that rolled a whole notebook back to March would be the most
+dangerous control in the app.
+
+Nothing new is stored. Git already holds every version of every file — a tree
+read at an old commit is the same call as a tree read at the newest one.
+
+### What a paragraph used to say
+
+Pointing at a paragraph in the blame view now shows the wording it replaced,
+taken from the revision before the commit that last changed it. A paragraph you
+rewrote in March is one you changed your mind about, and what you changed it
+_from_ is usually the most interesting thing on the page.
+
+Nothing is shown for a paragraph that was added rather than rewritten, or for a
+change older than the history that can be read — those are different facts, and
+inventing a previous wording for them would be a lie.
+
 ### A diagram can be a map of your notebook
 
 Write a `[[wikilink]]` in a box's label — `A["[[Deploy runbook]]"]` — and the
