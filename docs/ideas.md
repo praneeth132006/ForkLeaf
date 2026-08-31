@@ -63,9 +63,9 @@ Ticked entries link to nothing; the git history is the record.
       linked to the page it starts on
 - [ ] **Read scanned documents** — Big. Recognise the text once and keep it
       beside the file, so the work is shared with every device
-- [ ] **Publish your reading, not just your notes** — Big. A public page of
-      your commentary with the quoted passages set into it, each linking back
-      to the exact page
+- [x] **Publish your reading, not just your notes** — Big. Publishing a note
+      now rewrites its citations to the document in your repository, so the
+      quotations on the page link back to the pages they came from
 - [x] **Let other apps understand ForkLeaf's links** — Big. The format is
       written down at `/docs/citation-links`, and **Copy link** puts one on the
       clipboard. Inviting the plugin authors is the half that is still to do

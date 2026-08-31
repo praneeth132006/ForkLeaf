@@ -272,6 +272,17 @@ export function HelpDialog({
             then="Moving the cursor past a citation turns the document to that page; turning to a page scrolls the note to what you wrote about it. Your citations are the map, so nothing is guessed."
           />
           <Feature
+            title="Publish your reading, not just your notes"
+            what="A note written from a paper is commentary with the passages set into it — the argument, with the receipts."
+            doThis={
+              <>
+                Publish the note as you would any other, from <strong>Publish as a web page</strong>{" "}
+                in the properties panel.
+              </>
+            }
+            then="Every quotation on the page links back to the document in your repository, at the page it came from. The note itself keeps its ordinary relative links, so it still reads correctly on github.com."
+          />
+          <Feature
             title="Send a passage to something that is not ForkLeaf"
             what="The citation format is a relative path plus a standard fragment, so other tools can follow it."
             doThis={

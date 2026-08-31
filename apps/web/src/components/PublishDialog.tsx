@@ -6,6 +6,7 @@ import { deriveTitle, slugifyFilename, stripExtension } from "@forkleaf/markdown
 import { toHtml } from "@forkleaf/exporter";
 import { ApiGatewayError, publishNote, unpublishNote } from "@/lib/gateway";
 import { Dialog } from "./Dialog";
+import { linkDocuments } from "@/lib/publish-citations";
 import {
   describeTarget,
   isSplitPublishing,
@@ -115,7 +116,17 @@ export function PublishDialog({
 
       try {
         setStep("Rendering the page…");
-        const html = await toHtml(note.content, note.frontmatter, {
+
+        // Citations are written relative to the note, which is right in the
+        // repository and reaches nothing from a page served out of `docs/`.
+        // Only the published copy is rewritten; the note keeps its relative
+        // links, because that is what makes it readable everywhere else.
+        const body = linkDocuments(note.content, {
+          notePath: note.path,
+          repo: workspace.repo,
+        });
+
+        const html = await toHtml(body, note.frontmatter, {
           format: "html",
           title,
           includeFrontmatter: false,

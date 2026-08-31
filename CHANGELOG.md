@@ -58,6 +58,24 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### Publish your reading, not just your notes
+
+A note written from a paper is commentary with the passages set into it, each
+linked back to the page it came from. That is the thing worth sharing — not
+&ldquo;here is a PDF&rdquo; and not &ldquo;here is an opinion&rdquo;, but the
+argument with its receipts.
+
+It did not survive publishing. A citation is written relative to the note,
+which is right in the repository and reaches nothing from a page served out of
+`docs/` — so every quotation on a published reading page was a dead link,
+silently, which is worse than no link at all because it looks like there is a
+source behind it.
+
+Citations are now rewritten on the way out, to the document in your repository,
+fragment and all. Only the published copy changes: the note keeps its relative
+links, because that is what makes it readable on github.com and in any other
+editor.
+
 ### Highlights that are just text files
 
 Everybody else locks a highlight inside the PDF — a binary annotation only a
