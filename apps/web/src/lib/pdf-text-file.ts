@@ -1,5 +1,4 @@
 import { basename, dirname, joinPath, stripExtension } from "@forkleaf/markdown-engine";
-import type { PdfPageText } from "@forkleaf/pdf";
 
 /**
  * A document's text, kept beside it as a file.
@@ -82,9 +81,4 @@ export function formatPageText(
     body,
     "",
   ].join("\n");
-}
-
-/** Stored pages as the search and citation code want them. */
-export function asPageText(pages: readonly { page: number; text: string }[]): PdfPageText[] {
-  return pages.map((page) => ({ page: page.page, text: page.text, runs: [] }));
 }

@@ -234,6 +234,19 @@ export function HelpDialog({
             }
           />
           <Feature
+            title="A scan, or a paper every device re-reads"
+            what="A scan is a photograph of a page: nothing in it can be searched, quoted or checked. And a paper that does carry its text has it read again on every device, every time."
+            doThis={
+              <>
+                Recognise a scan&rsquo;s words once with a tool like <Mono>ocrmypdf</Mono> and
+                commit the result beside it as <Mono>&lt;name&gt;.text.md</Mono>, a{" "}
+                <Mono>## Page 1</Mono> heading per page. For a paper that already has text,{" "}
+                <Mono>⌘K</Mono> → <strong>Keep this document&rsquo;s text beside it</strong>.
+              </>
+            }
+            then="The reader uses that file when the document has nothing of its own, so search, quotations and the citation check start working on a scan — and no other device has to read the document again. Correcting a mangled line in the file corrects it everywhere."
+          />
+          <Feature
             title="Highlight a passage, and keep it as a text file"
             what="Everybody else locks a highlight inside the PDF, or inside their own app, where you can never get it out."
             doThis={

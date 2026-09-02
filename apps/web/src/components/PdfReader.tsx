@@ -213,6 +213,7 @@ export function PdfReader({
   layout = "panel",
 }: PdfReaderProps) {
   const { status, info, source, session, outline, pages, indexing, error } = reader;
+  const { scanned, textSupplied } = reader;
 
   const frameRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -635,6 +636,11 @@ export function PdfReader({
             {info ? `${info.pageCount} page${info.pageCount === 1 ? "" : "s"}` : "Opening…"}
             {section ? ` · ${section.title}` : ""}
             {indexing ? " · reading text…" : ""}
+            {/* Where the words came from, when they did not come from the
+                document. Somebody searching a scan should know that what they
+                are searching is a file somebody else made. */}
+            {textSupplied ? " · text from the file beside it" : ""}
+            {scanned && !textSupplied ? " · a scan: no text to search or quote" : ""}
           </p>
         </div>
 
@@ -768,6 +774,23 @@ export function PdfReader({
           ) : null}
           {status === "error" ? <Notice tone="danger">{error}</Notice> : null}
 
+          {/* Said once, where the pages are, rather than left for somebody to
+              discover by searching and finding nothing. */}
+          {scanned && !textSupplied ? (
+            <Notice tone="warn">
+              This document is a scan — photographs of pages, with no text in it. Nothing here can
+              be searched, quoted or checked until its words are recognised.
+              {path ? (
+                <>
+                  {" "}
+                  Recognise them once with a tool like <code>ocrmypdf</code> and commit the result
+                  beside it as <code>{textFileName(path)}</code>; every device then reads it from
+                  there.
+                </>
+              ) : null}
+            </Notice>
+          ) : null}
+
           {status === "ready" && info && session ? (
             <div className="flex flex-col items-center gap-4">
               {info.sizes.map((size, index) => {
@@ -884,6 +907,12 @@ export function PdfReader({
 }
 
 /** The highlights a page should show, from the citation and the search. */
+/** `papers/attention.pdf` → `attention.text.md`, for saying it in a sentence. */
+function textFileName(pdfPath: string): string {
+  const name = pdfPath.split("/").pop() ?? pdfPath;
+  return `${name.replace(/\.pdf$/i, "")}.text.md`;
+}
+
 function highlightsFor(
   page: number,
   located: { page: number; range: [number, number] } | null,

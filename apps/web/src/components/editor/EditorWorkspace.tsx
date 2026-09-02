@@ -59,6 +59,7 @@ import { withCorrectedPage, type CitationCheck } from "@/lib/citation-audit";
 import { paperNote } from "@/lib/note-from-paper";
 import { anchorsFor, lineForPage, pageForLine } from "@/lib/pdf-follow";
 import { describeTry, parseTryBranch, tryBranchFor } from "@/lib/try-branch";
+import { formatPageText, parsePageText, textPathFor } from "@/lib/pdf-text-file";
 import {
   highlightsPathFor,
   parseHighlights,
@@ -1074,6 +1075,58 @@ export function EditorWorkspace() {
     },
     [highlightPath, readerPath, reader, notebook],
   );
+
+  // ── A document's text, kept beside it ───────────────────────────────────
+  //
+  // A scan has no text at all, so nothing in it can be searched, quoted or
+  // checked. A paper that does have text has it extracted again on every
+  // device, every time, and thrown away at the end. One file beside the
+  // document answers both: read once, committed, and read from there after.
+
+  const textPath = useMemo(() => (readerPath ? textPathFor(readerPath) : null), [readerPath]);
+  const supplyText = reader.supplyText;
+
+  useEffect(() => {
+    if (!textPath) return;
+
+    let live = true;
+    void readNote(textPath)
+      .then((content) => {
+        if (live && content) supplyText(parsePageText(content));
+      })
+      .catch(() => {
+        // No such file, which is the ordinary case. A document with its own
+        // text does not need one, and a scan without one says so.
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [textPath, readNote, supplyText]);
+
+  /**
+   * Writes what has been read out of this document into a file beside it.
+   *
+   * Offered for a document that has its own text — the work is done, and this
+   * is what stops every other device redoing it. A scan has nothing to write,
+   * and the reader says what to do about that instead.
+   */
+  const keepDocumentText = useCallback(async () => {
+    if (!textPath || !readerPath || reader.pages.length === 0) return;
+
+    const title = reader.info
+      ? displayTitle(reader.info.metadata, reader.source?.name ?? "")
+      : (reader.source?.name ?? "document");
+
+    await notebook.upsertNote(textPath, () =>
+      formatPageText(
+        title,
+        reader.pages.map((page) => ({ page: page.page, text: page.text })),
+      ),
+    );
+
+    setNotice(`Kept the text of this document in ${textPath}`);
+  }, [textPath, readerPath, reader, notebook]);
 
   // ── Following along ─────────────────────────────────────────────────────
   //
@@ -2277,6 +2330,20 @@ export function EditorWorkspace() {
       });
     }
 
+    if (readerPath && workspace && !workspace.isLocal && reader.pages.length > 0) {
+      list.push({
+        id: "keep-document-text",
+        label: reader.textSupplied
+          ? "Rewrite this document's text file"
+          : "Keep this document's text beside it",
+        group: "Notes",
+        hint: "So no other device has to read the whole document again",
+        keywords:
+          "text ocr scan recognise extract keep save beside sidecar words searchable index share devices",
+        run: () => void keepDocumentText(),
+      });
+    }
+
     if (readerPath && workspace && !workspace.isLocal) {
       list.push({
         id: "document-versions",
@@ -2369,6 +2436,7 @@ export function EditorWorkspace() {
     reader,
     pdfPlacement,
     readerPath,
+    keepDocumentText,
     following,
     experiment,
     startExperiment,

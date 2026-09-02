@@ -58,6 +58,34 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### A document's text, kept beside it
+
+Two problems with one answer.
+
+A scan is a photograph of a page. There is no text in it, so there is nothing
+to search, nothing to quote and nothing to check a citation against — the
+reader said so honestly and then there was nowhere to go. And a paper that
+_does_ carry its text still had it extracted from scratch on every device,
+every time, and thrown away at the end.
+
+The reader now looks for `<name>.text.md` beside a document and uses it when
+the document has nothing of its own. Recognise a scan's words once — with
+`ocrmypdf`, `tesseract`, or anything else — commit the file, and search,
+quotations, highlights and the citation check all start working on it, on every
+device. For a paper that already has text, ⌘K → **Keep this document's text
+beside it** writes the same file from what has already been read.
+
+Markdown with a `## Page 1` heading per page, deliberately: somebody will make
+these by hand and will want to correct a mangled line when they find one, which
+means the format has to be something a person can open and read. Correcting a
+line there corrects it everywhere.
+
+A document's own text always wins. A file beside a paper never silently
+replaces what the paper actually says.
+
+**Recognising the words inside ForkLeaf is still not possible**, and that is a
+decision rather than an omission — see `docs/ideas.md`.
+
 ### Fixed — renaming a folder duplicated it, and broke every picture in it
 
 Three faults in one action, which together made renaming a folder unsafe.

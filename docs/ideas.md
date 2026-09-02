@@ -62,17 +62,19 @@ Ticked entries link to nothing; the git history is the record.
 - [x] **Start a note from a paper** — Small. Title, author and date fill
       themselves in; the paper's headings become the note's headings, each
       linked to the page it starts on
-- [ ] **Read scanned documents** — Big, and blocked rather than unstarted.
-      Every browser OCR engine needs WebAssembly, and this app deliberately
-      refuses `wasm-unsafe-eval` in the CSP that guards the route rendering
-      markdown from repositories you do not control (see `packages/pdf`'s
-      `document.ts`). Recognising the text on a server instead would mean
-      sending somebody's documents to us, which is the other thing this app
-      is built not to do. It needs a decision about one of those two, not more
-      code
-- [x] **Publish your reading, not just your notes** — Big. Publishing a note
-      now rewrites its citations to the document in your repository, so the
-      quotations on the page link back to the pages they came from
-- [x] **Let other apps understand ForkLeaf's links** — Big. The format is
-      written down at `/docs/citation-links`, and **Copy link** puts one on the
-      clipboard. Inviting the plugin authors is the half that is still to do
+- [~] **Read scanned documents** — Big. Half done, and the other half is a
+  decision rather than code.
+
+      **Done:** a document's words can live in `<name>.text.md` beside it. The
+      reader uses that file when the document has none of its own, so a scan
+      becomes searchable, quotable and checkable — and the work is done once
+      and shared with every device instead of redone on each one.
+
+      **Not done:** recognising the words inside ForkLeaf. Every browser OCR
+      engine needs WebAssembly, and this app deliberately refuses
+      `wasm-unsafe-eval` in the CSP that guards the route rendering markdown
+      from repositories you do not control. Recognising them on a server
+      instead would mean sending somebody's documents to us, which is the other
+      thing this app is built not to do. Either the policy changes or the
+      privacy promise does; until somebody decides which, the file beside the
+      document is the honest answer, and any tool can write it.

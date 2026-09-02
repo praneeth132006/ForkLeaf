@@ -61,6 +61,9 @@ const loading: PdfReaderState = {
   outline: [],
   pages: [],
   indexing: false,
+  scanned: false,
+  textSupplied: false,
+  supplyText: () => {},
   error: null,
   open: () => {},
   close: () => {},
@@ -291,5 +294,58 @@ describe("PdfReader — marking a passage", () => {
     );
 
     expect(document.querySelectorAll("[data-pdf-page]")).toHaveLength(0);
+  });
+});
+
+/**
+ * A scan is a photograph of a page. Saying so, and saying what would fix it,
+ * beats letting somebody search it and find nothing.
+ */
+describe("PdfReader — a document with no text of its own", () => {
+  const scan: PdfReaderState = { ...loading, status: "ready", scanned: true };
+
+  it("says it is a scan, and names the file that would fix it", () => {
+    render(<PdfReader reader={scan} layout="document" path="papers/minutes.pdf" onClose={null} />);
+
+    expect(screen.getByText(/photographs of pages/)).toBeTruthy();
+    expect(screen.getByText("minutes.text.md")).toBeTruthy();
+  });
+
+  it("suggests no file for a document that is not in the notebook", () => {
+    // Nowhere to commit one, so naming a path would be advice nobody can take.
+    render(<PdfReader reader={scan} layout="document" path={null} onClose={null} />);
+
+    expect(screen.getByText(/photographs of pages/)).toBeTruthy();
+    expect(screen.queryByText(/\.text\.md/)).toBeNull();
+  });
+
+  it("says where the words came from once they have been supplied", () => {
+    render(
+      <PdfReader
+        reader={{ ...scan, scanned: false, textSupplied: true }}
+        layout="document"
+        path="papers/minutes.pdf"
+        onClose={null}
+      />,
+    );
+
+    expect(screen.getByText(/text from the file beside it/)).toBeTruthy();
+    expect(screen.queryByText(/photographs of pages/)).toBeNull();
+  });
+
+  it("says nothing of the kind while the document is still being read", () => {
+    // "No text yet" and "no text at all" look identical until the reading
+    // finishes, and calling a paper a photograph while it loads would be wrong
+    // about half the documents that ever open.
+    render(
+      <PdfReader
+        reader={{ ...loading, status: "ready", indexing: true }}
+        layout="document"
+        path="papers/minutes.pdf"
+        onClose={null}
+      />,
+    );
+
+    expect(screen.queryByText(/photographs of pages/)).toBeNull();
   });
 });
