@@ -202,18 +202,20 @@ export class NoteRepository {
     const pending = this.sync.pendingFor(workspaceId);
     if (pending.length === 0) return tree;
 
-    // Images go through the same queue and are not part of the notebook; the
-    // tree only ever lists Markdown.
-    const markdown = (path: string) => path.toLowerCase().endsWith(".md");
-
     let next = tree;
     for (const change of pending) {
       if (change.op === "delete") {
         next = withoutPath(next, change.path);
-      } else if (change.op === "rename") {
+      } else if (change.op === "rename" || change.op === "move") {
+        // `move` was missing here, and a `move` is how everything that is not
+        // a note travels — including a PDF, which the tree does list. So
+        // renaming a folder holding a paper left the old folder on screen with
+        // the paper still in it, beside the new one: the duplicate folder that
+        // appears after a rename. Deleting that "duplicate" then deleted the
+        // real files, pictures included.
         next = withoutPath(next, change.path);
-        if (change.toPath && markdown(change.toPath)) next = withPath(next, change.toPath);
-      } else if (markdown(change.path)) {
+        if (change.toPath && listed(change.toPath)) next = withPath(next, change.toPath);
+      } else if (listed(change.path)) {
         next = withPath(next, change.path);
       }
     }
@@ -539,7 +541,11 @@ export class NoteRepository {
           }
         }
 
-        if (note) await this.renameNote(note, target);
+        // The folder is named as moving, so links inside it are left alone:
+        // everything they point at is coming too. Links pointing out of it are
+        // still rewritten, since the note is now a level further away from
+        // whatever they name.
+        if (note) await this.renameNote(note, target, { movedFolder: { from, to } });
         else await this.sync.recordAssetMove(workspaceId, path, target);
       } else {
         await this.sync.recordAssetMove(workspaceId, path, target);
@@ -557,12 +563,16 @@ export class NoteRepository {
    * moved but not repointed is a broken note, and there is no moment at which
    * anyone would want to see one.
    */
-  async renameNote(note: Note, toPath: string): Promise<Note> {
+  async renameNote(
+    note: Note,
+    toPath: string,
+    options: { movedFolder?: { from: string; to: string } } = {},
+  ): Promise<Note> {
     const current = await this.db.getNote(note.id);
     const stored = current ?? note;
     const freshNote: Note = {
       ...stored,
-      content: rewriteRelativeLinks(stored.content, stored.path, toPath),
+      content: rewriteRelativeLinks(stored.content, stored.path, toPath, options),
     };
 
     const content = serializeDocument(freshNote.content, freshNote.frontmatter);
@@ -584,6 +594,17 @@ export class NoteRepository {
   title(note: Note): string {
     return deriveTitle(note.content, note.frontmatter.title, note.path);
   }
+}
+
+/**
+ * Whether the sidebar's tree lists this path at all.
+ *
+ * Markdown and PDF — the same rule the tree itself is built with. Images and
+ * everything else travel through the queue too, and correcting the tree with
+ * them would put files in the sidebar that it deliberately does not show.
+ */
+function listed(path: string): boolean {
+  return /\.(md|markdown|mdx|pdf)$/i.test(path);
 }
 
 export function noteId(workspaceId: string, path: string): string {

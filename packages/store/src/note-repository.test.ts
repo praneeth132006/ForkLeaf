@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { TreeNode } from "@forkleaf/types";
 import type { RemoteGateway } from "./ports";
 import { MemoryDatabase } from "./memory-db";
 import { NoteRepository } from "./note-repository";
@@ -16,12 +17,12 @@ import { SyncEngine } from "./sync-engine";
 
 const WS = "octo/notes@main:";
 
-function repository(files: Record<string, string>, allPaths?: string[]) {
+function repository(files: Record<string, string>, allPaths?: string[], tree: TreeNode[] = []) {
   const db = new MemoryDatabase();
   const committed: { op: string; path: string; toPath?: string }[] = [];
 
   const gateway: RemoteGateway = {
-    listTree: async () => [],
+    listTree: async () => tree,
     // What the repository actually holds, images included. Defaults to the
     // notes, so tests that do not care about images need say nothing.
     listAllPaths: async () => allPaths ?? Object.keys(files),
@@ -397,6 +398,77 @@ describe("moving a folder", () => {
     const note = queued().find((change) => change.path.endsWith(".md"));
     expect(note?.op).toBe("rename");
     expect(note?.toPath).toBe("Python 101/Introduction/what-is-python.md");
+  });
+
+  /**
+   * The bug this guards: a note's links are relative to where the note sits,
+   * so moving one is normally accompanied by rewriting them. When the whole
+   * folder moves, the pictures move with it — and rewriting then pointed every
+   * image in the folder back at the folder's *old* path, which no longer
+   * exists. Every picture in a renamed folder broke immediately, and the note
+   * looked fine until somebody opened it.
+   */
+  it("leaves a link alone when what it points at is moving too", async () => {
+    const { notes, sync } = repository(files, all);
+
+    await notes.moveFolderContents(WS, "Introduction", "Python 101/Introduction", [
+      "Introduction/what-is-python.md",
+    ]);
+
+    const note = sync.pendingFor(WS).find((change) => change.path.endsWith(".md"));
+    expect(note?.content).toContain("![shot](assets/a.png)");
+    expect(note?.content).not.toContain("Introduction/assets/a.png");
+  });
+
+  it("still repoints a link to something outside the folder", async () => {
+    // That file did not move, and the note is now a level further away from
+    // it, so this one does have to be rewritten.
+    const outward = {
+      "Introduction/what-is-python.md": "# What\n\n![logo](../shared/logo.png)\n",
+    };
+    const { notes, sync } = repository(outward, [...Object.keys(outward), "shared/logo.png"]);
+
+    await notes.moveFolderContents(WS, "Introduction", "Python 101/Introduction", [
+      "Introduction/what-is-python.md",
+    ]);
+
+    const note = sync.pendingFor(WS).find((change) => change.path.endsWith(".md"));
+    expect(note?.content).toContain("![logo](../../shared/logo.png)");
+  });
+
+  /**
+   * The other half of the same report: renaming a folder that held a paper
+   * left the old folder on screen beside the new one, because the sidebar's
+   * correction knew about renames and deletes but not about moves — and a
+   * move is how everything that is not a note travels. Somebody then deleted
+   * the "duplicate", which deleted the real files.
+   */
+  it("does not leave the old folder on screen holding the files that moved", async () => {
+    const tree: TreeNode[] = [
+      {
+        kind: "folder",
+        name: "Introduction",
+        path: "Introduction",
+        children: [
+          { kind: "file", name: "what-is-python.md", path: "Introduction/what-is-python.md" },
+          { kind: "file", name: "paper.pdf", path: "Introduction/paper.pdf" },
+        ],
+      },
+    ];
+
+    const { notes } = repository(files, [...all, "Introduction/paper.pdf"], tree);
+
+    await notes.getTree(WS);
+    await notes.moveFolderContents(WS, "Introduction", "Renamed", [
+      "Introduction/what-is-python.md",
+    ]);
+
+    const shown = await notes.getTree(WS);
+    expect(shown.map((node) => node.path)).toEqual(["Renamed"]);
+    expect((shown[0]?.children ?? []).map((node) => node.path).sort()).toEqual([
+      "Renamed/paper.pdf",
+      "Renamed/what-is-python.md",
+    ]);
   });
 });
 

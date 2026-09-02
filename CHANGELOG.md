@@ -58,6 +58,33 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### Fixed — renaming a folder duplicated it, and broke every picture in it
+
+Three faults in one action, which together made renaming a folder unsafe.
+
+**The links to the pictures were repointed at the old folder.** A note's links
+are relative to where the note sits, so moving one is normally accompanied by
+rewriting them — but when the whole folder moves, the pictures move with it,
+and `assets/chart.png` was being rewritten to `../../old-folder/assets/chart.png`,
+which no longer exists. Every image in a renamed folder broke immediately, and
+the note looked fine until somebody opened it. Links that point _out_ of the
+folder are still rewritten, because those files did not move.
+
+**The old folder stayed on screen beside the new one.** The sidebar corrects
+the repository's file list with whatever has not been pushed yet, and it knew
+about renames and deletions but not about _moves_ — which is how everything
+that is not a note travels, a PDF included. So a folder holding a paper
+appeared twice.
+
+**An open tab kept pointing at the old path.** The next keystroke in it saved
+the note back to where it used to be, recreating the folder that had just been
+renamed with one note inside it. Tabs now follow the rename, and so do the
+locks on the notes in them.
+
+Between them these explain the duplicate folder people were left deleting — and
+why deleting it took real files with it: the duplicate was not a copy, it was
+the original.
+
 ### Borrow a note from somebody else's notebook
 
 When a friend writes a good note, what people do is copy and paste it. Now

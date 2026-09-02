@@ -1281,6 +1281,46 @@ export function useNotebook(request: NotebookRequest = {}) {
         putCreated(withCreatedRenamed(state.createdAt, source, target));
         putTreeOrder(withPathRenamed(state.treeOrder, source, target));
 
+        /**
+         * The notes open in tabs move too.
+         *
+         * Without this a tab left pointing at the old path, and the next
+         * keystroke in it saved the note *back* to where it used to be —
+         * recreating the folder that had just been renamed, with one note in
+         * it, on GitHub. That is the duplicate folder people were left
+         * deleting, and deleting it took the real files with it.
+         *
+         * Re-read rather than repathed, because the move rewrote the links in
+         * notes that pointed out of the folder: keeping the copy in the tab
+         * would show text that is no longer what the file says.
+         */
+        const inside = (path: string) => path === source || path.startsWith(`${source}/`);
+        const moved = (path: string) =>
+          inside(path) ? `${target}${path.slice(source.length)}` : path;
+
+        if (state.openNotes.some((note) => inside(note.path))) {
+          const reopened = await Promise.all(
+            state.openNotes.map(async (note) =>
+              inside(note.path)
+                ? await notes.openNote(workspace.id, moved(note.path)).catch(() => null)
+                : note,
+            ),
+          );
+
+          const open = reopened.filter((note): note is Note => note !== null);
+          const activePath = state.activePath ? moved(state.activePath) : null;
+
+          // Renaming a folder is not unlocking the notes inside it.
+          let locks = state.lockedPaths;
+          for (const note of state.openNotes) {
+            if (inside(note.path)) locks = renameLock(locks, note.path, moved(note.path));
+          }
+          if (locks !== state.lockedPaths) putLocked(locks);
+
+          patch({ openNotes: open, activePath });
+          rememberTabs(workspace.id, open, activePath);
+        }
+
         await refreshTree();
       } finally {
         patch({ busy: null });
@@ -1295,9 +1335,14 @@ export function useNotebook(request: NotebookRequest = {}) {
       state.emptyFolders,
       state.createdAt,
       state.treeOrder,
+      state.openNotes,
+      state.activePath,
+      state.lockedPaths,
       putEmptyFolders,
       putCreated,
       putTreeOrder,
+      putLocked,
+      rememberTabs,
       refreshTree,
       patch,
     ],
