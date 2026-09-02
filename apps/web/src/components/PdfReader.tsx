@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  citationLink,
   createCitation,
   displayTitle,
   serializeCitation,
@@ -71,6 +72,43 @@ export interface PdfReaderProps {
    * window's memory.
    */
   onOpenInTab?: (() => void) | null;
+  /**
+   * The passages this reader has marked and kept, drawn over the page.
+   *
+   * Resolved against the document as it is now rather than trusted: a
+   * highlight records the words, so one made against last year's version of a
+   * paper is still drawn in the right place after the author adds a figure.
+   */
+  highlights?: readonly PdfCitation[];
+  /** Marks the selected passage, or unmarks it if it is already marked. */
+  onHighlight?: ((citation: PdfCitation, marked: boolean) => void) | null;
+  /**
+   * A page to turn to, when the note beside the document moves to it.
+   *
+   * Watched rather than called, so the caller can say "page 12" as often as it
+   * likes without the reader jumping every time a render happens: the page is
+   * only turned when the number actually changes.
+   */
+  showPage?: number | null;
+  /** Reports the page now on screen, so the note can follow it back. */
+  onPageChange?: ((page: number) => void) | null;
+  /**
+   * A one-off request to turn to a page, from somewhere outside the reader.
+   *
+   * Separate from `showPage`, which is a value derived from where the note's
+   * cursor is and may therefore be the same number twice in a row without
+   * meaning "go there again". This carries an id so that asking for the same
+   * page a second time is a second request — which is what a reader pressing
+   * "p. 12" twice plainly means.
+   */
+  jumpTo?: { page: number; id: number } | null;
+  /**
+   * Where this document lives, so a link to a passage can name it.
+   *
+   * Null for one opened from a desktop: there is no path for a link to point
+   * at, and a link naming a file nobody else has is not a link.
+   */
+  path?: string | null;
   /**
    * Starts a note about this paper, with its headings already in it.
    *
@@ -162,6 +200,12 @@ export function PdfReader({
   onSave,
   saveHint,
   saving = false,
+  highlights = [],
+  onHighlight = null,
+  showPage = null,
+  onPageChange = null,
+  jumpTo = null,
+  path = null,
   onStartNote = null,
   mentions = null,
   onOpenMention = null,
@@ -169,6 +213,7 @@ export function PdfReader({
   layout = "panel",
 }: PdfReaderProps) {
   const { status, info, source, session, outline, pages, indexing, error } = reader;
+  const { scanned, textSupplied } = reader;
 
   const frameRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -318,6 +363,34 @@ export function PdfReader({
     setCurrent(page);
   }, []);
 
+  /**
+   * Follows the note beside the document.
+   *
+   * Only on a change of the *asked-for* page, never on a change of the page
+   * showing: scrolling the document sets `current`, which would otherwise be
+   * read back as an instruction and scroll it again.
+   */
+  const asked = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (showPage == null || asked.current === showPage) return;
+    asked.current = showPage;
+    goToPage(showPage);
+  }, [showPage, goToPage]);
+
+  useEffect(() => {
+    onPageChange?.(current);
+  }, [current, onPageChange]);
+
+  /** The last one-off request acted on, so it is acted on exactly once. */
+  const jumpedTo = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!jumpTo || jumpedTo.current === jumpTo.id) return;
+    jumpedTo.current = jumpTo.id;
+    goToPage(jumpTo.page);
+  }, [jumpTo, goToPage]);
+
   // ─── Search ───────────────────────────────────────────────────────────────
 
   const hits = useMemo<PdfSearchHit[]>(
@@ -407,6 +480,26 @@ export function PdfReader({
     [citationFor, onCite],
   );
 
+  /**
+   * The passage as a link anything can follow.
+   *
+   * Not a ForkLeaf address: `papers/x.pdf#page=12&q=…` is a relative path plus
+   * a fragment, which is a plain web link. Every PDF reader has understood
+   * `#page=` for twenty years, and the rest is the W3C Web Annotation text
+   * selector spelled into a query string — so a tool that has never heard of
+   * this app can still open the right page, and one that reads the quotation
+   * can find the right sentence. See /docs/citation-links.
+   */
+  const copyLink = useCallback(async () => {
+    const citation = citationFor();
+    if (!citation || !path) return;
+
+    await navigator.clipboard.writeText(citationLink(path, citation));
+    setCopied(true);
+    setSelection(null);
+    window.getSelection()?.removeAllRanges();
+  }, [citationFor, path]);
+
   // ─── Keyboard ─────────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -453,6 +546,40 @@ export function PdfReader({
       return ZOOM_STEPS[Math.min(Math.max(at, 0), ZOOM_STEPS.length - 1)] ?? previous;
     });
   }, []);
+
+  /**
+   * Every kept highlight, located in the document on screen.
+   *
+   * Recomputed when the text arrives rather than when the file is read: the
+   * words cannot be looked for until the pages have been extracted, and a
+   * highlight that could not be found is simply not drawn — the file still
+   * has it, and saying "this passage has gone" is the citation check's job.
+   */
+  const marked = useMemo(() => {
+    if (highlights.length === 0 || pages.length === 0) return [];
+
+    const found: { page: number; range: [number, number] }[] = [];
+
+    for (const citation of highlights) {
+      const match = reader.locate(citation);
+      // A passage no longer in the document is simply not drawn. The file
+      // still holds it, and saying "this has gone" is the citation check's
+      // job rather than the page's.
+      if (match?.page != null && match.range != null) {
+        found.push({ page: match.page, range: match.range });
+      }
+    }
+
+    return found;
+  }, [highlights, pages, reader]);
+
+  /** Whether the passage selected right now is one already kept. */
+  const selectionMarked = useMemo(() => {
+    const citation = citationFor();
+    if (!citation) return false;
+    const wanted = citation.quote.replace(/\s+/g, " ").trim();
+    return highlights.some((held) => held.quote.replace(/\s+/g, " ").trim() === wanted);
+  }, [citationFor, highlights]);
 
   const section = useMemo(
     () => (outline.length > 0 ? outlineEntryForPage(outline, current) : null),
@@ -509,6 +636,11 @@ export function PdfReader({
             {info ? `${info.pageCount} page${info.pageCount === 1 ? "" : "s"}` : "Opening…"}
             {section ? ` · ${section.title}` : ""}
             {indexing ? " · reading text…" : ""}
+            {/* Where the words came from, when they did not come from the
+                document. Somebody searching a scan should know that what they
+                are searching is a file somebody else made. */}
+            {textSupplied ? " · text from the file beside it" : ""}
+            {scanned && !textSupplied ? " · a scan: no text to search or quote" : ""}
           </p>
         </div>
 
@@ -642,6 +774,23 @@ export function PdfReader({
           ) : null}
           {status === "error" ? <Notice tone="danger">{error}</Notice> : null}
 
+          {/* Said once, where the pages are, rather than left for somebody to
+              discover by searching and finding nothing. */}
+          {scanned && !textSupplied ? (
+            <Notice tone="warn">
+              This document is a scan — photographs of pages, with no text in it. Nothing here can
+              be searched, quoted or checked until its words are recognised.
+              {path ? (
+                <>
+                  {" "}
+                  Recognise them once with a tool like <code>ocrmypdf</code> and commit the result
+                  beside it as <code>{textFileName(path)}</code>; every device then reads it from
+                  there.
+                </>
+              ) : null}
+            </Notice>
+          ) : null}
+
           {status === "ready" && info && session ? (
             <div className="flex flex-col items-center gap-4">
               {info.sizes.map((size, index) => {
@@ -655,7 +804,7 @@ export function PdfReader({
                     scale={scale}
                     text={pageText(page)}
                     visible={visible.has(page)}
-                    highlights={highlightsFor(page, located, hits, hitIndex)}
+                    highlights={highlightsFor(page, located, hits, hitIndex, marked)}
                     onSelect={onSelect}
                   />
                 );
@@ -670,6 +819,19 @@ export function PdfReader({
               reason={noCiteReason}
               copied={copied}
               onCite={cite}
+              onHighlight={
+                onHighlight
+                  ? () => {
+                      const citation = citationFor();
+                      if (!citation) return;
+                      onHighlight(citation, !selectionMarked);
+                      setSelection(null);
+                      window.getSelection()?.removeAllRanges();
+                    }
+                  : null
+              }
+              highlightLabel={selectionMarked ? "Unhighlight" : "Highlight"}
+              onCopyLink={path ? () => void copyLink() : null}
               onCopy={async () => {
                 const text = pageText(selection.page)?.text.slice(selection.start, selection.end);
                 if (!text) return;
@@ -745,13 +907,24 @@ export function PdfReader({
 }
 
 /** The highlights a page should show, from the citation and the search. */
+/** `papers/attention.pdf` → `attention.text.md`, for saying it in a sentence. */
+function textFileName(pdfPath: string): string {
+  const name = pdfPath.split("/").pop() ?? pdfPath;
+  return `${name.replace(/\.pdf$/i, "")}.text.md`;
+}
+
 function highlightsFor(
   page: number,
   located: { page: number; range: [number, number] } | null,
   hits: readonly PdfSearchHit[],
   hitIndex: number,
+  marked: readonly { page: number; range: [number, number] }[] = [],
 ): PdfHighlight[] {
   const highlights: PdfHighlight[] = [];
+
+  for (const held of marked) {
+    if (held.page === page) highlights.push({ range: held.range, kind: "highlight" });
+  }
 
   if (located?.page === page) {
     highlights.push({ range: located.range, kind: "citation" });
@@ -782,6 +955,9 @@ function CiteBar({
   reason,
   copied,
   onCite,
+  onHighlight,
+  highlightLabel,
+  onCopyLink,
   onCopy,
   onDismiss,
 }: {
@@ -790,6 +966,11 @@ function CiteBar({
   reason: string | null;
   copied: boolean;
   onCite: (withQuote: boolean) => void;
+  /** Marks the passage, in a text file beside the document. */
+  onHighlight: (() => void) | null;
+  highlightLabel: string;
+  /** Puts a plain web link to this passage on the clipboard. */
+  onCopyLink: (() => void) | null;
   onCopy: () => void | Promise<void>;
   onDismiss: () => void;
 }) {
@@ -803,6 +984,22 @@ function CiteBar({
           </>
         ) : reason ? (
           <span className="px-2 text-xs text-[var(--fl-muted)]">{reason}</span>
+        ) : null}
+        {onHighlight ? (
+          <BarButton
+            onClick={onHighlight}
+            title="Keeps this passage in a text file beside the document"
+          >
+            {highlightLabel}
+          </BarButton>
+        ) : null}
+        {onCopyLink ? (
+          <BarButton
+            onClick={onCopyLink}
+            title="A plain link to this passage, for anything outside ForkLeaf"
+          >
+            Copy link
+          </BarButton>
         ) : null}
         <BarButton onClick={() => void onCopy()}>{copied ? "Copied" : "Copy"}</BarButton>
         <BarButton onClick={onDismiss} aria-label="Dismiss">

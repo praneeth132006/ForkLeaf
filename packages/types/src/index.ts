@@ -428,6 +428,14 @@ export interface ExportOptions {
   renderDiagrams: boolean;
   /** Light or dark styling for HTML/PDF output. */
   theme: "light" | "dark";
+  /**
+   * Where a reader who spots a mistake should go, for a page being published.
+   *
+   * Absent for a download. A PDF in somebody's inbox has no author to reach
+   * and no repository behind it, so a "suggest an edit" link in one would be a
+   * link to a page the reader has no business seeing.
+   */
+  suggestUrl?: string | null;
 }
 
 // ─── Errors ─────────────────────────────────────────────────────────────────

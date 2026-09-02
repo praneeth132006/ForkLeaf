@@ -44,15 +44,33 @@ import {
   whyCannotSave,
   type PdfSource,
 } from "@/lib/pdf-source";
-import { commitToBranch } from "@/lib/gateway";
+import {
+  commitToBranch,
+  createBranch,
+  deleteBranch,
+  openPullRequest,
+  acceptSuggestion,
+} from "@/lib/gateway";
 import { readDroppedPdf } from "@/lib/local-files";
 import { insertionFor, quoteMarkdown } from "@/lib/pdf-quote";
 import { mentionsOfPdf, type PdfMention } from "@/lib/pdf-mentions";
 import { pagesOf, readDocumentText } from "@/lib/pdf-index";
 import { withCorrectedPage, type CitationCheck } from "@/lib/citation-audit";
 import { paperNote } from "@/lib/note-from-paper";
+import { anchorsFor, lineForPage, pageForLine } from "@/lib/pdf-follow";
+import { describeTry, parseTryBranch, tryBranchFor } from "@/lib/try-branch";
+import { formatPageText, parsePageText, textPathFor } from "@/lib/pdf-text-file";
+import {
+  highlightsPathFor,
+  parseHighlights,
+  withHighlight,
+  withoutHighlight,
+} from "@/lib/pdf-highlights";
 import { FreshnessDialog } from "@/components/FreshnessDialog";
 import { TimeMachineDialog } from "@/components/TimeMachineDialog";
+import { SuggestionsDialog } from "@/components/SuggestionsDialog";
+import { DocumentVersionsDialog } from "@/components/DocumentVersionsDialog";
+import { BorrowDialog } from "@/components/BorrowDialog";
 import { CitationsDialog } from "@/components/CitationsDialog";
 import { isPdfPath } from "@/lib/media";
 import { useTheme } from "@/hooks/useTheme";
@@ -157,6 +175,41 @@ function writePdfPlacement(value: PdfPlacement): void {
 function subscribeToPdfPlacement(onChange: () => void): () => void {
   const handle = (event: StorageEvent) => {
     if (event.key === null || event.key === PDF_PLACEMENT_KEY) onChange();
+  };
+  window.addEventListener("storage", handle);
+  return () => window.removeEventListener("storage", handle);
+}
+
+/**
+ * Whether the document follows the note, and the note the document.
+ *
+ * On by default. The mapping is not a guess — every citation in the note
+ * records the page it came from — so following is right far more often than it
+ * is wrong, and the one case it is wrong in (you are reading ahead of what you
+ * have written) is one keystroke from being switched off.
+ */
+const FOLLOW_KEY = "forkleaf:pdf-follow";
+
+function readFollow(): boolean {
+  try {
+    return window.localStorage.getItem(FOLLOW_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function writeFollow(value: boolean): void {
+  try {
+    window.localStorage.setItem(FOLLOW_KEY, value ? "1" : "0");
+  } catch {
+    // The setting still holds for this session.
+  }
+  window.dispatchEvent(new StorageEvent("storage", { key: FOLLOW_KEY }));
+}
+
+function subscribeToFollow(onChange: () => void): () => void {
+  const handle = (event: StorageEvent) => {
+    if (event.key === null || event.key === FOLLOW_KEY) onChange();
   };
   window.addEventListener("storage", handle);
   return () => window.removeEventListener("storage", handle);
@@ -268,6 +321,9 @@ export function EditorWorkspace() {
     | "citations"
     | "freshness"
     | "time-machine"
+    | "suggestions"
+    | "document-versions"
+    | "borrow"
     | null
   >(null);
   /**
@@ -747,6 +803,123 @@ export function EditorWorkspace() {
     return [...local, ...collectFilePaths(tree)];
   }, [workspace, notebook.tree, notebook.openNotes, notebook.assetUrls]);
 
+  // ── Trying a rewrite ────────────────────────────────────────────────────
+  //
+  // Work on a copy, keep it or throw it away, and the original is never in any
+  // danger. That is a branch, which this app has for free; all that was
+  // missing was a name that says what it is and two buttons that do not say
+  // "git".
+
+  /** The experiment this workspace is on, if it is on one. */
+  const experiment = useMemo(
+    () => (workspace && !workspace.isLocal ? parseTryBranch(workspace.repo.branch) : null),
+    [workspace],
+  );
+  const [experimentBusy, setExperimentBusy] = useState<"keeping" | "discarding" | null>(null);
+
+  const startExperiment = useCallback(async () => {
+    if (!workspace || workspace.isLocal || !note) return;
+
+    const name = tryBranchFor(workspace.repo.branch, title);
+    setExperimentBusy("keeping");
+
+    try {
+      await createBranch({
+        owner: workspace.repo.owner,
+        repo: workspace.repo.repo,
+        name,
+        from: workspace.repo.branch,
+      });
+      await notebook.switchBranch(name);
+      setNotice(
+        `Trying a rewrite of ${title}. Nothing you do here touches ${workspace.repo.branch}.`,
+      );
+    } catch (problem: unknown) {
+      notebook.reportError(
+        problem instanceof Error ? problem.message : "That experiment could not be started.",
+      );
+    } finally {
+      setExperimentBusy(null);
+    }
+  }, [workspace, note, title, notebook]);
+
+  /**
+   * Keeps the rewrite: onto the branch it came from, as one change.
+   *
+   * A pull request opened and immediately merged, rather than a direct commit,
+   * because that is what leaves a record of the experiment having happened —
+   * and because merging is the one operation that knows what to do when the
+   * base branch has moved on underneath.
+   */
+  const keepExperiment = useCallback(async () => {
+    if (!workspace || workspace.isLocal || !experiment) return;
+
+    setExperimentBusy("keeping");
+    const branch = workspace.repo.branch;
+
+    try {
+      const { pull } = await openPullRequest({
+        owner: workspace.repo.owner,
+        repo: workspace.repo.repo,
+        base: experiment.base,
+        head: branch,
+        title: `Rewrite of ${describeTry(experiment.slug)}`,
+      });
+
+      await acceptSuggestion({
+        owner: workspace.repo.owner,
+        repo: workspace.repo.repo,
+        number: pull.number,
+        title: `Rewrite of ${describeTry(experiment.slug)}`,
+      });
+
+      await notebook.switchBranch(experiment.base);
+      await deleteBranch({
+        owner: workspace.repo.owner,
+        repo: workspace.repo.repo,
+        name: branch,
+      }).catch(() => {
+        // The work is already on the base branch. A leftover branch is untidy
+        // and is not worth reporting as a failure of the thing that worked.
+      });
+
+      setNotice(`Kept. The rewrite is on ${experiment.base}.`);
+    } catch (problem: unknown) {
+      notebook.reportError(
+        problem instanceof Error ? problem.message : "That rewrite could not be kept.",
+      );
+    } finally {
+      setExperimentBusy(null);
+    }
+  }, [workspace, experiment, notebook]);
+
+  /** Throws the rewrite away, and the branch with it. */
+  const discardExperiment = useCallback(async () => {
+    if (!workspace || workspace.isLocal || !experiment) return;
+
+    setExperimentBusy("discarding");
+    const branch = workspace.repo.branch;
+
+    try {
+      // Back to the original *first*: deleting the branch a workspace is
+      // sitting on would leave the editor pointed at something that no longer
+      // exists.
+      await notebook.switchBranch(experiment.base);
+      await deleteBranch({
+        owner: workspace.repo.owner,
+        repo: workspace.repo.repo,
+        name: branch,
+      });
+      setNotice(`Thrown away. ${experiment.base} is exactly as you left it.`);
+    } catch (problem: unknown) {
+      notebook.reportError(
+        problem instanceof Error ? problem.message : "That experiment could not be thrown away.",
+      );
+    } finally {
+      setExperimentBusy(null);
+    }
+  }, [workspace, experiment, notebook]);
+
   /**
    * Starts a note about the paper on screen, with its headings already in it.
    *
@@ -821,6 +994,180 @@ export function EditorWorkspace() {
 
     return mentionsOfPdf(merged, readerPath);
   }, [readerPath, storedNotes, notebook.openNotes]);
+
+  // ── Highlights ──────────────────────────────────────────────────────────
+  //
+  // Kept in a markdown file beside the document rather than written into the
+  // PDF. The file in the repository stays exactly as it was committed, and the
+  // marks — the part that is actually yours — stay readable without this app.
+
+  /**
+   * The highlights file, tagged with the document it belongs to.
+   *
+   * Tagged rather than cleared when the document changes: clearing means
+   * writing state from inside an effect, which is a render spent undoing the
+   * last one — and leaves a window in which one paper's marks are drawn over
+   * another's pages. Reading it back through the current path gives the same
+   * "nothing yet" with neither problem.
+   */
+  /**
+   * A page something outside the reader has asked it to turn to.
+   *
+   * Carries an id rather than being a bare number, so asking for the same page
+   * twice is two requests — pressing "p. 12" again plainly means "take me back
+   * there".
+   */
+  const [pageRequest, setPageRequest] = useState<{ page: number; id: number } | null>(null);
+  const requestPage = useCallback(
+    (page: number) => setPageRequest((last) => ({ page, id: (last?.id ?? 0) + 1 })),
+    [],
+  );
+
+  const [highlightFile, setHighlightFile] = useState<{ path: string; content: string } | null>(
+    null,
+  );
+  const highlightPath = useMemo(
+    () => (readerPath ? highlightsPathFor(readerPath) : null),
+    [readerPath],
+  );
+
+  const readNote = notebook.readNote;
+
+  useEffect(() => {
+    if (!highlightPath) return;
+
+    let live = true;
+    void readNote(highlightPath)
+      .then((content) => {
+        if (live) setHighlightFile({ path: highlightPath, content: content ?? "" });
+      })
+      .catch(() => {
+        // No highlights file yet, or it could not be read. Either way there is
+        // nothing to draw, and the next highlight makes one.
+        if (live) setHighlightFile({ path: highlightPath, content: "" });
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [highlightPath, readNote]);
+
+  const highlights = useMemo(() => {
+    const content = highlightFile?.path === highlightPath ? highlightFile.content : "";
+    return parseHighlights(content).map((held) => held.citation);
+  }, [highlightFile, highlightPath]);
+
+  const toggleHighlight = useCallback(
+    async (citation: PdfCitation, marked: boolean) => {
+      if (!highlightPath || !readerPath) return;
+
+      const title = reader.info
+        ? displayTitle(reader.info.metadata, reader.source?.name ?? "")
+        : (reader.source?.name ?? "document");
+
+      const next = await notebook.upsertNote(highlightPath, (content) =>
+        marked
+          ? withHighlight(content, { pdfPath: readerPath, title, citation })
+          : withoutHighlight(content, { pdfPath: readerPath, title, quote: citation.quote }),
+      );
+
+      if (next !== null) setHighlightFile({ path: highlightPath, content: next });
+    },
+    [highlightPath, readerPath, reader, notebook],
+  );
+
+  // ── A document's text, kept beside it ───────────────────────────────────
+  //
+  // A scan has no text at all, so nothing in it can be searched, quoted or
+  // checked. A paper that does have text has it extracted again on every
+  // device, every time, and thrown away at the end. One file beside the
+  // document answers both: read once, committed, and read from there after.
+
+  const textPath = useMemo(() => (readerPath ? textPathFor(readerPath) : null), [readerPath]);
+  const supplyText = reader.supplyText;
+
+  useEffect(() => {
+    if (!textPath) return;
+
+    let live = true;
+    void readNote(textPath)
+      .then((content) => {
+        if (live && content) supplyText(parsePageText(content));
+      })
+      .catch(() => {
+        // No such file, which is the ordinary case. A document with its own
+        // text does not need one, and a scan without one says so.
+      });
+
+    return () => {
+      live = false;
+    };
+  }, [textPath, readNote, supplyText]);
+
+  /**
+   * Writes what has been read out of this document into a file beside it.
+   *
+   * Offered for a document that has its own text — the work is done, and this
+   * is what stops every other device redoing it. A scan has nothing to write,
+   * and the reader says what to do about that instead.
+   */
+  const keepDocumentText = useCallback(async () => {
+    if (!textPath || !readerPath || reader.pages.length === 0) return;
+
+    const title = reader.info
+      ? displayTitle(reader.info.metadata, reader.source?.name ?? "")
+      : (reader.source?.name ?? "document");
+
+    await notebook.upsertNote(textPath, () =>
+      formatPageText(
+        title,
+        reader.pages.map((page) => ({ page: page.page, text: page.text })),
+      ),
+    );
+
+    setNotice(`Kept the text of this document in ${textPath}`);
+  }, [textPath, readerPath, reader, notebook]);
+
+  // ── Following along ─────────────────────────────────────────────────────
+  //
+  // The document and the note kept on the same page: write about page twelve
+  // and the paper turns to page twelve, read page twelve and the note scrolls
+  // to what you said about it. This is what people open two windows to fake.
+
+  const following = useSyncExternalStore(subscribeToFollow, readFollow, () => true);
+  /** The page the reader is showing, so the note can follow it back. */
+  const [readerPage, setReaderPage] = useState(1);
+
+  /** This note's citations of the document being read, in note order. */
+  const followAnchors = useMemo(
+    () => (note && pdfMentions ? anchorsFor(pdfMentions, note.path) : []),
+    [note, pdfMentions],
+  );
+
+  /**
+   * Only beside the note, and only when the mapping exists.
+   *
+   * A document filling the middle column has no note next to it to follow, and
+   * a note with no citations of it has nothing to say about where it is.
+   */
+  const canFollow = following && readerLayout === "beside" && followAnchors.length > 0;
+
+  const followPage = useMemo(
+    () => (canFollow && cursor ? pageForLine(followAnchors, cursor.line) : null),
+    [canFollow, cursor, followAnchors],
+  );
+
+  /**
+   * The line to scroll the note to, for the page now on screen.
+   *
+   * Suppressed while the caret is what moved: the two directions would
+   * otherwise take turns nudging each other, and a reader who put their cursor
+   * somewhere would watch it scroll away from them.
+   */
+  const followLine = useMemo(
+    () => (canFollow && followPage === null ? lineForPage(followAnchors, readerPage) : null),
+    [canFollow, followPage, followAnchors, readerPage],
+  );
 
   /**
    * Writes a cited passage into the note being read alongside.
@@ -1911,6 +2258,42 @@ export function EditorWorkspace() {
       });
     }
 
+    if (note && workspace && !workspace.isLocal) {
+      list.push({
+        id: "borrow",
+        label: "Borrow a note from another notebook",
+        group: "Notes",
+        hint: "Link into somebody else's, pinned to the version you read",
+        keywords:
+          "borrow link somebody else other notebook repository shared reuse reference pin theirs copy",
+        run: () => setDialog("borrow"),
+      });
+    }
+
+    if (note && workspace && !workspace.isLocal && !experiment) {
+      list.push({
+        id: "try-rewrite",
+        label: "Try a rewrite of this note",
+        group: "Notes",
+        hint: "Work on a copy. Keep it or throw it away; the original is never at risk",
+        keywords:
+          "try rewrite experiment branch draft copy alternative version safe discard revert what if",
+        run: () => void startExperiment(),
+      });
+    }
+
+    if (workspace && !workspace.isLocal) {
+      list.push({
+        id: "suggestions",
+        label: "See what other people have suggested",
+        group: "Notes",
+        hint: "Corrections readers have sent back from your published pages",
+        keywords:
+          "suggestion suggestions pull request pr incoming reader correction fix accept merge contribute proposed change",
+        run: () => setDialog("suggestions"),
+      });
+    }
+
     if (workspace && !workspace.isLocal) {
       list.push({
         id: "time-machine",
@@ -1944,6 +2327,47 @@ export function EditorWorkspace() {
         keywords:
           "citation citations quote quotation check verify audit broken stale page pdf paper source reference sweep",
         run: () => setDialog("citations"),
+      });
+    }
+
+    if (readerPath && workspace && !workspace.isLocal && reader.pages.length > 0) {
+      list.push({
+        id: "keep-document-text",
+        label: reader.textSupplied
+          ? "Rewrite this document's text file"
+          : "Keep this document's text beside it",
+        group: "Notes",
+        hint: "So no other device has to read the whole document again",
+        keywords:
+          "text ocr scan recognise extract keep save beside sidecar words searchable index share devices",
+        run: () => void keepDocumentText(),
+      });
+    }
+
+    if (readerPath && workspace && !workspace.isLocal) {
+      list.push({
+        id: "document-versions",
+        label: "See what changed in this document",
+        group: "View",
+        hint: "Compares it with an earlier version, and says whether a page you quoted moved",
+        keywords:
+          "version versions changed diff compare document pdf revision earlier older history updated paper",
+        run: () => setDialog("document-versions"),
+      });
+    }
+
+    if (reader.status !== "idle") {
+      list.push({
+        id: "pdf-follow",
+        label: following
+          ? "Stop the document following the note"
+          : "Let the document follow the note",
+        group: "View",
+        hint: following
+          ? "The paper and the note stop moving with each other"
+          : "Write about page 12 and the paper turns to page 12, and back again",
+        keywords: "follow sync scroll page together beside link caret cursor track document paper",
+        run: () => writeFollow(!following),
       });
     }
 
@@ -2011,6 +2435,11 @@ export function EditorWorkspace() {
     localFiles,
     reader,
     pdfPlacement,
+    readerPath,
+    keepDocumentText,
+    following,
+    experiment,
+    startExperiment,
     canSavePdf,
     savePdfToNotebook,
   ]);
@@ -2149,6 +2578,12 @@ export function EditorWorkspace() {
       onSave={canSavePdf ? () => void savePdfToNotebook() : null}
       saveHint={pdfSaveHint}
       saving={savingPdf}
+      path={readerPath}
+      highlights={highlights}
+      onHighlight={readerPath ? (citation, marked) => void toggleHighlight(citation, marked) : null}
+      showPage={followPage}
+      jumpTo={pageRequest}
+      onPageChange={setReaderPage}
       onStartNote={reader.status === "ready" ? () => void startNoteFromPaper() : null}
       mentions={pdfMentions}
       onOpenMention={(path) => {
@@ -2512,6 +2947,50 @@ export function EditorWorkspace() {
               </div>
             )}
 
+            {/* An experiment says so, permanently, wherever you are in it.
+                A branch you have forgotten you are on is how work ends up
+                somewhere nobody looks — and the two ways out belong beside
+                the sentence that explains why they are there. */}
+            {experiment && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[var(--fl-border)] bg-[var(--fl-accent-soft)] px-3 py-2">
+                <p className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-[var(--fl-text)]">
+                  <strong>Trying a rewrite</strong> of {describeTry(experiment.slug)}. Nothing here
+                  touches <span className="font-mono text-[11.5px]">{experiment.base}</span> until
+                  you keep it.
+                </p>
+
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={experimentBusy !== null}
+                    onClick={() => void keepExperiment()}
+                    className="rounded-lg bg-[var(--fl-accent)] px-2.5 py-1 text-[12px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)] disabled:opacity-60"
+                  >
+                    {experimentBusy === "keeping" ? "Keeping…" : "Keep it"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={experimentBusy !== null}
+                    onClick={() =>
+                      setPrompt({
+                        title: "Throw this rewrite away?",
+                        label: "",
+                        initialValue: "",
+                        confirmLabel: "Throw it away",
+                        body: `Everything written on this branch goes, and ${experiment.base} stays exactly as you left it. This cannot be undone.`,
+                        onConfirm: async () => {
+                          await discardExperiment();
+                        },
+                      })
+                    }
+                    className="rounded-lg border border-[var(--fl-border)] px-2.5 py-1 text-[12px] font-medium text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-surface)] disabled:opacity-60"
+                  >
+                    {experimentBusy === "discarding" ? "Throwing away…" : "Throw it away"}
+                  </button>
+                </span>
+              </div>
+            )}
+
             {/* Not while the sign-in has just expired: "you are working locally"
               is true but is the wrong sentence to lead with, and the banner
               above it already says the useful half. */}
@@ -2536,6 +3015,7 @@ export function EditorWorkspace() {
                   mode={mode}
                   theme={theme}
                   onCursorChange={setCursor}
+                  revealLine={followLine}
                   images={images}
                   links={linkBridge}
                   imageDestination={
@@ -2855,6 +3335,58 @@ export function EditorWorkspace() {
           documents={workspace && !workspace.isLocal ? documentTexts : []}
           onOpenDocument={(path, page) => openRepoPdf(path, `page=${page}`)}
           commands={commands}
+        />
+      )}
+
+      {openDialog === "borrow" && note && workspace && !workspace.isLocal && (
+        <BorrowDialog
+          onClose={() => setDialog(null)}
+          loadTree={async (owner, repo, branch) => {
+            const params = new URLSearchParams({ owner, repo, branch });
+            const response = await fetch(`/api/gh/tree?${params.toString()}`);
+            if (!response.ok) {
+              throw new Error("That notebook could not be read. It may be private, or not exist.");
+            }
+            const { tree } = (await response.json()) as { tree: TreeNode[] };
+            return tree;
+          }}
+          onBorrow={(link) => {
+            setDialog(null);
+            // At the end of the note, like a cited passage: the caret has not
+            // been in the editor since the dialog opened, so its last recorded
+            // position is wherever it was several minutes ago.
+            const { text } = insertionFor(note.content, note.content.length, link);
+            void notebook.saveNote(text);
+            setNotice("Borrowed. The link reads their note from their repository.");
+          }}
+        />
+      )}
+
+      {openDialog === "document-versions" && workspace && !workspace.isLocal && readerPath && (
+        <DocumentVersionsDialog
+          onClose={() => setDialog(null)}
+          workspace={workspace}
+          path={readerPath}
+          // The pages this notebook has an opinion about: what it quotes, and
+          // what it has marked.
+          cited={[
+            ...new Set([
+              ...(pdfMentions ?? []).flatMap((mention) => (mention.page ? [mention.page] : [])),
+              ...highlights.map((held) => held.page),
+            ]),
+          ]}
+          onGoToPage={(page) => {
+            setDialog(null);
+            requestPage(page);
+          }}
+        />
+      )}
+
+      {openDialog === "suggestions" && workspace && !workspace.isLocal && (
+        <SuggestionsDialog
+          onClose={() => setDialog(null)}
+          repo={workspace.repo}
+          onAccepted={() => void notebook.pullRemote()}
         />
       )}
 

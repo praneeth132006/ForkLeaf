@@ -488,6 +488,19 @@ export async function readNotebookAt(
   );
 }
 
+/**
+ * One repository, whoever it belongs to.
+ *
+ * For borrowing: reading somebody else's notebook needs to know which branch
+ * they keep it on, which is a fact about their repository and not about yours.
+ */
+export async function describeRepo(owner: string, repo: string): Promise<RepoSummaryDto> {
+  const { repo: found } = await call<{ repo: RepoSummaryDto }>(
+    `/api/gh/repos?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`,
+  );
+  return found;
+}
+
 export async function listRepos(): Promise<RepoSummaryDto[]> {
   const { repos } = await call<{ repos: RepoSummaryDto[] }>("/api/gh/repos");
   return repos;
@@ -525,6 +538,38 @@ export interface PullRequestDto {
   base: string;
 }
 
+export interface SuggestionDto extends PullRequestDto {
+  author: string | null;
+  /** ISO 8601 — when it was last touched, which is how they are ordered. */
+  updatedAt: string;
+}
+
+/**
+ * The suggestions open on this notebook.
+ *
+ * Open pull requests, which for a notebook is what a suggestion is: somebody
+ * read a page and sent a correction back.
+ */
+export async function listSuggestions(owner: string, repo: string): Promise<SuggestionDto[]> {
+  const { pulls } = await call<{ pulls: SuggestionDto[] }>(
+    `/api/gh/suggestions?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`,
+  );
+  return pulls;
+}
+
+/** Accepts a suggestion, squashed, the way every other merge here is done. */
+export async function acceptSuggestion(options: {
+  owner: string;
+  repo: string;
+  number: number;
+  title?: string;
+}): Promise<{ merged: boolean; sha: string | null }> {
+  return call("/api/gh/review", {
+    method: "POST",
+    body: JSON.stringify({ ...options, action: "merge", method: "squash" }),
+  });
+}
+
 export async function listBranches(owner: string, repo: string): Promise<BranchSummaryDto[]> {
   const { branches } = await call<{ branches: BranchSummaryDto[] }>(
     `/api/gh/branches?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`,
@@ -543,6 +588,15 @@ export async function createBranch(options: {
     body: JSON.stringify(options),
   });
   return branch;
+}
+
+/** Throws away an experiment branch, and whatever was tried on it. */
+export async function deleteBranch(options: {
+  owner: string;
+  repo: string;
+  name: string;
+}): Promise<void> {
+  await call("/api/gh/branches", { method: "DELETE", body: JSON.stringify(options) });
 }
 
 /** Forks a repository so the user can write to a project they cannot push to. */

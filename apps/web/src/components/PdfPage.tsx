@@ -27,8 +27,11 @@ import { rectsForRange, type PdfPageText, type PdfSession } from "@forkleaf/pdf"
 export interface PdfHighlight {
   /** Character range in this page's text. */
   range: [number, number];
-  /** `citation` is the passage a link points at; `search` is a find result. */
-  kind: "citation" | "search";
+  /**
+   * `citation` is the passage a link points at, `search` a find result, and
+   * `highlight` something the reader marked and kept.
+   */
+  kind: "citation" | "search" | "highlight";
   /** The one the reader is currently on, drawn more strongly. */
   current?: boolean;
 }
@@ -120,9 +123,11 @@ export function PdfPage({
                     background:
                       highlight.kind === "citation"
                         ? "var(--fl-hl-yellow)"
-                        : highlight.current
-                          ? "var(--fl-hl-pink)"
-                          : "var(--fl-hl-blue)",
+                        : highlight.kind === "highlight"
+                          ? "var(--fl-hl-green)"
+                          : highlight.current
+                            ? "var(--fl-hl-pink)"
+                            : "var(--fl-hl-blue)",
                   }}
                 />
               ))

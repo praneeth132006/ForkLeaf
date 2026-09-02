@@ -4,6 +4,7 @@ import {
   describeTarget,
   idIsStableAcross,
   isSplitPublishing,
+  suggestEditUrl,
   parseTarget,
   publishTargetOf,
   targetWarning,
@@ -155,5 +156,40 @@ describe("withPublishTarget", () => {
 describe("describeTarget", () => {
   it("reads as owner/name", () => {
     expect(describeTarget(PUBLIC)).toBe("me/site");
+  });
+});
+
+/**
+ * The reader's way to send a correction back. GitHub's own editor forks,
+ * commits and opens the pull request; none of that has to be built here.
+ */
+describe("suggestEditUrl", () => {
+  const repo: RepoRef = { owner: "me", repo: "notes", branch: "main", directory: "" };
+
+  it("points at the note's own file, on its own branch", () => {
+    expect(suggestEditUrl(repo, "notes/runbook.md")).toBe(
+      "https://github.com/me/notes/edit/main/notes/runbook.md",
+    );
+  });
+
+  it("includes the workspace's folder, since that is where the file is", () => {
+    expect(suggestEditUrl({ ...repo, directory: "wiki" }, "a.md")).toBe(
+      "https://github.com/me/notes/edit/main/wiki/a.md",
+    );
+  });
+
+  it("encodes each segment without encoding the slashes between them", () => {
+    // A path is a path: percent-encoding its separators makes GitHub look for
+    // one file with slashes in its name.
+    expect(suggestEditUrl(repo, "SOC 101/week one.md")).toBe(
+      "https://github.com/me/notes/edit/main/SOC%20101/week%20one.md",
+    );
+  });
+
+  it("points at the source repository, whatever the page was published to", () => {
+    // A page published into a separate public site is a copy. A suggestion
+    // against the copy is one the author cannot accept without hand-copying it
+    // back.
+    expect(suggestEditUrl(repo, "a.md")).toContain("/me/notes/");
   });
 });

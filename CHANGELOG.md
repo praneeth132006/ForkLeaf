@@ -58,6 +58,197 @@ ForkLeaf opens PDFs, beside the note you are writing from them.
   all three with the current one marked, so it answers "where do they open
   now?" as well as changing it
 
+### A document's text, kept beside it
+
+Two problems with one answer.
+
+A scan is a photograph of a page. There is no text in it, so there is nothing
+to search, nothing to quote and nothing to check a citation against — the
+reader said so honestly and then there was nowhere to go. And a paper that
+_does_ carry its text still had it extracted from scratch on every device,
+every time, and thrown away at the end.
+
+The reader now looks for `<name>.text.md` beside a document and uses it when
+the document has nothing of its own. Recognise a scan's words once — with
+`ocrmypdf`, `tesseract`, or anything else — commit the file, and search,
+quotations, highlights and the citation check all start working on it, on every
+device. For a paper that already has text, ⌘K → **Keep this document's text
+beside it** writes the same file from what has already been read.
+
+Markdown with a `## Page 1` heading per page, deliberately: somebody will make
+these by hand and will want to correct a mangled line when they find one, which
+means the format has to be something a person can open and read. Correcting a
+line there corrects it everywhere.
+
+A document's own text always wins. A file beside a paper never silently
+replaces what the paper actually says.
+
+**Recognising the words inside ForkLeaf is still not possible**, and that is a
+decision rather than an omission — see `docs/ideas.md`.
+
+### Fixed — renaming a folder duplicated it, and broke every picture in it
+
+Three faults in one action, which together made renaming a folder unsafe.
+
+**The links to the pictures were repointed at the old folder.** A note's links
+are relative to where the note sits, so moving one is normally accompanied by
+rewriting them — but when the whole folder moves, the pictures move with it,
+and `assets/chart.png` was being rewritten to `../../old-folder/assets/chart.png`,
+which no longer exists. Every image in a renamed folder broke immediately, and
+the note looked fine until somebody opened it. Links that point _out_ of the
+folder are still rewritten, because those files did not move.
+
+**The old folder stayed on screen beside the new one.** The sidebar corrects
+the repository's file list with whatever has not been pushed yet, and it knew
+about renames and deletions but not about _moves_ — which is how everything
+that is not a note travels, a PDF included. So a folder holding a paper
+appeared twice.
+
+**An open tab kept pointing at the old path.** The next keystroke in it saved
+the note back to where it used to be, recreating the folder that had just been
+renamed with one note inside it. Tabs now follow the rename, and so do the
+locks on the notes in them.
+
+Between them these explain the duplicate folder people were left deleting — and
+why deleting it took real files with it: the duplicate was not a copy, it was
+the original.
+
+### Borrow a note from somebody else's notebook
+
+When a friend writes a good note, what people do is copy and paste it. Now
+there are two copies, one is already out of date, and neither of you can tell
+which. Installing a library solved this for code thirty years ago and nobody
+has solved it for the things people know.
+
+⌘K → **Borrow a note from another notebook** takes a repository as
+`owner/name`, lists the notes in it, and writes a link into yours —
+`[[repo:ada/notes:runbook.md@a1b2c3d]]` — pinned to the revision you read.
+Theirs stays theirs, nothing is copied here, and the link keeps working after
+they change it, because it names the version you actually read rather than
+&ldquo;whatever is there now&rdquo;. Unpin it if following along is what you
+wanted.
+
+### See what changed between two versions of a document
+
+A paper in your repository has every version of itself kept beside it, which no
+other reading app can say. ⌘K → **See what changed in this document** picks an
+earlier version and reports which pages changed — and whether one of them is a
+page you quoted.
+
+Compared as text, not as bytes: a paper re-exported from the same source
+differs in every byte while saying exactly the same thing, and a comparison
+that reported four hundred changed pages every time somebody re-saved it would
+be one nobody reads twice. Hyphenation across a line break, ligatures and runs
+of spaces are not edits.
+
+Whether the words you quoted survived is a different question, and one **Check
+my citations against their documents** already answers.
+
+### Publish your reading, not just your notes
+
+A note written from a paper is commentary with the passages set into it, each
+linked back to the page it came from. That is the thing worth sharing — not
+&ldquo;here is a PDF&rdquo; and not &ldquo;here is an opinion&rdquo;, but the
+argument with its receipts.
+
+It did not survive publishing. A citation is written relative to the note,
+which is right in the repository and reaches nothing from a page served out of
+`docs/` — so every quotation on a published reading page was a dead link,
+silently, which is worse than no link at all because it looks like there is a
+source behind it.
+
+Citations are now rewritten on the way out, to the document in your repository,
+fragment and all. Only the published copy changes: the note keeps its relative
+links, because that is what makes it readable on github.com and in any other
+editor.
+
+### Highlights that are just text files
+
+Everybody else locks a highlight inside the PDF — a binary annotation only a
+PDF reader can see — or inside their own app, where you can never get it out.
+Both mean the marks you made on a paper are worth nothing away from the tool
+you made them in, which is a strange fate for the part that is actually yours.
+
+Select a passage and press **Highlight**. It becomes a line in
+`attention.highlights.md`, committed beside the document, and is drawn in green
+over the page when you read it. The file renders on github.com, opens in
+Notepad, greps and diffs.
+
+The PDF is never touched. And because each line records the words rather than a
+page number, a highlight made against last year's version of a paper is still
+drawn in the right place after the author adds a figure to page 4 — one that has
+genuinely gone is simply not drawn, rather than drawn somewhere wrong.
+
+### Try a rewrite without losing what you had
+
+Rewriting a note you care about is a small act of courage: the old version goes
+into the history, where you have to know it exists and how to get it back. In
+practice people either do not try, or paste the original into a second note
+called `runbook-old.md`.
+
+⌘K → **Try a rewrite of this note** gives you a copy of the notebook to
+experiment in, and a bar at the top that says so and never goes away. **Keep
+it** puts the rewrite back onto the branch it came from as one change; **Throw
+it away** deletes the experiment and leaves the original exactly as it was.
+
+It is a git branch — named `try/<branch>/<what>`, so the name itself says what
+it is and where it has to land, and a second device picks the experiment up
+knowing both. Nothing is written down anywhere else, because anything written
+down anywhere else is the thing that gets lost.
+
+### Readers can suggest a change to your notes
+
+Programmers have had &ldquo;here is a fix for what you wrote&rdquo; for twenty
+years and call it a pull request. Nobody has ever offered it to people writing
+notes: a published page is something you read, and that is where it ends.
+
+- Every page you publish now carries **Suggest an edit**. A reader who spots a
+  mistake follows it, fixes the note in GitHub's own editor, and their change
+  becomes a suggestion — GitHub does the forking and the pull request, and
+  neither of you has to say those words
+- ⌘K → **See what other people have suggested** lists what has come in: who,
+  what, and when. **Read what changed** opens the diff and the conversation on
+  GitHub, which is a thing GitHub does very well; **Accept** merges it into your
+  notes from here, and the next sync brings it down to this device
+
+The link points at the note in the repository it came from, never at the
+published copy — a suggestion against a copy is one you could not accept
+without hand-copying it back.
+
+### The paper and the note stay on the same page
+
+Read a document beside a note and the two follow each other: move the cursor
+past a citation and the document turns to that page; turn to a page and the
+note scrolls to what you wrote about it. This is what people open two windows
+to fake.
+
+Nothing is guessed. Every citation already records the page it came from, so
+the mapping is the notebook's own. Above the first citation nothing follows —
+a cursor in a heading is not a statement about any page. ⌘K → **Stop the
+document following the note** switches it off; it works in Split and Source
+view, where there is a cursor to follow.
+
+### The citation format, written down
+
+A ForkLeaf citation was always an ordinary Markdown link — a relative path plus
+the `#page=` fragment every PDF reader has understood for twenty years, with the
+W3C Web Annotation text selector spelled into a query string. That is only
+useful to anybody else if it is written down, so it now is:
+[the citation link format](/docs/citation-links), field by field, with what a
+tool has to do to read one.
+
+**Copy link** on a selected passage puts exactly that form on the clipboard, for
+pasting into anything that is not ForkLeaf.
+
+### Help knows about all of it
+
+Ten features have gone in lately and the help dialog had not heard of any of
+them. It now covers every one, in the same three beats: what it is in one line,
+the exact words to press, and what happens when you do. Two new topics —
+**Papers & PDFs** and **Checks & history** — and the existing ones gained the
+resizable columns, the search that weighs what you are working on, diagram boxes
+that are notes, and what to do about an image too big to send.
+
 ### Your notebook, on a day you choose
 
 **Show me my notebook as it was on…** in the palette takes the whole notebook

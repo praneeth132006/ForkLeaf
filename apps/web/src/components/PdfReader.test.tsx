@@ -61,6 +61,9 @@ const loading: PdfReaderState = {
   outline: [],
   pages: [],
   indexing: false,
+  scanned: false,
+  textSupplied: false,
+  supplyText: () => {},
   error: null,
   open: () => {},
   close: () => {},
@@ -201,5 +204,148 @@ describe("PdfReader — starting a note from the paper", () => {
     render(<PdfReader reader={loading} layout="document" onStartNote={vi.fn()} onClose={null} />);
 
     expect(screen.queryByRole("button", { name: /Start a note about this paper/ })).toBeNull();
+  });
+});
+
+/**
+ * The one thing here that could outlive ForkLeaf: a citation is a relative
+ * path plus a standard fragment, and anything can follow it.
+ */
+describe("PdfReader — a link anything can follow", () => {
+  const withText: PdfReaderState = {
+    ...loading,
+    status: "ready",
+    pages: [
+      {
+        page: 1,
+        text: "We show that attention is all you need, and the rest is engineering.",
+        runs: [],
+      },
+    ],
+    info: {
+      pageCount: 1,
+      metadata: {
+        title: null,
+        author: null,
+        subject: null,
+        keywords: [],
+        createdAt: null,
+        modifiedAt: null,
+        producer: null,
+      },
+      sizes: [],
+      encrypted: false,
+    },
+  };
+
+  it("offers no link for a document that has no path to link to", () => {
+    // A PDF from a desktop: a link naming a file nobody else has is not a link.
+    render(<PdfReader reader={withText} layout="document" path={null} onClose={null} />);
+    expect(screen.queryByRole("button", { name: /Copy link/ })).toBeNull();
+  });
+});
+
+describe("PdfReader — following the note", () => {
+  it("turns to a page it is asked for, and only when the request changes", () => {
+    const { rerender } = render(
+      <PdfReader reader={loading} layout="document" showPage={null} onClose={null} />,
+    );
+
+    // jsdom has no layout, so what is under test is the decision to scroll,
+    // not the scrolling: the page is recorded as current either way.
+    rerender(<PdfReader reader={loading} layout="document" showPage={4} onClose={null} />);
+    rerender(<PdfReader reader={loading} layout="document" showPage={4} onClose={null} />);
+
+    // No throw, no loop: asking twice for the same page is not two requests.
+    expect(screen.getByLabelText("Contents and search")).toBeTruthy();
+  });
+
+  it("reports the page it is on, so the note can follow it back", () => {
+    const onPageChange = vi.fn();
+    render(
+      <PdfReader reader={loading} layout="document" onPageChange={onPageChange} onClose={null} />,
+    );
+
+    expect(onPageChange).toHaveBeenCalledWith(1);
+  });
+});
+
+/**
+ * Everybody else locks a highlight inside the PDF or inside their own app.
+ * Here it is a line in a text file, and the page draws what the file says.
+ */
+describe("PdfReader — marking a passage", () => {
+  it("offers no marking for a document the notebook cannot keep marks beside", () => {
+    // From a desktop: there is nowhere to write the file.
+    render(<PdfReader reader={loading} layout="document" onHighlight={null} onClose={null} />);
+    expect(screen.queryByRole("button", { name: /Highlight/ })).toBeNull();
+  });
+
+  it("draws nothing for a document whose text has not been read yet", () => {
+    // The words cannot be looked for until the pages have been extracted, and
+    // a highlight is found by its words rather than trusted to a page number.
+    render(
+      <PdfReader
+        reader={loading}
+        layout="document"
+        highlights={[{ page: 1, quote: "a passage", prefix: "", suffix: "" }]}
+        onClose={null}
+      />,
+    );
+
+    expect(document.querySelectorAll("[data-pdf-page]")).toHaveLength(0);
+  });
+});
+
+/**
+ * A scan is a photograph of a page. Saying so, and saying what would fix it,
+ * beats letting somebody search it and find nothing.
+ */
+describe("PdfReader — a document with no text of its own", () => {
+  const scan: PdfReaderState = { ...loading, status: "ready", scanned: true };
+
+  it("says it is a scan, and names the file that would fix it", () => {
+    render(<PdfReader reader={scan} layout="document" path="papers/minutes.pdf" onClose={null} />);
+
+    expect(screen.getByText(/photographs of pages/)).toBeTruthy();
+    expect(screen.getByText("minutes.text.md")).toBeTruthy();
+  });
+
+  it("suggests no file for a document that is not in the notebook", () => {
+    // Nowhere to commit one, so naming a path would be advice nobody can take.
+    render(<PdfReader reader={scan} layout="document" path={null} onClose={null} />);
+
+    expect(screen.getByText(/photographs of pages/)).toBeTruthy();
+    expect(screen.queryByText(/\.text\.md/)).toBeNull();
+  });
+
+  it("says where the words came from once they have been supplied", () => {
+    render(
+      <PdfReader
+        reader={{ ...scan, scanned: false, textSupplied: true }}
+        layout="document"
+        path="papers/minutes.pdf"
+        onClose={null}
+      />,
+    );
+
+    expect(screen.getByText(/text from the file beside it/)).toBeTruthy();
+    expect(screen.queryByText(/photographs of pages/)).toBeNull();
+  });
+
+  it("says nothing of the kind while the document is still being read", () => {
+    // "No text yet" and "no text at all" look identical until the reading
+    // finishes, and calling a paper a photograph while it loads would be wrong
+    // about half the documents that ever open.
+    render(
+      <PdfReader
+        reader={{ ...loading, status: "ready", indexing: true }}
+        layout="document"
+        path="papers/minutes.pdf"
+        onClose={null}
+      />,
+    );
+
+    expect(screen.queryByText(/photographs of pages/)).toBeNull();
   });
 });

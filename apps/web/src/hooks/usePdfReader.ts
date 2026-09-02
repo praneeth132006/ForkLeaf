@@ -45,6 +45,25 @@ export interface PdfReaderState {
   outline: PdfOutlineItem[];
   /** Page text, filled in behind the first render. Empty until extraction runs. */
   pages: PdfPageText[];
+  /**
+   * True when a document carries no text of its own — a scan.
+   *
+   * Only meaningful once the reading has finished: until then "no text yet"
+   * and "no text at all" look identical, and telling somebody their paper is a
+   * photograph while it is still being read would be wrong about half the
+   * documents that ever open.
+   */
+  scanned: boolean;
+  /** True when the words on screen came from a file rather than the document. */
+  textSupplied: boolean;
+  /**
+   * Hands the reader the words of a document that has none.
+   *
+   * For a scan whose text has been recognised elsewhere and committed beside
+   * it. Ignored when the document has its own text: a file beside a paper must
+   * never quietly replace what the paper actually says.
+   */
+  supplyText: (pages: readonly { page: number; text: string }[]) => void;
   /** True while text extraction is still running. */
   indexing: boolean;
   error: string | null;
@@ -66,7 +85,8 @@ export function usePdfReader(workspace: Workspace | null): PdfReaderState {
   const [session, setSession] = useState<PdfSession | null>(null);
   const [info, setInfo] = useState<PdfDocumentInfo | null>(null);
   const [outline, setOutline] = useState<PdfOutlineItem[]>([]);
-  const [pages, setPages] = useState<PdfPageText[]>([]);
+  const [extracted, setExtracted] = useState<PdfPageText[]>([]);
+  const [supplied, setSupplied] = useState<PdfPageText[]>([]);
   const [indexing, setIndexing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -109,7 +129,8 @@ export function usePdfReader(workspace: Workspace | null): PdfReaderState {
       setError(null);
       setInfo(null);
       setOutline([]);
-      setPages([]);
+      setExtracted([]);
+      setSupplied([]);
 
       void (async () => {
         try {
@@ -167,8 +188,8 @@ export function usePdfReader(workspace: Workspace | null): PdfReaderState {
 
         void opened
           .allText({ signal: controller.signal })
-          .then((extracted) => {
-            if (ticket === request.current) setPages(extracted);
+          .then((read) => {
+            if (ticket === request.current) setExtracted(read);
           })
           .catch(() => {
             // Aborted, or a document whose text cannot be read — a pure scan
@@ -192,7 +213,8 @@ export function usePdfReader(workspace: Workspace | null): PdfReaderState {
     setSource(null);
     setInfo(null);
     setOutline([]);
-    setPages([]);
+    setExtracted([]);
+    setSupplied([]);
     setIndexing(false);
     setError(null);
     setStatus("idle");
@@ -200,6 +222,24 @@ export function usePdfReader(workspace: Workspace | null): PdfReaderState {
 
   // The worker outlives React unless something stops it.
   useEffect(() => teardown, [teardown]);
+
+  /**
+   * What the reader has to work with: the document's own words, or the ones
+   * supplied for it.
+   *
+   * The document always wins. A supplied file is for a document that has
+   * nothing to say for itself, and letting it override a paper that does would
+   * make searching and citation quietly answer from the wrong text.
+   */
+  const pages = extracted.length > 0 ? extracted : supplied;
+
+  const supplyText = useCallback((given: readonly { page: number; text: string }[]) => {
+    setSupplied(
+      given
+        .filter((page) => page.text.trim() !== "")
+        .map((page) => ({ page: page.page, text: page.text, runs: [] })),
+    );
+  }, []);
 
   const search = useCallback(
     (query: string) => (pages.length === 0 ? [] : searchPdf(pages, query)),
@@ -218,6 +258,11 @@ export function usePdfReader(workspace: Workspace | null): PdfReaderState {
     info,
     outline,
     pages,
+    // A document that has been read and had nothing to give is a photograph
+    // of a page. Before the reading finishes, nobody can say that.
+    scanned: status === "ready" && !indexing && extracted.length === 0,
+    textSupplied: extracted.length === 0 && supplied.length > 0,
+    supplyText,
     indexing,
     error,
     open,

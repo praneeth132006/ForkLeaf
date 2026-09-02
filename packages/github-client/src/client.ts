@@ -65,6 +65,8 @@ interface ApiPullRequest {
   head: { ref: string; sha?: string };
   base: { ref: string; sha?: string };
   user?: { login: string } | null;
+  updated_at?: string;
+  created_at?: string;
   merged?: boolean;
   mergeable?: boolean | null;
   mergeable_state?: string | null;
@@ -526,6 +528,29 @@ export class GitHubClient {
     return { name, sha: from.sha, isDefault: false, protected: false };
   }
 
+  /**
+   * Deletes a branch.
+   *
+   * For an experiment somebody has decided against. Abandoned branches are
+   * clutter in everybody else's repository too, and a "throw it away" that
+   * left one behind would be a strange kind of throwing away.
+   *
+   * A branch that is already gone is not an error: two devices tidying up the
+   * same abandoned experiment is an ordinary race, and the wanted state is the
+   * same either way.
+   */
+  async deleteBranch(owner: string, repo: string, name: string): Promise<void> {
+    try {
+      await this.transport.request(
+        `/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(name)}`,
+        { method: "DELETE" },
+      );
+    } catch (error) {
+      if (error instanceof GitHubError && error.code === "not-found") return;
+      throw error;
+    }
+  }
+
   async getBranch(owner: string, repo: string, name: string): Promise<BranchSummary | null> {
     try {
       const { data } = await this.transport.request<{
@@ -638,6 +663,34 @@ export class GitHubClient {
     );
 
     return pulls[0] ? toPullRequest(pulls[0]) : null;
+  }
+
+  /**
+   * Every open pull request on a repository, newest first.
+   *
+   * For the author's side of "suggest an edit": a reader who spotted a mistake
+   * has opened one of these from a fork, and until now the only place to find
+   * out was github.com. Summaries only — a list is a list, and reading one
+   * costs a request of its own.
+   */
+  async listOpenPullRequests(
+    owner: string,
+    repo: string,
+    limit = 30,
+  ): Promise<(PullRequestSummary & { author: string | null; updatedAt: string })[]> {
+    const pulls = await this.transport.paginate<ApiPullRequest>(
+      `/repos/${owner}/${repo}/pulls?state=open&sort=updated&direction=desc` +
+        `&per_page=${Math.min(Math.max(limit, 1), 100)}`,
+    );
+
+    // Capped here rather than by asking for fewer: `paginate` follows every
+    // `Link: rel="next"` it is given, and a repository with four hundred open
+    // requests is not a list anybody reads to the end of.
+    return pulls.slice(0, limit).map((pull) => ({
+      ...toPullRequest(pull),
+      author: pull.user?.login ?? null,
+      updatedAt: pull.updated_at ?? pull.created_at ?? "",
+    }));
   }
 
   /**

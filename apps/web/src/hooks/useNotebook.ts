@@ -1281,6 +1281,46 @@ export function useNotebook(request: NotebookRequest = {}) {
         putCreated(withCreatedRenamed(state.createdAt, source, target));
         putTreeOrder(withPathRenamed(state.treeOrder, source, target));
 
+        /**
+         * The notes open in tabs move too.
+         *
+         * Without this a tab left pointing at the old path, and the next
+         * keystroke in it saved the note *back* to where it used to be —
+         * recreating the folder that had just been renamed, with one note in
+         * it, on GitHub. That is the duplicate folder people were left
+         * deleting, and deleting it took the real files with it.
+         *
+         * Re-read rather than repathed, because the move rewrote the links in
+         * notes that pointed out of the folder: keeping the copy in the tab
+         * would show text that is no longer what the file says.
+         */
+        const inside = (path: string) => path === source || path.startsWith(`${source}/`);
+        const moved = (path: string) =>
+          inside(path) ? `${target}${path.slice(source.length)}` : path;
+
+        if (state.openNotes.some((note) => inside(note.path))) {
+          const reopened = await Promise.all(
+            state.openNotes.map(async (note) =>
+              inside(note.path)
+                ? await notes.openNote(workspace.id, moved(note.path)).catch(() => null)
+                : note,
+            ),
+          );
+
+          const open = reopened.filter((note): note is Note => note !== null);
+          const activePath = state.activePath ? moved(state.activePath) : null;
+
+          // Renaming a folder is not unlocking the notes inside it.
+          let locks = state.lockedPaths;
+          for (const note of state.openNotes) {
+            if (inside(note.path)) locks = renameLock(locks, note.path, moved(note.path));
+          }
+          if (locks !== state.lockedPaths) putLocked(locks);
+
+          patch({ openNotes: open, activePath });
+          rememberTabs(workspace.id, open, activePath);
+        }
+
         await refreshTree();
       } finally {
         patch({ busy: null });
@@ -1295,9 +1335,14 @@ export function useNotebook(request: NotebookRequest = {}) {
       state.emptyFolders,
       state.createdAt,
       state.treeOrder,
+      state.openNotes,
+      state.activePath,
+      state.lockedPaths,
       putEmptyFolders,
       putCreated,
       putTreeOrder,
+      putLocked,
+      rememberTabs,
       refreshTree,
       patch,
     ],
@@ -1656,6 +1701,63 @@ export function useNotebook(request: NotebookRequest = {}) {
   );
 
   /**
+   * Writes a file in the notebook whether or not it exists yet.
+   *
+   * `rewriteNote` needs a note to already be there. This is for the files the
+   * app makes on somebody's behalf — a document's highlights, kept beside it —
+   * where "there is not one yet" is the ordinary first case rather than an
+   * error. It goes through the note repository like everything else, so the
+   * file gets the same offline queue, the same commit and the same history as
+   * anything typed by hand.
+   */
+  const upsertNote = useCallback(
+    async (path: string, change: (content: string) => string): Promise<string | null> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace) return null;
+
+      const existing = await notes.openNote(workspace.id, path).catch(() => null);
+      const note: Note = existing ?? {
+        id: `${workspace.id}::${path}`,
+        workspaceId: workspace.id,
+        path,
+        content: "",
+        frontmatter: {},
+        baseSha: null,
+        updatedAt: null,
+        dirty: true,
+      };
+
+      const next = change(note.content);
+      if (next === note.content) return note.content;
+
+      await notes.saveNote(note, next);
+      patchOpenNote(path, { content: next, dirty: true });
+
+      // A file made this way is a file in the notebook, so the sidebar has to
+      // know about it — otherwise it appears at the next refresh from GitHub
+      // and looks like something somebody else committed.
+      if (!existing) patch({ tree: insertIntoTree(state.tree, path) });
+
+      return next;
+    },
+    [state.activeWorkspace, state.tree, patch, patchOpenNote],
+  );
+
+  /** Reads a file in the notebook, or null when there is not one. */
+  const readNote = useCallback(
+    async (path: string): Promise<string | null> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace) return null;
+
+      const note = await notes.openNote(workspace.id, path).catch(() => null);
+      return note?.content ?? null;
+    },
+    [state.activeWorkspace],
+  );
+
+  /**
    * Drops one stuck change, so the queue behind it can move.
    *
    * The way out of a change that can never be pushed. Needs a refresh of the
@@ -1977,6 +2079,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       discardChange,
       shrinkChange,
       rewriteNote,
+      upsertNote,
+      readNote,
       saveDocumentText,
       documentText,
       allDocumentText,
@@ -2042,6 +2146,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       documentText,
       saveDocumentText,
       rewriteNote,
+      upsertNote,
+      readNote,
       shrinkChange,
       setSyncMode,
       resolveConflict,

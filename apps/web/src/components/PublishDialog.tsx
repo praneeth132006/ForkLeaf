@@ -6,11 +6,13 @@ import { deriveTitle, slugifyFilename, stripExtension } from "@forkleaf/markdown
 import { toHtml } from "@forkleaf/exporter";
 import { ApiGatewayError, publishNote, unpublishNote } from "@/lib/gateway";
 import { Dialog } from "./Dialog";
+import { linkDocuments } from "@/lib/publish-citations";
 import {
   describeTarget,
   isSplitPublishing,
   parseTarget,
   publishTargetOf,
+  suggestEditUrl,
   targetWarning,
 } from "@/lib/publish-target";
 
@@ -114,12 +116,25 @@ export function PublishDialog({
 
       try {
         setStep("Rendering the page…");
-        const html = await toHtml(note.content, note.frontmatter, {
+
+        // Citations are written relative to the note, which is right in the
+        // repository and reaches nothing from a page served out of `docs/`.
+        // Only the published copy is rewritten; the note keeps its relative
+        // links, because that is what makes it readable everywhere else.
+        const body = linkDocuments(note.content, {
+          notePath: note.path,
+          repo: workspace.repo,
+        });
+
+        const html = await toHtml(body, note.frontmatter, {
           format: "html",
           title,
           includeFrontmatter: false,
           renderDiagrams: true,
           theme: "light",
+          // The reader's way to send a correction back. Points at the note in
+          // the repository it came from, never at the published copy.
+          suggestUrl: suggestEditUrl(workspace.repo, note.path),
         });
 
         setStep("Committing it to your repository…");
@@ -133,7 +148,7 @@ export function PublishDialog({
         setStage("idle");
       }
     },
-    [note, title, slug, onChanged],
+    [note, title, slug, onChanged, workspace.repo],
   );
 
   const publish = useCallback(() => publishTo(target), [publishTo, target]);

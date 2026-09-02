@@ -155,3 +155,62 @@ describe("repairRelativeLinks", () => {
     expect(repairRelativeLinks(before, "a/n.md", repo).content).toBe(before);
   });
 });
+
+/**
+ * A whole folder moving is not the same as a note moving out of one.
+ *
+ * The pictures come too, so the links to them must be left exactly as they
+ * are. Rewriting them pointed every image in a renamed folder back at a folder
+ * that no longer existed — the note looked fine until somebody opened it.
+ */
+describe("rewriteRelativeLinks — a folder moving wholesale", () => {
+  const move = { from: "Introduction", to: "Python 101/Introduction" };
+
+  it("leaves a link to something inside the folder alone", () => {
+    const content = "![shot](assets/a.png)";
+
+    expect(
+      rewriteRelativeLinks(content, "Introduction/what.md", "Python 101/Introduction/what.md", {
+        movedFolder: move,
+      }),
+    ).toBe(content);
+  });
+
+  it("still repoints a link to something outside it", () => {
+    // That file did not move, and the note is a level further away now.
+    expect(
+      rewriteRelativeLinks(
+        "![logo](../shared/logo.png)",
+        "Introduction/what.md",
+        "Python 101/Introduction/what.md",
+        { movedFolder: move },
+      ),
+    ).toBe("![logo](../../shared/logo.png)");
+  });
+
+  it("leaves a link to a note in a sibling subfolder of the moved folder alone", () => {
+    expect(
+      rewriteRelativeLinks(
+        "[other](../week-two/plan.md)",
+        "Introduction/week-one/what.md",
+        "Python 101/Introduction/week-one/what.md",
+        { movedFolder: move },
+      ),
+    ).toBe("[other](../week-two/plan.md)");
+  });
+
+  it("does not mistake a folder whose name merely starts the same", () => {
+    // `Intro` must not swallow `Introduction`.
+    expect(
+      rewriteRelativeLinks("![x](../Introduction/assets/a.png)", "Intro/what.md", "Deep/what.md", {
+        movedFolder: { from: "Intro", to: "Deep" },
+      }),
+    ).toBe("![x](../Introduction/assets/a.png)");
+  });
+
+  it("rewrites exactly as before when no folder is named", () => {
+    expect(
+      rewriteRelativeLinks("![shot](assets/a.png)", "Introduction/what.md", "Deep/what.md"),
+    ).toBe("![shot](../Introduction/assets/a.png)");
+  });
+});

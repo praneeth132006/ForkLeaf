@@ -91,6 +91,11 @@ function scan(notes: readonly MentionSource[], wanted: (pdfPath: string) => bool
     // notebook of a few thousand notes.
     if (!note.content.toLowerCase().includes(".pdf")) continue;
 
+    // A document's own highlights file is not a note about the document: the
+    // passages in it are already drawn on the page, and listing them here as
+    // well would say the same thing twice.
+    if (note.path.endsWith(".highlights.md")) continue;
+
     const lines = note.content.split("\n");
 
     lines.forEach((line, index) => {

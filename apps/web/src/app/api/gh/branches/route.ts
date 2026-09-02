@@ -47,3 +47,35 @@ export async function POST(request: NextRequest) {
     };
   });
 }
+
+/**
+ * Deletes a branch.
+ *
+ * Only ever asked for by the experiment flow, which is why it is willing to
+ * delete at all: a branch called `try/…` that somebody has decided against is
+ * theirs, and leaving it behind would be a strange kind of throwing away.
+ */
+export async function DELETE(request: NextRequest) {
+  return handle(async () => {
+    const { client } = await requireClient();
+
+    const body = (await request.json().catch(() => ({}))) as {
+      owner?: string;
+      repo?: string;
+      name?: string;
+    };
+
+    const { owner, repo } = readOwnerRepo(body);
+    const name = sanitizeBranchName(body.name ?? "");
+    if (!name) throw new ApiError(400, "validation", "A branch name is required.");
+
+    // Deliberately narrow. Nothing in this app needs to delete an ordinary
+    // branch, and a route that could would be a route that can lose work.
+    if (!name.startsWith("try/")) {
+      throw new ApiError(400, "validation", "Only an experiment branch can be deleted here.");
+    }
+
+    await client.deleteBranch(owner, repo, name);
+    return { deleted: name };
+  });
+}

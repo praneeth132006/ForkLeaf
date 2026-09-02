@@ -140,9 +140,49 @@ const DEFINITION = /^([ \t]{0,3}\[(?:[^[\]\\]|\\.)+\]:[ \t]*)(<[^<>\n]*>|\S+)(.*
  * and line wrapping across the whole file, turning "moved a note" into a diff
  * nobody can review.
  */
-export function rewriteRelativeLinks(markdown: string, fromPath: string, toPath: string): string {
+export interface RewriteOptions {
+  /**
+   * A folder moving wholesale, when this note is moving as part of it.
+   *
+   * Without this, moving a folder breaks every picture in it. The links inside
+   * a note are relative to where the note sits, so a note carried from
+   * `Introduction/` to `Python 101/Introduction/` has `assets/a.png` rewritten
+   * to `../../Introduction/assets/a.png` — pointing back at a folder that no
+   * longer exists, because the pictures came along too.
+   *
+   * Knowing that the whole folder moved is what tells the rewrite to leave
+   * those links alone. Links pointing *out* of the folder still have to be
+   * rewritten: they name something that did not move, and the note is now a
+   * level further away from it.
+   */
+  movedFolder?: { from: string; to: string };
+}
+
+export function rewriteRelativeLinks(
+  markdown: string,
+  fromPath: string,
+  toPath: string,
+  options: RewriteOptions = {},
+): string {
   if (normalizePath(fromPath) === normalizePath(toPath)) return markdown;
   if (dirname(normalizePath(fromPath)) === dirname(normalizePath(toPath))) return markdown;
+
+  const folder = options.movedFolder
+    ? {
+        from: normalizePath(options.movedFolder.from),
+        to: normalizePath(options.movedFolder.to),
+      }
+    : null;
+
+  /** Where a file ends up, given a folder that is moving around it. */
+  const after = (repoPath: string): string => {
+    if (!folder) return repoPath;
+    if (repoPath === folder.from) return folder.to;
+    // The slash matters: `Intro` must not swallow `Introduction`.
+    return repoPath.startsWith(`${folder.from}/`)
+      ? `${folder.to}${repoPath.slice(folder.from.length)}`
+      : repoPath;
+  };
 
   const fenced = fencedRanges(markdown);
   const inFence = (index: number) => fenced.some(([start, end]) => index >= start && index < end);
@@ -160,7 +200,7 @@ export function rewriteRelativeLinks(markdown: string, fromPath: string, toPath:
     const repoPath = resolveFromNote(fromPath, path);
     if (!repoPath) return null;
 
-    return encodeDestination(`${relativeFromNote(toPath, repoPath)}${fragment}`);
+    return encodeDestination(`${relativeFromNote(toPath, after(repoPath))}${fragment}`);
   };
 
   let result = markdown.replace(

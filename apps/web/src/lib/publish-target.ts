@@ -118,3 +118,26 @@ export function withPublishTarget(workspace: Workspace, target: RepoRef | null):
 export function idIsStableAcross(workspace: Workspace): boolean {
   return workspace.id === workspaceId(workspace.repo);
 }
+
+/**
+ * Where a reader who spots a mistake in a published page should go.
+ *
+ * GitHub's own editor for the note's file. Following it forks the repository,
+ * commits the change to the fork and opens a pull request — three things the
+ * reader never has to know the names of, and none of which this app has to
+ * build, host or hold a token for.
+ *
+ * Deliberately the *source* repository, not wherever the page was published
+ * to. A page published into a separate public site is a copy; suggesting a
+ * change to the copy would produce a suggestion the author cannot accept
+ * without hand-copying it back.
+ */
+export function suggestEditUrl(repo: RepoRef, notePath: string): string {
+  const path = repo.directory ? `${repo.directory}/${notePath}` : notePath;
+  const encoded = path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  return `https://github.com/${repo.owner}/${repo.repo}/edit/${encodeURIComponent(repo.branch)}/${encoded}`;
+}

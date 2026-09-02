@@ -14,25 +14,25 @@ Ticked entries link to nothing; the git history is the record.
 
 ## The whole app
 
-- [ ] **Try a rewrite without losing the original** — Medium. A "Try this"
-      button gives you a second copy of a note to experiment on, compared side
-      by side; keep it or throw it away. It is a git branch, which ForkLeaf
-      already has for free
+- [x] **Try a rewrite without losing the original** — Medium. An experiment
+      branch with a bar that says so, and two buttons: keep it, or throw it
+      away. Comparing the two side by side is still to do
 - [x] **Read your notebook as it was on any date** — Small. A date picker that
       takes the _whole notebook_ back: the files that existed that day, and
       each one readable as it stood. Read-only
 - [x] **Ask a sentence where it came from** — Medium. Pointing at a paragraph
       now says what it used to say, taken from the revision before the change
       that produced it
-- [ ] **Suggest a change to someone else's notes** — Big. A reader of a
-      published page fixes a mistake and you get a suggestion to accept or
-      decline, without either of you touching GitHub. This is the single most
-      distinctive thing ForkLeaf could ship
+- [x] **Suggest a change to someone else's notes** — Big. Published pages carry
+      **Suggest an edit**; suggestions arrive in a list you can accept from.
+      Reading the diff still happens on GitHub, and the reader still needs a
+      GitHub account — the half that would remove that is still to do
 - [x] **Notes that tell you when they have gone stale** — Medium. A list that
       comes to you, across the notebook: notes pointing at files that have
       gone, links matching no note, and claims that have aged
-- [ ] **Borrow somebody else's notebook** — Big. Link into their notes, pinned
-      to a version, rather than copying and going stale
+- [x] **Borrow somebody else's notebook** — Big. Browse another repository's
+      notes and write a pinned link into yours. Reading one still opens it in a
+      dialog rather than as a note of your own, which is the honest shape
 - [x] **Search that knows what you are working on** — Small. Notes linked to
       the one you are in float to the top of ⌘K, by however many hops away
       they are
@@ -47,24 +47,34 @@ Ticked entries link to nothing; the git history is the record.
 - [x] **Open a PDF and see everything you have written about it** — Small
 - [x] **Search inside your PDFs from ⌘K** — Small. The text is kept the first
       time a document is read, so ⌘K reaches inside the papers as well
-- [ ] **Scroll one pane, the other follows** — Small. Scroll the note and the
-      document moves to the page you are writing about, and back again
+- [x] **Scroll one pane, the other follows** — Small. The cursor and the page
+      follow each other, mapped by the note's own citations. Split and Source
+      view, where there is a cursor to follow
 - [x] **A list of citations that have broken** — Medium. Every quotation in the
       notebook, checked against the document as it stands now: what has moved,
       what is gone, and a one-press fix for a stale page number
-- [ ] **See what changed between two versions of a PDF** — Medium. The file is
-      in a repository, so old versions are kept: show page 12 then and now, and
-      say whether the page you quoted is one of the ones that changed
-- [ ] **Highlights that are just text files** — Medium. A highlight is an
-      ordinary file beside the PDF, drawn over the page when you read
+- [x] **See what changed between two versions of a PDF** — Medium. Which pages
+      changed, compared as text rather than bytes, and whether one of them is a
+      page you quoted. Rendering the two pages side by side is still to do
+- [x] **Highlights that are just text files** — Medium. A line in
+      `<document>.highlights.md` beside the PDF, drawn over the page when you
+      read, found again by its words rather than by a page number
 - [x] **Start a note from a paper** — Small. Title, author and date fill
       themselves in; the paper's headings become the note's headings, each
       linked to the page it starts on
-- [ ] **Read scanned documents** — Big. Recognise the text once and keep it
-      beside the file, so the work is shared with every device
-- [ ] **Publish your reading, not just your notes** — Big. A public page of
-      your commentary with the quoted passages set into it, each linking back
-      to the exact page
-- [ ] **Let other apps understand ForkLeaf's links** — Big. The link format is
-      a web standard plus the `#page=` every reader has understood for twenty
-      years. Write it up and invite Obsidian and Zotero plugins to use it
+- [~] **Read scanned documents** — Big. Half done, and the other half is a
+  decision rather than code.
+
+      **Done:** a document's words can live in `<name>.text.md` beside it. The
+      reader uses that file when the document has none of its own, so a scan
+      becomes searchable, quotable and checkable — and the work is done once
+      and shared with every device instead of redone on each one.
+
+      **Not done:** recognising the words inside ForkLeaf. Every browser OCR
+      engine needs WebAssembly, and this app deliberately refuses
+      `wasm-unsafe-eval` in the CSP that guards the route rendering markdown
+      from repositories you do not control. Recognising them on a server
+      instead would mean sending somebody's documents to us, which is the other
+      thing this app is built not to do. Either the policy changes or the
+      privacy promise does; until somebody decides which, the file beside the
+      document is the honest answer, and any tool can write it.
