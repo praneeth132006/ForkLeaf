@@ -3,6 +3,7 @@ import { ApiError } from "./api-helpers";
 import {
   bookAssetPath,
   bookDir,
+  bookFilePath,
   bookUrl,
   chapterPath,
   chapterUrl,
@@ -268,5 +269,54 @@ describe("filesToDelete", () => {
     expect(of(["docs/handbook/index.html", "docs/handbook/INDEX.html"])).toEqual([
       "docs/handbook/index.html",
     ]);
+  });
+});
+
+/**
+ * The file list arrives over HTTP, which makes it a list of requests to write
+ * into somebody's repository. Everything below is about the ones that should
+ * not be honoured.
+ */
+describe("bookFilePath", () => {
+  it("places the files a book is made of", () => {
+    expect(bookFilePath("handbook", "index.html")).toBe("docs/handbook/index.html");
+    expect(bookFilePath("handbook", "setup.html")).toBe("docs/handbook/setup.html");
+    expect(bookFilePath("handbook", "assets/style.css")).toBe("docs/handbook/assets/style.css");
+    expect(bookFilePath("handbook", "forkleaf-book.json")).toBe("docs/handbook/forkleaf-book.json");
+  });
+
+  it("refuses anything that is not one of them", () => {
+    for (const file of [
+      "",
+      "notes.md",
+      "CNAME",
+      ".nojekyll",
+      "deploy.sh",
+      "assets/deploy.sh",
+      "assets/nested/style.css",
+      "drafts/chapter.html",
+      "../../.github/workflows/ci.yml",
+      "../escape.html",
+      "/etc/passwd",
+    ]) {
+      expect(() => bookFilePath("handbook", file)).toThrow(ApiError);
+    }
+  });
+
+  it("agrees with filesToDelete, so everything written can be removed again", () => {
+    const written = ["index.html", "setup.html", "assets/style.css", "forkleaf-book.json"].map(
+      (file) => bookFilePath("handbook", file),
+    );
+
+    expect(
+      filesToDelete({
+        version: 1,
+        book: "handbook",
+        title: "",
+        publishedAt: "",
+        chapters: [],
+        files: written,
+      }),
+    ).toEqual([...written].sort());
   });
 });

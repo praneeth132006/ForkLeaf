@@ -203,6 +203,41 @@ export function chapterUrl(siteUrl: string, book: string, slug: string): string 
   return `${bookUrl(siteUrl, book)}${slug.toLowerCase()}.html`;
 }
 
+/**
+ * Maps a book-relative filename onto a path in the repository.
+ *
+ * The builder produces names like `index.html`, `setup.html` and
+ * `assets/style.css` and knows nothing about where the book lives. This is
+ * where those become real paths, and — more to the point — where they are
+ * checked. The list of files to write arrives over HTTP, so it is a list of
+ * requests to write to somebody's repository: every entry is re-derived
+ * through the same functions that address a book in the first place, and one
+ * that does not correspond to a file a book is made of is refused outright
+ * rather than written somewhere unexpected.
+ */
+export function bookFilePath(book: string | undefined, relative: string): string {
+  const path = relative.toLowerCase();
+
+  if (path === BOOK_MANIFEST) return bookManifestPath(book);
+  if (path === `${BOOK_INDEX}.html`) return bookIndexPath(book);
+
+  if (path.startsWith("assets/")) {
+    const name = path.slice("assets/".length);
+    // `bookAssetPath` checks the name, but not that it is a name at all —
+    // `assets/nested/style.css` has to fail here, not become a folder.
+    if (name.includes("/")) {
+      throw new ApiError(400, "validation", "That file cannot be published inside a book.");
+    }
+    return bookAssetPath(book, name);
+  }
+
+  if (path.endsWith(".html")) {
+    return chapterPath(book, path.slice(0, -".html".length));
+  }
+
+  throw new ApiError(400, "validation", "That file cannot be published inside a book.");
+}
+
 /** One chapter, as the manifest records it. */
 export interface BookChapter {
   /** The chapter's address within the book, without `.html`. */

@@ -10,7 +10,19 @@ import {
 import { toHtml, type ImageResolver } from "./html";
 import { toDocx } from "./docx";
 
-export { toHtml, type ImageResolver } from "./html";
+export { toHtml, toBodyHtml, pageStyles, type ImageResolver } from "./html";
+export {
+  buildBook,
+  assignSlugs,
+  chapterSlug,
+  stylesheet as bookStylesheet,
+  BOOK_STYLESHEET,
+  type Book,
+  type BookChapter,
+  type BookFile,
+  type BookNote,
+  type BuildBookOptions,
+} from "./book";
 export { toDocx } from "./docx";
 
 /**
