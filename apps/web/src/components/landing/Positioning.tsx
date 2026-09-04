@@ -1,5 +1,4 @@
 import React from "react";
-import { SectionHeading } from "./SectionHeading";
 
 /**
  * Where ForkLeaf sits.
@@ -57,16 +56,26 @@ const AUDIENCES = [
   },
 ] as const;
 
-export function Positioning() {
+/**
+ * The category half of the "why this" argument: the three things a reader
+ * already has open, and the audiences the answer is aimed at.
+ *
+ * No section wrapper and no heading of its own — it is one block inside
+ * {@link Why}, which owns both. It used to be a section, directly above a
+ * second section making the same argument against named products; two full
+ * headings for one question read as two answers, and a reader who had been
+ * told "here is the honest case for moving" once did not need to be told it
+ * again four hundred pixels later.
+ */
+export function PositioningBlock() {
   return (
-    <section id="why" className="fl-anchor mx-auto w-full max-w-6xl px-6 py-24">
-      <SectionHeading
-        eyebrow="Where this fits"
-        title="You already have somewhere to put notes. Here is the honest case for moving."
-        body="Three reasonable alternatives, what each is genuinely good at, and the specific thing ForkLeaf does differently."
-      />
+    <>
+      <p className="mt-10 max-w-2xl text-[15px] leading-relaxed text-[var(--fl-muted)]">
+        First by category — the three things you already have open, what each is genuinely good at,
+        and the specific thing ForkLeaf does differently.
+      </p>
 
-      <div className="mt-12 grid gap-4 lg:grid-cols-3">
+      <div className="mt-8 grid gap-4 lg:grid-cols-3">
         {COMPARISONS.map((row) => (
           <article key={row.them} className="fl-card flex flex-col p-6">
             <h3 className="text-[16px] font-semibold tracking-tight text-[var(--fl-text)]">
@@ -118,6 +127,6 @@ export function Positioning() {
           ))}
         </dl>
       </div>
-    </section>
+    </>
   );
 }

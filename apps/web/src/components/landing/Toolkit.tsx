@@ -14,6 +14,11 @@ import { SectionHeading } from "./SectionHeading";
  * Every entry here corresponds to code in this repository. Nothing planned,
  * nothing "coming soon" — a capability list is a promise, and this page has
  * over-promised before. When a row stops being true, delete the row.
+ *
+ * This is also where the hero's capability chips went. Three of them named
+ * things no row here did — running a code block, archiving a web source,
+ * line-by-line blame — so those rows were added rather than the claims being
+ * quietly dropped on the way down the page.
  */
 
 interface Group {
@@ -42,6 +47,10 @@ const GROUPS: Group[] = [
       { name: "Markdown shortcuts", detail: "# ␣, - ␣, > ␣, ``` ␣ and the rest, as you type" },
       { name: "Images", detail: "Paste, drop or upload — committed alongside the note" },
       { name: "Properties", detail: "Title, tags and custom fields, stored as YAML front matter" },
+      {
+        name: "Runnable code blocks",
+        detail: "Run a shell, Python or JavaScript block; the output lands under it, stamped",
+      },
       { name: "Tabs & outline", detail: "Several notes open at once, with headings and stats" },
     ],
   },
@@ -64,6 +73,10 @@ const GROUPS: Group[] = [
         detail: "Every word of every note, ranked with BM25, in-browser",
       },
       { name: "Tags", detail: "Filter the library by anything in the front matter" },
+      {
+        name: "Web sources, archived",
+        detail: "Capture a page as a citation, with a Wayback copy that outlives the link",
+      },
       { name: "Folders & tree", detail: "Real directories in the repository, renamed in place" },
       { name: "Command palette", detail: "⌘K to jump to any note or run any command" },
     ],
@@ -99,6 +112,10 @@ const GROUPS: Group[] = [
       { name: "Offline-first", detail: "IndexedDB first, network second — always in that order" },
       { name: "Atomic commits", detail: "A burst of edits becomes one clean commit, not forty" },
       { name: "Full history", detail: "Every version of every note, with diffs, in the app" },
+      {
+        name: "Line-by-line blame",
+        detail: "Which commit wrote each paragraph, how old it is, and what it said before",
+      },
       { name: "Branches", detail: "Switch the branch you are writing on from the status bar" },
       { name: "Conflicts", detail: "Both versions shown side by side — never a silent overwrite" },
       { name: "Propose changes", detail: "Open a pull request against a repo you cannot push to" },

@@ -4,10 +4,9 @@ import { SignInError } from "@/components/SignInError";
 import { Nav } from "@/components/landing/Nav";
 import { Hero } from "@/components/landing/Hero";
 import { HowItWorks } from "@/components/landing/HowItWorks";
-import { Toolkit } from "@/components/landing/Toolkit";
 import { Features } from "@/components/landing/Features";
-import { Positioning } from "@/components/landing/Positioning";
-import { Comparison } from "@/components/landing/Comparison";
+import { Toolkit } from "@/components/landing/Toolkit";
+import { Why } from "@/components/landing/Why";
 import { Ownership } from "@/components/landing/Ownership";
 import { Faq } from "@/components/landing/Faq";
 import { Support } from "@/components/landing/Support";
@@ -70,12 +69,19 @@ export default async function Home({
       )}
 
       <main className="flex-1">
+        {/* Argument before inventory.
+            
+            `Toolkit` — the exhaustive list of everything ForkLeaf does — used
+            to come before `Features`, which is the illustrated case for why
+            any of it matters. That is the wrong way round: a reader who has
+            not yet been given a reason to care meets eight groups of ticked
+            rows, and a capability list read by somebody who is not yet sold
+            is just a long page. `Features` argues, then `Toolkit` proves. */}
         <Hero githubAvailable={githubAvailable} />
         <HowItWorks />
-        <Toolkit />
         <Features />
-        <Positioning />
-        <Comparison />
+        <Toolkit />
+        <Why />
         <Ownership />
         <Pricing />
         <Faq />

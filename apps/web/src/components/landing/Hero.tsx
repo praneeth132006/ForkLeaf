@@ -11,45 +11,27 @@ import { SectionLink } from "./SectionLink";
  *
  * 1. The display line makes the claim. It is set in Instrument Serif at a size
  *    that only works because it is short — resist lengthening it.
- * 2. The paragraph under it says what the thing actually is, in the plainest
- *    words available, because "notes you own" is a promise and not a product.
- * 3. The chips name the capabilities, because somebody reading a headline about
- *    ownership still does not know whether this can draw a diagram.
- * 4. The button says what it costs and what it will ask for, next to itself.
+ * 2. One sentence says what the thing actually is, because "notes you own" is
+ *    a promise and not a product.
+ * 3. The button says what it costs and what it will ask for, next to itself.
  *    An unpriced button with an OAuth screen behind it is the single most
  *    common reason a developer closes the tab.
- */
-
-/**
- * Named capabilities, in the order a writer would meet them.
  *
- * The list is long on purpose. "Notes in your own repo" is a storage decision,
- * and a reader who has only been told that is entitled to assume they are
- * being offered a text box over an API — so the chips say, before anybody
- * scrolls, that this is a full notebook: it links, it searches, it draws, it
- * remembers, it publishes, and it opens the files already on your disk.
+ * What is deliberately *not* here is the capability list.
  *
- * Every one of these is in the repository today. Nothing aspirational goes in
- * this list; the moment one entry turns out to be a plan, the reader is right
- * to stop believing the other eleven.
+ * Fifteen named capabilities used to sit between the paragraph and the button,
+ * on the reasoning that a reader told only "notes in your own repo" would
+ * assume they were being offered a text box over an API. The reasoning was
+ * right and the remedy was wrong: fifteen pills read as texture rather than as
+ * words, so the list that existed to be *read* was the one thing on the page
+ * nobody read, and it pushed the button below the fold to do it.
+ *
+ * The inventory is a section of its own further down, grouped by the job each
+ * capability belongs to, where a reader who wants it arrives having already
+ * decided to look. Nothing was dropped in the move — the three capabilities
+ * that were named only here (running a code block, archiving a web source,
+ * line-by-line blame) are named there now.
  */
-const CAPABILITIES = [
-  "Rich, split & source editing",
-  "[[Wikilinks]] & backlinks",
-  "Offline full-text search",
-  "Visual Mermaid studio",
-  "Real commit history",
-  "Version compare & restore",
-  "Conflicts shown, never merged",
-  "Pull requests from the editor",
-  "Publish to GitHub Pages",
-  "PDF, Word & HTML export",
-  "Opens the .md files on your disk",
-  "Runs the code in your notes",
-  "Web sources, archived",
-  "Line-by-line blame",
-  "Works offline",
-] as const;
 
 export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
   return (
@@ -86,27 +68,17 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
             the app that made them
           </h1>
 
+          {/* Two sentences, and they are the two that decide it: what the
+              thing is, and where the writing ends up. Everything this used to
+              add — the .md file, the local-first save, the commits under your
+              own name — is answered by scrolling, and a reader who has not yet
+              been given a reason to scroll will not read it here either. */}
           <p className="mx-auto mt-6 max-w-2xl text-[16px] leading-[1.6] text-[var(--fl-muted)] sm:mt-7 sm:text-[17.5px] sm:leading-[1.62]">
-            ForkLeaf is a full Markdown workspace — linked notes, offline search, a visual diagram
-            studio, real version history, exports and publishing — and its database is a{" "}
+            A full Markdown workspace — linked notes, offline search, a visual diagram studio, real
+            version history — whose database is a{" "}
             <em className="not-italic text-[var(--fl-text)]">GitHub repository you already own</em>.
-            Every note is a plain{" "}
-            <code className="font-mono text-[15px] text-[var(--fl-text)]">.md</code> file. It saves
-            to your device as you type, then turns those edits into real commits under your own
-            name. Nothing is stored on our servers, and there is no ForkLeaf database to be locked
-            out of.
+            Nothing is stored on our servers, and there is no ForkLeaf database to be locked out of.
           </p>
-
-          <ul className="mx-auto mt-7 flex max-w-3xl flex-wrap items-center justify-center gap-x-2 gap-y-2 text-[12.5px] text-[var(--fl-muted)]">
-            {CAPABILITIES.map((item) => (
-              <li
-                key={item}
-                className="rounded-full border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-1"
-              >
-                {item}
-              </li>
-            ))}
-          </ul>
 
           {/* ── Call to action ──────────────────────────────────────────── */}
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
@@ -127,21 +99,11 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
             )}
           </div>
 
-          {githubAvailable && (
-            /* Said here rather than discovered on GitHub's own consent screen.
-               The default grant covers every repository the account can reach,
-               which is a great deal to hand a notes app — so the narrower one
-               is offered next to it instead of being a thing you would have to
-               know to ask for. */
-            <p className="mt-3 text-[12.5px] text-[var(--fl-muted)]">
-              Keeping notes in public repositories?{" "}
-              <a href="/sign-in" className="fl-link">
-                Grant public-repository access only
-              </a>
-              .
-            </p>
-          )}
-
+          {/* The narrower-scope invitation used to sit above this line. It
+              pointed at `/sign-in` — the same address as the button directly
+              above it — so it was explanation rather than an affordance, and
+              the explanation is given properly in the ownership section this
+              line already links to. */}
           <p className="mt-4 text-[13px] text-[var(--fl-muted)]">
             {githubAvailable ? (
               <>
