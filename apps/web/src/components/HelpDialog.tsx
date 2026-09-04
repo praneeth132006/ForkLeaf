@@ -415,6 +415,16 @@ export function HelpDialog({
             }
           />
           <Feature
+            title="Publish a whole folder as a book"
+            what="A single published page is an island: a [[wikilink]] on it points at a heading that is not there, so every link between your notes quietly goes nowhere."
+            doThis={
+              <>
+                Right-click a folder in the sidebar and choose <strong>Publish as book…</strong>
+              </>
+            }
+            then="The notes are published together as one site — a contents page, a page each, and prev/next between them. Links between those notes become real links, and a link to a note you did not publish stays as the words you wrote rather than becoming a dead one. It is committed to your own repository, so unpublishing removes exactly the files it wrote and nothing else."
+          />
+          <Feature
             title="Let readers send corrections back"
             what="Programmers have had “here is a fix for what you wrote” for twenty years. Nobody has offered it to people writing notes."
             doThis={

@@ -21,6 +21,14 @@ export interface FileTreeProps {
   onCreateFolder: (parent: string) => void;
   onRenameFolder: (path: string) => void;
   onDeleteFolder: (path: string) => void;
+  /**
+   * Publishes a folder's notes as one linked site.
+   *
+   * Absent when there is no repository behind this notebook — a local
+   * workspace has nowhere to publish to, and an item that always fails is
+   * worse than one that is not offered.
+   */
+  onPublishFolder?: ((path: string) => void) | undefined;
   /** Moves a note to another folder. Called by drag-and-drop within the tree. */
   onMoveNote?: (path: string, toFolder: string) => void;
   /**
@@ -97,6 +105,7 @@ export function FileTree({
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
+  onPublishFolder,
   onMoveNote,
   onMoveFolder,
   onReorder,
@@ -360,6 +369,14 @@ export function FileTree({
           },
         },
         ...orderItems(node),
+        ...(onPublishFolder
+          ? [
+              {
+                label: "Publish as book…",
+                onSelect: () => onPublishFolder(node.path),
+              },
+            ]
+          : []),
         { label: "Rename folder…", onSelect: () => onRenameFolder(node.path) },
         {
           label: "Delete folder",
@@ -399,6 +416,7 @@ export function FileTree({
     onCreateFolder,
     onRenameFolder,
     onDeleteFolder,
+    onPublishFolder,
     onOpen,
     onOpenBeside,
     onRename,

@@ -712,3 +712,97 @@ export interface LinkPreviewResult {
 export async function previewLink(url: string): Promise<LinkPreviewResult> {
   return call(`/api/link-preview?url=${encodeURIComponent(url)}`, { timeoutMs: 8_000 });
 }
+
+// ─── Books ──────────────────────────────────────────────────────────────────
+
+/** One chapter, as the book's own record describes it. */
+export interface PublishedChapter {
+  slug: string;
+  title: string;
+  /** The note it was rendered from. */
+  source: string;
+}
+
+/** What a book records about itself, in the repository it was published to. */
+export interface PublishedBook {
+  version: 1;
+  book: string;
+  title: string;
+  publishedAt: string;
+  chapters: PublishedChapter[];
+  files: string[];
+}
+
+export interface BookState {
+  /** Null when this folder has never been published as a book. */
+  book: PublishedBook | null;
+  /** The public address, or null while Pages is switched off. */
+  url: string | null;
+  site: { url: string; status: string | null; isPublic: boolean } | null;
+}
+
+/**
+ * Whether this folder is currently published, and as what.
+ *
+ * Asked for rather than remembered, and answered from the book's own record
+ * rather than from the folder — `docs/handbook/` full of HTML is equally
+ * consistent with a book ForkLeaf published and a site somebody wrote by hand,
+ * and only the record tells them apart.
+ */
+export async function readBook(repo: RepoRef, book: string): Promise<BookState> {
+  return call(`/api/gh/publish/book?${repoParams(repo)}&book=${encodeURIComponent(book)}`);
+}
+
+/**
+ * Publishes a folder of notes as a book.
+ *
+ * The pages arrive already rendered, because rendering them needs a DOM —
+ * Mermaid draws into one — and the browser is where that exists. The route's
+ * job is to check that every filename is one a book is made of, write them in
+ * a single commit, and record what it wrote.
+ */
+export async function publishBook(options: {
+  repo: RepoRef;
+  book: string;
+  title: string;
+  chapters: PublishedChapter[];
+  files: { path: string; content: string }[];
+}): Promise<{
+  url: string;
+  siteUrl: string;
+  status: string | null;
+  dir: string;
+  chapters: number;
+  /** Files the previous publish wrote that this one no longer needs. */
+  removed: number;
+}> {
+  const { repo, ...rest } = options;
+
+  return call("/api/gh/publish/book", {
+    method: "POST",
+    body: JSON.stringify({
+      owner: repo.owner,
+      repo: repo.repo,
+      branch: repo.branch,
+      dir: repo.directory,
+      ...rest,
+    }),
+  });
+}
+
+/** Deletes exactly what the book's record says it wrote. The notes are left alone. */
+export async function unpublishBook(
+  repo: RepoRef,
+  book: string,
+): Promise<{ removed: number; paths: string[] }> {
+  return call("/api/gh/publish/book", {
+    method: "DELETE",
+    body: JSON.stringify({
+      owner: repo.owner,
+      repo: repo.repo,
+      branch: repo.branch,
+      dir: repo.directory,
+      book,
+    }),
+  });
+}
