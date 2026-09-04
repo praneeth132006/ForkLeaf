@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignSlugs, buildBook, chapterSlug, type BookNote } from "./book";
+import { assignSlugs, buildBook, chapterSlug, readMinutes, type BookNote } from "./book";
 
 const note = (path: string, markdown = "Body.", title?: string): BookNote => ({
   path,
@@ -153,7 +153,7 @@ describe("buildBook", () => {
 
   it("counts one chapter without saying '1 chapters'", async () => {
     const book = await build([note("only.md")]);
-    expect(fileAt(book.files, "index.html")).toContain("1 chapter<");
+    expect(fileAt(book.files, "index.html")).toContain("1 chapter ·");
   });
 
   it("escapes a title rather than letting it write markup", async () => {
@@ -198,10 +198,16 @@ describe("wikilinks between chapters", () => {
   });
 
   it("shows the alias the author wrote, not the target", async () => {
-    const book = await linked();
-    const page = fileAt(book.files, "intro.html");
-    expect(page).toContain("the deep one");
-    expect(page).not.toContain(">Deep Dive<");
+    const page = fileAt((await linked()).files, "intro.html");
+
+    // Scoped to the links in the prose: the sidebar lists every chapter by its
+    // own title, so "Deep Dive" appears on this page whatever the alias says.
+    const labels = [...page.matchAll(/<a[^>]*class="fl-wikilink[^"]*"[^>]*>([^<]*)</g)].map(
+      (match) => match[1],
+    );
+
+    expect(labels).toContain("the deep one");
+    expect(labels).not.toContain("Deep Dive");
   });
 
   it("carries a heading anchor through to the chapter", async () => {
@@ -328,5 +334,133 @@ describe("heading anchors", () => {
 
     expect(page).toContain('id="section"');
     expect(page).toContain('id="section-2"');
+  });
+});
+
+/**
+ * A published note is a document: one column, centred, nothing around it. A
+ * book is a place, and a reader who arrives in the middle of one needs to see
+ * that there is a middle to be in.
+ */
+describe("the contents beside the text", () => {
+  const three = () =>
+    build([note("one.md", "x", "One"), note("two.md", "x", "Two"), note("three.md", "x", "Three")]);
+
+  it("lists every chapter on every chapter", async () => {
+    const book = await three();
+
+    for (const page of book.files.filter(
+      (f) => f.path.endsWith(".html") && f.path !== "index.html",
+    )) {
+      for (const slug of ["one", "two", "three"]) {
+        expect(page.content, page.path).toContain(`href="${slug}.html"`);
+      }
+    }
+  });
+
+  it("marks the chapter being read, and only that one", async () => {
+    const page = fileAt((await three()).files, "two.html");
+    const current = [...page.matchAll(/href="([a-z-]+)\.html" aria-current="page"/g)];
+
+    expect(current).toHaveLength(1);
+    expect(current[0]![1]).toBe("two");
+  });
+
+  /**
+   * One list, laid out two ways. A details element cannot be forced open by a
+   * stylesheet — browsers hide its contents in a way the display property does
+   * not reach, which is how the first attempt at this shipped a sidebar that
+   * was eighty-eight pixels of padding and nothing else.
+   */
+  it("is one list rather than a disclosure or a second copy", async () => {
+    const page = fileAt((await three()).files, "one.html");
+
+    expect(page).toContain('<nav class="book-side"');
+    expect(page).not.toContain("<details");
+    // Each chapter is linked from the sidebar once, and the current one is not
+    // repeated as a second navigation block.
+    expect(page.match(/href="two\.html"/g)).toHaveLength(2); // sidebar + next
+    expect(page.match(/href="three\.html"/g)).toHaveLength(1); // sidebar only
+  });
+
+  it("offers a way past it to the words", async () => {
+    const page = fileAt((await three()).files, "one.html");
+
+    expect(page).toContain('class="book-skip" href="#content"');
+    expect(page).toContain('<main id="content">');
+  });
+
+  it("leaves the contents page itself without a sidebar", async () => {
+    expect(fileAt((await three()).files, "index.html")).not.toContain('class="book-side"');
+  });
+});
+
+describe("how long a chapter takes", () => {
+  it("counts the words, not the markup", () => {
+    expect(readMinutes("word ".repeat(200))).toBe(1);
+    expect(readMinutes("word ".repeat(1000))).toBe(5);
+  });
+
+  it("does not count a code block as reading", () => {
+    const prose = "word ".repeat(200);
+    const code = "```\n" + "token ".repeat(2000) + "\n```";
+
+    expect(readMinutes(`${prose}\n\n${code}`)).toBe(1);
+  });
+
+  it("never says a chapter takes no time at all", () => {
+    expect(readMinutes("")).toBe(1);
+    expect(readMinutes("Hi.")).toBe(1);
+  });
+
+  it("says it on the chapter and on the contents page", async () => {
+    const book = await build([note("long.md", "word ".repeat(1000), "Long")]);
+
+    expect(fileAt(book.files, "long.html")).toContain("5 min read");
+    expect(fileAt(book.files, "index.html")).toContain("5 min read");
+  });
+
+  it("adds the chapters up on the contents page", async () => {
+    const book = await build([
+      note("a.md", "word ".repeat(1000), "A"),
+      note("b.md", "word ".repeat(1000), "B"),
+    ]);
+
+    expect(fileAt(book.files, "index.html")).toContain("2 chapters · 10 min read");
+  });
+});
+
+describe("linking to a heading", () => {
+  it("gives every heading a link to itself", async () => {
+    const book = await build([note("g.md", "## Getting Started", "G")]);
+    const page = fileAt(book.files, "g.html");
+
+    expect(page).toContain('<a class="anchor" href="#getting-started"');
+    expect(page).toContain('aria-label="Link to this section"');
+  });
+
+  it("points the link at the heading it is in", async () => {
+    const book = await build([note("g.md", "## One\n\ntext\n\n## Two\n", "G")]);
+    const page = fileAt(book.files, "g.html");
+
+    expect(page).toMatch(/<h2 id="one">One<a class="anchor" href="#one"/);
+    expect(page).toMatch(/<h2 id="two">Two<a class="anchor" href="#two"/);
+  });
+
+  it("keeps the marker out of the heading's own text", async () => {
+    // In the markup the "#" becomes part of the heading — read aloud, and
+    // copied — so the stylesheet draws it instead.
+    const book = await build([note("g.md", "## Why a book?", "G")]);
+    const heading = /<h2[^>]*>([\s\S]*?)<\/h2>/.exec(fileAt(book.files, "g.html"))![1]!;
+
+    expect(heading.replace(/<[^>]*>/g, "")).toBe("Why a book?");
+  });
+
+  it("does not let the anchor change the id it points at", async () => {
+    // The id is taken from the heading's text before the link is added; if it
+    // were taken after, the `#` would end up in the slug.
+    const book = await build([note("g.md", "## Voice", "G")]);
+    expect(fileAt(book.files, "g.html")).toContain('id="voice"');
+    expect(fileAt(book.files, "g.html")).not.toContain('id="voice-"');
   });
 });
