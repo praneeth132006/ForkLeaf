@@ -294,3 +294,56 @@ describe("rearranging by drag", () => {
     expect(onMoveNote).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Publishing a folder is offered only where there is somewhere to publish to.
+ * A local notebook has no repository behind it, and a menu item that always
+ * fails is worse than one that is not there.
+ */
+describe("publishing a folder as a book", () => {
+  /**
+   * The context handler sits on the row's own button, not on the wrapper that
+   * `row` returns — that one carries the drag handlers.
+   */
+  const openMenu = (label: string) => {
+    const button = screen.getByText(label).closest("button");
+    if (!button) throw new Error(`no button for ${label}`);
+    fireEvent.contextMenu(button);
+  };
+
+  it("offers it on a folder when the notebook has a repository", () => {
+    draw({ onPublishFolder: vi.fn() });
+    openMenu("Fieldwork");
+
+    expect(screen.getByText("Publish as book…")).toBeTruthy();
+  });
+
+  it("names the folder the menu was opened on", () => {
+    const onPublishFolder = vi.fn();
+    draw({ onPublishFolder });
+
+    openMenu("OSINT");
+    fireEvent.click(screen.getByText("Publish as book…"));
+
+    expect(onPublishFolder).toHaveBeenCalledWith("OSINT");
+  });
+
+  it("does not offer it at all without somewhere to publish to", () => {
+    draw();
+    openMenu("Fieldwork");
+
+    expect(screen.queryByText("Publish as book…")).toBeNull();
+    // The rest of the folder menu is untouched.
+    expect(screen.getByText("Rename folder…")).toBeTruthy();
+  });
+
+  it("is a folder's menu item, not a note's", () => {
+    draw({ onPublishFolder: vi.fn() });
+    openMenu("osint");
+
+    // The note's own menu did open — this is not a menu that failed to appear.
+    expect(screen.getByText("Rename…")).toBeTruthy();
+
+    expect(screen.queryByText("Publish as book…")).toBeNull();
+  });
+});

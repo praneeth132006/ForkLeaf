@@ -18,8 +18,8 @@ import { SectionLink } from "./SectionLink";
 
 const SECTIONS = [
   { hash: "#how", label: "How it works" },
-  { hash: "#toolkit", label: "What it does" },
   { hash: "#features", label: "Features" },
+  { hash: "#toolkit", label: "What it does" },
   { hash: "#compare", label: "Compare" },
   { hash: "#pricing", label: "Pricing" },
   { hash: "#support", label: "Support" },

@@ -48,6 +48,8 @@ export interface EditorSidebarProps {
   /** Make a folder inside `parent`. An empty string means the repository root. */
   onCreateFolder: (parent: string) => void;
   onRenameFolder: (path: string) => void;
+  /** Publishes a folder's notes as one linked site. Absent for a local workspace. */
+  onPublishFolder?: ((path: string) => void) | undefined;
   onDeleteFolder: (path: string) => void;
   /** Moves a note into another folder, from a drag within the tree. */
   onMoveNote: (path: string, toFolder: string) => void;
@@ -683,6 +685,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
           onTogglePin={props.onTogglePin}
           pinnedPaths={props.pinnedPaths}
           onRenameFolder={props.onRenameFolder}
+          onPublishFolder={props.onPublishFolder}
           onDeleteFolder={props.onDeleteFolder}
           {...(props.openFolders ? { openFolders: props.openFolders } : {})}
           {...(props.onOpenFoldersChange ? { onOpenFoldersChange: props.onOpenFoldersChange } : {})}

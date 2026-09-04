@@ -1,4 +1,9 @@
-import { markdownToHtml, extractMermaidBlocks, serializeDocument } from "@forkleaf/markdown-engine";
+import {
+  markdownToHtml,
+  extractMermaidBlocks,
+  serializeDocument,
+  type WikilinkResolver,
+} from "@forkleaf/markdown-engine";
 import { renderDiagram, extractDiagramLinks, LIGHT_THEME, DARK_THEME } from "@forkleaf/diagrams";
 import type { ExportOptions } from "@forkleaf/types";
 
@@ -107,6 +112,33 @@ export async function toHtml(
   options: ExportOptions,
   resolveImage?: ImageResolver,
 ): Promise<string> {
+  const body = await toBodyHtml(markdown, frontmatter, options, resolveImage);
+
+  return document(
+    options.title,
+    forPrinting(withoutRepeatedTitle(body, options.title)),
+    options.theme,
+    options.suggestUrl ?? null,
+  );
+}
+
+/**
+ * Markdown → the rendered body, without a document around it.
+ *
+ * Split out of {@link toHtml} because a book needs exactly this and nothing
+ * else: forty chapters that each inline the same six kilobytes of CSS are the
+ * same six kilobytes served forty times, and the `<head>` a chapter needs —
+ * a stylesheet link, a canonical URL, its place in the reading order — is not
+ * the `<head>` a downloaded file needs. The rendering is identical either way,
+ * which is the point of sharing it rather than writing a second renderer.
+ */
+export async function toBodyHtml(
+  markdown: string,
+  frontmatter: Record<string, unknown>,
+  options: ExportOptions,
+  resolveImage?: ImageResolver,
+  resolveWikilink?: WikilinkResolver,
+): Promise<string> {
   const source = options.includeFrontmatter ? serializeDocument(markdown, frontmatter) : markdown;
 
   const withDiagrams = options.renderDiagrams
@@ -124,7 +156,7 @@ export async function toHtml(
     },
   );
 
-  let body = markdownToHtml(tokenised);
+  let body = markdownToHtml(tokenised, resolveWikilink ? { resolveWikilink } : undefined);
   body = body.replace(
     /FORKLEAFDIAGRAM(\d+)TOKEN/g,
     (_match, index: string) => `<div class="diagram">${svgs[Number(index)] ?? ""}</div>`,
@@ -132,12 +164,7 @@ export async function toHtml(
 
   if (resolveImage) body = await inlineImages(body, resolveImage);
 
-  return document(
-    options.title,
-    forPrinting(withoutRepeatedTitle(body, options.title)),
-    options.theme,
-    options.suggestUrl ?? null,
-  );
+  return body;
 }
 
 /**
@@ -227,39 +254,18 @@ function forPrinting(html: string): string {
  */
 const BRAND_MARK = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21v-7"/><path d="M12 14 6.5 8.5A4 4 0 0 1 5.4 5.7L5 3l2.7.4a4 4 0 0 1 2.8 1.1L12 6"/><path d="m12 14 5.5-5.5a4 4 0 0 0 1.1-2.8L19 3l-2.7.4a4 4 0 0 0-2.8 1.1L12 6"/></svg>`;
 
-function document(
-  title: string,
-  body: string,
-  theme: "light" | "dark",
-  suggestUrl: string | null,
-): string {
-  const dark = theme === "dark";
-  const colors = dark
-    ? {
-        bg: "#14181F",
-        fg: "#EDEAE2",
-        muted: "#8A93A3",
-        rule: "#2A3240",
-        accent: "#3FA796",
-        code: "#1E2530",
-      }
-    : {
-        bg: "#FFFFFF",
-        fg: "#22262E",
-        muted: "#6B7280",
-        rule: "#E5E3DC",
-        accent: "#2F7F72",
-        code: "#F5F3ED",
-      };
+/**
+ * The stylesheet, as text.
+ *
+ * Exported because a book links it rather than inlining it. Everything a
+ * chapter needs to look like a ForkLeaf document is here, and the book adds
+ * its own chrome — contents, chapter navigation — on top of it, so the two
+ * cannot drift into looking like different products.
+ */
+export function pageStyles(theme: "light" | "dark"): string {
+  const colors = palette(theme);
 
-  return `<!doctype html>
-<html lang="en" data-theme="${theme}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)}</title>
-<style>
-  :root {
+  return `  :root {
     --bg: ${colors.bg};
     --fg: ${colors.fg};
     --muted: ${colors.muted};
@@ -413,7 +419,44 @@ function document(
       white-space: nowrap;
     }
   }
-</style>
+`;
+}
+
+/** The two palettes, which are the only thing the theme actually changes. */
+function palette(theme: "light" | "dark") {
+  return theme === "dark"
+    ? {
+        bg: "#14181F",
+        fg: "#EDEAE2",
+        muted: "#8A93A3",
+        rule: "#2A3240",
+        accent: "#3FA796",
+        code: "#1E2530",
+      }
+    : {
+        bg: "#FFFFFF",
+        fg: "#22262E",
+        muted: "#6B7280",
+        rule: "#E5E3DC",
+        accent: "#2F7F72",
+        code: "#F5F3ED",
+      };
+}
+
+function document(
+  title: string,
+  body: string,
+  theme: "light" | "dark",
+  suggestUrl: string | null,
+): string {
+  return `<!doctype html>
+<html lang="en" data-theme="${theme}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<style>
+${pageStyles(theme)}</style>
 </head>
 <body>
 <main>
@@ -445,7 +488,8 @@ function printedOn(): string {
   }
 }
 
-function escapeHtml(text: string): string {
+/** Exported so the book builder escapes titles exactly as pages do. */
+export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

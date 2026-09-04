@@ -1,5 +1,4 @@
 import React from "react";
-import { SectionHeading } from "./SectionHeading";
 
 /**
  * ForkLeaf against the apps people actually have open.
@@ -149,18 +148,33 @@ const ARGUMENTS: { title: string; body: string }[] = [
   },
 ];
 
-export function Comparison() {
+/**
+ * The named-products half of the "why this" argument.
+ *
+ * A block rather than a section — {@link Why} owns the heading — but it keeps
+ * `id="compare"`, because the nav has always pointed at the table itself and
+ * a reader who clicks "Compare" wants the rows, not the paragraph three
+ * screens above them.
+ */
+export function ComparisonBlock() {
   return (
-    <section id="compare" className="fl-anchor mx-auto w-full max-w-6xl px-6 py-24">
-      <SectionHeading
-        eyebrow="Side by side"
-        title="Every other notes app is a rented room. This one is a deed."
-        body="Nine questions to ask before you put a decade of thinking somewhere. Notion, OneNote, Obsidian and Evernote answer them too — these are their answers, not ours about them."
-      />
+    <>
+      <div className="mt-20 border-t border-[var(--fl-border)] pt-12">
+        <h3 className="text-[22px] font-semibold tracking-[-0.02em] text-[var(--fl-text)]">
+          And by name
+        </h3>
+        <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-[var(--fl-muted)]">
+          Nine questions to ask before you put a decade of thinking somewhere. Notion, OneNote,
+          Obsidian and Evernote answer them too — these are their answers, not ours about them.
+        </p>
+      </div>
 
       {/* Wide tables scroll inside themselves; the page must never scroll
           sideways because of one. */}
-      <div className="mt-12 overflow-x-auto rounded-2xl border border-[var(--fl-border)]">
+      <div
+        id="compare"
+        className="fl-anchor mt-8 overflow-x-auto rounded-2xl border border-[var(--fl-border)]"
+      >
         <table className="w-full min-w-[56rem] border-collapse text-left text-[13.5px]">
           <caption className="sr-only">
             How ForkLeaf compares with Notion, OneNote, Obsidian and Evernote
@@ -238,6 +252,6 @@ export function Comparison() {
         them at all. It is a folder of Markdown in a repository with your name on it, and ForkLeaf
         is the window you happen to be reading it through.
       </p>
-    </section>
+    </>
   );
 }

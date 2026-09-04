@@ -12,7 +12,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import type { CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
 import { displayTitle, parseCitation, type PdfCitation } from "@forkleaf/pdf";
-import type { EditorViewMode, Workspace } from "@forkleaf/types";
+import type { EditorViewMode, Note, Workspace } from "@forkleaf/types";
 import {
   deriveTitle,
   dirname,
@@ -85,6 +85,7 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { ConnectRepoDialog } from "@/components/ConnectRepoDialog";
 import { ProposeChangesDialog } from "@/components/ProposeChangesDialog";
 import { PublishDialog } from "@/components/PublishDialog";
+import { PublishBookDialog } from "@/components/PublishBookDialog";
 import { HelpDialog } from "@/components/HelpDialog";
 import { HistoryDialog } from "@/components/HistoryDialog";
 import { ReviewPanel } from "@/components/ReviewPanel";
@@ -306,6 +307,16 @@ export function EditorWorkspace() {
    * over the document instead of sitting beside it.
    */
   const [drawer, setDrawer] = useState<"files" | "document" | null>(null);
+
+  /**
+   * The folder being published as a book, and the notes to build it from.
+   *
+   * Held apart from `dialog`, which is a bare name, because this one needs to
+   * remember *which* folder was asked for. The notes are loaded when the menu
+   * item is chosen rather than kept in state: a book is built from the notes'
+   * full text, which the editor otherwise has no reason to hold all of.
+   */
+  const [book, setBook] = useState<{ folder: string; notes: Note[] } | null>(null);
   const [dialog, setDialog] = useState<
     | "export"
     | "connect"
@@ -1760,6 +1771,25 @@ export function EditorWorkspace() {
     [notebook],
   );
 
+  /**
+   * Opens the book dialog for a folder, with its notes already in hand.
+   *
+   * The notes are fetched here rather than inside the dialog because they come
+   * from the store rather than from the network: reading them is fast, and a
+   * dialog that opens empty and fills in a moment later is a dialog whose
+   * chapter list moves under the reader while they are counting it.
+   */
+  const handlePublishFolder = useCallback(
+    async (path: string) => {
+      try {
+        setBook({ folder: path, notes: await loadAllNotes() });
+      } catch {
+        notebook.reportError("Those notes could not be read, so the book was not opened.");
+      }
+    },
+    [loadAllNotes, notebook],
+  );
+
   const handleDeleteFolder = useCallback(
     (path: string) => {
       setPrompt({
@@ -2658,6 +2688,9 @@ export function EditorWorkspace() {
             onCreateFolder={handleCreateFolder}
             onRenameFolder={handleRenameFolder}
             onDeleteFolder={handleDeleteFolder}
+            {...(workspace && !workspace.isLocal
+              ? { onPublishFolder: (path: string) => void handlePublishFolder(path) }
+              : {})}
             onMoveNote={handleMoveNote}
             onMoveFolder={handleMoveFolder}
             pinnedPaths={notebook.pinnedPaths}
@@ -3430,6 +3463,19 @@ export function EditorWorkspace() {
             openRepoPdf(pdfPath, `page=${page}`);
           }}
           onFix={correctCitationPage}
+        />
+      )}
+
+      {book && workspace && !workspace.isLocal && (
+        <PublishBookDialog
+          // A fresh dialog per folder: opening the menu on another folder must
+          // not leave the last one's chapters on screen as though they were
+          // this one's.
+          key={book.folder}
+          folder={book.folder}
+          workspace={workspace}
+          notes={book.notes}
+          onClose={() => setBook(null)}
         />
       )}
 
