@@ -13,6 +13,17 @@ vi.mock("@/lib/gateway", () => ({
 
 vi.mock("@/lib/pdf-index", () => ({
   readDocumentText: (...args: unknown[]) => readDocumentText(...args),
+  PDFJS_ASSETS: "/pdfjs",
+}));
+
+// Rendering two pages of a real PDF is this component's own test, not this
+// one's: here it only has to be the thing that appears when a page is picked.
+vi.mock("@/components/DocumentPageCompare", () => ({
+  DocumentPageCompare: ({ page, beforeLabel }: { page: number; beforeLabel: string }) => (
+    <p>
+      side by side page {page} against {beforeLabel}
+    </p>
+  ),
 }));
 
 const { DocumentVersionsDialog } = await import("./DocumentVersionsDialog");
@@ -145,8 +156,47 @@ describe("DocumentVersionsDialog — the comparison", () => {
     const props = open();
     await compare();
 
-    fireEvent.click(await screen.findByRole("button", { name: "p. 2" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Go to page 2" }));
     expect(props.onGoToPage).toHaveBeenCalledWith(2);
+  });
+
+  it("shows a changed page in both versions at once", async () => {
+    readDocumentText
+      .mockResolvedValueOnce(pages("one", "two"))
+      .mockResolvedValueOnce(pages("one", "rewritten"));
+    open();
+    await compare();
+
+    fireEvent.click(await screen.findByRole("button", { name: "p. 2" }));
+    expect(await screen.findByText(/side by side page 2/)).toBeTruthy();
+  });
+
+  it("closes the side-by-side pages when the same one is pressed again", async () => {
+    readDocumentText
+      .mockResolvedValueOnce(pages("one", "two"))
+      .mockResolvedValueOnce(pages("one", "rewritten"));
+    open();
+    await compare();
+
+    const page = await screen.findByRole("button", { name: "p. 2" });
+    fireEvent.click(page);
+    expect(await screen.findByText(/side by side page 2/)).toBeTruthy();
+
+    fireEvent.click(page);
+    await waitFor(() => expect(screen.queryByText(/side by side page 2/)).toBeNull());
+  });
+
+  it("does not offer to draw a page that is not in the version being read", async () => {
+    // Three pages down to two: page 3 is gone, and there is nothing on the
+    // right-hand side of a comparison to put beside it.
+    readDocumentText
+      .mockResolvedValueOnce(pages("one", "two", "three"))
+      .mockResolvedValueOnce(pages("one", "two"));
+    open();
+    await compare();
+
+    const removed = await screen.findByRole("button", { name: /p\. 3 \(removed\)/ });
+    expect(removed.hasAttribute("disabled")).toBe(true);
   });
 
   it("reports two versions that cannot both be read", async () => {

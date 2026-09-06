@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { RepoRef } from "@forkleaf/types";
 import { Dialog } from "@/components/Dialog";
+import { SuggestionDiff } from "@/components/SuggestionDiff";
 import { acceptSuggestion, listSuggestions, type SuggestionDto } from "@/lib/gateway";
 import { relativeTime } from "@/lib/relative-time";
 
@@ -20,11 +21,15 @@ import { relativeTime } from "@/lib/relative-time";
  * it: the author's list, in the app they write in, with the one action that
  * matters on each.
  *
- * Reading a suggestion still happens on GitHub. That is deliberate rather than
- * unfinished — a diff with a conversation attached is a thing GitHub is
- * extremely good at, and a worse copy of it here would be a worse copy of it
- * here. Accepting one, which is the part that belongs to the person whose
- * notebook it is, happens here.
+ * Reading one happens here too, now. That used to be a link to GitHub, on the
+ * argument that a diff with a conversation attached is something GitHub is
+ * very good at — which is true, and was still the wrong trade: it made a
+ * two-line correction to a note into a trip to a code-review tool, for the
+ * one decision this dialog exists to support. What changed, before and after,
+ * is shown below the suggestion that proposes it.
+ *
+ * The conversation is the half that genuinely belongs on GitHub, and the link
+ * stays for it. Everything needed to decide is here.
  */
 
 export interface SuggestionsDialogProps {
@@ -44,6 +49,8 @@ export function SuggestionsDialog({ onClose, repo, onAccepted }: SuggestionsDial
   /** The suggestion being merged, so its row can say so. */
   const [accepting, setAccepting] = useState<number | null>(null);
   const [accepted, setAccepted] = useState<Set<number>>(new Set());
+  /** The suggestion whose change is open, if any. One at a time. */
+  const [reading, setReading] = useState<number | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
   /**
@@ -169,14 +176,16 @@ export function SuggestionsDialog({ onClose, repo, onAccepted }: SuggestionsDial
                 </p>
 
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <a
-                    href={pull.url}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    aria-expanded={reading === pull.number}
+                    onClick={() =>
+                      setReading((current) => (current === pull.number ? null : pull.number))
+                    }
                     className="rounded border border-[var(--fl-border)] px-2 py-1 text-[11.5px] font-medium text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-surface)]"
                   >
-                    Read what changed
-                  </a>
+                    {reading === pull.number ? "Hide what changed" : "Read what changed"}
+                  </button>
 
                   {accepted.has(pull.number) ? (
                     <span className="text-[11.5px] text-[var(--fl-muted)]">
@@ -197,18 +206,32 @@ export function SuggestionsDialog({ onClose, repo, onAccepted }: SuggestionsDial
                       {accepting === pull.number ? "Accepting…" : "Accept"}
                     </button>
                   )}
+
+                  {/* Quieter than it was, and for a different job: the diff is
+                      here now, and this is the way to the conversation. */}
+                  <a
+                    href={pull.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11.5px] text-[var(--fl-muted)] underline decoration-dotted underline-offset-2 transition-colors hover:text-[var(--fl-text)]"
+                  >
+                    Discuss on GitHub
+                  </a>
                 </div>
+
+                {reading === pull.number && (
+                  <SuggestionDiff owner={repo.owner} repo={repo.repo} number={pull.number} />
+                )}
               </li>
             ))}
           </ul>
 
-          {/* Said once, at the bottom, rather than on every row: reading a diff
-              with a conversation on it is a thing GitHub does very well, and a
-              worse copy of it here would help nobody. */}
+          {/* Said once, at the bottom, rather than on every row. */}
           <p className="mt-3 text-[11.5px] leading-relaxed text-[var(--fl-muted)]">
-            <strong>Read what changed</strong> opens the suggestion on GitHub, where the diff and
-            the conversation are. <strong>Accept</strong> merges it into your notes here, and the
-            next sync brings the change down to this device.
+            <strong>Read what changed</strong> shows the note before and after, here.{" "}
+            <strong>Accept</strong> merges it into your notes, and the next sync brings the change
+            down to this device. <strong>Discuss on GitHub</strong> is for replying to whoever sent
+            it.
           </p>
         </div>
       )}

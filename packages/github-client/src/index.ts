@@ -17,6 +17,7 @@ export {
   type IssueCommentDto,
   type PullRequestFile,
   type CommitFile,
+  type BranchComparison,
 } from "./client";
 
 export { Transport, type RateLimit, type TransportConfig, type HttpResponse } from "./http";

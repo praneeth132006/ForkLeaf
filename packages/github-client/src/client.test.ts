@@ -1067,3 +1067,87 @@ describe("deleteBranch", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe("compareBranches", () => {
+  const url = "GET /repos/octo/notes/compare/main...try%2Fmain%2Frunbook";
+
+  const answer = (over: Record<string, unknown> = {}) => ({
+    merge_base_commit: { sha: "merge-sha" },
+    commits: [{ sha: "first" }, { sha: "tip" }],
+    ahead_by: 2,
+    behind_by: 5,
+    files: [{ filename: "notes/runbook.md", status: "modified" }],
+    ...over,
+  });
+
+  it("reports the merge base, which is the honest before", async () => {
+    const { fetchImpl } = fakeGitHub({ [url]: answer() });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    const result = await client.compareBranches("octo", "notes", "main", "try/main/runbook");
+
+    expect(result.mergeBaseSha).toBe("merge-sha");
+    expect(result.behindBy).toBe(5);
+  });
+
+  /** The tip of the branch under comparison is the last commit GitHub lists. */
+  it("reports the head commit rather than the branch name", async () => {
+    const { fetchImpl } = fakeGitHub({ [url]: answer() });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    const result = await client.compareBranches("octo", "notes", "main", "try/main/runbook");
+
+    expect(result.headSha).toBe("tip");
+  });
+
+  it("falls back to the names it was given when GitHub says nothing", async () => {
+    const { fetchImpl } = fakeGitHub({ [url]: { files: [] } });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    const result = await client.compareBranches("octo", "notes", "main", "try/main/runbook");
+
+    expect(result.mergeBaseSha).toBe("main");
+    expect(result.headSha).toBe("try/main/runbook");
+  });
+
+  it("carries a rename's old path across", async () => {
+    const { fetchImpl } = fakeGitHub({
+      [url]: answer({
+        files: [{ filename: "notes/new.md", status: "renamed", previous_filename: "notes/old.md" }],
+      }),
+    });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    const result = await client.compareBranches("octo", "notes", "main", "try/main/runbook");
+
+    expect(result.files[0]).toEqual({
+      path: "notes/new.md",
+      status: "renamed",
+      previousPath: "notes/old.md",
+    });
+  });
+
+  it("caps the file list and says it did", async () => {
+    const files = Array.from({ length: 5 }, (_, index) => ({
+      filename: `notes/${index}.md`,
+      status: "modified",
+    }));
+    const { fetchImpl } = fakeGitHub({ [url]: answer({ files }) });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    const result = await client.compareBranches("octo", "notes", "main", "try/main/runbook", 2);
+
+    expect(result.files).toHaveLength(2);
+    expect(result.truncated).toBe(true);
+  });
+
+  /** A branch name with a slash in it is the normal case here: `try/main/x`. */
+  it("escapes the branch names it puts in the URL", async () => {
+    const { calls, fetchImpl } = fakeGitHub({ [url]: answer() });
+    const client = new GitHubClient({ token: "t", fetch: fetchImpl });
+
+    await client.compareBranches("octo", "notes", "main", "try/main/runbook");
+
+    expect(calls[0]?.url).toBe("/repos/octo/notes/compare/main...try%2Fmain%2Frunbook");
+  });
+});

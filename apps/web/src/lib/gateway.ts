@@ -557,6 +557,41 @@ export async function listSuggestions(owner: string, repo: string): Promise<Sugg
   return pulls;
 }
 
+/** A suggestion's change: every note it touches, with both versions of the text. */
+export interface SuggestionDetailDto {
+  pull: {
+    number: number;
+    title: string;
+    url: string;
+    author: string | null;
+    base: string;
+    head: string;
+    baseSha: string;
+    headSha: string;
+  };
+  /** True when the suggestion touches more files than were read. */
+  truncated: boolean;
+  files: ComparedFileDto[];
+}
+
+/**
+ * What one suggestion proposes.
+ *
+ * Read here rather than on GitHub. Both sides come out of this repository by
+ * commit — a suggestion arrives from a fork, whose branch does not exist here,
+ * but whose head commit does.
+ */
+export async function readSuggestion(
+  owner: string,
+  repo: string,
+  number: number,
+): Promise<SuggestionDetailDto> {
+  return await call<SuggestionDetailDto>(
+    `/api/gh/suggestions?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}` +
+      `&number=${number}`,
+  );
+}
+
 /** Accepts a suggestion, squashed, the way every other merge here is done. */
 export async function acceptSuggestion(options: {
   owner: string;
@@ -588,6 +623,50 @@ export async function createBranch(options: {
     body: JSON.stringify(options),
   });
   return branch;
+}
+
+/** One file a comparison touches, with both versions of its text. */
+export interface ComparedFileDto {
+  path: string;
+  /** GitHub's own word: added, modified, removed, renamed. */
+  status: string;
+  previousPath: string | null;
+  /** The text at the merge base, or null when the file is new. */
+  before: string | null;
+  /** The text on the branch being compared, or null when the file was removed. */
+  after: string | null;
+  /** False for a picture, or for a file too large to put a diff through. */
+  diffable: boolean;
+}
+
+export interface BranchComparisonDto {
+  base: string;
+  head: string;
+  mergeBaseSha: string;
+  headSha: string;
+  aheadBy: number;
+  behindBy: number;
+  truncated: boolean;
+  files: ComparedFileDto[];
+}
+
+/**
+ * What one branch changed relative to another, text included.
+ *
+ * Compared against the merge base, not the other branch's tip — so work that
+ * landed on `main` while a rewrite was being written is not reported as
+ * something the rewrite deletes.
+ */
+export async function compareBranches(
+  owner: string,
+  repo: string,
+  base: string,
+  head: string,
+): Promise<BranchComparisonDto> {
+  return await call<BranchComparisonDto>(
+    `/api/gh/compare?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}` +
+      `&base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`,
+  );
 }
 
 /** Throws away an experiment branch, and whatever was tried on it. */

@@ -170,7 +170,9 @@ export function HelpDialog({
             then={
               <>
                 You get a copy of the whole notebook to experiment in, and a bar at the top saying
-                so. <strong>Keep it</strong> puts the rewrite back as one change;{" "}
+                so. <strong>Compare</strong> puts the rewrite beside the original, changed words
+                picked out, so the decision is a reading rather than a memory test.{" "}
+                <strong>Keep it</strong> puts the rewrite back as one change;{" "}
                 <strong>Throw it away</strong> leaves the original exactly as it was. It is a git
                 branch, which is why nothing can be lost either way.
               </>
@@ -434,7 +436,7 @@ export function HelpDialog({
                 <strong>See what other people have suggested</strong>.
               </>
             }
-            then="The reader fixes the note in GitHub's editor and their change arrives in your list. Read what changed on GitHub, and accept it here — the next sync brings it down to this device."
+            then="The reader fixes the note in GitHub's editor and their change arrives in your list. Read what changed — the note before and after, here — and accept it, and the next sync brings it down to this device. The link to GitHub stays for replying to whoever sent it."
           />
           <Feature
             title="What changed in this paper since I read it?"
@@ -445,7 +447,7 @@ export function HelpDialog({
                 <strong>See what changed in this document</strong> and pick an earlier version.
               </>
             }
-            then="Which pages changed, comparing the words rather than the bytes — and, if one of them is a page you quoted, it says so. Whether your quotation itself survived is what the citation check answers."
+            then="Which pages changed, comparing the words rather than the bytes — and, if one of them is a page you quoted, it says so. Pick a page to see both versions of it drawn side by side. Whether your quotation itself survived is what the citation check answers."
           />
           <Feature
             title="What did my notebook look like in March?"

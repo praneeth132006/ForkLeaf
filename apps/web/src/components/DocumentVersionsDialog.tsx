@@ -3,9 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Workspace } from "@forkleaf/types";
 import { Dialog } from "@/components/Dialog";
+import { DocumentPageCompare } from "@/components/DocumentPageCompare";
 import { listNoteHistory, type NoteCommitDto } from "@/lib/gateway";
 import { readDocumentText } from "@/lib/pdf-index";
-import { affected, comparePages, listPages, type VersionComparison } from "@/lib/pdf-versions";
+import {
+  affected,
+  comparePages,
+  listPages,
+  type PageChange,
+  type VersionComparison,
+} from "@/lib/pdf-versions";
 import { relativeTime } from "@/lib/relative-time";
 
 /**
@@ -170,8 +177,13 @@ export function DocumentVersionsDialog({
 
           {result && (
             <Report
+              key={result.sha}
               comparison={result.comparison}
               cited={cited}
+              workspace={workspace}
+              path={path}
+              sha={result.sha}
+              versionLabel={labelFor(state.commits, result.sha)}
               {...(onGoToPage ? { onGoToPage } : {})}
             />
           )}
@@ -181,16 +193,38 @@ export function DocumentVersionsDialog({
   );
 }
 
+/** How the older version is described on the left-hand page. */
+function labelFor(commits: NoteCommitDto[], sha: string): string {
+  const commit = commits.find((entry) => entry.sha === sha);
+  return commit ? relativeTime(commit.date) : sha.slice(0, 7);
+}
+
 function Report({
   comparison,
   cited,
+  workspace,
+  path,
+  sha,
+  versionLabel,
   onGoToPage,
 }: {
   comparison: VersionComparison;
   cited: readonly number[];
+  workspace: Workspace;
+  path: string;
+  sha: string;
+  versionLabel: string;
   onGoToPage?: (page: number) => void;
 }) {
   const yours = affected(comparison, cited);
+  /**
+   * The page being looked at in both versions at once, if any.
+   *
+   * Nothing clears this when a different version is compared, because the
+   * report itself is keyed on the commit: a new comparison mounts a new one,
+   * rather than leaving a page open from the pair before it.
+   */
+  const [sideBySide, setSideBySide] = useState<PageChange | null>(null);
 
   return (
     <div className="mt-4 border-t border-[var(--fl-border)] pt-3">
@@ -203,26 +237,68 @@ function Report({
       </p>
 
       {comparison.changes.length > 0 && (
-        <ul className="mt-2 flex flex-wrap gap-1.5">
-          {comparison.changes.map((change) => (
-            <li key={`${change.page}-${change.kind}`}>
-              <button
-                type="button"
-                disabled={!onGoToPage || change.kind === "removed"}
-                onClick={() => onGoToPage?.(change.page)}
-                title={
-                  change.kind === "removed"
-                    ? "This page is not in the version you are reading"
-                    : `Go to page ${change.page}`
-                }
-                className="rounded border border-[var(--fl-border)] px-1.5 py-0.5 text-[11.5px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)] disabled:cursor-default disabled:opacity-60"
-              >
-                p. {change.page}
-                {change.kind === "changed" ? "" : ` (${change.kind})`}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="mt-2 text-[11.5px] text-[var(--fl-muted)]">
+            Pick a page to see both versions of it side by side.
+          </p>
+
+          <ul className="mt-1.5 flex flex-wrap gap-1.5">
+            {comparison.changes.map((change) => {
+              const open = sideBySide?.page === change.page;
+
+              return (
+                <li key={`${change.page}-${change.kind}`} className="flex items-stretch">
+                  {/* Two things to do with a changed page, and they are not the
+                      same thing: look at what changed, or go and read around
+                      it. The first is why this dialog exists, so it is the
+                      page number itself; the second keeps the arrow it had. */}
+                  <button
+                    type="button"
+                    aria-pressed={open}
+                    disabled={change.kind === "removed"}
+                    onClick={() => setSideBySide(open ? null : change)}
+                    title={
+                      change.kind === "removed"
+                        ? "This page is not in the version you are reading"
+                        : `Show page ${change.page} in both versions`
+                    }
+                    className={`rounded-l border border-[var(--fl-border)] px-1.5 py-0.5 text-[11.5px] transition-colors disabled:cursor-default disabled:opacity-60 ${
+                      open
+                        ? "border-[var(--fl-accent)] bg-[var(--fl-accent-soft)] text-[var(--fl-text)]"
+                        : "text-[var(--fl-text)] hover:bg-[var(--fl-elevated)]"
+                    }`}
+                  >
+                    p. {change.page}
+                    {change.kind === "changed" ? "" : ` (${change.kind})`}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!onGoToPage || change.kind === "removed"}
+                    onClick={() => onGoToPage?.(change.page)}
+                    title={`Go to page ${change.page} in the reader`}
+                    className="-ml-px rounded-r border border-[var(--fl-border)] px-1.5 py-0.5 text-[11.5px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] disabled:cursor-default disabled:opacity-40"
+                  >
+                    <span aria-hidden="true">→</span>
+                    <span className="sr-only">Go to page {change.page}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          {sideBySide && (
+            <DocumentPageCompare
+              key={`${sha}:${sideBySide.page}`}
+              workspace={workspace}
+              path={path}
+              sha={sha}
+              page={sideBySide.page}
+              beforeLabel={versionLabel}
+              addedPage={sideBySide.kind === "added"}
+            />
+          )}
+        </>
       )}
 
       {/* The sentence this whole comparison exists to be able to say. */}
