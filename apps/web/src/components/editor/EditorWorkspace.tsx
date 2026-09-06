@@ -70,6 +70,7 @@ import { FreshnessDialog } from "@/components/FreshnessDialog";
 import { TimeMachineDialog } from "@/components/TimeMachineDialog";
 import { SuggestionsDialog } from "@/components/SuggestionsDialog";
 import { DocumentVersionsDialog } from "@/components/DocumentVersionsDialog";
+import { ExperimentCompareDialog } from "@/components/ExperimentCompareDialog";
 import { BorrowDialog } from "@/components/BorrowDialog";
 import { CitationsDialog } from "@/components/CitationsDialog";
 import { isPdfPath } from "@/lib/media";
@@ -334,6 +335,7 @@ export function EditorWorkspace() {
     | "time-machine"
     | "suggestions"
     | "document-versions"
+    | "experiment-compare"
     | "borrow"
     | null
   >(null);
@@ -2312,6 +2314,18 @@ export function EditorWorkspace() {
       });
     }
 
+    if (workspace && !workspace.isLocal && experiment) {
+      list.push({
+        id: "compare-experiment",
+        label: "Compare this rewrite with the original",
+        group: "Notes",
+        hint: "Both versions side by side, before you keep it or throw it away",
+        keywords:
+          "compare rewrite experiment original side by side diff difference before after against changed what changed",
+        run: () => setDialog("experiment-compare"),
+      });
+    }
+
     if (workspace && !workspace.isLocal) {
       list.push({
         id: "suggestions",
@@ -2993,6 +3007,16 @@ export function EditorWorkspace() {
                 </p>
 
                 <span className="flex shrink-0 items-center gap-1.5">
+                  {/* Before either of the two decisions, the thing they need:
+                      the rewrite beside what it replaces. First, because it is
+                      the only one of the three that changes nothing. */}
+                  <button
+                    type="button"
+                    onClick={() => setDialog("experiment-compare")}
+                    className="rounded-lg border border-[var(--fl-border)] px-2.5 py-1 text-[12px] font-medium text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-surface)]"
+                  >
+                    Compare
+                  </button>
                   <button
                     type="button"
                     disabled={experimentBusy !== null}
@@ -3412,6 +3436,17 @@ export function EditorWorkspace() {
             setDialog(null);
             requestPage(page);
           }}
+        />
+      )}
+
+      {openDialog === "experiment-compare" && workspace && !workspace.isLocal && experiment && (
+        <ExperimentCompareDialog
+          onClose={() => setDialog(null)}
+          owner={workspace.repo.owner}
+          repo={workspace.repo.repo}
+          base={experiment.base}
+          head={workspace.repo.branch}
+          slug={experiment.slug}
         />
       )}
 

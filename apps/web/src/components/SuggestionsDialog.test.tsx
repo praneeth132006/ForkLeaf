@@ -12,6 +12,12 @@ vi.mock("@/lib/gateway", () => ({
   acceptSuggestion: (...args: unknown[]) => acceptSuggestion(...args),
 }));
 
+// The diff has its own tests, and pulling the real one in here would make
+// every test in this file about a second network call it does not care about.
+vi.mock("@/components/SuggestionDiff", () => ({
+  SuggestionDiff: ({ number }: { number: number }) => <p>the change in #{number}</p>,
+}));
+
 const { SuggestionsDialog } = await import("./SuggestionsDialog");
 
 afterEach(() => {
@@ -115,11 +121,51 @@ describe("SuggestionsDialog — accepting one", () => {
     );
   });
 
-  it("sends reading a suggestion to GitHub, where the diff is", async () => {
+  /**
+   * The point of the whole dialog: deciding without leaving.
+   *
+   * This used to be a link to github.com, on the argument that GitHub renders
+   * a diff better than a notes app would. It does — and it also meant three
+   * context switches to approve a one-word correction, which is what nearly
+   * all of these are.
+   */
+  it("shows what a suggestion changes without leaving", async () => {
     listSuggestions.mockResolvedValue([suggestion()]);
     open();
 
-    const link = await screen.findByRole("link", { name: /Read what changed/ });
+    fireEvent.click(await screen.findByRole("button", { name: "Read what changed" }));
+    expect(await screen.findByText(/the change in #7/)).toBeTruthy();
+  });
+
+  it("puts the change away again", async () => {
+    listSuggestions.mockResolvedValue([suggestion()]);
+    open();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Read what changed" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Hide what changed" }));
+
+    await waitFor(() => expect(screen.queryByText(/the change in #7/)).toBeNull());
+  });
+
+  /** The conversation is the half that genuinely belongs on GitHub. */
+  it("still offers the conversation on GitHub", async () => {
+    listSuggestions.mockResolvedValue([suggestion()]);
+    open();
+
+    const link = await screen.findByRole("link", { name: /Discuss on GitHub/ });
     expect(link.getAttribute("href")).toBe("https://github.com/me/notes/pull/7");
+  });
+
+  it("reads one suggestion at a time", async () => {
+    listSuggestions.mockResolvedValue([suggestion(), suggestion({ number: 8, title: "Another" })]);
+    open();
+
+    const [first, second] = await screen.findAllByRole("button", { name: "Read what changed" });
+    fireEvent.click(first!);
+    expect(await screen.findByText(/the change in #7/)).toBeTruthy();
+
+    fireEvent.click(second!);
+    expect(await screen.findByText(/the change in #8/)).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText(/the change in #7/)).toBeNull());
   });
 });

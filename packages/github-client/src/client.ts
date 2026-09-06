@@ -76,6 +76,14 @@ interface ApiCommitDetail {
   files?: { filename: string; status: string; previous_filename?: string }[];
 }
 
+interface ApiComparison {
+  merge_base_commit?: { sha: string };
+  commits?: { sha: string }[];
+  ahead_by?: number;
+  behind_by?: number;
+  files?: { filename: string; status: string; previous_filename?: string }[];
+}
+
 interface ApiReviewComment {
   id: number;
   path: string;
@@ -270,6 +278,21 @@ export interface CommitFile {
   /** GitHub's own word: added, modified, removed, renamed. */
   status: string;
   previousPath: string | null;
+}
+
+/** Two branches compared: what differs, and the commit they last agreed at. */
+export interface BranchComparison {
+  /** The commit both branches share — the honest "before" for a diff. */
+  mergeBaseSha: string;
+  /** The tip of the branch being compared. */
+  headSha: string;
+  /** Commits on `head` that `base` does not have. */
+  aheadBy: number;
+  /** Commits on `base` that `head` does not have, which is why merge base matters. */
+  behindBy: number;
+  files: CommitFile[];
+  /** True when the comparison touches more files than were returned. */
+  truncated: boolean;
 }
 
 export interface NoteCommit {
@@ -1152,6 +1175,48 @@ export class GitHubClient {
       avatarUrl: entry.author?.avatar_url ?? null,
       date: entry.commit.author?.date ?? entry.commit.committer?.date ?? "",
       byForkLeaf: (entry.commit.message ?? "").startsWith(COMMIT_MARKER),
+    };
+  }
+
+  /**
+   * What one branch changed relative to another.
+   *
+   * Answers the question an experiment asks: *what would keeping this do to
+   * the branch it came from?* — which is not the same as "how do these two
+   * branches differ". If work landed on `main` while the rewrite was being
+   * written, a straight two-tip comparison reports that work as something the
+   * experiment deletes, which is a lie that would talk somebody out of keeping
+   * a perfectly good rewrite.
+   *
+   * The honest before-side is the merge base: the commit the experiment
+   * actually grew out of. GitHub computes it for this endpoint anyway, so
+   * `mergeBaseSha` comes back with the file list and the caller reads the old
+   * text at that commit rather than at the branch tip.
+   */
+  async compareBranches(
+    owner: string,
+    repo: string,
+    base: string,
+    head: string,
+    limit = 100,
+  ): Promise<BranchComparison> {
+    const { data } = await this.transport.request<ApiComparison>(
+      `/repos/${owner}/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`,
+    );
+    if (!data) throw new GitHubError("unknown", "Empty comparison response");
+
+    const all = data.files ?? [];
+    return {
+      mergeBaseSha: data.merge_base_commit?.sha ?? base,
+      headSha: data.commits?.[data.commits.length - 1]?.sha ?? head,
+      aheadBy: data.ahead_by ?? 0,
+      behindBy: data.behind_by ?? 0,
+      files: all.slice(0, limit).map((file) => ({
+        path: file.filename,
+        status: file.status,
+        previousPath: file.previous_filename ?? null,
+      })),
+      truncated: all.length > limit,
     };
   }
 

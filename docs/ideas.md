@@ -15,18 +15,27 @@ Ticked entries link to nothing; the git history is the record.
 ## The whole app
 
 - [x] **Try a rewrite without losing the original** — Medium. An experiment
-      branch with a bar that says so, and two buttons: keep it, or throw it
-      away. Comparing the two side by side is still to do
+      branch with a bar that says so, and three buttons: compare it with the
+      original, keep it, or throw it away. The comparison is against the commit
+      the rewrite grew from, so work that landed on the original meanwhile is
+      not reported as something the rewrite deletes
 - [x] **Read your notebook as it was on any date** — Small. A date picker that
       takes the _whole notebook_ back: the files that existed that day, and
       each one readable as it stood. Read-only
 - [x] **Ask a sentence where it came from** — Medium. Pointing at a paragraph
       now says what it used to say, taken from the revision before the change
       that produced it
-- [x] **Suggest a change to someone else's notes** — Big. Published pages carry
-      **Suggest an edit**; suggestions arrive in a list you can accept from.
-      Reading the diff still happens on GitHub, and the reader still needs a
-      GitHub account — the half that would remove that is still to do
+- [~] **Suggest a change to someone else's notes** — Big. Published pages carry
+  **Suggest an edit**; suggestions arrive in a list you can read and accept
+  from, the note before and after, without leaving. The link to GitHub is
+  now only for replying to whoever sent it.
+
+      The reader still needs a GitHub account, which is the remaining half and
+      is a decision rather than code: accepting a suggestion from somebody with
+      no account means deciding where an unauthenticated proposal is kept and
+      what it is signed with, and every answer to that is either an account
+      somewhere else or an unsigned commit in your repository
+
 - [x] **Notes that tell you when they have gone stale** — Medium. A list that
       comes to you, across the notebook: notes pointing at files that have
       gone, links matching no note, and claims that have aged
@@ -55,7 +64,8 @@ Ticked entries link to nothing; the git history is the record.
       what is gone, and a one-press fix for a stale page number
 - [x] **See what changed between two versions of a PDF** — Medium. Which pages
       changed, compared as text rather than bytes, and whether one of them is a
-      page you quoted. Rendering the two pages side by side is still to do
+      page you quoted. Picking one of those pages draws it out of both files,
+      side by side — so "page 12 changed" becomes the paragraph that changed
 - [x] **Highlights that are just text files** — Medium. A line in
       `<document>.highlights.md` beside the PDF, drawn over the page when you
       read, found again by its words rather than by a page number

@@ -5,6 +5,34 @@ full record.
 
 ## Unreleased
 
+### Comparing two things, side by side
+
+Three places in ForkLeaf could tell you that something had changed and then
+leave you to work out _how_ on your own. All three can now show you.
+
+- **A rewrite, beside the original.** Trying a rewrite already gave you a copy
+  to work in and two buttons — keep it, throw it away — with nothing in between
+  to base the choice on. The bar now has a third: **Compare** puts the two
+  versions in two columns with the changed words picked out.
+
+  Compared against the commit the rewrite grew from rather than the original's
+  current tip. If anything landed on the original while the rewrite was being
+  written, comparing against the tip would report that work as something the
+  rewrite deletes — and talk you out of keeping a rewrite that deletes nothing.
+  When the original has moved on, it says so instead.
+
+- **Two versions of a paper, page beside page.** Comparing two versions of a
+  PDF said which pages changed, compared as words rather than bytes. Picking
+  one of those pages now draws it from both files at once, so "page 12 changed"
+  becomes the paragraph that changed. The arrow beside it still takes the
+  reader there.
+
+- **A suggestion, read where you accept it.** A correction sent back from a
+  published page could be accepted here but only read on github.com — three
+  context switches to approve the one-word fixes that most of them are. The
+  note before and after is now in the list itself. **Discuss on GitHub** stays,
+  for the half that genuinely belongs there: replying to whoever sent it.
+
 ### Fixed — another account could read this browser's notebook
 
 Signing out and signing in as a different GitHub account on the same browser
