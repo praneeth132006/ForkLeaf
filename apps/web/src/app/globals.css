@@ -207,6 +207,27 @@ h3 {
   color: var(--fl-text);
 }
 
+/* The PDF text layer is transparent words sitting on top of a drawn page, and
+   the two rules above would undo exactly that: a selection colour is a colour,
+   so the moment you dragged across a paragraph the browser painted the
+   invisible spans in the text colour — a second, serif, slightly-stretched
+   copy of the sentence on top of the real one. Selected text there has to stay
+   as invisible as unselected text; only the highlight behind it should show.
+   `-webkit-text-fill-color` is the one Chrome actually honours here. */
+.fl-pdf-text::selection,
+.fl-pdf-text ::selection {
+  background: var(--fl-selection);
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.fl-pdf-text::-moz-selection,
+.fl-pdf-text ::-moz-selection {
+  background: var(--fl-selection);
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
 /* A selection made in a window that has since lost focus stays visible, dimmer.
    Without this the browser greys it out to near-invisibility, which is the
    state you are in every time you reach for a menu mid-selection. */

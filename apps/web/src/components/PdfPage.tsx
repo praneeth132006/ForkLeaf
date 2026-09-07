@@ -205,12 +205,20 @@ function TextLayer({
   return (
     <div
       ref={layerRef}
-      className="absolute inset-0 select-text"
+      className="fl-pdf-text absolute inset-0 select-text"
       style={{ color: "transparent", lineHeight: 1 }}
     >
       {text.runs.map((run, index) => {
         const content = text.text.slice(run.start, run.end);
         if (!content.trim()) return null;
+
+        // The spaces and line breaks between two runs belong to the page text
+        // but to no run, so nothing carried them into the DOM and a copied
+        // paragraph came back as "Anattackconsistsof". They ride along at the
+        // end of the run before them, clipped to nothing so they cost no
+        // layout, and carry their own offset so a selection that stops inside
+        // one still resolves.
+        const gap = text.text.slice(run.end, text.runs[index + 1]?.start ?? run.end);
 
         return (
           <span
@@ -222,12 +230,18 @@ function TextLayer({
               top: height - (run.y + run.height) * scale,
               fontSize: Math.max(run.height * scale, 1),
               fontFamily: "serif",
-              // Measured after layout by the effect below would be more exact
-              // still; this is within a pixel and costs no reflow.
               transform: `scaleX(${run.width > 0 ? (run.width * scale) / Math.max(measure(content, run.height * scale), 0.01) : 1})`,
             }}
           >
             {content}
+            {gap ? (
+              <span
+                data-run-start={run.end}
+                className="absolute left-full top-0 block w-0 overflow-hidden"
+              >
+                {gap}
+              </span>
+            ) : null}
           </span>
         );
       })}
@@ -236,17 +250,43 @@ function TextLayer({
 }
 
 /**
- * A rough advance width for a string at a font size.
+ * The advance width of a string at a font size, in the layer's own font.
  *
- * Deliberately an estimate. Measuring each run properly means a canvas
- * `measureText` per run per zoom level, which on a dense page is thousands of
- * calls on every scroll — and the only thing the number affects is how closely
- * an invisible box hugs the glyphs under it. Half an em per character is
- * within a few per cent for prose, which is close enough that a selection
- * lands on the words the reader dragged across.
+ * This number decides how far the invisible span is stretched to cover the
+ * glyphs beneath it, which is to say how closely the selection highlight hugs
+ * the words. The old half-an-em-per-character estimate is right for average
+ * prose and wrong for everything else: a line of capitals, a heading, a run of
+ * digits or "illili" all miss by enough that the blue box ends mid-word.
+ *
+ * Measuring is exact, and the reason not to measure was cost — a `measureText`
+ * per run per zoom level, thousands per scroll. So the ratio is measured once
+ * at a reference size and cached by string: width scales linearly with font
+ * size, so zooming re-uses the same number, and a document repeats its words
+ * enough that the cache answers most runs on a page it has seen before.
  */
+const REFERENCE_SIZE = 100;
+const ratios = new Map<string, number>();
+let ruler: CanvasRenderingContext2D | null | undefined;
+
 function measure(content: string, fontSize: number): number {
-  return content.length * fontSize * 0.5;
+  const cached = ratios.get(content);
+  if (cached !== undefined) return cached * fontSize;
+
+  if (ruler === undefined) {
+    ruler =
+      typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
+    if (ruler) ruler.font = `${REFERENCE_SIZE}px serif`;
+  }
+
+  // Without a canvas — server-side, or a context the browser refused — fall
+  // back to the old estimate rather than leaving every span unstretched.
+  const ratio = ruler ? ruler.measureText(content).width / REFERENCE_SIZE : content.length * 0.5;
+
+  // A three-hundred-page document has a lot of distinct runs, and none of this
+  // is worth holding onto forever.
+  if (ratios.size > 20_000) ratios.clear();
+  ratios.set(content, ratio);
+  return ratio * fontSize;
 }
 
 /** The page-text offset a DOM position corresponds to, or null if outside. */
