@@ -1,0 +1,7 @@
+{
+  "name": "@forkleaf/extension",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Save to ForkLeaf: a browser extension that sends pages, quotes, links and images to your ForkLeaf inbox.",
+  "type": "module"
+}

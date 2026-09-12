@@ -83,6 +83,7 @@ import {
 } from "@/lib/weekly-review";
 import { daysBefore, deletedSince } from "@/lib/deleted-notes";
 import { SaveDialog } from "@/components/SaveDialog";
+import { MindDialog } from "@/components/MindDialog";
 import { INBOX_FOLDER, bookmarklet, findSaved, inboxNote, parseSaveRequest } from "@/lib/inbox";
 import { setTaskDone } from "@/lib/tasks";
 import {
@@ -432,6 +433,7 @@ export function EditorWorkspace() {
     | "graph"
     | "folder-views"
     | "flashcards"
+    | "mind"
     | "time-machine"
     | "suggestions"
     | "document-versions"
@@ -2651,6 +2653,14 @@ export function EditorWorkspace() {
         run: () => setDialog("flashcards"),
       });
       list.push({
+        id: "mind",
+        label: "Show everything I saved",
+        group: "Notes",
+        hint: "Pages, quotes, links and pictures from the inbox, newest first",
+        keywords: "saved inbox mind clips bookmarks read later collection grid gallery pinterest",
+        run: () => setDialog("mind"),
+      });
+      list.push({
         id: "bookmarklet",
         label: "Copy the Save to ForkLeaf bookmarklet",
         group: "Notes",
@@ -3872,6 +3882,33 @@ export function EditorWorkspace() {
             notebook.openNote(path);
           }}
           workspaceId={workspace.id}
+        />
+      )}
+
+      {openDialog === "mind" && workspace && (
+        <MindDialog
+          onClose={() => setDialog(null)}
+          loadNotes={async () =>
+            (await notebook.allNotes()).map((entry) => ({
+              path: entry.path,
+              title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+              content: entry.content,
+              frontmatter: entry.frontmatter,
+            }))
+          }
+          onOpenNote={(path) => {
+            setDialog(null);
+            notebook.openNote(path);
+          }}
+          onCopyBookmarklet={() => {
+            void navigator.clipboard.writeText(bookmarklet(window.location.origin)).then(
+              () =>
+                setNotice(
+                  "Copied. Make a new bookmark and paste this as its address, then press it on any page.",
+                ),
+              () => notebook.reportError("The clipboard could not be written to from this page."),
+            );
+          }}
         />
       )}
 

@@ -35,7 +35,7 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] Flashcards from notes, with spaced repetition
 - [x] Weekly review written from your notes
 - [x] Save from anywhere: share sheet, bookmarklet and save address
-- [ ] Browser extension (save pages, quotes, images) and the Mind view
+- [x] Browser extension (save pages, quotes, images) and the Mind view
 - [ ] Encrypted folders
 - [ ] Notebook checks as a GitHub Action
 - [ ] MCP server so AI assistants can use your notebook
@@ -140,6 +140,30 @@ ForkLeaf always asks **Save to your notebook?** first, showing exactly what will
 be written, because anyone can put that address in a link. It also tells you
 when you have saved the same link before. Only `http` and `https` addresses are
 kept.
+
+### Browser extension
+
+**Save to ForkLeaf** lives in `apps/extension`. Load it from
+`chrome://extensions` → **Developer mode** → **Load unpacked**, then set your
+ForkLeaf address in its **Options**.
+
+- Toolbar button or **Alt+Shift+S** saves the page — or the selected text as a
+  quote.
+- Right-click a page, selection, link or image → **Save … to ForkLeaf**.
+
+It opens ForkLeaf's save address, so ForkLeaf still asks before saving. It needs
+no account and no host permissions. See `apps/extension/README.md`.
+
+### Everything you saved
+
+⌘K → **Show everything I saved** shows the inbox as a grid: quotes as quotes,
+pictures as pictures, links with their site, newest first.
+
+- Filter by **Quotes**, **Links**, **Notes** or **Images**, or search inside all
+  of them (titles, text, sites and tags).
+- Click a card to open its note; **Original** opens the page it came from.
+- Pictures load through ForkLeaf's image proxy, so the sites never see you
+  looking.
 
 ### Weekly review
 

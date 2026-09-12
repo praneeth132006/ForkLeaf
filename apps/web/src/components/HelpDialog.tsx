@@ -155,6 +155,18 @@ export function HelpDialog({
             then="A note in inbox/ with the text, a link back and the site it came from. ForkLeaf asks before saving anything, and tells you if you have saved that link before."
           />
           <Feature
+            title="Everything you saved, at a glance"
+            what="A folder of saved things is a list of filenames. What you are looking for is the quote, or the picture."
+            doThis="⌘K → Show everything I saved. Filter by kind, or search inside all of it."
+            then="A grid of your inbox — quotes as quotes, pictures as pictures, links with their site — newest first. Click one to open its note, or Original for the page it came from."
+          />
+          <Feature
+            title="Save from your browser in one click"
+            what="Copying a quote, switching tabs and pasting it into a note loses where it came from."
+            doThis="Load the Save to ForkLeaf extension from apps/extension, then press its button or Alt+Shift+S — or right-click a selection, link or image."
+            then="ForkLeaf opens with what you chose, asks, and saves it to inbox/ with a link back. The extension holds no account and cannot save anything you have not seen."
+          />
+          <Feature
             title="Look back on the week"
             what="A week of notes goes by without anybody noticing what it added up to."
             doThis="⌘K → Write this week's review."

@@ -5,6 +5,25 @@ full record.
 
 ## Unreleased
 
+### A browser extension, and everything you saved in one place
+
+- **Save to ForkLeaf**, a Chromium extension in `apps/extension`. The toolbar
+  button (or Alt+Shift+S) saves the page, or the selection as a quote; the
+  right-click menu saves a page, a selection, a link or an image. It opens
+  ForkLeaf's save address in a new tab rather than writing anything itself, so
+  it needs no account, holds no token, asks for no host permissions, and every
+  save still goes through ForkLeaf's confirmation. A selection too long for an
+  address is cut to fit and marked as cut. The decisions — what to save for each
+  menu, which addresses count, where ForkLeaf is — are plain modules with tests.
+
+- **Everything you saved.** ⌘K → **Show everything I saved** lays the inbox out
+  as a grid of what each thing is: quotes set as quotes, pictures shown, links
+  with their site and date. Filter by kind, search across titles, text, sites
+  and tags, open the note, or open the original. Pictures are fetched through
+  ForkLeaf's image proxy rather than by the browser, so browsing the inbox does
+  not tell every site in it that you looked; one that will not load is hidden
+  rather than drawn broken.
+
 ### Save from anywhere
 
 Things worth keeping are mostly found somewhere other than a notes app. There
