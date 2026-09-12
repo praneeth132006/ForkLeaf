@@ -72,6 +72,16 @@ import { TasksDialog } from "@/components/TasksDialog";
 import { DeletedNotesDialog } from "@/components/DeletedNotesDialog";
 import { GraphDialog } from "@/components/GraphDialog";
 import { FolderViewsDialog, type FolderView } from "@/components/FolderViewsDialog";
+import { FlashcardsDialog } from "@/components/FlashcardsDialog";
+import { SCHEDULE_PATH, findCards } from "@/lib/flashcards";
+import {
+  formatWeeklyReview,
+  isoWeek,
+  summariseWeek,
+  weeklyReviewPath,
+  weeklyReviewTitle,
+} from "@/lib/weekly-review";
+import { daysBefore, deletedSince } from "@/lib/deleted-notes";
 import { setTaskDone } from "@/lib/tasks";
 import {
   DAILY_TEMPLATE,
@@ -118,7 +128,7 @@ import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { StorageBlocked } from "@/components/StorageBlocked";
 import { BootScreen } from "@/components/BootScreen";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
-import { fetchSession, signOut } from "@/lib/gateway";
+import { fetchSession, readNotebookAt, signOut } from "@/lib/gateway";
 import { postHogReset } from "@/lib/posthog";
 import { assetPathFor, relativeSrc, resolveImageSrc } from "@/lib/assets";
 import { revealAsset } from "@/lib/reveal-asset";
@@ -364,6 +374,7 @@ export function EditorWorkspace() {
     | "deleted"
     | "graph"
     | "folder-views"
+    | "flashcards"
     | "time-machine"
     | "suggestions"
     | "document-versions"
@@ -2115,6 +2126,63 @@ export function EditorWorkspace() {
     setNotice(`Started today's note, ${created.path}`);
   }, [notebook, takenPaths]);
 
+  /** Writes this week's review into the journal, or opens it when it exists. */
+  const writeWeeklyReview = useCallback(async () => {
+    const now = new Date();
+    const path = weeklyReviewPath(now);
+    if (takenPaths.includes(path)) {
+      notebook.openNote(path);
+      return;
+    }
+
+    const notes = (await notebook.allNotes())
+      .filter((entry) => isMarkdown(entry.path))
+      .map((entry) => {
+        const created = entry.frontmatter.created as unknown;
+        return {
+          path: entry.path,
+          title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+          content: entry.content,
+          created:
+            created instanceof Date
+              ? created.toISOString()
+              : typeof created === "string"
+                ? created
+                : null,
+          updatedAt: entry.updatedAt,
+        };
+      });
+
+    // Notes deleted this week are the ones in the notebook as it stood at the
+    // end of last Sunday and not in it now. Only a repository remembers that.
+    let deleted: string[] = [];
+    if (workspace && !workspace.isLocal) {
+      try {
+        const { commit, tree } = await readNotebookAt(
+          workspace.repo,
+          daysBefore(isoWeek(now).monday, 1),
+        );
+        if (commit) {
+          deleted = deletedSince(collectFilePaths(tree), takenPaths)
+            .filter((entry) => !entry.movedTo)
+            .map((entry) => entry.path);
+        }
+      } catch {
+        // Offline, or GitHub is slow: the rest of the week is still worth
+        // writing down, and the review simply leaves the deletions out.
+      }
+    }
+
+    const created = await notebook.createNote(
+      weeklyReviewTitle(now),
+      JOURNAL_FOLDER,
+      formatWeeklyReview(summariseWeek(notes, now, deleted)),
+    );
+    if (!created) return;
+    track("note_created");
+    setNotice(`Wrote this week's review, ${created.path}`);
+  }, [notebook, takenPaths, workspace]);
+
   const newFromTemplate = useCallback(
     (template: Template) => {
       // Beside the note that is open — unless that note is itself a template,
@@ -2178,6 +2246,14 @@ export function EditorWorkspace() {
         hint: dailyNotePath(new Date()),
         keywords: "daily journal diary today log day date",
         run: () => void openToday(),
+      },
+      {
+        id: "weekly-review",
+        label: "Write this week's review",
+        group: "Notes",
+        hint: weeklyReviewPath(new Date()),
+        keywords: "weekly review week summary retro retrospective reflection journal digest",
+        run: () => void writeWeeklyReview(),
       },
       {
         id: "graph",
@@ -2509,6 +2585,14 @@ export function EditorWorkspace() {
         keywords: "tasks todo to-do checklist checkbox due overdue agenda action items",
         run: () => setDialog("tasks"),
       });
+      list.push({
+        id: "flashcards",
+        label: "Review flashcards",
+        group: "Notes",
+        hint: "Every question :: answer line in your notes, when it is due",
+        keywords: "flashcards cards spaced repetition review study learn quiz anki memorise",
+        run: () => setDialog("flashcards"),
+      });
       list.push(
         {
           id: "board",
@@ -2684,6 +2768,7 @@ export function EditorWorkspace() {
     templates,
     newFromTemplate,
     saveAsTemplate,
+    writeWeeklyReview,
   ]);
 
   /**
@@ -3713,6 +3798,37 @@ export function EditorWorkspace() {
             notebook.openNote(path);
           }}
           workspaceId={workspace.id}
+        />
+      )}
+
+      {openDialog === "flashcards" && workspace && (
+        <FlashcardsDialog
+          onClose={() => setDialog(null)}
+          loadCards={async () =>
+            (await notebook.allNotes())
+              .filter(
+                (entry) =>
+                  isMarkdown(entry.path) &&
+                  !isTemplatePath(entry.path) &&
+                  entry.path !== SCHEDULE_PATH,
+              )
+              .flatMap((entry) =>
+                findCards(
+                  entry.path,
+                  deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+                  entry.content,
+                ),
+              )
+          }
+          readSchedule={() => notebook.readNote(SCHEDULE_PATH)}
+          writeSchedule={async (content) => {
+            const written = await notebook.upsertNote(SCHEDULE_PATH, () => content);
+            if (written === null) throw new Error("The schedule could not be written.");
+          }}
+          onOpenNote={(path) => {
+            setDialog(null);
+            notebook.openNote(path);
+          }}
         />
       )}
 

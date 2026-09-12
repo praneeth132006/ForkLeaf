@@ -149,6 +149,12 @@ export function HelpDialog({
             then="Tomorrow the same command makes a new one, and yesterday's is still there in the journal folder."
           />
           <Feature
+            title="Look back on the week"
+            what="A week of notes goes by without anybody noticing what it added up to."
+            doThis="⌘K → Write this week's review."
+            then="A note in journal/ listing what you started, what you worked on, what you deleted and which to-dos are overdue or coming up — each linked — with an empty Looking back heading for your own words. Run it again that week and it opens the same note."
+          />
+          <Feature
             title="Every to-do, in one list"
             what="A - [ ] written in Tuesday's meeting note is invisible from Wednesday's."
             doThis="⌘K → Show every open to-do. Tick one there and it is ticked in its note. Add 📅 2026-09-14 or due: 2026-09-14 to a line to give it a date."
@@ -159,6 +165,12 @@ export function HelpDialog({
             what="Tabs, file trees and sync status are all useful, and none of them are the sentence you are writing."
             doThis="Press ⌘⇧F, or ⌘K → Enter focus mode."
             then="Everything but the note steps away. The same keys, or the button in the corner, bring it back."
+          />
+          <Feature
+            title="Learn what you write down"
+            what="Notes you never see again are notes you forget. Spaced repetition shows each fact again just before it would slip."
+            doThis="Write a line like Capital of Portugal :: Lisbon in any note, then ⌘K → Review flashcards. Space shows the answer; 1–4 grade it."
+            then="Each card comes back after a gap that grows as you remember it. The schedule is reviews/flashcards.md in your repository, so every device agrees."
           />
           <Feature
             title="See how your notes connect"

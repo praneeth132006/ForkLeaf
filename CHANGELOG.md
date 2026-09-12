@@ -5,6 +5,39 @@ full record.
 
 ## Unreleased
 
+### This week, written down
+
+⌘K → **Write this week's review** makes `journal/2026-w37.md`: the notes started
+this week (and how many words they came to), the notes worked on, the notes
+deleted, the to-dos that are overdue and the ones due in the next seven days —
+each with a link to its note — and an empty **Looking back** heading for the part
+only you can write. Running it again the same week opens the note rather than
+writing a second one.
+
+Read from the notes themselves — their `created` dates and when they were last
+saved — so it works offline and in a notebook with no repository. On a
+connected repository, notes deleted this week are found the same way **Bring
+back a deleted note** finds them. To-dos are copied as plain lines rather than
+boxes, so a review does not add a second copy of every task to the to-do list.
+Weeks are ISO weeks, starting on Monday.
+
+### Flashcards
+
+A line written `Question :: Answer` in any note is a flashcard, and ⌘K →
+**Review flashcards** goes through the ones due today: the question, the answer
+when asked for, then **Again**, **Hard**, **Good** or **Easy** (or 1–4 on the
+keyboard). The gap before a card returns grows as it is remembered — SM-2, the
+schedule most flashcard apps descend from — and each button says what that gap
+will be. A forgotten card comes round again before the session ends.
+
+The schedule lives in `reviews/flashcards.md` as a table, one row per card, and
+each grade is written to it straight away: it syncs, it has history, and
+deleting a row starts that card over. A card is identified by its note and its
+question, so editing the answer or the rest of the note keeps its progress.
+`::` in code blocks, indented code, tables, headings and inline code is never
+read as a card. The spelling is the one Obsidian's spaced-repetition plugin
+reads, so the cards are not a ForkLeaf format.
+
 ### A graph of the notebook, and a folder as a board or a table
 
 - **Graph.** ⌘K → **Show the graph of my notes** draws every note as a dot and

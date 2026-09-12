@@ -32,8 +32,8 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] Graph view of the links between notes
 - [x] Kanban board for a folder
 - [x] Database views over note properties (table)
-- [ ] Flashcards from notes, with spaced repetition
-- [ ] Weekly review written from git history
+- [x] Flashcards from notes, with spaced repetition
+- [x] Weekly review written from your notes
 - [ ] Save from anywhere: share target and save API
 - [ ] Browser extension (save pages, quotes, images) and the Mind view
 - [ ] Encrypted folders
@@ -98,6 +98,44 @@ otherwise it starts with the date, a to-do list and a notes section.
 - Give a to-do a date with `📅 2026-09-14` or `due: 2026-09-14`. Overdue items
   come first and are marked.
 - To-dos inside code blocks and in `templates/` are ignored.
+
+### Flashcards
+
+Write a card as one line in any note:
+
+```markdown
+Capital of Portugal :: Lisbon
+
+- Mitochondria :: the powerhouse of the cell
+```
+
+⌘K → **Review flashcards** shows the cards due today, then new ones (up to 20
+a session).
+
+1. Read the question, press **Show answer** (or **Space**).
+2. Grade it: **Again**, **Hard**, **Good** or **Easy** (or **1**–**4**). Each
+   button shows when the card will come back.
+3. A card you forgot comes round again before the session ends.
+
+The schedule is kept in `reviews/flashcards.md`, a table with one row per card,
+so it syncs to every device. Delete a row to start that card over. Lines in
+code blocks, tables, headings and inline code are never cards, so `std :: vector`
+is safe. Same spelling as Obsidian's spaced-repetition plugin.
+
+### Weekly review
+
+⌘K → **Write this week's review** makes `journal/YYYY-wWW.md` (for example
+`journal/2026-w37.md`) and opens it. It lists:
+
+- **Started** — notes created this week, and how many words they came to
+- **Worked on** — notes changed this week
+- **Deleted** — notes removed this week (connected repositories only)
+- **Overdue** and **Coming up** — dated to-dos, with a link to their note
+- **Looking back** — an empty heading for your own thoughts
+
+Running it again the same week opens the existing review instead of making a
+second one. Weeks start on Monday. To-dos are copied as plain lines, not boxes,
+so they are not counted twice in **Show every open to-do**.
 
 ### Focus mode
 
