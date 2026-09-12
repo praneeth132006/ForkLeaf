@@ -1758,6 +1758,25 @@ export function useNotebook(request: NotebookRequest = {}) {
   );
 
   /**
+   * Reads a file with its properties still attached, or null.
+   *
+   * `readNote` gives the body alone, which is right for the files the app
+   * keeps beside a document and wrong for a template, whose tags and fields
+   * are half of what it is for.
+   */
+  const readDocument = useCallback(
+    async (path: string): Promise<string | null> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace) return null;
+
+      const note = await notes.openNote(workspace.id, path).catch(() => null);
+      return note ? serializeDocument(note.content, note.frontmatter) : null;
+    },
+    [state.activeWorkspace],
+  );
+
+  /**
    * Drops one stuck change, so the queue behind it can move.
    *
    * The way out of a change that can never be pushed. Needs a refresh of the
@@ -2081,6 +2100,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       rewriteNote,
       upsertNote,
       readNote,
+      readDocument,
       saveDocumentText,
       documentText,
       allDocumentText,
@@ -2148,6 +2168,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       rewriteNote,
       upsertNote,
       readNote,
+      readDocument,
       shrinkChange,
       setSyncMode,
       resolveConflict,

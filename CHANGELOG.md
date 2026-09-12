@@ -5,6 +5,37 @@ full record.
 
 ## Unreleased
 
+### Everyday writing: templates, today's note, to-dos and focus
+
+Four things every notes app is expected to do, which ForkLeaf did not. Each one
+is ordinary files and ordinary markdown, so nothing here works only inside
+ForkLeaf.
+
+- **Templates are files in `templates/`.** Every markdown file there appears in
+  ⌘K as **New note from template**, and **Save this note as a template** makes
+  one from what you have open. `{{title}}`, `{{date}}`, `{{time}}`,
+  `{{weekday}}`, `{{yesterday}}` and `{{tomorrow}}` are filled in; any other
+  braces are left alone, in case they are yours. A template's tags come along;
+  its own title and creation date do not, or every meeting note would claim to
+  have been written the day the template was.
+
+- **Today's note.** ⌘K → **Open today's note** opens `journal/2026-09-12.md`,
+  making it first if needed — from `templates/daily.md` when there is one, and a
+  plain dated page with a to-do list when there is not. "Today" is the writer's
+  own day, not UTC's.
+
+- **Every open to-do, in one list.** A `- [ ]` written in Tuesday's meeting
+  note was invisible from Wednesday's. ⌘K → **Show every open to-do** lists
+  every unticked box in the notebook, soonest due first, and ticking one there
+  ticks it in its note — one character, synced and in history like any edit.
+  Due dates are `📅 2026-09-14` (the Obsidian Tasks spelling) or
+  `due: 2026-09-14`. Boxes inside code blocks and templates are not tasks. When
+  a note has changed since the list was read and the line cannot be found
+  unambiguously, nothing is ticked and the list reads again.
+
+- **Focus mode.** ⌘⇧F puts away the file tree, the tabs, the document panel and
+  the status bar, and brings back exactly the layout you had when pressed again.
+
 ### Comparing two things, side by side
 
 Three places in ForkLeaf could tell you that something had changed and then

@@ -25,6 +25,7 @@ import {
   serializeDocument,
   slugifyFilename,
   stripExtension,
+  uniquePath,
 } from "@forkleaf/markdown-engine";
 import { useNotebook } from "@/hooks/useNotebook";
 import { usePublishedPages } from "@/hooks/usePublishedPages";
@@ -67,6 +68,20 @@ import {
   withoutHighlight,
 } from "@/lib/pdf-highlights";
 import { FreshnessDialog } from "@/components/FreshnessDialog";
+import { TasksDialog } from "@/components/TasksDialog";
+import { setTaskDone } from "@/lib/tasks";
+import {
+  DAILY_TEMPLATE,
+  JOURNAL_FOLDER,
+  TEMPLATE_FOLDER,
+  dailyNotePath,
+  dateStamp,
+  defaultDailyNote,
+  isTemplatePath,
+  noteFromTemplate,
+  templatesIn,
+  type Template,
+} from "@/lib/templates";
 import { TimeMachineDialog } from "@/components/TimeMachineDialog";
 import { SuggestionsDialog } from "@/components/SuggestionsDialog";
 import { DocumentVersionsDialog } from "@/components/DocumentVersionsDialog";
@@ -276,6 +291,14 @@ export function EditorWorkspace() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  /**
+   * Everything but the note, put away.
+   *
+   * Separate from the two collapse toggles rather than built from them, so
+   * leaving focus puts back exactly the layout somebody had — not both panels
+   * open because that is what "show" means.
+   */
+  const [focusMode, setFocusMode] = useState(false);
 
   // The widths of the three columns that are not the document, each dragged by
   // the seam beside it and remembered on this device.
@@ -332,6 +355,7 @@ export function EditorWorkspace() {
     | "publish"
     | "citations"
     | "freshness"
+    | "tasks"
     | "time-machine"
     | "suggestions"
     | "document-versions"
@@ -2052,6 +2076,83 @@ export function EditorWorkspace() {
     return list;
   }, [workspace, user]);
 
+  const templates = useMemo(() => templatesIn(takenPaths), [takenPaths]);
+
+  /** Opens today's journal note, making it first when there is not one yet. */
+  const openToday = useCallback(async () => {
+    const now = new Date();
+    const path = dailyNotePath(now);
+    if (takenPaths.includes(path)) {
+      notebook.openNote(path);
+      return;
+    }
+
+    const title = dateStamp(now);
+    const raw = takenPaths.includes(DAILY_TEMPLATE)
+      ? await notebook.readDocument(DAILY_TEMPLATE)
+      : null;
+    const made =
+      raw !== null
+        ? noteFromTemplate(raw, { title, now })
+        : { content: defaultDailyNote(now), frontmatter: {} };
+
+    const created = await notebook.createNote(
+      title,
+      JOURNAL_FOLDER,
+      made.content,
+      made.frontmatter,
+    );
+    if (!created) return;
+    track("note_created");
+    setNotice(`Started today's note, ${created.path}`);
+  }, [notebook, takenPaths]);
+
+  const newFromTemplate = useCallback(
+    (template: Template) => {
+      // Beside the note that is open — unless that note is itself a template,
+      // where a new meeting note would quietly become another template.
+      const folder = isTemplatePath(`${currentFolder}/`) ? "" : currentFolder;
+
+      setPrompt({
+        title: `New note from “${template.name}”`,
+        label: "Title",
+        initialValue: "Untitled note",
+        confirmLabel: "Create",
+        body: folder
+          ? `Made from ${template.path}, saved inside “${folder}”.`
+          : `Made from ${template.path}, saved at the top of your repository.`,
+        onConfirm: async (value) => {
+          const title = value || "Untitled note";
+          const raw = await notebook.readDocument(template.path);
+          if (raw === null) {
+            notebook.reportError(`${template.path} could not be read, so no note was made.`);
+            return;
+          }
+
+          const made = noteFromTemplate(raw, { title, now: new Date() });
+          const created = await notebook.createNote(title, folder, made.content, made.frontmatter);
+          if (!created) return;
+          track("note_created");
+          setNotice(`Created ${created.path} from ${template.name}`);
+        },
+      });
+    },
+    [notebook, currentFolder],
+  );
+
+  /** Copies the open note into `templates/`, leaving the note itself alone. */
+  const saveAsTemplate = useCallback(async () => {
+    if (!note) return;
+    const path = uniquePath(
+      joinPath(TEMPLATE_FOLDER, `${slugifyFilename(title || "template")}.md`),
+      takenPaths,
+    );
+    // An empty body would write nothing at all, which is not a template.
+    const written = await notebook.upsertNote(path, () => note.content || "# {{title}}\n\n");
+    if (written === null) return;
+    setNotice(`Saved ${path} — it is now under “New note from template” in ⌘K`);
+  }, [note, title, takenPaths, notebook]);
+
   const commands = useMemo<Command[]>(() => {
     const list: Command[] = [
       {
@@ -2061,6 +2162,22 @@ export function EditorWorkspace() {
         hint: "⌘⇧N",
         keywords: "create add write",
         run: () => handleCreate(currentFolder),
+      },
+      {
+        id: "today",
+        label: "Open today's note",
+        group: "Notes",
+        hint: dailyNotePath(new Date()),
+        keywords: "daily journal diary today log day date",
+        run: () => void openToday(),
+      },
+      {
+        id: "focus",
+        label: focusMode ? "Leave focus mode" : "Enter focus mode",
+        group: "View",
+        hint: "⌘⇧F — just the note",
+        keywords: "zen distraction free fullscreen hide writing",
+        run: () => setFocusMode((value) => !value),
       },
       {
         id: "dashboard",
@@ -2360,6 +2477,34 @@ export function EditorWorkspace() {
           "stale fresh freshness rot decay old outdated broken link missing file check audit sweep review",
         run: () => setDialog("freshness"),
       });
+      list.push({
+        id: "tasks",
+        label: "Show every open to-do",
+        group: "Notes",
+        hint: "Every unticked box in the notebook, overdue first",
+        keywords: "tasks todo to-do checklist checkbox due overdue agenda action items",
+        run: () => setDialog("tasks"),
+      });
+      for (const template of templates) {
+        list.push({
+          id: `template-${template.path}`,
+          label: `New note from template: ${template.name}`,
+          group: "Templates",
+          hint: template.path,
+          keywords: "template create new note skeleton",
+          run: () => newFromTemplate(template),
+        });
+      }
+      if (note && !isTemplatePath(note.path)) {
+        list.push({
+          id: "save-template",
+          label: "Save this note as a template",
+          group: "Templates",
+          hint: `A copy in ${TEMPLATE_FOLDER}/ — {{title}} and {{date}} are filled in on use`,
+          keywords: "template reuse skeleton copy",
+          run: () => void saveAsTemplate(),
+        });
+      }
     }
 
     if (workspace && !workspace.isLocal) {
@@ -2486,6 +2631,11 @@ export function EditorWorkspace() {
     startExperiment,
     canSavePdf,
     savePdfToNotebook,
+    focusMode,
+    openToday,
+    templates,
+    newFromTemplate,
+    saveAsTemplate,
   ]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
@@ -2554,6 +2704,14 @@ export function EditorWorkspace() {
           if (event.shiftKey && note) {
             event.preventDefault();
             notebook.toggleLocked(note.path);
+          }
+          break;
+
+        case "f":
+          // ⌘⇧F, not ⌘F: that one is find, in the page and in the source view.
+          if (event.shiftKey) {
+            event.preventDefault();
+            setFocusMode((value) => !value);
           }
           break;
 
@@ -2664,73 +2822,75 @@ export function EditorWorkspace() {
         {/* Beside the document from `md` up; a drawer over it below that.
             One component either way — a second, cut-down mobile file tree
             would be a second set of bugs. */}
-        <div
-          className={`fl-panel ${
-            drawer === "files"
-              ? "fixed inset-y-2 left-2 z-40 flex w-[min(19rem,85vw)] shadow-[var(--fl-shadow-lg)] md:static md:z-auto md:shadow-none"
-              : "hidden md:flex"
-          } ${sidebarCollapsed ? "md:w-auto" : "md:w-[var(--fl-col)]"}`}
-          style={{ "--fl-col": `${sidebarWidth}px` } as React.CSSProperties}
-        >
-          <EditorSidebar
-            collapsed={sidebarCollapsed}
-            onToggle={() => setSidebarCollapsed((value) => !value)}
-            workspaces={notebook.workspaces}
-            activeWorkspace={workspace}
-            onSwitchWorkspace={notebook.switchWorkspace}
-            onConnectRepo={() => setDialog("connect")}
-            onDisconnectRepo={handleDisconnectRepo}
-            tree={notebook.tree}
-            activePath={note?.path ?? null}
-            onOpenNote={(path) => {
-              // A PDF in the tree opens in the reader. It is in the tree
-              // because ForkLeaf can open it; handing it to the notebook would
-              // make a note whose body is the raw bytes of a PDF.
-              if (isPdfPath(path)) openRepoPdf(path, "");
-              else notebook.openNote(path);
-              // On a phone the drawer covers the note it just opened.
-              setDrawer(null);
-            }}
-            {...(workspace && !workspace.isLocal
-              ? { onOpenPdfBeside: (path: string) => openRepoPdf(path, "", "beside") }
-              : {})}
-            {...(localFiles.supported ? { onOpenPdfFile: () => void localFiles.openPdf() } : {})}
-            onCreateNote={handleCreate}
-            currentFolder={currentFolder}
-            onDeleteNote={handleDelete}
-            onRenameNote={handleRename}
-            onCreateFolder={handleCreateFolder}
-            onRenameFolder={handleRenameFolder}
-            onDeleteFolder={handleDeleteFolder}
-            {...(workspace && !workspace.isLocal
-              ? { onPublishFolder: (path: string) => void handlePublishFolder(path) }
-              : {})}
-            onMoveNote={handleMoveNote}
-            onMoveFolder={handleMoveFolder}
-            pinnedPaths={notebook.pinnedPaths}
-            {...(notebook.expandedFolders ? { openFolders: notebook.expandedFolders } : {})}
-            onOpenFoldersChange={notebook.setExpandedFolders}
-            sortMode={notebook.treeOrder.mode}
-            onSortModeChange={notebook.setTreeSortMode}
-            onReorder={notebook.moveInTree}
-            onReorderTo={notebook.dropInTree}
-            onResetOrder={notebook.resetTreeOrder}
-            manualFolders={manualFolders}
-            onTogglePin={notebook.togglePinned}
-            onMovePin={notebook.movePinned}
-            user={user}
-            onSignIn={signIn}
-            onSignOut={handleSignOut}
-            onOpenHelp={() => setDialog("help")}
-            onOpenPalette={() => setPaletteOpen(true)}
-            githubAvailable={notebook.session?.githubAvailable ?? false}
-          />
-        </div>
+        {!focusMode && (
+          <div
+            className={`fl-panel ${
+              drawer === "files"
+                ? "fixed inset-y-2 left-2 z-40 flex w-[min(19rem,85vw)] shadow-[var(--fl-shadow-lg)] md:static md:z-auto md:shadow-none"
+                : "hidden md:flex"
+            } ${sidebarCollapsed ? "md:w-auto" : "md:w-[var(--fl-col)]"}`}
+            style={{ "--fl-col": `${sidebarWidth}px` } as React.CSSProperties}
+          >
+            <EditorSidebar
+              collapsed={sidebarCollapsed}
+              onToggle={() => setSidebarCollapsed((value) => !value)}
+              workspaces={notebook.workspaces}
+              activeWorkspace={workspace}
+              onSwitchWorkspace={notebook.switchWorkspace}
+              onConnectRepo={() => setDialog("connect")}
+              onDisconnectRepo={handleDisconnectRepo}
+              tree={notebook.tree}
+              activePath={note?.path ?? null}
+              onOpenNote={(path) => {
+                // A PDF in the tree opens in the reader. It is in the tree
+                // because ForkLeaf can open it; handing it to the notebook would
+                // make a note whose body is the raw bytes of a PDF.
+                if (isPdfPath(path)) openRepoPdf(path, "");
+                else notebook.openNote(path);
+                // On a phone the drawer covers the note it just opened.
+                setDrawer(null);
+              }}
+              {...(workspace && !workspace.isLocal
+                ? { onOpenPdfBeside: (path: string) => openRepoPdf(path, "", "beside") }
+                : {})}
+              {...(localFiles.supported ? { onOpenPdfFile: () => void localFiles.openPdf() } : {})}
+              onCreateNote={handleCreate}
+              currentFolder={currentFolder}
+              onDeleteNote={handleDelete}
+              onRenameNote={handleRename}
+              onCreateFolder={handleCreateFolder}
+              onRenameFolder={handleRenameFolder}
+              onDeleteFolder={handleDeleteFolder}
+              {...(workspace && !workspace.isLocal
+                ? { onPublishFolder: (path: string) => void handlePublishFolder(path) }
+                : {})}
+              onMoveNote={handleMoveNote}
+              onMoveFolder={handleMoveFolder}
+              pinnedPaths={notebook.pinnedPaths}
+              {...(notebook.expandedFolders ? { openFolders: notebook.expandedFolders } : {})}
+              onOpenFoldersChange={notebook.setExpandedFolders}
+              sortMode={notebook.treeOrder.mode}
+              onSortModeChange={notebook.setTreeSortMode}
+              onReorder={notebook.moveInTree}
+              onReorderTo={notebook.dropInTree}
+              onResetOrder={notebook.resetTreeOrder}
+              manualFolders={manualFolders}
+              onTogglePin={notebook.togglePinned}
+              onMovePin={notebook.movePinned}
+              user={user}
+              onSignIn={signIn}
+              onSignOut={handleSignOut}
+              onOpenHelp={() => setDialog("help")}
+              onOpenPalette={() => setPaletteOpen(true)}
+              githubAvailable={notebook.session?.githubAvailable ?? false}
+            />
+          </div>
+        )}
 
         {/* The seam between the file tree and the document. Hidden on a phone,
             where the tree is a drawer over the document and has no edge to
             share with it. */}
-        {!sidebarCollapsed && (
+        {!sidebarCollapsed && !focusMode && (
           <ColumnResizer
             label="Notes and folders"
             width={sidebarWidth}
@@ -2751,7 +2911,17 @@ export function EditorWorkspace() {
         {readingHere ? (
           <main className="fl-panel flex min-w-0 flex-1 flex-col">{readerPane("document")}</main>
         ) : (
-          <main className="fl-panel flex min-w-0 flex-1 flex-col">
+          <main className="fl-panel relative flex min-w-0 flex-1 flex-col">
+            {focusMode && (
+              <button
+                type="button"
+                onClick={() => setFocusMode(false)}
+                title="Leave focus mode (⌘⇧F)"
+                className="absolute right-3 top-3 z-10 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] px-2.5 py-1 text-[12px] font-medium text-[var(--fl-muted)] opacity-40 transition-opacity hover:text-[var(--fl-text)] hover:opacity-100 focus-visible:opacity-100"
+              >
+                Leave focus
+              </button>
+            )}
             {/* ── Header ────────────────────────────────────────────────── */}
             {/* One row: which notes are open, how this one is being viewed, and
               the handful of controls that act on the window rather than on the
@@ -2762,7 +2932,9 @@ export function EditorWorkspace() {
               controls beside it sat in empty space. Now the tabs take whatever
               is left after the controls have what they need, and scroll when
               that is not enough — which is what makes this fit every width. */}
-            <header className="flex h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-2">
+            <header
+              className={`${focusMode ? "hidden" : "flex"} h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-2`}
+            >
               {/* The way into the file tree — and therefore into the
                 dashboard, the repository picker and everything else that
                 lives in it — on a screen too narrow to show it beside the
@@ -3138,7 +3310,7 @@ export function EditorWorkspace() {
           </div>
         )}
 
-        {(!panelCollapsed || drawer === "document") && reader.status === "idle" && (
+        {(!panelCollapsed || drawer === "document") && !focusMode && reader.status === "idle" && (
           <ColumnResizer
             label="Document panel"
             width={panelWidth}
@@ -3151,7 +3323,7 @@ export function EditorWorkspace() {
           />
         )}
 
-        {(!panelCollapsed || drawer === "document") && reader.status === "idle" && (
+        {(!panelCollapsed || drawer === "document") && !focusMode && reader.status === "idle" && (
           <div
             className={`fl-panel lg:w-[var(--fl-col)] ${
               drawer === "document"
@@ -3233,26 +3405,28 @@ export function EditorWorkspace() {
         )}
       </div>
 
-      <EditorStatusBar
-        locked={noteLocked}
-        onSwitchBranch={notebook.switchBranch}
-        onPropose={() => setDialog("propose")}
-        sync={notebook.sync}
-        sessionExpired={notebook.sessionExpired}
-        workspace={workspace}
-        notePath={note?.path ?? null}
-        localFile={note ? localFiles.fileFor(note.path) : null}
-        cursor={cursor}
-        words={words}
-        syncPreference={notebook.syncPreference}
-        onSyncModeChange={notebook.setSyncMode}
-        onSyncNow={() => void retrySync()}
-        onShowConflicts={() => setConflictsDismissed(false)}
-        onSignIn={signInAgain}
-        onDiscardChange={(id) => void notebook.discardChange(id)}
-        onShrinkChange={notebook.shrinkChange}
-        onLocateChange={(path) => void locateUnsynced(path)}
-      />
+      {!focusMode && (
+        <EditorStatusBar
+          locked={noteLocked}
+          onSwitchBranch={notebook.switchBranch}
+          onPropose={() => setDialog("propose")}
+          sync={notebook.sync}
+          sessionExpired={notebook.sessionExpired}
+          workspace={workspace}
+          notePath={note?.path ?? null}
+          localFile={note ? localFiles.fileFor(note.path) : null}
+          cursor={cursor}
+          words={words}
+          syncPreference={notebook.syncPreference}
+          onSyncModeChange={notebook.setSyncMode}
+          onSyncNow={() => void retrySync()}
+          onShowConflicts={() => setConflictsDismissed(false)}
+          onSignIn={signInAgain}
+          onDiscardChange={(id) => void notebook.discardChange(id)}
+          onShrinkChange={notebook.shrinkChange}
+          onLocateChange={(path) => void locateUnsynced(path)}
+        />
+      )}
 
       {/* ── Dialogs ────────────────────────────────────────────────────── */}
       {openDialog === "export" && note && (
@@ -3479,6 +3653,29 @@ export function EditorWorkspace() {
             notebook.openNote(path);
           }}
           workspaceId={workspace.id}
+        />
+      )}
+
+      {openDialog === "tasks" && workspace && (
+        <TasksDialog
+          onClose={() => setDialog(null)}
+          loadNotes={async () =>
+            (await notebook.allNotes())
+              // A template's boxes are a skeleton for later, not work to do.
+              .filter((entry) => !isTemplatePath(entry.path))
+              .map((entry) => ({
+                path: entry.path,
+                content: entry.content,
+                title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+              }))
+          }
+          onToggle={(path, task, done) =>
+            notebook.rewriteNote(path, (content) => setTaskDone(content, task, done) ?? content)
+          }
+          onOpenNote={(path) => {
+            setDialog(null);
+            notebook.openNote(path);
+          }}
         />
       )}
 

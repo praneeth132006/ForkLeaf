@@ -137,6 +137,30 @@ export function HelpDialog({
             Hugo.
           </Item>
           <Feature
+            title="Start from a template"
+            what="Meeting notes, reading notes, a weekly review — the same skeleton, typed out again every time."
+            doThis="Put any note in a templates/ folder, or open one and choose ⌘K → Save this note as a template. Each one appears in ⌘K as New note from template."
+            then="{{title}}, {{date}}, {{time}}, {{weekday}}, {{yesterday}} and {{tomorrow}} are filled in. Its tags come along; its title and dates do not."
+          />
+          <Feature
+            title="A note for today"
+            what="Somewhere to put the day's scraps without deciding where they belong first."
+            doThis="⌘K → Open today's note. It opens journal/2026-09-12.md, making it if needed — from templates/daily.md when you have written one."
+            then="Tomorrow the same command makes a new one, and yesterday's is still there in the journal folder."
+          />
+          <Feature
+            title="Every to-do, in one list"
+            what="A - [ ] written in Tuesday's meeting note is invisible from Wednesday's."
+            doThis="⌘K → Show every open to-do. Tick one there and it is ticked in its note. Add 📅 2026-09-14 or due: 2026-09-14 to a line to give it a date."
+            then="Overdue items come first. Templates are left out, since their boxes are not real tasks."
+          />
+          <Feature
+            title="Focus on the page"
+            what="Tabs, file trees and sync status are all useful, and none of them are the sentence you are writing."
+            doThis="Press ⌘⇧F, or ⌘K → Enter focus mode."
+            then="Everything but the note steps away. The same keys, or the button in the corner, bring it back."
+          />
+          <Feature
             title="Make the columns the width you want"
             what="Every panel here can be resized, including the reader."
             doThis="Drag the seam between two panels. Double-click it to put it back; arrow keys move it too."
@@ -584,6 +608,7 @@ export function HelpDialog({
             ["⌘⇧E", "Export the current note"],
             ["⌘1 / ⌘2 / ⌘3", "Rich, split and source views"],
             ["⌘\\", "Show or hide the sidebar"],
+            ["⌘⇧F", "Focus mode — just the note"],
             ["⌘B / ⌘I", "Bold / italic (rich text)"],
             ["⌘Z / ⌘⇧Z", "Undo / redo"],
             ["Tab", "Indent (source view)"],
