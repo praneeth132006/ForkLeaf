@@ -34,7 +34,7 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] Database views over note properties (table)
 - [x] Flashcards from notes, with spaced repetition
 - [x] Weekly review written from your notes
-- [ ] Save from anywhere: share target and save API
+- [x] Save from anywhere: share sheet, bookmarklet and save address
 - [ ] Browser extension (save pages, quotes, images) and the Mind view
 - [ ] Encrypted folders
 - [ ] Notebook checks as a GitHub Action
@@ -121,6 +121,25 @@ The schedule is kept in `reviews/flashcards.md`, a table with one row per card,
 so it syncs to every device. Delete a row to start that card over. Lines in
 code blocks, tables, headings and inline code are never cards, so `std :: vector`
 is safe. Same spelling as Obsidian's spaced-repetition plugin.
+
+### Save from anywhere
+
+Keep a page, a quote, a link or an image from outside ForkLeaf. It lands as a
+note in `inbox/`, with the address, the site and the date as properties.
+
+- **From your phone:** install ForkLeaf from the browser, then use **Share →
+  ForkLeaf** in any app.
+- **From any browser:** ⌘K → **Copy the Save to ForkLeaf bookmarklet**, make a
+  new bookmark, and paste it as the address. Press it on any page to save the
+  page — or, with text selected, to save that text as a quote.
+- **From anything else:** open
+  `/editor?save=1&kind=quote&url=…&title=…&text=…` (`kind` is `page`, `quote`,
+  `link` or `image`).
+
+ForkLeaf always asks **Save to your notebook?** first, showing exactly what will
+be written, because anyone can put that address in a link. It also tells you
+when you have saved the same link before. Only `http` and `https` addresses are
+kept.
 
 ### Weekly review
 

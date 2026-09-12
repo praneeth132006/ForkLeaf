@@ -109,6 +109,20 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: "maskable",
       },
     ],
+    /**
+     * ForkLeaf in the operating system's share sheet.
+     *
+     * Once installed, "Share → ForkLeaf" from any app opens the editor with
+     * what was shared in the address, where a dialog asks before anything is
+     * saved to `inbox/`. GET rather than POST: nothing but text is shared, and
+     * a GET needs no service worker to receive it — this app deliberately has
+     * none. The parameter names are read by `lib/inbox`.
+     */
+    share_target: {
+      action: "/editor",
+      method: "GET",
+      params: { title: "share_title", text: "share_text", url: "share_url" },
+    },
     shortcuts: [
       { name: "New note", url: "/editor?new=1" },
       { name: "Dashboard", url: "/dashboard" },

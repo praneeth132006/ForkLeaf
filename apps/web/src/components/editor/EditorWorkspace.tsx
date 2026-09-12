@@ -82,6 +82,8 @@ import {
   weeklyReviewTitle,
 } from "@/lib/weekly-review";
 import { daysBefore, deletedSince } from "@/lib/deleted-notes";
+import { SaveDialog } from "@/components/SaveDialog";
+import { INBOX_FOLDER, bookmarklet, findSaved, inboxNote, parseSaveRequest } from "@/lib/inbox";
 import { setTaskDone } from "@/lib/tasks";
 import {
   DAILY_TEMPLATE,
@@ -301,6 +303,61 @@ export function EditorWorkspace() {
     path: searchParams.get("note"),
   });
   const router = useRouter();
+
+  /**
+   * Something shared into ForkLeaf from outside — the share sheet, the
+   * bookmarklet, the browser extension — waiting to be confirmed.
+   *
+   * Derived from the address rather than copied into state, and cleared by
+   * replacing the address once it has been answered, so a reload after saving
+   * cannot save the same thing twice.
+   */
+  const saveKey = searchParams.toString();
+  const incomingSave = useMemo(() => parseSaveRequest(new URLSearchParams(saveKey)), [saveKey]);
+  const [answeredSave, setAnsweredSave] = useState<string | null>(null);
+  const [earlierSave, setEarlierSave] = useState<{
+    key: string;
+    path: string;
+    title: string;
+  } | null>(null);
+  const loadNotesForSave = notebook.allNotes;
+
+  useEffect(() => {
+    if (!incomingSave || !notebook.ready) return;
+    let live = true;
+    void loadNotesForSave().then((all) => {
+      const found = findSaved(all, incomingSave);
+      if (live && found) {
+        setEarlierSave({
+          key: saveKey,
+          path: found.path,
+          title: deriveTitle(found.content, found.frontmatter.title, found.path),
+        });
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, [incomingSave, notebook.ready, loadNotesForSave, saveKey]);
+
+  const answerSave = useCallback(() => {
+    setAnsweredSave(saveKey);
+    const rest = new URLSearchParams(saveKey);
+    for (const key of [
+      "save",
+      "kind",
+      "url",
+      "title",
+      "text",
+      "share_url",
+      "share_text",
+      "share_title",
+    ]) {
+      rest.delete(key);
+    }
+    const query = rest.toString();
+    router.replace(query ? `/editor?${query}` : "/editor");
+  }, [saveKey, router]);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
@@ -2593,6 +2650,23 @@ export function EditorWorkspace() {
         keywords: "flashcards cards spaced repetition review study learn quiz anki memorise",
         run: () => setDialog("flashcards"),
       });
+      list.push({
+        id: "bookmarklet",
+        label: "Copy the Save to ForkLeaf bookmarklet",
+        group: "Notes",
+        hint: "Make a bookmark with it as the address — it saves the page, or the text you selected",
+        keywords: "save bookmarklet clip clipper web inbox capture bookmark browser read later",
+        run: async () => {
+          try {
+            await navigator.clipboard.writeText(bookmarklet(window.location.origin));
+            setNotice(
+              "Copied. Make a new bookmark and paste this as its address, then press it on any page.",
+            );
+          } catch {
+            notebook.reportError("The clipboard could not be written to from this page.");
+          }
+        },
+      });
       list.push(
         {
           id: "board",
@@ -3798,6 +3872,31 @@ export function EditorWorkspace() {
             notebook.openNote(path);
           }}
           workspaceId={workspace.id}
+        />
+      )}
+
+      {incomingSave && answeredSave !== saveKey && workspace && (
+        <SaveDialog
+          request={incomingSave}
+          existing={earlierSave?.key === saveKey ? earlierSave : null}
+          onSave={async (request) => {
+            const made = inboxNote(request, new Date());
+            const created = await notebook.createNote(
+              made.title,
+              INBOX_FOLDER,
+              made.content,
+              made.frontmatter,
+            );
+            if (!created) throw new Error("There is no notebook open to save into.");
+            track("note_created");
+            setNotice(`Saved to ${created.path}`);
+            answerSave();
+          }}
+          onClose={answerSave}
+          onOpenExisting={(path) => {
+            answerSave();
+            notebook.openNote(path);
+          }}
         />
       )}
 

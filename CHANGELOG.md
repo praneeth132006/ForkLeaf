@@ -5,6 +5,32 @@ full record.
 
 ## Unreleased
 
+### Save from anywhere
+
+Things worth keeping are mostly found somewhere other than a notes app. There
+are now three ways to send them here, and all of them arrive the same way.
+
+- **The share sheet.** Installed ForkLeaf registers as a share target, so
+  **Share → ForkLeaf** works from any app on a phone.
+- **A bookmarklet.** ⌘K → **Copy the Save to ForkLeaf bookmarklet** gives a
+  bookmark that saves the page you are on, or the text you selected as a quote.
+- **An address**, `/editor?save=1&kind=…&url=…&title=…&text=…`, for anything
+  else — the browser extension will use the same one.
+
+What is saved is a note in `inbox/` — a blockquote with its source for a quote,
+a link for a page, the picture for an image — with `type`, `url`, `site` and
+`saved` as properties. Nothing is fetched to make it; the words are the ones
+that were shared.
+
+**It always asks first.** A link to that address can be put on any website, so
+arriving at it is not consent to write into somebody's repository. A dialog
+shows exactly what will be saved, with Save focused so it is still one tap from
+the share sheet; declining writes nothing. The address is cleared afterwards, so
+a reload cannot save twice. Only `http` and `https` addresses are kept —
+`javascript:` and `data:` are dropped — control characters are stripped, lengths
+are capped, and parentheses in an address are escaped so they cannot break the
+link. Saving the same link again says where the first copy is.
+
 ### This week, written down
 
 ⌘K → **Write this week's review** makes `journal/2026-w37.md`: the notes started

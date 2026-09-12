@@ -46,6 +46,14 @@ const apply = (frontmatter: Record<string, unknown>, changes: Record<string, unk
   return next;
 };
 
+/**
+ * The React key for the column of notes without the property.
+ *
+ * Any string no property value would plausibly be. It used to start with a NUL
+ * character, which made git and `file` treat this source as binary.
+ */
+const NO_VALUE_KEY = "(no value)";
+
 const tabClass = (active: boolean) =>
   `rounded-[6px] px-2.5 py-1 text-[12px] font-medium ${
     active
@@ -293,7 +301,7 @@ function Board({
           const label = column.value === NO_VALUE ? `No ${property}` : column.value;
           return (
             <section
-              key={column.value || " none"}
+              key={column.value || NO_VALUE_KEY}
               aria-label={label}
               onDragOver={(event) => {
                 event.preventDefault();
@@ -343,7 +351,7 @@ function Board({
                       className="mt-1 w-full rounded border border-transparent bg-transparent text-[11px] text-[var(--fl-muted)] hover:border-[var(--fl-border)]"
                     >
                       {columns.map((target) => (
-                        <option key={target.value || " none"} value={target.value}>
+                        <option key={target.value || NO_VALUE_KEY} value={target.value}>
                           {target.value === NO_VALUE ? `No ${property}` : target.value}
                         </option>
                       ))}

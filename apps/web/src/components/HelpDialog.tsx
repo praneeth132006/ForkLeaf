@@ -149,6 +149,12 @@ export function HelpDialog({
             then="Tomorrow the same command makes a new one, and yesterday's is still there in the journal folder."
           />
           <Feature
+            title="Save things from anywhere"
+            what="The article, the quote, the picture you want to keep are all somewhere else when you find them."
+            doThis="On a phone, install ForkLeaf and use Share → ForkLeaf. In a browser, ⌘K → Copy the Save to ForkLeaf bookmarklet, and paste it as a new bookmark's address."
+            then="A note in inbox/ with the text, a link back and the site it came from. ForkLeaf asks before saving anything, and tells you if you have saved that link before."
+          />
+          <Feature
             title="Look back on the week"
             what="A week of notes goes by without anybody noticing what it added up to."
             doThis="⌘K → Write this week's review."
