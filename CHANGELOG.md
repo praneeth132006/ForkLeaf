@@ -5,6 +5,56 @@ full record.
 
 ## Unreleased
 
+### A graph of the notebook, and a folder as a board or a table
+
+- **Graph.** ⌘K → **Show the graph of my notes** draws every note as a dot and
+  every `[[link]]` between two notes as a line. It opens on the notes within two
+  links of the one you are in; **Whole notebook** shows everything, and notes
+  with no links are hidden until asked for. Scroll to zoom, drag to move, point
+  at a note to light up its neighbours, type to find one, click to open it. The
+  layout is computed here rather than by a library, and is deterministic — the
+  same notebook draws the same picture every time, so where things are can be
+  learned.
+
+- **Board.** ⌘K → **Show this folder as a board** puts the folder's notes in
+  columns by their `status` property — or any other property you pick. Drag a
+  card, or use the menu on it, and that note's `status` changes; moving it to
+  **No status** removes the property. Columns come from the values the notes
+  already use, with To do / Doing / Done offered when the folder uses those or
+  nothing yet.
+
+- **Table.** ⌘K → **Show this folder as a table** lists the folder's notes with
+  a column for every property they have. Click a header to sort (numbers as
+  numbers, empty cells last), type to filter, click a cell to edit it. A
+  property keeps the shape it had: a list stays a list and a number a number.
+  **Add** gives every note a new, empty property column to fill in.
+
+Neither view stores anything of its own. The board and the table are rebuilt
+from the notes' front matter each time they open, so they cannot disagree with
+the files, and every change is an ordinary edit to one note. A note locked on
+this device is not changed, and the view says so.
+
+### Fixed
+
+- ⌘⇧F in the source view entered focus mode _and_ opened the editor's
+  find-and-replace bar underneath it. The shortcut is now taken before the
+  editor sees it.
+- The **Leave focus** button sat under the "only on this device" banner. The
+  banner steps away in focus mode with everything else.
+- A new day's note began with an empty `- [ ]`, which the rich editor showed
+  as a bullet reading "[ ]". It begins with the headings alone now.
+
+### Bring back a deleted note
+
+⌘K → **Bring back a deleted note** compares the notebook as it stood a week, a
+month, three months or a year ago with the notebook now, and lists the notes
+that have gone. Each can be read before deciding, and **Bring it back** writes
+it at the path it had, properties included, as an ordinary new change. When a
+file with the same name has appeared elsewhere since, the row says the note was
+probably moved rather than deleted. Nothing new on the server: the comparison is
+the time machine's read of an earlier day. When something new already lives at
+the old path, the note comes back beside it instead of over it.
+
 ### Everyday writing: templates, today's note, to-dos and focus
 
 Four things every notes app is expected to do, which ForkLeaf did not. Each one

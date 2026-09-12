@@ -98,5 +98,7 @@ export function defaultDailyNote(now: Date): string {
     month: "long",
     day: "numeric",
   });
-  return `# ${long}\n\n## To do\n\n- [ ] \n\n## Notes\n\n`;
+  // No empty `- [ ]` under To do: the rich editor reads a box with nothing
+  // after it as a bullet whose text is "[ ]", and writes it back escaped.
+  return `# ${long}\n\n## To do\n\n## Notes\n\n`;
 }

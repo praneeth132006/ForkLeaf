@@ -25,7 +25,14 @@ import {
   type Workspace,
   type EditorViewMode,
 } from "@forkleaf/types";
-import { dirname, removeReferencesTo, serializeDocument } from "@forkleaf/markdown-engine";
+import {
+  dirname,
+  parseDocument,
+  removeReferencesTo,
+  serializeDocument,
+  uniquePath,
+  updateFrontmatter as mergeFrontmatter,
+} from "@forkleaf/markdown-engine";
 import {
   GitHubGateway,
   LocalGateway,
@@ -1777,6 +1784,65 @@ export function useNotebook(request: NotebookRequest = {}) {
   );
 
   /**
+   * Changes properties on any note, open or not.
+   *
+   * `updateFrontmatter` is the properties panel's, and acts on the note in
+   * front of you. A board or a table changes a property on a note somebody is
+   * looking at a card for, which is usually not the open one. A key set to
+   * `undefined` is removed. A locked note is left alone and reported as such.
+   */
+  const setNoteProperties = useCallback(
+    async (path: string, changes: Record<string, unknown>): Promise<boolean> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace || isLocked(path)) return false;
+
+      const open = state.openNotes.find((note) => note.path === path);
+      const note = open ?? (await notes.openNote(workspace.id, path).catch(() => null));
+      if (!note) return false;
+
+      const frontmatter = mergeFrontmatter(note.frontmatter, changes);
+      await notes.saveNote(note, note.content, frontmatter);
+      patchOpenNote(path, { frontmatter, dirty: true });
+      return true;
+    },
+    [state.activeWorkspace, state.openNotes, patchOpenNote, isLocked],
+  );
+
+  /**
+   * Writes a deleted note back from its raw text, at the path it had.
+   *
+   * Properties are split out first so they land as front matter rather than
+   * as a YAML block pasted into the body. When something new already lives at
+   * the old path, the note comes back beside it rather than over it.
+   */
+  const restoreNote = useCallback(
+    async (path: string, raw: string): Promise<string | null> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace) return null;
+
+      const target = uniquePath(path, collectPaths(state.tree));
+      const parsed = parseDocument(raw);
+      const blank: Note = {
+        id: `${workspace.id}::${target}`,
+        workspaceId: workspace.id,
+        path: target,
+        content: "",
+        frontmatter: {},
+        baseSha: null,
+        updatedAt: null,
+        dirty: true,
+      };
+
+      await notes.saveNote(blank, parsed.content, parsed.frontmatter);
+      patch({ tree: insertIntoTree(state.tree, target) });
+      return target;
+    },
+    [state.activeWorkspace, state.tree, patch],
+  );
+
+  /**
    * Drops one stuck change, so the queue behind it can move.
    *
    * The way out of a change that can never be pushed. Needs a refresh of the
@@ -2101,6 +2167,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       upsertNote,
       readNote,
       readDocument,
+      restoreNote,
+      setNoteProperties,
       saveDocumentText,
       documentText,
       allDocumentText,
@@ -2169,6 +2237,8 @@ export function useNotebook(request: NotebookRequest = {}) {
       upsertNote,
       readNote,
       readDocument,
+      restoreNote,
+      setNoteProperties,
       shrinkChange,
       setSyncMode,
       resolveConflict,

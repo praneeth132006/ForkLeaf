@@ -161,6 +161,24 @@ export function HelpDialog({
             then="Everything but the note steps away. The same keys, or the button in the corner, bring it back."
           />
           <Feature
+            title="See how your notes connect"
+            what="Backlinks show one note's neighbours. Sometimes you want the map."
+            doThis="⌘K → Show the graph of my notes. It opens on the notes near the one you are in; Whole notebook shows everything."
+            then="Each note is a dot and each [[link]] a line. Scroll to zoom, drag to move, point at a note to light up its neighbours, click to open it."
+          />
+          <Feature
+            title="A folder as a board"
+            what="A project folder is a set of things at different stages. A list of filenames does not show that."
+            doThis="⌘K → Show this folder as a board. Drag a card to another column, or use the menu on the card."
+            then="The note's status property changes to the column's name — ordinary front matter, readable anywhere. Columns from lets you group by any other property."
+          />
+          <Feature
+            title="A folder as a table"
+            what="A reading list, a set of meetings, a list of films: notes with the same properties, which want to be sorted and compared."
+            doThis="⌘K → Show this folder as a table. Click a header to sort, type to filter, click a cell to change it."
+            then="Every change is written into that note's properties. A list stays a list and a number stays a number; clearing a cell removes the property."
+          />
+          <Feature
             title="Make the columns the width you want"
             what="Every panel here can be resized, including the reader."
             doThis="Drag the seam between two panels. Double-click it to put it back; arrow keys move it too."
@@ -482,6 +500,17 @@ export function HelpDialog({
               </>
             }
             then="The files that existed that day, and any of them readable as it stood. Read-only: nothing here can change what you have now."
+          />
+          <Feature
+            title="I deleted a note I needed"
+            what="Git still has it. It was only ever missing a list of what had gone, and a button."
+            doThis={
+              <>
+                <Mono>⌘K</Mono> → <strong>Bring back a deleted note</strong>, choose how far back to
+                look, and press <strong>Bring it back</strong>.
+              </>
+            }
+            then="The note returns at the path it had, with its properties, as a new change — so it is in the history and can be deleted again. A note that was only moved says where it went, so you do not restore a duplicate."
           />
           <Feature
             title="Where did this paragraph come from?"

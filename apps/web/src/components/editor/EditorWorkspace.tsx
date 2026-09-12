@@ -69,6 +69,9 @@ import {
 } from "@/lib/pdf-highlights";
 import { FreshnessDialog } from "@/components/FreshnessDialog";
 import { TasksDialog } from "@/components/TasksDialog";
+import { DeletedNotesDialog } from "@/components/DeletedNotesDialog";
+import { GraphDialog } from "@/components/GraphDialog";
+import { FolderViewsDialog, type FolderView } from "@/components/FolderViewsDialog";
 import { setTaskDone } from "@/lib/tasks";
 import {
   DAILY_TEMPLATE,
@@ -299,6 +302,8 @@ export function EditorWorkspace() {
    * open because that is what "show" means.
    */
   const [focusMode, setFocusMode] = useState(false);
+  /** Which half of the board-and-table dialog opens first. */
+  const [folderView, setFolderView] = useState<FolderView>("board");
 
   // The widths of the three columns that are not the document, each dragged by
   // the seam beside it and remembered on this device.
@@ -356,6 +361,9 @@ export function EditorWorkspace() {
     | "citations"
     | "freshness"
     | "tasks"
+    | "deleted"
+    | "graph"
+    | "folder-views"
     | "time-machine"
     | "suggestions"
     | "document-versions"
@@ -2172,6 +2180,14 @@ export function EditorWorkspace() {
         run: () => void openToday(),
       },
       {
+        id: "graph",
+        label: "Show the graph of my notes",
+        group: "View",
+        hint: "Every note as a dot, every [[link]] as a line",
+        keywords: "graph map network links connections web visualise mind",
+        run: () => setDialog("graph"),
+      },
+      {
         id: "focus",
         label: focusMode ? "Leave focus mode" : "Enter focus mode",
         group: "View",
@@ -2465,6 +2481,14 @@ export function EditorWorkspace() {
           "time travel machine history date day past was previous version snapshot notebook whole rewind back then",
         run: () => setDialog("time-machine"),
       });
+      list.push({
+        id: "deleted",
+        label: "Bring back a deleted note",
+        group: "Notes",
+        hint: "Notes that are gone now, read from the history and restored where they were",
+        keywords: "restore undelete recover deleted removed trash bin lost undo",
+        run: () => setDialog("deleted"),
+      });
     }
 
     if (workspace) {
@@ -2485,6 +2509,30 @@ export function EditorWorkspace() {
         keywords: "tasks todo to-do checklist checkbox due overdue agenda action items",
         run: () => setDialog("tasks"),
       });
+      list.push(
+        {
+          id: "board",
+          label: "Show this folder as a board",
+          group: "View",
+          hint: "Cards in columns by status — drag one and its note's status changes",
+          keywords: "kanban board columns cards status drag trello project",
+          run: () => {
+            setFolderView("board");
+            setDialog("folder-views");
+          },
+        },
+        {
+          id: "table",
+          label: "Show this folder as a table",
+          group: "View",
+          hint: "Every note's properties as columns — sort, filter, edit in place",
+          keywords: "table database properties spreadsheet columns sort filter frontmatter notion",
+          run: () => {
+            setFolderView("table");
+            setDialog("folder-views");
+          },
+        },
+      );
       for (const template of templates) {
         list.push({
           id: `template-${template.path}`,
@@ -2638,6 +2686,26 @@ export function EditorWorkspace() {
     saveAsTemplate,
   ]);
 
+  /**
+   * ⌘⇧F, caught before anything inside the page sees it.
+   *
+   * Listening in the capture phase is the point. The source editor treats
+   * ⌘⇧F as ⌘F and opened its find-and-replace bar underneath the focus
+   * mode that had just been asked for; an ordinary window listener runs after
+   * the editor's own and cannot stop that.
+   */
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.altKey) return;
+      if (event.key.toLowerCase() !== "f") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setFocusMode((value) => !value);
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, []);
+
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
   // Declared after the callbacks it uses, so nothing is referenced before it
   // exists and the memoisation stays intact.
@@ -2704,14 +2772,6 @@ export function EditorWorkspace() {
           if (event.shiftKey && note) {
             event.preventDefault();
             notebook.toggleLocked(note.path);
-          }
-          break;
-
-        case "f":
-          // ⌘⇧F, not ⌘F: that one is find, in the page and in the source view.
-          if (event.shiftKey) {
-            event.preventDefault();
-            setFocusMode((value) => !value);
           }
           break;
 
@@ -3223,7 +3283,7 @@ export function EditorWorkspace() {
             {/* Not while the sign-in has just expired: "you are working locally"
               is true but is the wrong sentence to lead with, and the banner
               above it already says the useful half. */}
-            {!user && !notebook.sessionExpired && (
+            {!user && !notebook.sessionExpired && !focusMode && (
               <LocalOnlyBanner
                 githubAvailable={notebook.session?.githubAvailable ?? false}
                 onSignIn={signIn}
@@ -3653,6 +3713,60 @@ export function EditorWorkspace() {
             notebook.openNote(path);
           }}
           workspaceId={workspace.id}
+        />
+      )}
+
+      {openDialog === "folder-views" && workspace && (
+        <FolderViewsDialog
+          onClose={() => setDialog(null)}
+          initialView={folderView}
+          folders={collectFolders(notebook.tree).filter((path) => !isTemplatePath(`${path}/`))}
+          initialFolder={isTemplatePath(`${currentFolder}/`) ? "" : currentFolder}
+          loadNotes={async () =>
+            (await notebook.allNotes())
+              .filter((entry) => isMarkdown(entry.path) && !isTemplatePath(entry.path))
+              .map((entry) => ({
+                path: entry.path,
+                title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+                frontmatter: entry.frontmatter,
+              }))
+          }
+          onSetProperties={notebook.setNoteProperties}
+          onOpenNote={(path) => {
+            setDialog(null);
+            notebook.openNote(path);
+          }}
+        />
+      )}
+
+      {openDialog === "graph" && (
+        <GraphDialog
+          onClose={() => setDialog(null)}
+          graph={links.graph}
+          titleFor={links.titleFor}
+          ready={links.ready}
+          currentPath={note?.path ?? null}
+          onOpenNote={(path) => {
+            setDialog(null);
+            notebook.openNote(path);
+          }}
+        />
+      )}
+
+      {openDialog === "deleted" && workspace && !workspace.isLocal && (
+        <DeletedNotesDialog
+          onClose={() => setDialog(null)}
+          repo={workspace.repo}
+          currentPaths={takenPaths}
+          onRestore={async (path, raw) => {
+            const landed = await notebook.restoreNote(path, raw);
+            if (landed) setNotice(`Brought back ${landed}`);
+            return landed;
+          }}
+          onOpenNote={(path) => {
+            setDialog(null);
+            notebook.openNote(path);
+          }}
         />
       )}
 
