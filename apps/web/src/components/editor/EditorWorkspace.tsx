@@ -21,6 +21,7 @@ import { readSharedDeck, shareDeck } from "@/lib/gateway";
 import { useInlineFlashcards } from "@/lib/inline-flashcards";
 import { useSpacedReading } from "@/lib/spaced-reading";
 import { useCourseBridge } from "@/lib/course-bridge";
+import { mapNote, noteMapMarkdown } from "@/lib/note-map";
 import { displayTitle, parseCitation, type PdfCitation } from "@forkleaf/pdf";
 import type { EditorViewMode, Note, Workspace } from "@forkleaf/types";
 import {
@@ -3417,6 +3418,28 @@ export function EditorWorkspace() {
         TOOL_ICONS.cards,
         "Study, add cards, or make them from this note",
       ),
+      ...(notePath && links.ready
+        ? [
+            {
+              id: "tool:map-note",
+              label: "Map this note",
+              hint: "A canvas of this note and every note it links with, laid out here",
+              group: "See",
+              keywords: ["map", "canvas", "links", "graph", "mind", "diagram", "connections"],
+              icon: <ExtraGlyph d={TOOL_ICONS.graph} />,
+              insert: () => noteMapMarkdown(mapNote(links.graph, notePath)),
+            },
+            {
+              id: "tool:map-note-wide",
+              label: "Map this note, two links deep",
+              hint: "Also the notes its links lead to",
+              group: "See",
+              keywords: ["map", "canvas", "links", "graph", "wide", "deep", "neighbourhood"],
+              icon: <ExtraGlyph d={TOOL_ICONS.graph} />,
+              insert: () => noteMapMarkdown(mapNote(links.graph, notePath, { depth: 2 })),
+            },
+          ]
+        : []),
       {
         id: "tool:dated-todo",
         label: "To-do with a date",
@@ -3457,7 +3480,7 @@ export function EditorWorkspace() {
       ...tool("extension-docs", "Help", TOOL_ICONS.help),
       ...tool("help", "Help", TOOL_ICONS.help),
     ];
-  }, [commands]);
+  }, [commands, notePath, links.graph, links.ready]);
 
   /** What the editor reports chosen: a `/` tool, or one of its own extras. */
   const runEditorAction = useCallback(

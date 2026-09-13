@@ -113,6 +113,15 @@ otherwise it starts with the date, a to-do list and a notes section.
   come first and are marked.
 - To-dos inside code blocks and in `templates/` are ignored.
 
+### Map this note
+
+`/` → **Map this note** draws a canvas right where you typed it: the open note in
+the middle, the notes it links to on the right, the notes that link to it on the
+left, notes linked both ways across the top, and an arrow for every link between
+them. **Map this note, two links deep** also places the notes those lead to on
+an outer ring. It is an ordinary canvas block — move cards, add your own, and it
+is saved in the note.
+
 ### Hands-free review
 
 `/` → **Hands-free review** puts a block in the note. Press **Start** and every

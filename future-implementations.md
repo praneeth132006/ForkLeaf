@@ -52,8 +52,8 @@ When something on this list ships, tick it, add the date, and describe it in
       in your updates.
 - [x] **Hands-free review.** _(done 2026-09-13)_ Cards read aloud and answered
       by voice, for studying while walking.
-- [ ] **Map this note.** One click builds a canvas of a note and everything it
-      links to, laid out automatically.
+- [x] **Map this note.** _(done 2026-09-13)_ One click builds a canvas of a
+      note and everything it links to, laid out automatically.
 - [ ] **Claim checker.** While writing, flag sentences that nothing in your notes
       or saved sources supports.
 - [ ] **Decision notes.** Branch a decision into options, score the pros and

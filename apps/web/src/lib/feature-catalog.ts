@@ -175,6 +175,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "map-note",
+        title: "Map this note",
+        summary:
+          "A canvas of the note and every note it links with, laid out automatically, right in the note.",
+        how: "/ → Map this note",
+        tags: ["new"],
+      },
+      {
         id: "hands-free",
         title: "Hands-free review",
         summary:

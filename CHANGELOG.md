@@ -5,6 +5,12 @@ full record.
 
 ## Unreleased
 
+### Map this note
+
+`/` → **Map this note** builds a canvas of the note and every note it links with
+— links out on the right, links in on the left, arrows following each link — laid
+out automatically and placed in the note, one or two links deep.
+
 ### Hands-free review
 
 `/` → **Hands-free review** reads a note's cards aloud, listens for the answer,
