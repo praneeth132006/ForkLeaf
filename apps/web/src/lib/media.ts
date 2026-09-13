@@ -50,6 +50,23 @@ export const DOCUMENT_TYPES: Record<string, string> = {
 };
 
 /**
+ * The audio formats a voice note can be stored in, and served back as.
+ *
+ * What `MediaRecorder` produces in the browsers people use — WebM or Ogg with
+ * Opus, and MP4/AAC from Safari — plus MP3 and WAV for a recording made
+ * elsewhere and dropped in. Audio cannot run script, so these are served
+ * inline for an `<audio>` element to play, like images.
+ */
+export const AUDIO_TYPES: Record<string, string> = {
+  webm: "audio/webm",
+  ogg: "audio/ogg",
+  oga: "audio/ogg",
+  m4a: "audio/mp4",
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+};
+
+/**
  * Largest PDF ForkLeaf will open.
  *
  * Higher than the image ceiling, and for a different reason. A PDF is not
@@ -88,6 +105,28 @@ export function imageTypeFor(path: string): string | null {
   return IMAGE_TYPES[extensionOf(path)] ?? null;
 }
 
+/** The MIME type for an audio path we are willing to serve, or null. */
+export function audioTypeFor(path: string): string | null {
+  return AUDIO_TYPES[extensionOf(path)] ?? null;
+}
+
+/** True for a path that is a recording ForkLeaf can play. */
+export function isAudioPath(path: string): boolean {
+  return audioTypeFor(path) !== null;
+}
+
+/**
+ * The extension to store a recording under, from the type `MediaRecorder`
+ * reported — which may carry a codec, as in `audio/webm;codecs=opus`.
+ */
+export function audioExtensionFor(type: string | undefined): string | null {
+  const base = (type ?? "").split(";")[0]!.trim().toLowerCase();
+  if (base === "audio/x-wav" || base === "audio/wave") return "wav";
+  if (base === "audio/x-m4a") return "m4a";
+  const match = Object.entries(AUDIO_TYPES).find(([, mime]) => mime === base);
+  return match ? match[0] : null;
+}
+
 /** The MIME type for a document path we are willing to serve, or null. */
 export function documentTypeFor(path: string): string | null {
   return DOCUMENT_TYPES[extensionOf(path)] ?? null;
@@ -102,7 +141,7 @@ export function documentTypeFor(path: string): string | null {
  * much included, from this app's origin.
  */
 export function servableTypeFor(path: string): string | null {
-  return imageTypeFor(path) ?? documentTypeFor(path);
+  return imageTypeFor(path) ?? documentTypeFor(path) ?? audioTypeFor(path);
 }
 
 /** True for a path that is a PDF. */
@@ -117,8 +156,11 @@ export function extensionForFile(file: { name?: string; type?: string }): string
   // spelling we would rather write into a repository anyway.
   if (byType) return byType[0];
 
+  const audio = audioExtensionFor(file.type);
+  if (audio) return audio;
+
   const fromName = extensionOf(file.name ?? "");
-  return fromName in IMAGE_TYPES ? fromName : null;
+  return fromName in IMAGE_TYPES || fromName in AUDIO_TYPES ? fromName : null;
 }
 
 /**

@@ -93,6 +93,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "voice",
+        title: "Voice notes",
+        summary:
+          "Record a thought, keep the audio beside the note and play it from there — with an optional transcript.",
+        how: "⌘K → Record a voice note",
+        tags: ["new"],
+      },
+      {
         id: "lock",
         title: "Lock a note",
         summary:

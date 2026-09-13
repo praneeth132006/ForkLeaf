@@ -85,6 +85,8 @@ import { daysBefore, deletedSince } from "@/lib/deleted-notes";
 import { SaveDialog } from "@/components/SaveDialog";
 import { MindDialog } from "@/components/MindDialog";
 import { EncryptDialog } from "@/components/EncryptDialog";
+import { VoiceNoteDialog } from "@/components/VoiceNoteDialog";
+import { voiceNoteMarkdown } from "@/lib/voice";
 import { UnlockPanel } from "@/components/UnlockPanel";
 import { isEncrypted } from "@/lib/encryption";
 import { useEncryptedNotes } from "@/hooks/useEncryptedNotes";
@@ -439,6 +441,7 @@ export function EditorWorkspace() {
     | "flashcards"
     | "mind"
     | "encrypt"
+    | "voice"
     | "time-machine"
     | "suggestions"
     | "document-versions"
@@ -2710,6 +2713,16 @@ export function EditorWorkspace() {
       });
       if (note && !sealed) {
         list.push({
+          id: "voice",
+          label: "Record a voice note",
+          group: "Notes",
+          hint: "Saved beside this note and played from it",
+          keywords: "voice audio record recording microphone memo dictate speak transcript",
+          run: () => setDialog("voice"),
+        });
+      }
+      if (note && !sealed) {
+        list.push({
           id: "encrypt",
           label: "Encrypt this note…",
           group: "Notes",
@@ -3973,6 +3986,30 @@ export function EditorWorkspace() {
             notebook.openNote(path);
           }}
           workspaceId={workspace.id}
+        />
+      )}
+
+      {openDialog === "voice" && note && !sealed && (
+        <VoiceNoteDialog
+          onClose={() => setDialog(null)}
+          onSave={async (file, seconds, transcript) => {
+            const current = notebook.note;
+            if (!current) throw new Error("Open a note to add the recording to.");
+            if (noteLocked) {
+              throw new Error("This note is locked. Unlock it — ⌘⇧L — to add a recording.");
+            }
+            const src = await images.upload!(file);
+            const markdown = voiceNoteMarkdown({
+              src,
+              seconds,
+              recordedAt: new Date(),
+              transcript,
+            });
+            const separator = current.content.endsWith("\n") ? "" : "\n";
+            await notebook.saveNote(`${current.content}${separator}\n${markdown}`);
+            setDialog(null);
+            setNotice("Voice note added to the end of this note.");
+          }}
         />
       )}
 

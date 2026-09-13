@@ -138,6 +138,9 @@ function policy(nonce: string | null, isDev: boolean): string {
     // https image may load; `img-src` cannot execute anything, and uploads
     // committed to the repository come from this origin regardless.
     "img-src 'self' data: blob: https:",
+    // Voice notes: recordings committed to the repository come from this
+    // origin, and one not yet pushed plays from a blob: URL on this device.
+    "media-src 'self' blob:",
     "font-src 'self' data:",
     // GitHub itself is never called from the browser — it goes through this
     // app's own routes. These are Firebase's endpoints, and only apply when a

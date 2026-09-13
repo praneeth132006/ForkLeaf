@@ -5,6 +5,33 @@ full record.
 
 ## Unreleased
 
+### Voice notes
+
+⌘K → **Record a voice note** records in the browser, lets the recording be heard
+back and redone, and **Add to note** saves it in `assets/` beside the note — like
+a pasted picture, so it goes through the same queue, the same commit and the
+same history — with a **Listen to the recording** link at the end of the note.
+
+That link is the whole format. A paragraph that is only a link to a recording in
+the repository now renders as an audio player in the preview and on published
+pages, and stays a plain link to the file on github.com. Only repository files
+play: a link to audio on another site stays a link, because playing it would
+mean the page fetching from that site. The player is built after sanitising,
+from a link the sanitiser has already passed, and a recording that is not on this
+device stays a link rather than becoming a broken player.
+
+Recordings are WebM or Ogg with Opus where the browser can, MP4 in Safari, and
+stop at ten minutes, which keeps them inside the 3 MB a single commit carries.
+Audio joins the allowlist the commit and raw-file routes share, and the content
+security policy gains `media-src 'self' blob:` so a recording not yet pushed can
+play from this device.
+
+A transcript is optional, off by default, and says before it is switched on that
+the browser does it — Chrome sends the audio to Google. Refusing microphone
+permission is explained rather than failing silently, and a failed save keeps
+the recording. Recording is not offered in an encrypted note, whose audio would
+be stored in the clear.
+
 ### Your notebook, from an AI assistant
 
 `packages/mcp` is a Model Context Protocol server. Added to Claude Code, Claude

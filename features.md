@@ -39,7 +39,7 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] Encrypted notes
 - [x] Notebook checks as a GitHub Action
 - [x] MCP server so AI assistants can use your notebook
-- [ ] Voice notes
+- [x] Voice notes
 - [ ] Import from Obsidian and Notion
 
 ---
@@ -194,6 +194,23 @@ you understand it cannot be recovered.
 - On github.com the file says it is encrypted and shows only sealed text.
 - Its properties cannot be edited in the panel while it is encrypted, and
   search, backlinks and to-dos do not see inside it.
+
+### Voice notes
+
+⌘K → **Record a voice note**, then **Start recording**, **Stop**, listen back,
+and **Add to note**.
+
+- The recording is saved in `assets/` beside the note, like a pasted picture,
+  and a **Listen to the recording** link is added to the end of the note.
+- In Split and Source view, and on published pages, that link plays as an
+  audio player. On github.com it is a link to the file.
+- Up to 10 minutes a recording (a file is committed in one request of up to
+  3 MB).
+- **Write a transcript as well** is optional and off by default. Your browser
+  does the transcribing, not ForkLeaf — Chrome sends the audio to Google — and
+  the transcript is quoted under the recording.
+- Not available in an encrypted note, whose recording would be stored
+  unencrypted.
 
 ### Focus mode
 

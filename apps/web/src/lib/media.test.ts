@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  audioExtensionFor,
   documentTypeFor,
   extensionForFile,
   extensionOf,
   imageTypeFor,
+  isAudioPath,
   isPdfPath,
   safeAssetName,
   servableTypeFor,
@@ -108,5 +110,29 @@ describe("safeAssetName", () => {
 
   it("keeps accented names readable rather than reducing them to initials", () => {
     expect(safeAssetName("Café Menu", "png")).toBe("cafe-menu.png");
+  });
+});
+
+describe("audio, for voice notes", () => {
+  it("serves the recording formats browsers produce, and nothing that only looks like one", () => {
+    expect(servableTypeFor("notes/assets/voice.webm")).toBe("audio/webm");
+    expect(servableTypeFor("voice.M4A")).toBe("audio/mp4");
+    expect(servableTypeFor("voice.mp3")).toBe("audio/mpeg");
+    expect(servableTypeFor("voice.webm.html")).toBeNull();
+  });
+
+  it("knows a recording from its path", () => {
+    expect(isAudioPath("a/b.ogg")).toBe(true);
+    expect(isAudioPath("a/b.pdf")).toBe(false);
+  });
+
+  it("names a recording from the type MediaRecorder reports, codec and all", () => {
+    expect(audioExtensionFor("audio/webm;codecs=opus")).toBe("webm");
+    expect(audioExtensionFor("audio/mp4")).toBe("m4a");
+    expect(audioExtensionFor("audio/x-wav")).toBe("wav");
+    expect(audioExtensionFor("video/webm")).toBeNull();
+    expect(audioExtensionFor(undefined)).toBeNull();
+    expect(extensionForFile({ name: "blob", type: "audio/ogg;codecs=opus" })).toBe("ogg");
+    expect(extensionForFile({ name: "memo.m4a", type: "" })).toBe("m4a");
   });
 });
