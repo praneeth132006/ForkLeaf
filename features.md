@@ -225,6 +225,23 @@ Running it again the same week opens the existing review instead of making a
 second one. Weeks start on Monday. To-dos are copied as plain lines, not boxes,
 so they are not counted twice in **Show every open to-do**.
 
+### Canvases
+
+- `/` → **New canvas** makes `canvases/Canvas YYYY-MM-DD.canvas` and opens it;
+  click any `.canvas` file in the sidebar (or ⌘K → **Open canvas: name**) to
+  open one.
+- **Add card** or double-click empty space for a text card; **Add a note…** puts
+  a note on the board (with **Open note**); paste an address for a link card;
+  **Add group** makes a group that carries the cards inside it.
+- Drag cards to move them (Shift-click for several), drag the corner square to
+  resize, and drag the dot on a selected card's right edge onto another card to
+  draw an arrow. Six colours, and Delete removes cards with their arrows.
+- Drag the background or scroll to move; pinch or ⌘/Ctrl-scroll to zoom; **Fit**
+  shows everything.
+- Saved a moment after each change as [JSON Canvas](https://jsoncanvas.org), the
+  format Obsidian uses — boards open in either, and fields Obsidian wrote are
+  kept. A file that is not a canvas is never opened as an empty board.
+
 ### Ask your notebook
 
 `/` or ⌘K → **Ask your notebook**, type a question, press **Ask**.

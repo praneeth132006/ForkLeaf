@@ -7,6 +7,7 @@ import { Features } from "./features";
 import { BrowserExtension, McpServer } from "./setup";
 import {
   AskNotebook,
+  Canvases,
   EncryptedNotes,
   Flashcards,
   Importing,
@@ -61,6 +62,7 @@ export const DOC_CONTENT: Record<string, () => React.JSX.Element> = {
   "running-code": RunningCode,
   resurfacing: Resurfacing,
   ask: AskNotebook,
+  canvases: Canvases,
   meetings: MeetingNotes,
   plans: Plans,
   "privacy-and-data": PrivacyAndData,

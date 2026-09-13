@@ -53,7 +53,7 @@ When something on this list ships, tick it, add the date, and describe it in
       graph, from your own repository.
 - [ ] **Shared notebooks with review.** A friend's edit arrives as a suggestion
       you accept, like a pull request, instead of overwriting the note.
-- [ ] **Canvas.** Place notes, pictures and PDFs freely on a board, saved as a
+- [x] **Canvas.** _(done 2026-09-13)_ Place notes, pictures and PDFs freely on a board, saved as a
       plain file in the repository.
 
 ### Distribution

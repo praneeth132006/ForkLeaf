@@ -989,7 +989,8 @@ export class GitHubClient {
     const flat = tree.tree.filter((entry) => {
       if (entry.type !== "blob") return false;
       if (!inDirectory(entry.path)) return false;
-      if (options.include !== "all" && !/\.(mdx?|pdf)$/i.test(entry.path)) return false;
+      // Canvases are boards of notes, so they belong in the tree beside them.
+      if (options.include !== "all" && !/\.(mdx?|pdf|canvas)$/i.test(entry.path)) return false;
       return true;
     });
 

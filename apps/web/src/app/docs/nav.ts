@@ -110,6 +110,12 @@ export const DOC_SECTIONS: DocSection[] = [
           "Question :: Answer cards, both-way cards, multi-line cards and fill-in-the-blanks, with spaced repetition.",
       },
       {
+        slug: "canvases",
+        title: "Canvases",
+        summary:
+          "Cards, notes and links placed freely and joined with arrows, saved as JSON Canvas.",
+      },
+      {
         slug: "ask",
         title: "Ask your notebook",
         summary:

@@ -5,6 +5,33 @@ full record.
 
 ## Unreleased
 
+### Canvases
+
+`/` → **New canvas** opens a board for placing cards, notes, links and groups
+freely and joining them with arrows. Cards are added from the toolbar or by
+double-clicking, moved by dragging (Shift-click for several), resized from the
+corner, connected by dragging a card's edge dot onto another, coloured with the
+six JSON Canvas presets, and deleted with their arrows; a group carries the
+cards inside it. The board pans and zooms around the cursor, and **Fit** shows
+all of it. `.canvas` files open from the sidebar and ⌘K.
+
+Boards are saved a moment after each change as JSON Canvas 1.0, tab-indented as
+Obsidian writes it, keeping fields this app does not read. A file that is not a
+canvas is reported and never opened as an empty board, so it cannot be
+overwritten.
+
+The store now saves and opens files that are not markdown exactly as written:
+it used to stamp `updated` and `generator` front matter onto every file, which
+would have put YAML at the top of a JSON file. The GitHub tree lists `.canvas`
+files beside notes and PDFs.
+
+### Dialogs keep focus where you put it
+
+Every dialog moved focus back to its first field whenever the page behind it
+re-rendered — after a save, a sync, a grade in a flashcard review — because it
+treated each new close handler as a new dialog. It now sets focus once, when it
+opens, and still closes with the newest handler.
+
 ### Save to ForkLeaf in Firefox
 
 The extension now loads in Firefox 121 and later, from the same folder as in

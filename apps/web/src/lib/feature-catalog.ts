@@ -483,6 +483,15 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new", "github"],
       },
       {
+        id: "canvases",
+        title: "Canvases",
+        summary:
+          "A board of cards, notes, links and groups joined by arrows, saved as JSON Canvas so it opens in Obsidian too.",
+        how: "/ → New canvas, or click a .canvas file",
+        docs: "/docs/canvases",
+        tags: ["new"],
+      },
+      {
         id: "ask",
         title: "Ask your notebook",
         summary:

@@ -66,6 +66,9 @@ function frontmatterTimestamp(frontmatter: NoteFrontmatter): string | null {
   return null;
 }
 
+/** Markdown carries front matter; every other text file is kept exactly as written. */
+const isMarkdownPath = (path: string) => /\.(md|mdx|markdown)$/i.test(path);
+
 export class NoteRepository {
   private readonly db: LocalDatabase;
   private readonly gateway: RemoteGateway;
@@ -235,7 +238,11 @@ export class NoteRepository {
     try {
       const remote = await this.gateway.readFile(workspaceId, path);
       if (remote) {
-        const parsed = parseDocument(remote.content);
+        // Only markdown has front matter. A `---` line in a canvas or any other
+        // file is part of the file.
+        const parsed = isMarkdownPath(path)
+          ? parseDocument(remote.content)
+          : { content: remote.content, frontmatter: {} as NoteFrontmatter };
         const note: Note = {
           id,
           workspaceId,
@@ -265,7 +272,10 @@ export class NoteRepository {
 
   /** Saves an edit locally and queues it for GitHub. Returns immediately. */
   async saveNote(note: Note, content: string, frontmatter?: NoteFrontmatter): Promise<Note> {
-    const nextFrontmatter = this.stamp(frontmatter ?? note.frontmatter);
+    // A canvas, or any file that is not markdown, is saved exactly as written:
+    // provenance stamped at the top of a JSON file is a broken file.
+    const markdown = isMarkdownPath(note.path);
+    const nextFrontmatter = markdown ? this.stamp(frontmatter ?? note.frontmatter) : {};
 
     // The note passed from the UI might have a stale baseSha if a background
     // sync finished and updated the database since the UI last read it.
@@ -286,7 +296,10 @@ export class NoteRepository {
 
     // The IndexedDB write happens inside recordUpsert, in the same transaction
     // as the queue write.
-    await this.sync.recordUpsert(updated, serializeDocument(content, nextFrontmatter));
+    await this.sync.recordUpsert(
+      updated,
+      markdown ? serializeDocument(content, nextFrontmatter) : content,
+    );
     return updated;
   }
 
@@ -575,7 +588,9 @@ export class NoteRepository {
       content: rewriteRelativeLinks(stored.content, stored.path, toPath, options),
     };
 
-    const content = serializeDocument(freshNote.content, freshNote.frontmatter);
+    const content = isMarkdownPath(stored.path)
+      ? serializeDocument(freshNote.content, freshNote.frontmatter)
+      : stored.content;
     await this.sync.recordRename(freshNote, toPath, content);
     return { ...freshNote, id: noteId(freshNote.workspaceId, toPath), path: toPath };
   }

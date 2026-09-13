@@ -526,3 +526,48 @@ describe("setPublishTarget", () => {
     await expect(notes.setPublishTarget("nope", SITE)).resolves.toBeNull();
   });
 });
+
+describe("files that are not markdown", () => {
+  const blank = (path: string) => ({
+    id: `${WS}::${path}`,
+    workspaceId: WS,
+    path,
+    content: "",
+    frontmatter: {},
+    baseSha: null,
+    updatedAt: null,
+    dirty: true,
+  });
+
+  it("saves a canvas exactly as written, with nothing stamped on it", async () => {
+    const { notes, sync } = repository({});
+    const json = '{\n\t"nodes": [],\n\t"edges": []\n}\n';
+
+    const saved = await notes.saveNote(blank("boards/Plan.canvas"), json);
+
+    expect(saved.frontmatter).toEqual({});
+    expect(saved.content).toBe(json);
+    const [change] = sync.pendingFor(WS) as unknown as { path: string; content: string }[];
+    expect(change).toMatchObject({ path: "boards/Plan.canvas", content: json });
+  });
+
+  it("opens a canvas without reading a --- line as front matter", async () => {
+    const text = '---\nnot: front matter\n---\n{"nodes":[],"edges":[]}';
+    const { notes } = repository({ "boards/B.canvas": text });
+
+    const note = await notes.openNote(WS, "boards/B.canvas");
+
+    expect(note.content).toBe(text);
+    expect(note.frontmatter).toEqual({});
+  });
+
+  it("still stamps markdown notes", async () => {
+    const { notes, sync } = repository({});
+
+    const saved = await notes.saveNote(blank("a.md"), "# A\n");
+
+    expect(saved.frontmatter.generator).toBeTruthy();
+    const [change] = sync.pendingFor(WS) as unknown as { content: string }[];
+    expect(change!.content.startsWith("---\n")).toBe(true);
+  });
+});

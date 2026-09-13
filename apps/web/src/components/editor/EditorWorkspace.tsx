@@ -94,6 +94,14 @@ import { resurface, type Resurfaced } from "@/lib/resurface";
 import { AskDialog } from "@/components/AskDialog";
 import { MEETING_FOLDER, extractMeeting, meetingNote, withMeetingSummary } from "@/lib/meeting";
 import { plainText } from "@/lib/mind";
+import { CanvasDialog, type CanvasNoteChoice } from "@/components/CanvasDialog";
+import {
+  canvasTitle,
+  emptyCanvas,
+  isCanvasPath,
+  newCanvasPath,
+  serializeCanvas,
+} from "@/lib/canvas";
 import { surveyNotebook } from "@/lib/notebook-freshness";
 import { ConnectAssistantDialog } from "@/components/ConnectAssistantDialog";
 import type { InsertAction } from "@forkleaf/editor";
@@ -163,7 +171,7 @@ import { revealAsset } from "@/lib/reveal-asset";
 import { imageTypeFor } from "@/lib/media";
 import { collectFilePaths, collectFolders } from "@/lib/tree";
 import { hasRelativeImages, repairNoteLinks } from "@/lib/repair-links";
-import { flattenTree, isMarkdown } from "@/lib/library";
+import { excerptOf, flattenTree, isMarkdown } from "@/lib/library";
 import { track } from "@/lib/firebase/analytics";
 import { upsertUserProfile } from "@/lib/firebase/users";
 
@@ -2464,6 +2472,32 @@ export function EditorWorkspace() {
     };
   }, [listAllNotes, openPath, workspace, resurfaceDay]);
 
+  // ── Canvases ────────────────────────────────────────────────────────────
+
+  /** The `.canvas` board open over the editor, and the notes it can place. */
+  const [canvasPath, setCanvasPath] = useState<string | null>(null);
+  const [canvasNotes, setCanvasNotes] = useState<CanvasNoteChoice[]>([]);
+  useEffect(() => {
+    if (!canvasPath) return;
+    let live = true;
+    void listAllNotes().then((entries) => {
+      if (!live) return;
+      setCanvasNotes(
+        entries
+          .filter((entry) => isMarkdown(entry.path))
+          .map((entry) => ({
+            path: entry.path,
+            title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+            excerpt: excerptOf(entry.content),
+          }))
+          .sort((a, b) => a.title.localeCompare(b.title)),
+      );
+    });
+    return () => {
+      live = false;
+    };
+  }, [canvasPath, listAllNotes]);
+
   const commands = useMemo<Command[]>(() => {
     const list: Command[] = [
       {
@@ -2813,6 +2847,32 @@ export function EditorWorkspace() {
         run: () => setDialog("freshness"),
       });
       list.push({
+        id: "canvas-new",
+        label: "New canvas",
+        group: "Notes",
+        hint: "A board of cards, notes and links — saved as JSON Canvas, opens in Obsidian",
+        keywords: "canvas board whiteboard mind map spatial cards obsidian brainstorm",
+        run: async () => {
+          const path = newCanvasPath(takenPaths, new Date());
+          const written = await notebook.writeFile(path, serializeCanvas(emptyCanvas()));
+          if (!written) {
+            setNotice("The canvas could not be created.");
+            return;
+          }
+          setCanvasPath(path);
+        },
+      });
+      for (const path of takenPaths.filter(isCanvasPath)) {
+        list.push({
+          id: `canvas:${path}`,
+          label: `Open canvas: ${canvasTitle(path)}`,
+          group: "Notes",
+          hint: path,
+          keywords: "canvas board",
+          run: () => setCanvasPath(path),
+        });
+      }
+      list.push({
         id: "ask",
         label: "Ask your notebook",
         group: "Notes",
@@ -3126,6 +3186,7 @@ export function EditorWorkspace() {
 
     return list;
   }, [
+    takenPaths,
     resurfaced,
     note,
     title,
@@ -3254,6 +3315,7 @@ export function EditorWorkspace() {
       ...tool("import", "Capture", TOOL_ICONS.download),
       ...tool("mind", "Capture", TOOL_ICONS.grid),
       ...tool("bookmarklet", "Capture", TOOL_ICONS.download),
+      ...tool("canvas-new", "See", TOOL_ICONS.grid, "A board of cards, notes and links"),
       ...tool("ask", "See", TOOL_ICONS.help, "Answers quoted from your own notes"),
       ...tool("resurface", "See", TOOL_ICONS.clock),
       ...tool("graph", "See", TOOL_ICONS.graph),
@@ -3495,6 +3557,7 @@ export function EditorWorkspace() {
                 // because ForkLeaf can open it; handing it to the notebook would
                 // make a note whose body is the raw bytes of a PDF.
                 if (isPdfPath(path)) openRepoPdf(path, "");
+                else if (isCanvasPath(path)) setCanvasPath(path);
                 else notebook.openNote(path);
                 // On a phone the drawer covers the note it just opened.
                 setDrawer(null);
@@ -4245,7 +4308,9 @@ export function EditorWorkspace() {
           tree={notebook.tree}
           openNotes={notebook.openNotes}
           workspace={workspace}
-          onOpenNote={notebook.openNote}
+          onOpenNote={(path) =>
+            isCanvasPath(path) ? setCanvasPath(path) : notebook.openNote(path)
+          }
           // A notebook with no repository has no documents to reach: nothing
           // could have been read from one, and a result that opened nothing
           // would be worse than no result.
@@ -4460,6 +4525,21 @@ export function EditorWorkspace() {
             answerSave();
             notebook.openNote(path);
           }}
+        />
+      )}
+
+      {canvasPath && workspace && (
+        <CanvasDialog
+          key={canvasPath}
+          path={canvasPath}
+          onClose={() => setCanvasPath(null)}
+          load={() => notebook.readNote(canvasPath)}
+          save={async (text) => {
+            const written = await notebook.writeFile(canvasPath, text);
+            if (!written) throw new Error("The canvas could not be saved.");
+          }}
+          notes={canvasNotes}
+          onOpenNote={(path) => notebook.openNote(path)}
         />
       )}
 

@@ -655,3 +655,66 @@ export function MeetingNotes() {
     </>
   );
 }
+
+export function Canvases() {
+  return (
+    <>
+      <Lead>
+        A board for thinking in space: cards, notes, links and groups placed anywhere and joined
+        with arrows — saved as a <Code>.canvas</Code> file that opens in Obsidian too.
+      </Lead>
+
+      <H2 id="start">Making one</H2>
+      <UL>
+        <LI>
+          <strong>/ → New canvas</strong> makes <Code>canvases/Canvas 2026-09-13.canvas</Code> and
+          opens it. Rename the file in the sidebar like any other.
+        </LI>
+        <LI>
+          Click a <Code>.canvas</Code> file in the sidebar, or ⌘K →{" "}
+          <strong>Open canvas: name</strong>, to open one.
+        </LI>
+      </UL>
+
+      <H2 id="cards">Cards</H2>
+      <Table
+        head={["To", "Do this"]}
+        rows={[
+          ["Add a card", "Add card, or double-click empty space. Type straight away."],
+          ["Edit a card", "Double-click it. Click the background or press Esc when done."],
+          [
+            "Put a note on the board",
+            "Add a note… — the card shows its title and first lines; Open note opens it",
+          ],
+          ["Add a link", "Paste an address into Paste a link… and press Add link"],
+          ["Group cards", "Add group, then drag cards inside it. Moving the group moves them."],
+          ["Colour", "Select cards, then pick one of the six colours, or No colour"],
+          ["Delete", "Select, then Delete or Backspace — its arrows go with it"],
+        ]}
+      />
+
+      <H2 id="moving">Moving around</H2>
+      <UL>
+        <LI>Drag a card to move it; Shift-click to select several and drag them together.</LI>
+        <LI>Drag the square in a selected card&rsquo;s corner to resize it.</LI>
+        <LI>
+          Drag the dot on a selected card&rsquo;s right edge onto another card to draw an arrow.
+          Click an arrow to select it.
+        </LI>
+        <LI>
+          Drag the background to move the board. Scroll to pan; pinch, or ⌘/Ctrl-scroll, to zoom.{" "}
+          <strong>Fit</strong> shows everything.
+        </LI>
+      </UL>
+
+      <H2 id="file">The file</H2>
+      <P>
+        Every change is saved a moment later. The file is{" "}
+        <A href="https://jsoncanvas.org">JSON Canvas</A>, the open format Obsidian uses, so a board
+        made here opens there and the other way round, and fields another app wrote are kept. A file
+        that is not a canvas is never opened as an empty board, so it cannot be overwritten by
+        accident.
+      </P>
+    </>
+  );
+}

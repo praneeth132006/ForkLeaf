@@ -36,6 +36,16 @@ export function Dialog({
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
+  // The latest close handler, read when a key is pressed. Callers usually pass
+  // an inline function, which is a new one on every render; with it as the
+  // effect's dependency, every re-render of the page behind — a save, a sync —
+  // ran the effect again and pulled focus back to the first field, out of
+  // whatever was being typed in or pressed.
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     previouslyFocused.current = document.activeElement as HTMLElement | null;
 
@@ -71,7 +81,7 @@ export function Dialog({
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        closeRef.current();
         return;
       }
 
@@ -100,7 +110,7 @@ export function Dialog({
       document.removeEventListener("keydown", handleKey);
       previouslyFocused.current?.focus();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div
