@@ -85,6 +85,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "encrypt",
+        title: "Encrypted notes",
+        summary:
+          "Seal a note with a passphrase: its words, title and tags are unreadable on GitHub or anywhere else without it.",
+        how: "⌘K → Encrypt this note…",
+        tags: ["new"],
+      },
+      {
         id: "lock",
         title: "Lock a note",
         summary:

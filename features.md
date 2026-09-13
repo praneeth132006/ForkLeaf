@@ -36,7 +36,7 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] Weekly review written from your notes
 - [x] Save from anywhere: share sheet, bookmarklet and save address
 - [x] Browser extension (save pages, quotes, images) and the Mind view
-- [ ] Encrypted folders
+- [x] Encrypted notes
 - [ ] Notebook checks as a GitHub Action
 - [ ] MCP server so AI assistants can use your notebook
 - [ ] Voice notes
@@ -179,6 +179,21 @@ pictures as pictures, links with their site, newest first.
 Running it again the same week opens the existing review instead of making a
 second one. Weeks start on Monday. To-dos are copied as plain lines, not boxes,
 so they are not counted twice in **Show every open to-do**.
+
+### Encrypted notes
+
+⌘K → **Encrypt this note…**, choose a passphrase, type it twice and tick that
+you understand it cannot be recovered.
+
+- The words, title and tags are sealed with AES-256-GCM; the key comes from
+  your passphrase and never leaves the browser. **The filename is not
+  encrypted** — rename the note first if the name is private.
+- Opening the note asks for the passphrase. It then edits normally and stays
+  open until you close the tab or ⌘K → **Lock this encrypted note**.
+- ⌘K → **Remove encryption from this note** writes it back as plain text.
+- On github.com the file says it is encrypted and shows only sealed text.
+- Its properties cannot be edited in the panel while it is encrypted, and
+  search, backlinks and to-dos do not see inside it.
 
 ### Focus mode
 

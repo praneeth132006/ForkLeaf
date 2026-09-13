@@ -1810,6 +1810,32 @@ export function useNotebook(request: NotebookRequest = {}) {
   );
 
   /**
+   * Replaces a note's body and properties together.
+   *
+   * `saveNote` writes the body and keeps the properties; `setNoteProperties`
+   * merges into them. Sealing a note needs neither: its title and tags have
+   * to leave the file entirely, or encrypting the body would still publish
+   * what the note is called and what it is about. The store stamps its own
+   * fields back on, which say nothing about the note.
+   */
+  const writeDocument = useCallback(
+    async (path: string, content: string, frontmatter: Note["frontmatter"]): Promise<boolean> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace || isLocked(path)) return false;
+
+      const open = state.openNotes.find((note) => note.path === path);
+      const note = open ?? (await notes.openNote(workspace.id, path).catch(() => null));
+      if (!note) return false;
+
+      const saved = await notes.saveNote(note, content, frontmatter);
+      patchOpenNote(path, { content, frontmatter: saved.frontmatter, dirty: true });
+      return true;
+    },
+    [state.activeWorkspace, state.openNotes, patchOpenNote, isLocked],
+  );
+
+  /**
    * Writes a deleted note back from its raw text, at the path it had.
    *
    * Properties are split out first so they land as front matter rather than
@@ -2169,6 +2195,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       readDocument,
       restoreNote,
       setNoteProperties,
+      writeDocument,
       saveDocumentText,
       documentText,
       allDocumentText,
@@ -2239,6 +2266,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       readDocument,
       restoreNote,
       setNoteProperties,
+      writeDocument,
       shrinkChange,
       setSyncMode,
       resolveConflict,

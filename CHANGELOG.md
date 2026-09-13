@@ -5,6 +5,29 @@ full record.
 
 ## Unreleased
 
+### Encrypted notes
+
+⌘K → **Encrypt this note…** seals a note so that only its passphrase can read
+it — in ForkLeaf, on github.com, in a clone on somebody else's machine. The
+words, the title and the tags all go inside; the file keeps nothing about the
+note but the fields ForkLeaf stamps on every note. It is still one ordinary
+`.md` file, which explains on github.com what it is and carries the sealed
+text, with the parameters needed to open it written beside it: AES-256-GCM,
+the key derived from the passphrase with PBKDF2-SHA256 at 600,000 iterations.
+
+Opening an encrypted note shows a passphrase box where the editor would be, so
+the sealed text is never on screen as if it were the note. Once opened it edits
+like any other note until the tab closes or ⌘K → **Lock this encrypted note**;
+typing is sealed again after a short pause, reusing the key derived when it was
+opened, with a fresh IV every save. **Remove encryption from this note** writes
+it back as plain text, after asking. A passphrase that is wrong, and a file that
+has been tampered with, both fail rather than showing garbage.
+
+What it does not hide, said before encrypting: the filename. What it cannot do:
+recover a forgotten passphrase — nobody holds a copy, ForkLeaf included. If a
+newer version of an open note arrives from another device, the note locks
+again instead of this tab overwriting it with what it remembered.
+
 ### A browser extension, and everything you saved in one place
 
 - **Save to ForkLeaf**, a Chromium extension in `apps/extension`. The toolbar

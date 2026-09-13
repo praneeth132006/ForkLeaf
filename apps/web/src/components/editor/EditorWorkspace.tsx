@@ -84,6 +84,10 @@ import {
 import { daysBefore, deletedSince } from "@/lib/deleted-notes";
 import { SaveDialog } from "@/components/SaveDialog";
 import { MindDialog } from "@/components/MindDialog";
+import { EncryptDialog } from "@/components/EncryptDialog";
+import { UnlockPanel } from "@/components/UnlockPanel";
+import { isEncrypted } from "@/lib/encryption";
+import { useEncryptedNotes } from "@/hooks/useEncryptedNotes";
 import { INBOX_FOLDER, bookmarklet, findSaved, inboxNote, parseSaveRequest } from "@/lib/inbox";
 import { setTaskDone } from "@/lib/tasks";
 import {
@@ -434,6 +438,7 @@ export function EditorWorkspace() {
     | "folder-views"
     | "flashcards"
     | "mind"
+    | "encrypt"
     | "time-machine"
     | "suggestions"
     | "document-versions"
@@ -489,6 +494,12 @@ export function EditorWorkspace() {
     (notebook.ready && notebook.needsRepoChoice && !repoChoiceDismissed ? "connect" : null);
 
   const note = notebook.note;
+
+  /** Encrypted notes opened in this tab. See `useEncryptedNotes`. */
+  const encrypted = useEncryptedNotes(notebook.writeDocument);
+  const sealed = note ? isEncrypted(note.content) : false;
+  const opened = encrypted.openedFor(note);
+
   const mode: EditorViewMode = note?.viewMode ?? "wysiwyg";
   const title = note ? deriveTitle(note.content, note.frontmatter.title, note.path) : "";
   const workspace = notebook.activeWorkspace;
@@ -2242,6 +2253,43 @@ export function EditorWorkspace() {
     setNotice(`Wrote this week's review, ${created.path}`);
   }, [notebook, takenPaths, workspace]);
 
+  const encryptCurrent = useCallback(
+    async (passphrase: string) => {
+      if (!note) return;
+      const written = await encrypted.encrypt(
+        note.path,
+        note.content,
+        note.frontmatter,
+        passphrase,
+      );
+      if (!written) {
+        throw new Error("The note could not be written. It may be locked on this device.");
+      }
+      setDialog(null);
+      setNotice(`Encrypted ${note.path}. Its passphrase is the only way back in.`);
+    },
+    [note, encrypted],
+  );
+
+  const removeEncryption = useCallback(() => {
+    if (!note || !opened) return;
+    const path = note.path;
+    setPrompt({
+      title: "Remove encryption?",
+      label: "",
+      destructive: true,
+      confirmLabel: "Remove encryption",
+      body: "The note is written back as plain text, readable by anyone who can read this repository. Its earlier encrypted versions stay in the history.",
+      onConfirm: async () => {
+        if (!(await encrypted.decrypt(path))) {
+          notebook.reportError(`${path} could not be written. It may be locked on this device.`);
+          return;
+        }
+        setNotice(`${path} is plain text again.`);
+      },
+    });
+  }, [note, opened, encrypted, notebook]);
+
   const newFromTemplate = useCallback(
     (template: Template) => {
       // Beside the note that is open — unless that note is itself a template,
@@ -2660,6 +2708,36 @@ export function EditorWorkspace() {
         keywords: "saved inbox mind clips bookmarks read later collection grid gallery pinterest",
         run: () => setDialog("mind"),
       });
+      if (note && !sealed) {
+        list.push({
+          id: "encrypt",
+          label: "Encrypt this note…",
+          group: "Notes",
+          hint: "Only its passphrase can read it — here, on GitHub, anywhere",
+          keywords: "encrypt password passphrase private secret secure lock hide confidential",
+          run: () => setDialog("encrypt"),
+        });
+      }
+      if (note && sealed && opened) {
+        list.push(
+          {
+            id: "lock-encrypted",
+            label: "Lock this encrypted note",
+            group: "Notes",
+            hint: "Forget its passphrase in this tab",
+            keywords: "encrypt lock close hide passphrase forget",
+            run: () => void encrypted.lock(note.path),
+          },
+          {
+            id: "decrypt",
+            label: "Remove encryption from this note",
+            group: "Notes",
+            hint: "Writes it back as plain text",
+            keywords: "decrypt unencrypt remove encryption plain text",
+            run: () => removeEncryption(),
+          },
+        );
+      }
       list.push({
         id: "bookmarklet",
         label: "Copy the Save to ForkLeaf bookmarklet",
@@ -2853,6 +2931,10 @@ export function EditorWorkspace() {
     newFromTemplate,
     saveAsTemplate,
     writeWeeklyReview,
+    sealed,
+    opened,
+    encrypted,
+    removeEncryption,
   ]);
 
   /**
@@ -3462,14 +3544,22 @@ export function EditorWorkspace() {
 
             {/* ── Canvas ───────────────────────────────────────────────── */}
             <div ref={canvasRef} className="flex min-h-0 flex-1 flex-col">
-              {note ? (
-                <MarkdownEditor
+              {note && sealed && !opened ? (
+                <UnlockPanel
                   key={note.id}
+                  noteTitle={note.path}
+                  onUnlock={(passphrase) => encrypted.open(note.path, note.content, passphrase)}
+                />
+              ) : note ? (
+                <MarkdownEditor
+                  key={opened ? `${note.id}:unlocked` : note.id}
                   readOnly={noteLocked}
                   extraActions={editorExtras}
                   onExtraAction={(id) => setDialog(id === "link-file" ? "link-file" : "capture")}
-                  value={note.content}
-                  onChange={notebook.saveNote}
+                  value={opened ? opened.body : note.content}
+                  onChange={
+                    opened ? (text: string) => encrypted.save(note.path, text) : notebook.saveNote
+                  }
                   mode={mode}
                   theme={theme}
                   onCursorChange={setCursor}
@@ -3566,7 +3656,8 @@ export function EditorWorkspace() {
               onToggle={() => (drawer === "document" ? setDrawer(null) : setPanelCollapsed(true))}
               note={note}
               workspace={workspace}
-              locked={noteLocked}
+              locked={noteLocked || sealed}
+              encrypted={sealed}
               onFrontmatterChange={notebook.updateFrontmatter}
               onRewrite={notebook.saveNote}
               onExport={() => {
@@ -3882,6 +3973,15 @@ export function EditorWorkspace() {
             notebook.openNote(path);
           }}
           workspaceId={workspace.id}
+        />
+      )}
+
+      {openDialog === "encrypt" && note && !sealed && (
+        <EncryptDialog
+          noteTitle={title || note.path}
+          notePath={note.path}
+          onEncrypt={encryptCurrent}
+          onClose={() => setDialog(null)}
         />
       )}
 

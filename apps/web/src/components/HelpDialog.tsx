@@ -179,6 +179,12 @@ export function HelpDialog({
             then="Overdue items come first. Templates are left out, since their boxes are not real tasks."
           />
           <Feature
+            title="Keep a note private, even in a public repository"
+            what="A repository gets shared, made public or cloned onto machines you do not control. Some notes should stay yours anyway."
+            doThis="⌘K → Encrypt this note…, choose a passphrase and type it twice. Opening the note later asks for it."
+            then="The words, title and tags are sealed with AES-256-GCM before they are saved; on GitHub the file only says it is encrypted. The filename is not hidden, and a forgotten passphrase cannot be recovered by anyone. ⌘K → Lock this encrypted note forgets it in this tab; Remove encryption writes it back as plain text."
+          />
+          <Feature
             title="Focus on the page"
             what="Tabs, file trees and sync status are all useful, and none of them are the sentence you are writing."
             doThis="Press ⌘⇧F, or ⌘K → Enter focus mode."

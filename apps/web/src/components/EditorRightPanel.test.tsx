@@ -86,3 +86,43 @@ describe("EditorRightPanel actions", () => {
     expect(screen.queryByRole("button", { name: /history, replay & who wrote what/i })).toBeNull();
   });
 });
+
+describe("EditorRightPanel when properties cannot be changed", () => {
+  function locked(encrypted: boolean) {
+    render(
+      <EditorRightPanel
+        collapsed={false}
+        onToggle={vi.fn()}
+        note={NOTE}
+        workspace={LOCAL}
+        locked
+        encrypted={encrypted}
+        onFrontmatterChange={vi.fn()}
+        onExport={vi.fn()}
+        onShowHistory={vi.fn()}
+        syncMode="auto"
+        onSyncNow={vi.fn()}
+        links={{
+          ready: true,
+          backlinks: [],
+          outgoing: [],
+          titleFor: (path: string) => path,
+          onOpen: vi.fn(),
+          onCreate: vi.fn(),
+        }}
+        assetUrls={{}}
+      />,
+    );
+  }
+
+  it("points a locked note at the padlock", () => {
+    locked(false);
+    expect(screen.getByText(/Unlock it from the padlock/)).toBeTruthy();
+  });
+
+  it("does not send an encrypted note to the padlock, which cannot open it", () => {
+    locked(true);
+    expect(screen.getByText(/properties are sealed inside it/)).toBeTruthy();
+    expect(screen.queryByText(/padlock/)).toBeNull();
+  });
+});

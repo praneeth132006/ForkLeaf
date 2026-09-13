@@ -49,6 +49,11 @@ export interface EditorRightPanelProps {
    * worst of both.
    */
   locked?: boolean;
+  /**
+   * True when the note is encrypted. Its properties are sealed inside it, so
+   * the panel says that instead of pointing at the padlock, which cannot help.
+   */
+  encrypted?: boolean;
   /** Opens the capture dialog; absent when signed out. */
   onCapture?: () => void;
   /** Opens the publish dialog. Absent for a workspace with no repository. */
@@ -122,6 +127,7 @@ export function EditorRightPanel({
   onOpenFile,
   onCapture,
   locked = false,
+  encrypted = false,
   onRewrite,
   onPublish,
   published,
@@ -381,8 +387,9 @@ export function EditorRightPanel({
 
                 {locked && (
                   <p className="mt-3 text-[11.5px] leading-snug text-[var(--fl-muted)]">
-                    This note is locked. Unlock it from the padlock in the header, or with ⌘⇧L, to
-                    change its properties.
+                    {encrypted
+                      ? "This note is encrypted, and its properties are sealed inside it. Remove encryption from ⌘K to change them."
+                      : "This note is locked. Unlock it from the padlock in the header, or with ⌘⇧L, to change its properties."}
                   </p>
                 )}
               </Section>
