@@ -175,6 +175,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "spaced-reading",
+        title: "Spaced reading",
+        summary:
+          "Highlights from PDFs and quotes saved from the web come back a few a day, in the note, on the flashcard schedule.",
+        how: "/ → Spaced reading",
+        tags: ["new"],
+      },
+      {
         id: "explain-back",
         title: "Explain it back",
         summary:

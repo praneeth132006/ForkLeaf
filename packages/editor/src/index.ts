@@ -44,6 +44,12 @@ export {
 } from "./extensions/FlashcardBlock";
 export { CanvasBlock, type CanvasBridge } from "./extensions/CanvasBlock";
 export {
+  ReadingBlock,
+  type ReadingBridge,
+  type ReadingChoice,
+  type ReadingPassage,
+} from "./extensions/ReadingBlock";
+export {
   CanvasBoard,
   readUrl,
   type CanvasBoardProps,

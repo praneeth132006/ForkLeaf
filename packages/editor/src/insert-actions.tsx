@@ -189,6 +189,15 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     markdown: { text: '```canvas\n{\n\t"nodes": [],\n\t"edges": []\n}\n```\n' },
   },
   {
+    id: "reading",
+    keywords: ["highlights", "readwise", "reread", "quotes", "pdf", "spaced", "review", "saved"],
+    label: "Spaced reading",
+    hint: "Today's highlights from PDFs and saved pages, to reread",
+    icon: <Glyph d="M2.5 3.5h5v9h-5zM8.5 3.5h5v9h-5z" />,
+    rich: (editor) => editor.chain().focus().insertReading().run(),
+    markdown: { text: "```reading\n```\n" },
+  },
+  {
     id: "h1",
     keywords: ["title", "big", "heading"],
     label: "Heading 1",

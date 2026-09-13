@@ -5,6 +5,13 @@ full record.
 
 ## Unreleased
 
+### Spaced reading
+
+Highlights were made and never seen again. `/` → **Spaced reading** puts a
+block in the note that brings back a few passages a day — PDF highlights, saved
+quotes, and highlights on saved pages — on the flashcard schedule, in your own
+repository. Each is sent back soon, later, or never, and says when it returns.
+
 ### Explain it back
 
 ⌘K or `/` → **Explain it back** hides the note where it was and asks for what

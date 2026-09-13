@@ -41,8 +41,9 @@ When something on this list ships, tick it, add the date, and describe it in
 - [x] **Explain it back.** _(done 2026-09-13)_ Hide a note, write down what you
       remember, then see a side-by-side comparison with the original that shows
       exactly what you forgot.
-- [ ] **Spaced reading.** Highlights from PDFs and saved web pages come back on
-      the flashcard schedule, like Readwise but in your own repository.
+- [x] **Spaced reading.** _(done 2026-09-13)_ Highlights from PDFs and saved web
+      pages come back on the flashcard schedule, like Readwise but in your own
+      repository.
 - [ ] **Folder to course.** Turn a folder into an ordered course based on how its
       notes link, with progress tracking, cards per lesson and a quiz at the end.
 - [ ] **Decks you can fork.** Share a deck as a public GitHub repository. Others

@@ -113,6 +113,17 @@ otherwise it starts with the date, a to-do list and a notes section.
   come first and are marked.
 - To-dos inside code blocks and in `templates/` are ignored.
 
+### Spaced reading
+
+`/` → **Spaced reading** puts a block in the note — today's note is a good home
+for it — listing a few passages to reread each day: highlights from your PDFs
+(the `.highlights.md` beside each document), quotes saved from the web, and
+`==highlights==` on saved pages. Reread one, then choose **Again soon**,
+**Later** or **Done with it**; it says when the passage returns. Passages share
+the flashcard schedule in `reviews/flashcards.md`, so it syncs like everything
+else. Click where a passage came from to open it. The note stores only an empty
+` ```reading ` block — the passages are always read fresh.
+
 ### Explain it back
 
 ⌘K or `/` → **Explain it back** hides the open note, in its own place, and asks

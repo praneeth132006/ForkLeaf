@@ -12,6 +12,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import type { CanvasBridge, CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
 import { useInlineFlashcards } from "@/lib/inline-flashcards";
+import { useSpacedReading } from "@/lib/spaced-reading";
 import { displayTitle, parseCitation, type PdfCitation } from "@forkleaf/pdf";
 import type { EditorViewMode, Note, Workspace } from "@forkleaf/types";
 import {
@@ -1436,6 +1437,29 @@ export function EditorWorkspace() {
     }),
     [allNotesForCanvas, openNoteForCanvas],
   );
+
+  /** A spaced-reading block brings back highlights and saved quotes to reread. */
+  const readNoteForReading = notebook.readNote;
+  const upsertNoteForReading = notebook.upsertNote;
+  const readingStore = useMemo(
+    () =>
+      workspace
+        ? {
+            allNotes: async () =>
+              (await allNotesForCanvas()).map((entry) => ({
+                path: entry.path,
+                title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+                content: entry.content,
+                frontmatter: entry.frontmatter,
+              })),
+            readNote: readNoteForReading,
+            upsertNote: upsertNoteForReading,
+            openNote: openNoteForCanvas,
+          }
+        : null,
+    [workspace, allNotesForCanvas, readNoteForReading, upsertNoteForReading, openNoteForCanvas],
+  );
+  const readingBridge = useSpacedReading(readingStore);
 
   const linkBridge = useMemo<LinkBridge>(
     () => ({
@@ -4046,6 +4070,7 @@ export function EditorWorkspace() {
                   images={images}
                   links={linkBridge}
                   canvas={canvasBridge}
+                  {...(readingBridge ? { reading: readingBridge } : {})}
                   {...(flashcardBridge ? { flashcards: flashcardBridge } : {})}
                   imageDestination={
                     workspace && !workspace.isLocal
