@@ -204,65 +204,76 @@ export function Flashcards() {
   return (
     <>
       <Lead>
-        Write a card in any note, and ForkLeaf shows it again just before you would forget it.
+        Flashcards turn what is in your notes into things you remember. You see a question, try to
+        recall the answer, then say how well you knew it — and ForkLeaf shows each card again just
+        before you would forget it.
       </Lead>
 
-      <H2 id="write">Writing cards</H2>
+      <H2 id="start">Where to start</H2>
       <P>
-        Type <Code>/flashcard</Code>, or write any of these. They work in Rich, Split and Source
-        view, and they are the same spellings Obsidian&rsquo;s spaced-repetition plugin reads.
+        <strong>/ → Flashcards</strong> (or ⌘K → <strong>Flashcards</strong>) opens the flashcards
+        home. It shows how many cards are waiting today, explains how it works, and has everything
+        below in one place.
       </P>
+
+      <H2 id="make">Making cards</H2>
+      <H3>1. Type one in</H3>
+      <P>
+        In <strong>Add a card</strong>, write the question and the answer, pick where to keep it in{" "}
+        <strong>Save to</strong>, and press <strong>Add card</strong>. Your first card goes into a
+        new note, <Code>flashcards/Flashcards.md</Code>. No syntax to learn.
+      </P>
+      <H3>2. Let your note suggest them</H3>
+      <P>
+        With a note open, <strong>Cards from “your note”</strong> lists the definitions it already
+        contains — a bold term with its meaning, a list of <em>term — meaning</em> lines, a heading
+        that asks a question and the paragraph under it. Untick any you do not want and press{" "}
+        <strong>Add cards to this note</strong>. They are written under a <Code>## Flashcards</Code>{" "}
+        heading at the end of the note.
+      </P>
+      <Pre label="a note that suggests three cards">{`**Osmosis**: water moving across a membrane
+- Ribosome — makes proteins from RNA
+
+## What is DNA?
+The molecule that carries genetic instructions.`}</Pre>
+      <H3>3. Write them in a note</H3>
       <Table
         head={["Write", "You get"]}
         rows={[
           [<Code key="1">Capital of Portugal :: Lisbon</Code>, "A card: question, then answer"],
-          [
-            <Code key="2">What is H2O?::Water</Code>,
-            "The same, without spaces — when the question has several words or a question mark",
-          ],
+          [<Code key="2">What is H2O?::Water</Code>, "The same, without spaces"],
           [<Code key="3">Hola ::: Hello</Code>, "Two cards, one each way"],
           [
             <Code key="4">Lisbon is the capital of ==Portugal==</Code>,
-            "A fill-in-the-blank card for each highlight, in notes tagged flashcards",
+            "A fill-in-the-blank card, in notes tagged flashcards",
           ],
         ]}
       />
-      <H3>A card over several lines</H3>
       <P>
-        Put the question, then a line holding only <Code>?</Code>, then the answer, with no blank
-        lines between them. Use <Code>??</Code> for a card each way.
+        For a card over several lines, put the question, a line holding only <Code>?</Code>, then
+        the answer. Code blocks, tables and headings are never cards.
       </P>
-      <Pre label="in your note">{`What are the primary colours?
-?
-red
-yellow
-blue`}</Pre>
-      <P>
-        Formatting, links and escaped characters show as plain words on the card, so{" "}
-        <Code>2 * 3 :: 6</Code> reads as written. Lines in code blocks, tables and headings are
-        never cards, and <Code>std::vector</Code> is safe. A card written twice is asked once.
-      </P>
-      <Note>
-        Highlights become blanks only in notes tagged <Code>flashcards</Code> — in the Tags field,
-        or with <Code>#flashcards</Code> in the text — so highlighting for emphasis elsewhere makes
-        no cards.
-      </Note>
 
-      <H2 id="review">Reviewing</H2>
+      <H2 id="study">Studying</H2>
       <OL>
         <LI>
-          <strong>/ → Review flashcards</strong> shows the cards due today, then new ones — up to 20
-          a session.
+          Press <strong>Study N cards</strong> for everything due, or <strong>Study</strong> beside
+          one deck — every note with cards in it is a deck.
         </LI>
         <LI>
-          Read the question and press <strong>Show answer</strong> (or <strong>Space</strong>).
+          Read the question and try to remember. Press <strong>Show answer</strong> (or{" "}
+          <strong>Space</strong>).
         </LI>
         <LI>
-          Grade it <strong>Again</strong>, <strong>Hard</strong>, <strong>Good</strong> or{" "}
-          <strong>Easy</strong> (or <strong>1</strong>–<strong>4</strong>). Each button says when
-          the card will come back; a card you forgot comes round again before the session ends.
+          Say how well you knew it: <strong>Again</strong> (forgot it), <strong>Hard</strong>{" "}
+          (barely), <strong>Good</strong> (knew it) or <strong>Easy</strong> (too easy) — or press{" "}
+          <strong>1</strong>–<strong>4</strong>. Each button says when the card comes back.
         </LI>
       </OL>
+      <P>
+        A card you forget comes round again before the session ends. Cards you know come back in
+        days, then weeks, then months. Nothing due? <strong>Practise</strong> a deck anyway.
+      </P>
 
       <H2 id="schedule">Where the schedule is kept</H2>
       <P>
@@ -681,7 +692,10 @@ export function Canvases() {
         head={["To", "Do this"]}
         rows={[
           ["Add a card", "Add card, or double-click empty space. Type straight away."],
-          ["Edit a card", "Double-click it. Click the background or press Esc when done."],
+          [
+            "Edit a card",
+            "Double-click it, or select it and press Enter or Edit. Click the background or press Esc when done.",
+          ],
           [
             "Put a note on the board",
             "Add a note… — the card shows its title and first lines; Open note opens it",

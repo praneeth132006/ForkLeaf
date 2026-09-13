@@ -91,6 +91,7 @@ import { VoiceNoteDialog } from "@/components/VoiceNoteDialog";
 import { ImportDialog } from "@/components/ImportDialog";
 import { ToolsDialog } from "@/components/ToolsDialog";
 import { resurface, type Resurfaced } from "@/lib/resurface";
+import { withCards } from "@/lib/flashcard-suggestions";
 import { AskDialog } from "@/components/AskDialog";
 import { MEETING_FOLDER, extractMeeting, meetingNote, withMeetingSummary } from "@/lib/meeting";
 import { plainText } from "@/lib/mind";
@@ -2944,9 +2945,9 @@ export function EditorWorkspace() {
       });
       list.push({
         id: "flashcards",
-        label: "Review flashcards",
+        label: "Flashcards",
         group: "Notes",
-        hint: "Every question :: answer line in your notes, when it is due",
+        hint: "Study what is due, add cards, or make them from this note",
         keywords: "flashcards cards spaced repetition review study learn quiz anki memorise",
         run: () => setDialog("flashcards"),
       });
@@ -3294,7 +3295,12 @@ export function EditorWorkspace() {
         icon: <ExtraGlyph d={TOOL_ICONS.cards} />,
         insert: "Question :: Answer",
       },
-      ...tool("flashcards", "Study", TOOL_ICONS.cards, "The cards due today"),
+      ...tool(
+        "flashcards",
+        "Study",
+        TOOL_ICONS.cards,
+        "Study, add cards, or make them from this note",
+      ),
       {
         id: "tool:dated-todo",
         label: "To-do with a date",
@@ -4583,6 +4589,11 @@ export function EditorWorkspace() {
                 ),
               )
           }
+          onAddCards={async (path, cards) => {
+            const written = await notebook.upsertNote(path, (content) => withCards(content, cards));
+            if (written === null) throw new Error("The cards could not be saved.");
+          }}
+          currentNote={note && !sealed ? { path: note.path, title, content: note.content } : null}
           readSchedule={() => notebook.readNote(SCHEDULE_PATH)}
           writeSchedule={async (content) => {
             const written = await notebook.upsertNote(SCHEDULE_PATH, () => content);

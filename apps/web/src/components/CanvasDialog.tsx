@@ -113,6 +113,21 @@ export function CanvasDialog({ path, onClose, load, save, notes, onOpenNote }: C
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
+  /**
+   * The last press, to tell a double press from two single ones.
+   *
+   * Not the browser's dblclick: pressing a card captures the pointer on the
+   * board so a drag can leave the card, and a captured press sends dblclick to
+   * the board. Double-clicking a card to write in it made a new, empty card
+   * underneath instead.
+   */
+  const lastPress = useRef<{ id: string; at: number } | null>(null);
+  const isDoublePress = (id: string, at: number) => {
+    const previous = lastPress.current;
+    const double = previous !== null && previous.id === id && at - previous.at < 400;
+    lastPress.current = double ? null : { id, at };
+    return double;
+  };
   /** True once somebody has changed the board; nothing is saved before that. */
   const changed = useRef(false);
   const latest = useRef({ canvas, save });
@@ -227,6 +242,15 @@ export function CanvasDialog({ path, onClose, load, save, notes, onOpenNote }: C
       if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
       const current = keys.current;
       if (current.editing) return;
+      if (event.key === "Enter" && current.selected.size === 1) {
+        const [id] = [...current.selected];
+        const target = latest.current.canvas.nodes.find((each) => each.id === id);
+        if (target && (target.type === "text" || target.type === "group")) {
+          event.preventDefault();
+          setEditing(target.id);
+        }
+        return;
+      }
       if (event.key === "Delete" || event.key === "Backspace") {
         if (current.selected.size > 0) {
           event.preventDefault();
@@ -268,6 +292,12 @@ export function CanvasDialog({ path, onClose, load, save, notes, onOpenNote }: C
   const onBackgroundPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button > 0) return;
     if ((event.target as HTMLElement).closest("[data-node-id], [data-edge-id]")) return;
+    if (isDoublePress("background", event.timeStamp)) {
+      event.preventDefault();
+      const world = toWorld(view, screenPoint(event));
+      addText({ x: world.x - TEXT_SIZE.width / 2, y: world.y - TEXT_SIZE.height / 2 });
+      return;
+    }
     setSelected(new Set());
     setSelectedEdge(null);
     setEditing(null);
@@ -323,6 +353,19 @@ export function CanvasDialog({ path, onClose, load, save, notes, onOpenNote }: C
     if (event.button > 0 || editing === node.id) return;
     if ((event.target as HTMLElement).closest("button, a, textarea, input, [data-handle]")) return;
     event.stopPropagation();
+    if (
+      isDoublePress(node.id, event.timeStamp) &&
+      (node.type === "text" || node.type === "group")
+    ) {
+      // The browser moves focus to what was pressed once this handler returns —
+      // and what was pressed is the text the editor is about to replace, so the
+      // new text box lost focus and closed the moment it opened.
+      event.preventDefault();
+      setSelected(new Set([node.id]));
+      setSelectedEdge(null);
+      setEditing(node.id);
+      return;
+    }
     const next = event.shiftKey
       ? toggled(selected, node.id)
       : selected.has(node.id)
@@ -402,17 +445,6 @@ export function CanvasDialog({ path, onClose, load, save, notes, onOpenNote }: C
       ...GROUP_SIZE,
     });
 
-  const onDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    const card = (event.target as HTMLElement).closest<HTMLElement>("[data-node-id]");
-    if (card) {
-      const node = canvas.nodes.find((each) => each.id === card.dataset.nodeId);
-      if (node && (node.type === "text" || node.type === "group")) setEditing(node.id);
-      return;
-    }
-    const world = toWorld(view, screenPoint(event));
-    addText({ x: world.x - TEXT_SIZE.width / 2, y: world.y - TEXT_SIZE.height / 2 });
-  };
-
   const zoomBy = (factor: number) => {
     const size = viewportSize();
     setView((current) => zoomAt(current, { x: size.width / 2, y: size.height / 2 }, factor));
@@ -444,6 +476,13 @@ export function CanvasDialog({ path, onClose, load, save, notes, onOpenNote }: C
   };
 
   const byId = new Map(canvas.nodes.map((node) => [node.id, node]));
+  /** The one selected card or group that can be written in, for the Edit button. */
+  const editable =
+    selected.size === 1
+      ? canvas.nodes.find(
+          (node) => selected.has(node.id) && (node.type === "text" || node.type === "group"),
+        )
+      : undefined;
   const notesByPath = new Map(notes.map((note) => [note.path, note]));
   const ordered = [
     ...canvas.nodes.filter((node) => node.type === "group"),
@@ -549,6 +588,14 @@ export function CanvasDialog({ path, onClose, load, save, notes, onOpenNote }: C
               </div>
               <button
                 type="button"
+                disabled={!editable}
+                onClick={() => editable && setEditing(editable.id)}
+                className={button}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
                 disabled={selected.size === 0 && !selectedEdge}
                 onClick={deleteSelected}
                 className={button}
@@ -612,7 +659,6 @@ export function CanvasDialog({ path, onClose, load, save, notes, onOpenNote }: C
                 gesture.current = null;
                 setConnecting(null);
               }}
-              onDoubleClick={onDoubleClick}
               className="relative h-[62vh] min-h-[360px] touch-none select-none overflow-hidden rounded-xl border border-[var(--fl-border)] bg-[var(--fl-bg)]"
               style={{
                 backgroundImage: "radial-gradient(var(--fl-border) 1px, transparent 1px)",
@@ -869,8 +915,8 @@ export function CanvasDialog({ path, onClose, load, save, notes, onOpenNote }: C
             </div>
             <p className="text-[11.5px] text-[var(--fl-muted)]">
               Drag the background to move · scroll to pan · pinch or ⌘/Ctrl-scroll to zoom ·
-              double-click for a card · drag a card&rsquo;s dot onto another to connect · Delete
-              removes
+              double-click empty space for a card, or a card to write in it (or Enter, or Edit) ·
+              drag a card&rsquo;s dot onto another to connect · Delete removes
             </p>
           </>
         )}

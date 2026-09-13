@@ -115,40 +115,23 @@ otherwise it starts with the date, a to-do list and a notes section.
 
 ### Flashcards
 
-Write a card in any note (or type `/flashcard`):
+`/` or ⌘K → **Flashcards** opens the flashcards home: how many cards are waiting
+today, a short **How flashcards work**, and everything below.
 
-```markdown
-Capital of Portugal :: Lisbon
-What is H2O?::Water
-Hola ::: Hello
+- **Add a card** — type a question and answer, choose **Save to**, press **Add
+  card**. The first card goes into `flashcards/Flashcards.md`.
+- **Cards from this note** — definitions the open note already has (`**Term**:
+meaning`, `- Term — meaning`, a `## Question?` heading with its paragraph) are
+  listed; untick what you do not want and add the rest under `## Flashcards`.
+- **Write them yourself** — `Question :: Answer` (spaces optional when the
+  question reads like one), `:::` for both ways, a `?` line for multi-line
+  cards, `==highlights==` as blanks in notes tagged `flashcards`.
+- **Study** everything due, or one **deck** (a note with cards); **Practise** a
+  deck when nothing is due. Show the answer (**Space**), then **Again** / **Hard**
+  / **Good** / **Easy** (**1**–**4**) — each says when the card comes back.
 
-What are the primary colours?
-?
-red, yellow and blue
-```
-
-- `::` makes a card. Without spaces it still works when the question has several
-  words or ends in `?`, so `std::vector` never becomes a card.
-- `:::` makes two cards, one each way; `??` on its own line does the same for a
-  card over several lines.
-- A line holding only `?` splits a card over several lines: the question above,
-  the answer below, with no blank line in between.
-- In a note tagged `flashcards` (Tags field, or `#flashcards` in the text), each
-  `==highlight==` becomes a fill-in-the-blank card.
-- Formatting, links and the escapes the rich editor writes (`2 \* 3`) show as
-  plain words on the card. A card written twice is asked once.
-
-⌘K or `/` → **Review flashcards** shows the cards due today, then new ones (up
-to 20 a session).
-
-1. Read the question, press **Show answer** (or **Space**).
-2. Grade it: **Again**, **Hard**, **Good** or **Easy** (or **1**–**4**). Each
-   button shows when the card will come back.
-3. A card you forgot comes round again before the session ends.
-
-The schedule is kept in `reviews/flashcards.md`, a table with one row per card,
-so it syncs to every device. Delete a row to start that card over. Lines in
-code blocks, tables and headings are never cards.
+The schedule is kept in `reviews/flashcards.md`, one row per card, so it syncs
+to every device. Delete a row to start that card over.
 
 ### Save from anywhere
 
@@ -233,6 +216,8 @@ so they are not counted twice in **Show every open to-do**.
 - **Add card** or double-click empty space for a text card; **Add a note…** puts
   a note on the board (with **Open note**); paste an address for a link card;
   **Add group** makes a group that carries the cards inside it.
+- Double-click a card to write in it (or select it and press Enter, or **Edit**);
+  double-click a group to rename it.
 - Drag cards to move them (Shift-click for several), drag the corner square to
   resize, and drag the dot on a selected card's right edge onto another card to
   draw an arrow. Six colours, and Delete removes cards with their arrows.
