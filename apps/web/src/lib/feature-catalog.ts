@@ -217,7 +217,7 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         title: "Save to ForkLeaf extension",
         summary:
           "One click, or a right-click on a selection, link or image. No account and no host permissions.",
-        how: "Alt+Shift+S, or right-click → Save to ForkLeaf",
+        how: "Alt+Shift+S, or right-click → Save to ForkLeaf — in Chrome, Edge, Brave, Arc or Firefox",
         docs: "/docs/browser-extension",
         tags: ["new"],
       },

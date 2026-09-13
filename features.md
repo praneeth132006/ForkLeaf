@@ -184,7 +184,7 @@ kept.
 
 ### Browser extension
 
-**Save to ForkLeaf** lives in `apps/extension`. Load it from
+**Save to ForkLeaf** lives in `apps/extension` and works in Chrome, Edge, Brave, Arc and Firefox (121+; load `manifest.json` from `about:debugging`). Load it from
 `chrome://extensions` → **Developer mode** → **Load unpacked**, then set your
 ForkLeaf address in its **Options**.
 

@@ -5,6 +5,15 @@ full record.
 
 ## Unreleased
 
+### Save to ForkLeaf in Firefox
+
+The extension now loads in Firefox 121 and later, from the same folder as in
+Chrome: `about:debugging` → **Load Temporary Add-on…** → `manifest.json`. The
+manifest declares both `background.service_worker` (Chrome) and
+`background.scripts` (Firefox), which each browser ignores the other of, and a
+Gecko add-on id. It still asks for no access to any site; a test holds the
+manifest to all three.
+
 ### Ask your notebook
 
 `/` or ⌘K → **Ask your notebook** answers a question with the passages in your

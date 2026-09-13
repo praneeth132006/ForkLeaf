@@ -61,6 +61,7 @@ When something on this list ships, tick it, add the date, and describe it in
 - [ ] **Chrome Web Store listing** for Save to ForkLeaf, so it installs in one
       click instead of from a copy of the repository. Needs a developer account
       and a store review.
-- [ ] **Firefox and Safari** versions of the extension.
+- [x] **Firefox** version of the extension _(done 2026-09-13)_.
+- [ ] **Safari** version of the extension (needs Xcode to convert and sign).
 - [ ] **`npx @forkleaf/mcp`** on npm, for people who want the local server
       without cloning the repository.
