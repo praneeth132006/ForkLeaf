@@ -37,7 +37,7 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] Save from anywhere: share sheet, bookmarklet and save address
 - [x] Browser extension (save pages, quotes, images) and the Mind view
 - [x] Encrypted notes
-- [ ] Notebook checks as a GitHub Action
+- [x] Notebook checks as a GitHub Action
 - [ ] MCP server so AI assistants can use your notebook
 - [ ] Voice notes
 - [ ] Import from Obsidian and Notion
@@ -300,6 +300,25 @@ on this device is not changed.
 | **Citation check**                  | ⌘K → **Check my citations against their documents**, with one-press page-number fixes.                                                                                                                    |
 | **What changed in a PDF**           | ⌘K → **See what changed in this document**, then pick a page to compare side by side.                                                                                                                     |
 | **Unused images**                   | Lists images no note refers to, so they can be removed.                                                                                                                                                   |
+
+### Notebook check on every pull request
+
+Copy `docs/workflows/notebook-check.yml` into your notes repository as
+`.github/workflows/notebook-check.yml`. On every pull request that touches
+markdown, and every push to `main`, it:
+
+- checks that every file a note points at exists and every `[[link]]` finds a
+  note, reading the notes at that exact commit;
+- writes a report to the job summary and marks each broken reference on its
+  file;
+- fails only for broken references — notes that may have aged are listed as
+  worth re-reading, never failed;
+- warns and passes if ForkLeaf cannot be reached.
+
+Public repositories need nothing else. For a private one, set the repository
+variable `FORKLEAF_SEND_TOKEN` to `true` so the job's own short-lived
+`GITHUB_TOKEN` is sent with the request, or run your own ForkLeaf and set
+`FORKLEAF_URL`.
 
 ## Sync and GitHub
 

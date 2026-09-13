@@ -5,6 +5,31 @@ full record.
 
 ## Unreleased
 
+### Notebook check on every pull request
+
+The stale-notes check that lived only in the editor now runs in CI.
+`docs/workflows/notebook-check.yml` is a workflow to copy into a notes
+repository: on a pull request it asks ForkLeaf to read the notes at that
+commit, puts the report in the job summary, marks each broken reference on its
+file, and fails the check when a note points at a file that is not there or a
+`[[link]]` matches no note. Notes whose claims may have aged are listed as worth
+re-reading and never fail anything. If ForkLeaf is unreachable the step warns
+and passes, so an outage elsewhere does not block a merge.
+
+Behind it is `GET /api/gh/notebook-check?owner=&repo=&ref=`, which reads every
+markdown file at one commit — so a push landing mid-check cannot produce a
+report mixing two versions — runs the same survey as the editor, and returns
+the findings and a ready-made markdown report. It answers without signing in for
+public repositories. A private repository needs a token: the signed-in session,
+or an explicit `Authorization: Bearer` header, which the workflow sends only when
+`FORKLEAF_SEND_TOKEN` is `true` and which is used for that request's reads and
+nothing else. It reads at most 400 notes and skips any over 512 KB, saying how
+many it skipped, and is rate limited.
+
+Shipped as a template in `docs/` rather than switched on for this repository:
+enabling it here would fail ForkLeaf's own pull requests against a production
+deployment that does not have the route yet.
+
 ### Encrypted notes
 
 ⌘K → **Encrypt this note…** seals a note so that only its passphrase can read

@@ -368,6 +368,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         how: "⌘K → Check which of my notes have gone stale",
       },
       {
+        id: "notebook-check-action",
+        title: "Notebook check on every pull request",
+        summary:
+          "A GitHub Actions workflow that fails a pull request which leaves a note pointing at a missing file or a link to no note.",
+        how: "Copy docs/workflows/notebook-check.yml into .github/workflows",
+        tags: ["new", "github"],
+      },
+      {
         id: "citations",
         title: "Are my quotations still true?",
         summary:
