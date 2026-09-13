@@ -454,6 +454,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new", "github"],
       },
       {
+        id: "import",
+        title: "Import from Obsidian or Notion",
+        summary:
+          "Bring a vault or a Notion export across, with embeds turned into images and links rewritten to still work.",
+        how: "⌘K → Import notes from Obsidian or Notion",
+        tags: ["new"],
+      },
+      {
         id: "export",
         title: "Export anywhere",
         summary:

@@ -86,6 +86,7 @@ import { SaveDialog } from "@/components/SaveDialog";
 import { MindDialog } from "@/components/MindDialog";
 import { EncryptDialog } from "@/components/EncryptDialog";
 import { VoiceNoteDialog } from "@/components/VoiceNoteDialog";
+import { ImportDialog } from "@/components/ImportDialog";
 import { voiceNoteMarkdown } from "@/lib/voice";
 import { UnlockPanel } from "@/components/UnlockPanel";
 import { isEncrypted } from "@/lib/encryption";
@@ -442,6 +443,7 @@ export function EditorWorkspace() {
     | "mind"
     | "encrypt"
     | "voice"
+    | "import"
     | "time-machine"
     | "suggestions"
     | "document-versions"
@@ -2704,6 +2706,14 @@ export function EditorWorkspace() {
         run: () => setDialog("flashcards"),
       });
       list.push({
+        id: "import",
+        label: "Import notes from Obsidian or Notion",
+        group: "Notes",
+        hint: "A vault or an unzipped Notion export, into a folder of its own",
+        keywords: "import obsidian notion vault export migrate move bring notes folder markdown",
+        run: () => setDialog("import"),
+      });
+      list.push({
         id: "mind",
         label: "Show everything I saved",
         group: "Notes",
@@ -3986,6 +3996,23 @@ export function EditorWorkspace() {
             notebook.openNote(path);
           }}
           workspaceId={workspace.id}
+        />
+      )}
+
+      {openDialog === "import" && workspace && (
+        <ImportDialog
+          onClose={() => setDialog(null)}
+          taken={takenPaths}
+          onImport={(plan) =>
+            notebook.importDocuments(
+              plan.notes.map((entry) => ({ path: entry.path, raw: entry.content })),
+              plan.assets.map((entry) => ({ path: entry.path, file: entry.file })),
+            )
+          }
+          onOpenNote={(path) => {
+            setDialog(null);
+            notebook.openNote(path);
+          }}
         />
       )}
 

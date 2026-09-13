@@ -40,7 +40,7 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] Notebook checks as a GitHub Action
 - [x] MCP server so AI assistants can use your notebook
 - [x] Voice notes
-- [ ] Import from Obsidian and Notion
+- [x] Import from Obsidian and Notion
 
 ---
 
@@ -356,6 +356,24 @@ It talks to GitHub directly, never through ForkLeaf. It will not touch anything
 but notes, anything in a hidden folder, or anything outside the notebook, and it
 neither shows nor overwrites encrypted notes. Set `FORKLEAF_READ_ONLY=true` to
 offer only the tools that read.
+
+### Import from Obsidian or Notion
+
+⌘K → **Import notes from Obsidian or Notion**, pick the source, choose the
+folder, check what will come across, then **Import**.
+
+- **Obsidian:** choose the vault folder. Folders and front matter come across
+  as they are; `![[picture.png]]` embeds become ordinary images pointing at
+  where the picture landed, and `![[Note]]` embeds become `[[Note]]` links.
+  `.obsidian` settings and `.trash` are left behind.
+- **Notion:** Settings → Export all workspace content → Markdown & CSV, unzip
+  it, and choose the folder. The long ids Notion adds to every name are
+  removed, and links between pages are rewritten so they still work. Database
+  tables (CSV) are skipped, with the reason shown.
+- Everything goes into one folder of its own (`Imported/Obsidian` or
+  `Imported/Notion` unless you change it), and nothing already in the notebook
+  is overwritten. Pictures, PDFs and recordings are copied; other files, and
+  anything over 3 MB, are listed as left out.
 
 ## Sync and GitHub
 

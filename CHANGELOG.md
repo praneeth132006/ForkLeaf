@@ -5,6 +5,29 @@ full record.
 
 ## Unreleased
 
+### Import from Obsidian and Notion
+
+⌘K → **Import notes from Obsidian or Notion** reads a folder picked from disk,
+shows what will come across — how many notes and files, how many links were
+updated, what was left out and why — and imports only when asked, into a folder
+of its own so a mistaken import is one folder to delete.
+
+- **Obsidian vaults** keep their folders and front matter. `![[picture.png]]`
+  embeds, which Obsidian resolves by filename anywhere in the vault, become
+  ordinary markdown images pointing at where the picture landed, so they
+  render here and on github.com; `![[Note]]` embeds become `[[Note]]` links.
+  `.obsidian`, `.trash` and other hidden folders are left behind.
+- **Notion exports** (Markdown & CSV, unzipped) lose the 32-character id Notion
+  appends to every page and folder name, and their URL-encoded relative links
+  are rewritten to the cleaned paths. Database tables come out of Notion as CSV
+  and are skipped with that reason.
+
+Nothing already in the notebook is overwritten. Pictures, PDFs and recordings
+are copied through the same queue as a pasted image; anything else, and any
+file over the 3 MB a commit carries, is listed as left out. Up to 2,000 notes
+at a time. The notes are saved and then added to the sidebar in one step — one
+update per note would have kept only the last of them.
+
 ### Voice notes
 
 ⌘K → **Record a voice note** records in the browser, lets the recording be heard

@@ -2035,6 +2035,69 @@ export function useNotebook(request: NotebookRequest = {}) {
   );
 
   /**
+   * Writes many notes and files at once, from an import.
+   *
+   * One tree update at the end rather than one per note: each save would
+   * otherwise insert into the tree as it stood when this function was made,
+   * and every insert but the last would be lost. Paths arrive already chosen
+   * so as not to collide with anything in the notebook. A note that fails is
+   * reported and the rest carry on.
+   */
+  const importDocuments = useCallback(
+    async (
+      documents: readonly { path: string; raw: string }[],
+      files: readonly { path: string; file: File }[],
+    ): Promise<{ notes: number; assets: number; failed: { path: string; reason: string }[] }> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace) {
+        return { notes: 0, assets: 0, failed: [{ path: "", reason: "No notebook is open." }] };
+      }
+
+      const failed: { path: string; reason: string }[] = [];
+      const reason = (error: unknown) => (error instanceof Error ? error.message : String(error));
+      let tree = state.tree;
+      let saved = 0;
+      let stored = 0;
+
+      for (const document of documents) {
+        try {
+          const parsed = parseDocument(document.raw);
+          const blank: Note = {
+            id: `${workspace.id}::${document.path}`,
+            workspaceId: workspace.id,
+            path: document.path,
+            content: "",
+            frontmatter: {},
+            baseSha: null,
+            updatedAt: null,
+            dirty: true,
+          };
+          await notes.saveNote(blank, parsed.content, parsed.frontmatter);
+          tree = insertIntoTree(tree, document.path);
+          saved += 1;
+        } catch (error) {
+          failed.push({ path: document.path, reason: reason(error) });
+        }
+      }
+
+      for (const item of files) {
+        try {
+          await putAsset(item.path, item.file, false);
+          if (/\.pdf$/i.test(item.path)) tree = insertIntoTree(tree, item.path);
+          stored += 1;
+        } catch (error) {
+          failed.push({ path: item.path, reason: reason(error) });
+        }
+      }
+
+      patch({ tree });
+      return { notes: saved, assets: stored, failed };
+    },
+    [state.activeWorkspace, state.tree, patch, putAsset],
+  );
+
+  /**
    * Makes a stuck image small enough to send, and sends it.
    *
    * The alternative on offer used to be deletion, full stop, which is a
@@ -2196,6 +2259,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       restoreNote,
       setNoteProperties,
       writeDocument,
+      importDocuments,
       saveDocumentText,
       documentText,
       allDocumentText,
@@ -2267,6 +2331,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       restoreNote,
       setNoteProperties,
       writeDocument,
+      importDocuments,
       shrinkChange,
       setSyncMode,
       resolveConflict,
