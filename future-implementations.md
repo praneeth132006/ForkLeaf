@@ -60,8 +60,9 @@ When something on this list ships, tick it, add the date, and describe it in
       score the pros and cons, and keep the chosen option with its history.
 - [x] **Notebook health badge.** _(done 2026-09-13)_ A README badge for your
       notes repository showing broken links, stale notes and review streaks.
-- [ ] **What I learned this month.** An automatic page built from your flashcard
-      progress, new notes and meeting decisions, which you can publish.
+- [x] **What I learned this month.** _(done 2026-09-13)_ An automatic page built
+      from your flashcard progress, new notes and meeting decisions, which you
+      can publish.
 
 ### Capturing
 

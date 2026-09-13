@@ -25,6 +25,7 @@ import { useCourseBridge } from "@/lib/course-bridge";
 import { mapNote, noteMapMarkdown } from "@/lib/note-map";
 import { buildSupportIndex, checkClaim, type SupportIndex } from "@/lib/claims";
 import { badgeMarkdown } from "@/lib/notebook-health";
+import { formatMonthlyPage, monthlyPagePath, summariseMonth } from "@/lib/monthly-learning";
 import { displayTitle, parseCitation, type PdfCitation } from "@forkleaf/pdf";
 import type { EditorViewMode, Note, Workspace } from "@forkleaf/types";
 import {
@@ -2500,6 +2501,45 @@ export function EditorWorkspace() {
     setNotice(`Wrote this week's review, ${created.path}`);
   }, [notebook, takenPaths, workspace, knownFiles]);
 
+  /** What I learned this month: written once a month, opened after that. */
+  const writeMonthlyPage = useCallback(async () => {
+    const now = new Date();
+    const path = monthlyPagePath(now);
+    if (takenPaths.includes(path)) {
+      notebook.openNote(path);
+      return;
+    }
+    const [entries, schedule] = await Promise.all([
+      notebook.allNotes(),
+      notebook.readNote(SCHEDULE_PATH),
+    ]);
+    const notes = entries
+      .filter((entry) => isMarkdown(entry.path))
+      .map((entry) => {
+        const created = entry.frontmatter.created as unknown;
+        return {
+          path: entry.path,
+          title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+          content: entry.content,
+          created:
+            created instanceof Date
+              ? created.toISOString()
+              : typeof created === "string"
+                ? created
+                : null,
+          updatedAt: entry.updatedAt,
+        };
+      });
+    const created = await notebook.createNote(
+      path.replace(/^.*\//, "").replace(/\.md$/, ""),
+      JOURNAL_FOLDER,
+      formatMonthlyPage(summariseMonth(notes, schedule, now)),
+    );
+    if (!created) return;
+    track("note_created");
+    setNotice(`Wrote what you learned this month, ${created.path}`);
+  }, [notebook, takenPaths]);
+
   const encryptCurrent = useCallback(
     async (passphrase: string) => {
       if (!note) return;
@@ -2706,6 +2746,15 @@ export function EditorWorkspace() {
         hint: dailyNotePath(new Date()),
         keywords: "daily journal diary today log day date",
         run: () => void openToday(),
+      },
+      {
+        id: "learned-this-month",
+        label: "What I learned this month",
+        group: "Notes",
+        hint: monthlyPagePath(new Date()),
+        keywords:
+          "month monthly learned learning summary digest review progress flashcards decisions publish",
+        run: () => void writeMonthlyPage(),
       },
       {
         id: "weekly-review",
@@ -3438,6 +3487,7 @@ export function EditorWorkspace() {
     newFromTemplate,
     saveAsTemplate,
     writeWeeklyReview,
+    writeMonthlyPage,
     sealed,
     opened,
     encrypted,
@@ -3558,6 +3608,12 @@ export function EditorWorkspace() {
       ...tool("tasks", "Plan", TOOL_ICONS.check, "Every unticked box in the notebook"),
       ...tool("today", "Plan", TOOL_ICONS.calendar),
       ...tool("weekly-review", "Plan", TOOL_ICONS.calendar),
+      ...tool(
+        "learned-this-month",
+        "Plan",
+        TOOL_ICONS.calendar,
+        "A page of this month's notes, cards and decisions",
+      ),
       ...templates,
       ...tool("save-template", "Templates", TOOL_ICONS.template),
       ...tool("voice", "Capture", TOOL_ICONS.mic),

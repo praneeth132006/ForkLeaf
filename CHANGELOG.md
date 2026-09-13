@@ -5,6 +5,12 @@ full record.
 
 ## Unreleased
 
+### What I learned this month
+
+⌘K or `/` → **What I learned this month** writes a journal page from the month's
+new notes, flashcard progress and the decisions made in decision blocks and
+meetings — ready to add a few thoughts to and publish as a page.
+
 ### Notebook health badge
 
 A README badge for a notes repository — broken links, stale notes and the

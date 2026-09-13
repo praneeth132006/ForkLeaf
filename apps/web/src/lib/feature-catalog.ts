@@ -175,6 +175,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "learned-this-month",
+        title: "What I learned this month",
+        summary:
+          "A journal page built from the month's new notes, flashcard progress and decisions, which you can publish.",
+        how: "⌘K → What I learned this month",
+        tags: ["new"],
+      },
+      {
         id: "health-badge",
         title: "Notebook health badge",
         summary:

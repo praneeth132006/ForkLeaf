@@ -113,6 +113,17 @@ otherwise it starts with the date, a to-do list and a notes section.
   come first and are marked.
 - To-dos inside code blocks and in `templates/` are ignored.
 
+### What I learned this month
+
+⌘K or `/` → **What I learned this month** writes `journal/YYYY-MM-learned.md` and
+opens it: the notes started this month (and how many words), the notes worked
+on, how the flashcards are coming along — mature (a gap of three weeks or more),
+still learning, not started, and the biggest decks — and the decisions made,
+both from decision blocks chosen this month and from meeting notes. It ends
+with an empty **Looking back** section to write in. Running it again later in
+the month opens the page already written. It is an ordinary note, so ⌘K →
+**Publish this note as a page…** shares it.
+
 ### Notebook health badge
 
 `/` → **Notebook health badge** (in a notebook on GitHub) types the markdown for a
