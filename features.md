@@ -38,7 +38,7 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] Browser extension (save pages, quotes, images) and the Mind view
 - [x] Encrypted notes
 - [x] Notebook checks as a GitHub Action
-- [ ] MCP server so AI assistants can use your notebook
+- [x] MCP server so AI assistants can use your notebook
 - [ ] Voice notes
 - [ ] Import from Obsidian and Notion
 
@@ -319,6 +319,26 @@ Public repositories need nothing else. For a private one, set the repository
 variable `FORKLEAF_SEND_TOKEN` to `true` so the job's own short-lived
 `GITHUB_TOKEN` is sent with the request, or run your own ForkLeaf and set
 `FORKLEAF_URL`.
+
+### Use your notebook from an AI assistant
+
+`packages/mcp` is an MCP server, so Claude Code, Claude Desktop or any other
+MCP client can work with your notes. Give it a GitHub token for your notes
+repository and add it to your assistant — the setup is in
+`packages/mcp/README.md`.
+
+| Tool                   | What the assistant can do                           |
+| ---------------------- | --------------------------------------------------- |
+| `search_notes`         | Search every note, with the line each match is on   |
+| `list_notes`           | List the notes, or those in one folder              |
+| `read_note`            | Read a note in full, with the notes that link to it |
+| `write_note`           | Create or replace a note, as one commit             |
+| `append_to_daily_note` | Add to today's `journal/YYYY-MM-DD.md`              |
+
+It talks to GitHub directly, never through ForkLeaf. It will not touch anything
+but notes, anything in a hidden folder, or anything outside the notebook, and it
+neither shows nor overwrites encrypted notes. Set `FORKLEAF_READ_ONLY=true` to
+offer only the tools that read.
 
 ## Sync and GitHub
 

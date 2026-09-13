@@ -5,6 +5,30 @@ full record.
 
 ## Unreleased
 
+### Your notebook, from an AI assistant
+
+`packages/mcp` is a Model Context Protocol server. Added to Claude Code, Claude
+Desktop or another MCP client, it lets the assistant search the notebook
+(`search_notes`), list notes (`list_notes`), read one with the notes that link to
+it (`read_note`), create or replace a note (`write_note`) and add to today's
+journal note (`append_to_daily_note`).
+
+It reads and commits to the notes repository with a GitHub token the person
+gives it, directly — nothing passes through ForkLeaf. Writes are ordinary
+commits marked `forkleaf:`, so each one is in the history. It refuses anything
+that is not a `.md` or `.mdx` note, anything in a hidden folder such as
+`.github`, any path that climbs out with `..` (checked before normalising, which
+would otherwise quietly drop it), and anything outside `FORKLEAF_DIR` when that
+is set. Encrypted notes are neither shown nor overwritten — the server has no
+passphrase, so writing one could only destroy it. `FORKLEAF_READ_ONLY=true`
+removes the two writing tools entirely. Configuration mistakes are reported as a
+sentence naming the variable to set.
+
+The protocol is written by hand, like the GitHub client: newline-delimited
+JSON-RPC over stdio, with a malformed request answered as a JSON-RPC error and a
+tool that could not do what it was asked answered with `isError`, so the
+assistant can read why.
+
 ### Notebook check on every pull request
 
 The stale-notes check that lived only in the editor now runs in CI.

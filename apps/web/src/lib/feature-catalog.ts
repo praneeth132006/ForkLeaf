@@ -438,6 +438,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["github"],
       },
       {
+        id: "mcp",
+        title: "Use your notebook from an AI assistant",
+        summary:
+          "An MCP server so Claude and other assistants can search, read and write your notes, talking to GitHub directly.",
+        how: "Add packages/mcp to Claude Code or Claude Desktop",
+        tags: ["new", "github"],
+      },
+      {
         id: "export",
         title: "Export anywhere",
         summary:
