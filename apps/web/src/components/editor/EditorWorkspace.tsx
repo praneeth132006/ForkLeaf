@@ -4499,6 +4499,7 @@ export function EditorWorkspace() {
           onDiscardChange={(id) => void notebook.discardChange(id)}
           onShrinkChange={notebook.shrinkChange}
           onLocateChange={(path) => void locateUnsynced(path)}
+          onConnectAssistant={() => setDialog("connect-assistant")}
         />
       )}
 

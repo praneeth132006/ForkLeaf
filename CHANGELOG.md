@@ -5,6 +5,12 @@ full record.
 
 ## Unreleased
 
+### Connect an AI assistant, from the bottom bar
+
+**Connect AI assistant** now sits in the editor's bottom bar and opens the MCP
+setup for Claude Code, Claude Desktop, Cursor and VS Code; the site footer links
+to the MCP guide too. It was only reachable from ⌘K before.
+
 ### What I learned this month
 
 ⌘K or `/` → **What I learned this month** writes a journal page from the month's
