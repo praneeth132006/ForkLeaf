@@ -113,6 +113,18 @@ otherwise it starts with the date, a to-do list and a notes section.
   come first and are marked.
 - To-dos inside code blocks and in `templates/` are ignored.
 
+### Claim checker
+
+⌘K or `/` → **Check claims in this note** turns the checker on for the open note
+(it stays on for that note on this device). While you write, a sentence that
+states something — a number, "is", "causes", "always" — gets a dotted underline
+when nothing in your other notes, saved pages and quotes, or PDF highlights backs
+it: most of its words and every number in it. Hover a backed sentence to see which
+note and line backs it. Questions, plans, opinions ("I think", "maybe") and
+sentences that already cite a link are left alone. It says where you have a
+source, not whether a claim is true, and the note's text is never changed. Run
+the command again to turn it off.
+
 ### Map this note
 
 `/` → **Map this note** draws a canvas right where you typed it: the open note in

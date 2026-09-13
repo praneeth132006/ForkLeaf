@@ -54,8 +54,8 @@ When something on this list ships, tick it, add the date, and describe it in
       by voice, for studying while walking.
 - [x] **Map this note.** _(done 2026-09-13)_ One click builds a canvas of a
       note and everything it links to, laid out automatically.
-- [ ] **Claim checker.** While writing, flag sentences that nothing in your notes
-      or saved sources supports.
+- [x] **Claim checker.** _(done 2026-09-13)_ While writing, flag sentences that
+      nothing in your notes or saved sources supports.
 - [ ] **Decision notes.** Branch a decision into options, score the pros and
       cons, and keep the chosen option with its history.
 - [ ] **Notebook health badge.** A README badge for your notes repository showing

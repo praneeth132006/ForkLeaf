@@ -25,6 +25,7 @@ import type { CanvasBridge } from "./extensions/CanvasBlock";
 import type { ReadingBridge } from "./extensions/ReadingBlock";
 import type { CourseBridge } from "./extensions/CourseBlock";
 import type { DeckBridge } from "./extensions/DeckBlock";
+import type { ClaimBridge } from "./extensions/ClaimChecker";
 
 export interface MarkdownEditorProps {
   /**
@@ -89,6 +90,8 @@ export interface MarkdownEditorProps {
   course?: CourseBridge;
   /** Sharing this note's cards as a deck, and copying decks others shared. */
   deck?: DeckBridge;
+  /** Underlines claims nothing in the notebook backs, while it is on for the note. */
+  claims?: ClaimBridge;
   /**
    * Makes the note readable but not writable, in every mode at once.
    *
@@ -141,6 +144,7 @@ export function MarkdownEditor({
   reading,
   course,
   deck,
+  claims,
   readOnly = false,
 }: MarkdownEditorProps) {
   // Split view: the divider position, as a percentage of the container width.
@@ -456,6 +460,7 @@ export function MarkdownEditor({
             {...(reading ? { reading } : {})}
             {...(course ? { course } : {})}
             {...(deck ? { deck } : {})}
+            {...(claims ? { claims } : {})}
             {...(placeholder ? { placeholder } : {})}
             // A wide bottom pad so the last paragraph can be scrolled to the
             // middle of the screen instead of being pinned to the bottom edge.

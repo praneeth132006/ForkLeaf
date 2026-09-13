@@ -77,6 +77,7 @@ import { ReadingBlock, type ReadingBridge } from "./extensions/ReadingBlock";
 import { CourseBlock, type CourseBridge } from "./extensions/CourseBlock";
 import { DeckBlock, type DeckBridge } from "./extensions/DeckBlock";
 import { HandsFreeBlock, browserSpeech, type SpeechKit } from "./extensions/HandsFreeBlock";
+import { ClaimChecker, claimCheckerKey, type ClaimBridge } from "./extensions/ClaimChecker";
 import { Wikilink } from "./extensions/Wikilink";
 import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 import { ShortcutsAfterLineBreak } from "./extensions/ShortcutsAfterLineBreak";
@@ -124,6 +125,8 @@ export interface WysiwygEditorProps {
   deck?: DeckBridge;
   /** Speaking and listening for hands-free review; the browser's own by default. */
   speech?: () => SpeechKit | null;
+  /** Underlines claims nothing in the notebook backs, while it is on for the note. */
+  claims?: ClaimBridge;
   /**
    * Makes the note readable but not writable.
    *
@@ -161,6 +164,7 @@ export function WysiwygEditor({
   course,
   deck,
   speech,
+  claims,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -186,6 +190,8 @@ export function WysiwygEditor({
   deckRef.current = deck;
   const speechRef = useRef(speech);
   speechRef.current = speech;
+  const claimsRef = useRef<ClaimBridge | undefined>(claims);
+  claimsRef.current = claims;
 
   /**
    * Images waiting to hear that the resolver knows something new.
@@ -288,6 +294,7 @@ export function WysiwygEditor({
       ReadingBlock.configure({ bridge: () => readingRef.current }),
       CourseBlock.configure({ bridge: () => courseRef.current }),
       DeckBlock.configure({ bridge: () => deckRef.current }),
+      ClaimChecker.configure({ bridge: () => claimsRef.current }),
       HandsFreeBlock.configure({
         speech: () => (speechRef.current ? speechRef.current() : browserSpeech()),
       }),
@@ -561,6 +568,25 @@ export function WysiwygEditor({
     // to the top every time the note synced.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
+
+  // The claim checker was switched, or has a newer notebook to check against:
+  // repaint its marks. A meta-only transaction, so the note does not change.
+  //
+  // Only when it actually changes after the editor exists: the extension reads
+  // the bridge as it is built, and a transaction on mount — even one that
+  // changes nothing — let a note that ends in a card grow a paragraph and
+  // report an edit just for being opened.
+  const paintedClaims = useRef<{ editor: Editor | null; claims: ClaimBridge | undefined }>({
+    editor: null,
+    claims,
+  });
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const painted = paintedClaims.current;
+    paintedClaims.current = { editor, claims };
+    if (painted.editor !== editor || painted.claims === claims) return;
+    editor.view.dispatch(editor.state.tr.setMeta(claimCheckerKey, true));
+  }, [editor, claims]);
 
   // Hand the instance to the parent once it exists, and take it back on
   // unmount so a toolbar never holds a destroyed editor.

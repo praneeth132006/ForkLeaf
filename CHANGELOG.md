@@ -5,6 +5,13 @@ full record.
 
 ## Unreleased
 
+### Claim checker
+
+⌘K or `/` → **Check claims in this note** underlines, as you write, sentences
+that state something nothing in your other notes, saved sources or highlights
+backs — and says which note and line backs the ones that are. On per note,
+remembered on this device, and the note's text is never touched.
+
 ### Map this note
 
 `/` → **Map this note** builds a canvas of the note and every note it links with

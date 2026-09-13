@@ -13,6 +13,7 @@ import dynamic from "next/dynamic";
 import type {
   CanvasBridge,
   CursorPosition,
+  ClaimBridge,
   DeckBridge,
   ImageBridge,
   LinkBridge,
@@ -22,6 +23,7 @@ import { useInlineFlashcards } from "@/lib/inline-flashcards";
 import { useSpacedReading } from "@/lib/spaced-reading";
 import { useCourseBridge } from "@/lib/course-bridge";
 import { mapNote, noteMapMarkdown } from "@/lib/note-map";
+import { buildSupportIndex, checkClaim, type SupportIndex } from "@/lib/claims";
 import { displayTitle, parseCitation, type PdfCitation } from "@forkleaf/pdf";
 import type { EditorViewMode, Note, Workspace } from "@forkleaf/types";
 import {
@@ -1493,6 +1495,83 @@ export function EditorWorkspace() {
     [workspace, treeForCourse, allNotesForCanvas, openNoteForCanvas, currentFolder],
   );
   const courseBridge = useCourseBridge(courseStore);
+
+  /**
+   * The claim checker, on per note and remembered on this device. While it is
+   * on, the notebook is indexed once and every sentence written is checked
+   * against the other notes, saved pages and highlights.
+   */
+  const [claimsOn, setClaimsOn] = useState<ReadonlySet<string>>(() => {
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(CLAIMS_KEY) ?? "[]") as unknown;
+      return new Set(
+        Array.isArray(stored) ? stored.filter((each) => typeof each === "string") : [],
+      );
+    } catch {
+      return new Set();
+    }
+  });
+  const toggleClaims = useCallback((path: string) => {
+    setClaimsOn((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      try {
+        window.localStorage.setItem(CLAIMS_KEY, JSON.stringify([...next]));
+      } catch {
+        // Storage can be blocked; the choice lasts for this visit.
+      }
+      return next;
+    });
+  }, []);
+  const checkingClaims = Boolean(notePath && claimsOn.has(notePath));
+  const [supportIndex, setSupportIndex] = useState<SupportIndex | null>(null);
+  const treeForClaims = notebook.tree;
+  useEffect(() => {
+    if (!checkingClaims) return;
+    let live = true;
+    void allNotesForCanvas().then((entries) => {
+      if (!live) return;
+      setSupportIndex(
+        buildSupportIndex(
+          entries
+            .filter((entry) => isMarkdown(entry.path) && !isTemplatePath(entry.path))
+            .map((entry) => ({
+              path: entry.path,
+              title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+              content: entry.content,
+            })),
+        ),
+      );
+    });
+    return () => {
+      live = false;
+    };
+  }, [checkingClaims, allNotesForCanvas, treeForClaims]);
+  const claimBridge = useMemo<ClaimBridge>(() => {
+    const seen = new Map<string, ReturnType<ClaimBridge["check"]>>();
+    return {
+      enabled: checkingClaims && supportIndex !== null,
+      check: (sentence) => {
+        if (!supportIndex) return null;
+        if (!seen.has(sentence)) {
+          const result = checkClaim(supportIndex, sentence, notePath);
+          seen.set(
+            sentence,
+            result.status === "unsupported"
+              ? { status: "unsupported" }
+              : result.status === "supported"
+                ? {
+                    status: "supported",
+                    title: `${result.source.title}, line ${result.source.line}`,
+                  }
+                : null,
+          );
+        }
+        return seen.get(sentence) ?? null;
+      },
+    };
+  }, [checkingClaims, supportIndex, notePath]);
 
   /** A deck block shares this note's cards publicly, or copies a shared deck in. */
   const deckBridge = useMemo<DeckBridge>(
@@ -3055,6 +3134,17 @@ export function EditorWorkspace() {
       });
       if (note && !(sealed && !opened)) {
         list.push({
+          id: "claims",
+          label: claimsOn.has(note.path)
+            ? "Stop checking claims in this note"
+            : "Check claims in this note",
+          group: "Notes",
+          hint: "Underline sentences that nothing in your notes or saved sources backs",
+          keywords:
+            "claim check fact source cite citation evidence support verify unsupported proof",
+          run: () => toggleClaims(note.path),
+        });
+        list.push({
           id: "explain-back",
           label: "Explain it back",
           group: "Notes",
@@ -3307,6 +3397,8 @@ export function EditorWorkspace() {
 
     return list;
   }, [
+    claimsOn,
+    toggleClaims,
     takenPaths,
     resurfaced,
     note,
@@ -3461,6 +3553,7 @@ export function EditorWorkspace() {
       ...tool("mind", "Capture", TOOL_ICONS.grid),
       ...tool("bookmarklet", "Capture", TOOL_ICONS.download),
       ...tool("ask", "See", TOOL_ICONS.help, "Answers quoted from your own notes"),
+      ...tool("claims", "See", TOOL_ICONS.check, "Underline what nothing in your notes backs"),
       ...tool("resurface", "See", TOOL_ICONS.clock),
       ...tool("graph", "See", TOOL_ICONS.graph),
       ...tool("board", "See", TOOL_ICONS.grid),
@@ -4150,6 +4243,7 @@ export function EditorWorkspace() {
                   {...(readingBridge ? { reading: readingBridge } : {})}
                   {...(courseBridge ? { course: courseBridge } : {})}
                   deck={deckBridge}
+                  claims={claimBridge}
                   {...(flashcardBridge ? { flashcards: flashcardBridge } : {})}
                   imageDestination={
                     workspace && !workspace.isLocal
@@ -5008,6 +5102,9 @@ function EmptyState({
  * exported, and the two icons it draws beside these have to match to the pixel.
  */
 /** Icons for the `/` menu's tools, on the same 16px grid as the editor's own. */
+/** Notes the claim checker is on for, on this device. */
+const CLAIMS_KEY = "forkleaf:claims-on";
+
 const TOOL_ICONS = {
   cards: "M2.75 5.25h8.5v8h-8.5zM5 2.75h8.25v8",
   check: "M3 4.5l1.25 1.25L6.5 3.5M8.5 4.75h5M3 10.5l1.25 1.25L6.5 9.5M8.5 10.75h5",

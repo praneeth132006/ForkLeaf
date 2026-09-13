@@ -819,6 +819,19 @@ mark.fl-hl-orange {
   border: 0;
 }
 
+/* The claim checker: a sentence nothing in the notebook backs yet. Dotted, not
+   red — it is a question of sources, not a mistake. */
+.fl-claim-unsupported {
+  text-decoration: underline dotted var(--fl-warn);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+.fl-claim-supported {
+  cursor: help;
+}
+
 /* A `Question :: Answer` line in a rendered note: the question, and the answer
    behind a click. The rich editor draws the same line as a card it can grade. */
 .fl-flashcard {

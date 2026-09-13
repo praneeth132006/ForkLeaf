@@ -175,6 +175,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "claim-checker",
+        title: "Claim checker",
+        summary:
+          "While you write, underline sentences that nothing in your notes or saved sources backs, and see what backs the rest.",
+        how: "⌘K → Check claims in this note",
+        tags: ["new"],
+      },
+      {
         id: "map-note",
         title: "Map this note",
         summary:
