@@ -47,8 +47,9 @@ When something on this list ships, tick it, add the date, and describe it in
 - [x] **Folder to course.** _(done 2026-09-13)_ Turn a folder into an ordered
       course based on how its notes link, with progress tracking, cards per
       lesson and a quiz at the end.
-- [ ] **Decks you can fork.** Share a deck as a public GitHub repository. Others
-      copy it, keep their progress private, and pull in your updates.
+- [x] **Decks you can fork.** _(done 2026-09-13)_ Share a deck as a public
+      GitHub repository. Others copy it, keep their progress private, and pull
+      in your updates.
 - [ ] **Hands-free review.** Cards read aloud and answered by voice, for studying
       while walking.
 - [ ] **Map this note.** One click builds a canvas of a note and everything it

@@ -113,6 +113,23 @@ otherwise it starts with the date, a to-do list and a notes section.
   come first and are marked.
 - To-dos inside code blocks and in `templates/` are ignored.
 
+### Decks you can fork
+
+`/` → **Shared deck** puts a deck block in the note.
+
+- **Share:** in a note with cards, **Share as a public repository** (signed in
+  with GitHub) asks first, then makes `your-name/<title>-deck` holding a README
+  and `deck.md` — only the `Question :: Answer` lines, nothing else from the
+  note. Change the cards later and **Publish changes**.
+- **Copy:** paste `owner/repo` or a GitHub link and **Copy the cards here**. The
+  cards land under the block as your own; your progress stays in your own
+  schedule. Works without signing in for public decks.
+- **Update:** **Check for updates** compares the version you copied with the
+  newest one and lists new, changed and removed cards; **Pull them in** applies
+  them. Cards you rewrote, and cards you added yourself, are left alone.
+
+The block is a ` ```deck ` fence naming the repository and version.
+
 ### A folder as a course
 
 `/` → **Course from a folder** puts a course block in the note. Pick a folder

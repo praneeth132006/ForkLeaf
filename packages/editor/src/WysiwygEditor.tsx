@@ -75,6 +75,7 @@ import { FlashcardBlock, type FlashcardBridge } from "./extensions/FlashcardBloc
 import { CanvasBlock, type CanvasBridge } from "./extensions/CanvasBlock";
 import { ReadingBlock, type ReadingBridge } from "./extensions/ReadingBlock";
 import { CourseBlock, type CourseBridge } from "./extensions/CourseBlock";
+import { DeckBlock, type DeckBridge } from "./extensions/DeckBlock";
 import { Wikilink } from "./extensions/Wikilink";
 import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 import { ShortcutsAfterLineBreak } from "./extensions/ShortcutsAfterLineBreak";
@@ -118,6 +119,8 @@ export interface WysiwygEditorProps {
   reading?: ReadingBridge;
   /** A folder's notes as lessons, for a course block in the note. */
   course?: CourseBridge;
+  /** Sharing this note's cards as a deck, and copying decks others shared. */
+  deck?: DeckBridge;
   /**
    * Makes the note readable but not writable.
    *
@@ -153,6 +156,7 @@ export function WysiwygEditor({
   canvas,
   reading,
   course,
+  deck,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -174,6 +178,8 @@ export function WysiwygEditor({
   readingRef.current = reading;
   const courseRef = useRef<CourseBridge | undefined>(course);
   courseRef.current = course;
+  const deckRef = useRef<DeckBridge | undefined>(deck);
+  deckRef.current = deck;
 
   /**
    * Images waiting to hear that the resolver knows something new.
@@ -275,6 +281,7 @@ export function WysiwygEditor({
       CanvasBlock.configure({ bridge: () => canvasRef.current }),
       ReadingBlock.configure({ bridge: () => readingRef.current }),
       CourseBlock.configure({ bridge: () => courseRef.current }),
+      DeckBlock.configure({ bridge: () => deckRef.current }),
       // Read through the ref, not captured: the extension list is built once,
       // and the bridge arrives a render later once the workspace resolves.
       Wikilink.configure({ bridge: () => linksRef.current }),

@@ -175,6 +175,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "shared-decks",
+        title: "Decks you can fork",
+        summary:
+          "Share a note's flashcards as a public GitHub repository; others copy it, keep their progress private, and pull in your updates.",
+        how: "/ → Shared deck",
+        tags: ["new", "github"],
+      },
+      {
         id: "course",
         title: "A folder as a course",
         summary:

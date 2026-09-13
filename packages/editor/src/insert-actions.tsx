@@ -207,6 +207,15 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     markdown: { text: "```course\nfolder: \n```\n", cursor: 18 },
   },
   {
+    id: "deck",
+    keywords: ["share", "fork", "flashcards", "github", "copy", "anki", "public", "update"],
+    label: "Shared deck",
+    hint: "Share this note's cards as a public deck, or copy one someone shared",
+    icon: <Glyph d="M2.5 5h8.5v8.5H2.5zM5 2.5h8.5V11M10 1.5l2.5 2.5L10 6.5" />,
+    rich: (editor) => editor.chain().focus().insertDeck().run(),
+    markdown: { text: "```deck\n```\n" },
+  },
+  {
     id: "h1",
     keywords: ["title", "big", "heading"],
     label: "Heading 1",

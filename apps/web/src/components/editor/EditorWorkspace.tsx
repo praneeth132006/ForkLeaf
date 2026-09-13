@@ -10,7 +10,14 @@ import React, {
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import type { CanvasBridge, CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
+import type {
+  CanvasBridge,
+  CursorPosition,
+  DeckBridge,
+  ImageBridge,
+  LinkBridge,
+} from "@forkleaf/editor";
+import { readSharedDeck, shareDeck } from "@/lib/gateway";
 import { useInlineFlashcards } from "@/lib/inline-flashcards";
 import { useSpacedReading } from "@/lib/spaced-reading";
 import { useCourseBridge } from "@/lib/course-bridge";
@@ -1485,6 +1492,24 @@ export function EditorWorkspace() {
     [workspace, treeForCourse, allNotesForCanvas, openNoteForCanvas, currentFolder],
   );
   const courseBridge = useCourseBridge(courseStore);
+
+  /** A deck block shares this note's cards publicly, or copies a shared deck in. */
+  const deckBridge = useMemo<DeckBridge>(
+    () => ({
+      signedIn: () => user !== null,
+      noteTitle: () => title || "Flashcards",
+      read: async (repo, ref) => {
+        const [owner = "", name = ""] = repo.split("/");
+        const deck = await readSharedDeck(owner, name, ref);
+        return { sha: deck.sha, content: deck.content };
+      },
+      share: async (input) => {
+        const shared = await shareDeck(input);
+        return { repo: `${shared.owner}/${shared.repo}`, sha: shared.sha };
+      },
+    }),
+    [user, title],
+  );
 
   const linkBridge = useMemo<LinkBridge>(
     () => ({
@@ -4101,6 +4126,7 @@ export function EditorWorkspace() {
                   canvas={canvasBridge}
                   {...(readingBridge ? { reading: readingBridge } : {})}
                   {...(courseBridge ? { course: courseBridge } : {})}
+                  deck={deckBridge}
                   {...(flashcardBridge ? { flashcards: flashcardBridge } : {})}
                   imageDestination={
                     workspace && !workspace.isLocal

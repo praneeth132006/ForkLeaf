@@ -165,3 +165,21 @@ export {
 export * from "./canvas";
 
 export { cardSeparator, parseCardLine, type CardLine } from "./flashcard-line";
+
+export {
+  DECK_FILE,
+  cardLine,
+  deckCardsOf,
+  deckFile,
+  deckRepoName,
+  diffDecks,
+  formatDeckBlock,
+  parseDeckBlock,
+  parseRepoAddress,
+  planDeckUpdate,
+  readDeckFile,
+  type DeckBlockState,
+  type DeckCard,
+  type DeckChanges,
+  type DeckPlan,
+} from "./deck";

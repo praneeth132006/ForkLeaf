@@ -24,6 +24,7 @@ import type { FlashcardBridge } from "./extensions/FlashcardBlock";
 import type { CanvasBridge } from "./extensions/CanvasBlock";
 import type { ReadingBridge } from "./extensions/ReadingBlock";
 import type { CourseBridge } from "./extensions/CourseBlock";
+import type { DeckBridge } from "./extensions/DeckBlock";
 
 export interface MarkdownEditorProps {
   /**
@@ -86,6 +87,8 @@ export interface MarkdownEditorProps {
   reading?: ReadingBridge;
   /** A folder's notes as lessons, for a course block in the note. */
   course?: CourseBridge;
+  /** Sharing this note's cards as a deck, and copying decks others shared. */
+  deck?: DeckBridge;
   /**
    * Makes the note readable but not writable, in every mode at once.
    *
@@ -137,6 +140,7 @@ export function MarkdownEditor({
   canvas,
   reading,
   course,
+  deck,
   readOnly = false,
 }: MarkdownEditorProps) {
   // Split view: the divider position, as a percentage of the container width.
@@ -451,6 +455,7 @@ export function MarkdownEditor({
             {...(canvas ? { canvas } : {})}
             {...(reading ? { reading } : {})}
             {...(course ? { course } : {})}
+            {...(deck ? { deck } : {})}
             {...(placeholder ? { placeholder } : {})}
             // A wide bottom pad so the last paragraph can be scrolled to the
             // middle of the screen instead of being pinned to the bottom edge.

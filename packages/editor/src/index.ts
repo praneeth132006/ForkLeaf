@@ -56,6 +56,7 @@ export {
   type CourseLesson,
   type CourseQuestion,
 } from "./extensions/CourseBlock";
+export { DeckBlock, type DeckBridge } from "./extensions/DeckBlock";
 export {
   CanvasBoard,
   readUrl,

@@ -5,6 +5,14 @@ full record.
 
 ## Unreleased
 
+### Decks you can fork
+
+`/` → **Shared deck** shares a note's cards as a public GitHub repository
+(after asking, and with only the card lines), copies someone's shared deck into
+a note, and later pulls in a newer version — adding, changing and removing
+cards while keeping any card you rewrote or added. Progress stays private in
+your own schedule.
+
 ### A folder as a course
 
 `/` → **Course from a folder** turns a folder's notes into lessons ordered by how
