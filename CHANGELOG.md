@@ -5,6 +5,26 @@ full record.
 
 ## Unreleased
 
+### A flashcards home you can start from
+
+Flashcards opened straight into a review with no explanation, so there was no
+way to tell what a card was, how to make one, or why cards came back. `/` →
+**Flashcards** now opens a home: how many cards are waiting, a three-step **How
+flashcards work**, **Add a card** with question and answer fields (no syntax),
+**Cards from this note** — definitions the open note already holds, ticked and
+added under `## Flashcards` — and **Decks**, one per note, each studied or
+practised on its own. Grades say what they mean (Forgot it, Barely, Knew it,
+Too easy) and when the card comes back, and a session ends with a way back.
+
+### Canvas cards can be edited again
+
+Double-clicking a card made a new empty card under it instead of opening the
+card: pressing a card captures the pointer on the board so it can be dragged,
+and the browser then sends the double-click to the board. Double presses are
+now timed on the card itself, so double-clicking writes in a card or renames a
+group, double-clicking empty space adds one, and a selected card also opens with
+Enter or the new **Edit** button.
+
 ### Canvases
 
 `/` → **New canvas** opens a board for placing cards, notes, links and groups
