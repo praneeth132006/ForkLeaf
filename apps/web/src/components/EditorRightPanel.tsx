@@ -8,6 +8,7 @@ import { exportNote, printToPdf, downloadResult } from "@forkleaf/exporter";
 import { exportImageResolver } from "@/lib/export-images";
 import { NoteFreshness, hasFreshnessToReport } from "@/components/NoteFreshness";
 import { deriveTitle } from "@forkleaf/markdown-engine";
+import type { Resurfaced } from "@/lib/resurface";
 
 export interface EditorRightPanelProps {
   collapsed: boolean;
@@ -72,6 +73,9 @@ export interface EditorRightPanelProps {
   onSyncNow: () => void;
   /** The `[[wikilink]]` neighbourhood of this note. */
   links: NoteLinks;
+  /** Older notes worth reading again today, with why each was chosen. */
+  resurfaced?: readonly Resurfaced[];
+  onOpenNote?: (path: string) => void;
   /** Object URLs for assets held on this device, keyed by repository path. */
   assetUrls: Readonly<Record<string, string>>;
 }
@@ -135,6 +139,8 @@ export function EditorRightPanel({
   onSyncNow,
   links,
   assetUrls,
+  resurfaced,
+  onOpenNote,
 }: EditorRightPanelProps) {
   const [newKey, setNewKey] = useState("");
   const [newTag, setNewTag] = useState<string | null>(null);
@@ -535,6 +541,38 @@ export function EditorRightPanel({
             <Section title="Links">
               <LinksSection note={note} links={links} />
             </Section>
+
+            {/* ── Worth revisiting ───────────────────────────────────────
+                Absent until a notebook has notes old enough to have been
+                forgotten — an empty "nothing to revisit" is not worth the
+                space. */}
+            {resurfaced && resurfaced.length > 0 && onOpenNote && (
+              <Section title="Worth revisiting">
+                <ul className="-mx-2 flex flex-col gap-0.5">
+                  {resurfaced.map((item) => (
+                    <li key={item.path}>
+                      <button
+                        type="button"
+                        onClick={() => onOpenNote(item.path)}
+                        className="block w-full rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--fl-elevated)]"
+                      >
+                        <span className="block truncate text-[13px] font-medium text-[var(--fl-text)]">
+                          {item.title}
+                        </span>
+                        <span className="block text-[11.5px] text-[var(--fl-muted)]">
+                          {item.reason}
+                        </span>
+                        {item.excerpt && (
+                          <span className="mt-0.5 line-clamp-2 block text-[12px] text-[var(--fl-muted)]">
+                            {item.excerpt}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            )}
 
             {/* ── Freshness ─────────────────────────────────────────────────
                 Renders nothing at all for a note with no datable claims and

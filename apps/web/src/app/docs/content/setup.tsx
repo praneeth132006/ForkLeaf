@@ -57,6 +57,25 @@ export function BrowserExtension() {
         repository again and press the reload arrow on the extension&rsquo;s card.
       </Note>
 
+      <H3>In Firefox</H3>
+      <OL>
+        <LI>
+          Open <Code>about:debugging#/runtime/this-firefox</Code> and press{" "}
+          <strong>Load Temporary Add-on…</strong>.
+        </LI>
+        <LI>
+          Choose <Code>manifest.json</Code> inside the <Code>apps/extension</Code> folder.
+        </LI>
+        <LI>
+          Only if you run ForkLeaf somewhere else: set its address in the add-on&rsquo;s{" "}
+          <strong>Preferences</strong>.
+        </LI>
+      </OL>
+      <P>
+        Firefox 121 or later. It forgets a temporary add-on when it restarts, so load it again after
+        a restart. The same folder works in Chrome and Firefox.
+      </P>
+
       <H2 id="use">Use it</H2>
       <Table
         head={["To save", "Do this"]}

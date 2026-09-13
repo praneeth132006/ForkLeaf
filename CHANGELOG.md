@@ -5,6 +5,91 @@ full record.
 
 ## Unreleased
 
+### Canvases
+
+`/` → **New canvas** opens a board for placing cards, notes, links and groups
+freely and joining them with arrows. Cards are added from the toolbar or by
+double-clicking, moved by dragging (Shift-click for several), resized from the
+corner, connected by dragging a card's edge dot onto another, coloured with the
+six JSON Canvas presets, and deleted with their arrows; a group carries the
+cards inside it. The board pans and zooms around the cursor, and **Fit** shows
+all of it. `.canvas` files open from the sidebar and ⌘K.
+
+Boards are saved a moment after each change as JSON Canvas 1.0, tab-indented as
+Obsidian writes it, keeping fields this app does not read. A file that is not a
+canvas is reported and never opened as an empty board, so it cannot be
+overwritten.
+
+The store now saves and opens files that are not markdown exactly as written:
+it used to stamp `updated` and `generator` front matter onto every file, which
+would have put YAML at the top of a JSON file. The GitHub tree lists `.canvas`
+files beside notes and PDFs.
+
+### Dialogs keep focus where you put it
+
+Every dialog moved focus back to its first field whenever the page behind it
+re-rendered — after a save, a sync, a grade in a flashcard review — because it
+treated each new close handler as a new dialog. It now sets focus once, when it
+opens, and still closes with the newest handler.
+
+### Save to ForkLeaf in Firefox
+
+The extension now loads in Firefox 121 and later, from the same folder as in
+Chrome: `about:debugging` → **Load Temporary Add-on…** → `manifest.json`. The
+manifest declares both `background.service_worker` (Chrome) and
+`background.scripts` (Firefox), which each browser ignores the other of, and a
+Gecko add-on id. It still asks for no access to any site; a test holds the
+manifest to all three.
+
+### Ask your notebook
+
+`/` or ⌘K → **Ask your notebook** answers a question with the passages in your
+notes that answer it: paragraphs and list items, ranked by how much of the
+question they cover with rare words counting for more (BM25-style), quoted with
+the note, the heading and the line, matching words highlighted, at most two
+from one note. **Open at line N** opens the note there — the line in Split and
+Source, the paragraph in Rich text. No model writes anything, so it cannot say
+what your notes do not, and nothing leaves the device.
+
+### Meeting notes
+
+`/` → **Start meeting notes** makes a dated note in `meetings/`. **Pull out
+decisions and to-dos** reads the notes — or a voice note's transcript — for
+`Decision:`, "we agreed", `Action:`, "@Sam will", "Leo will review", `Question:`
+and speaker labels, and writes a Summary at the end: decisions, action items as
+to-dos with owner and date, and open questions. The summary sits under its own heading, so running it again replaces it, and it is never read back in.
+
+### Flashcards that work the way they are written
+
+Cards written in the rich editor came out wrong. The editor escapes what it
+saves, so `2 * 3 :: 6` was asked as "2 \* 3", `[[links]]` kept escaped
+brackets, formatting marks showed raw, and every line ending inside a paragraph
+left a backslash on its answer. `Question::Answer` without spaces made no card.
+
+Cards are now shown as a person reads them, and the spellings Obsidian's
+spaced-repetition plugin reads all work: `::` with or without spaces (a tight
+card needs a question that reads like one, so `std::vector` stays code), `:::`
+for a card each way, a line holding only `?` or `??` to split a card over
+several lines, and `==highlights==` as fill-in-the-blank cards in notes tagged
+`flashcards`. `::` inside inline code is not a separator, a card written twice
+is asked once, and the review keeps multi-line answers' line breaks and says
+when a card is reversed or a blank.
+
+### Worth revisiting
+
+A few older notes come back each day — in the document panel and through `/` →
+**Open a note worth revisiting** — each with the reason it was chosen: linked to
+the open note and untouched for a month, written on this day in an earlier year,
+or among the longest forgotten. The choice holds for the day. Templates, the
+flashcard schedule and encrypted notes are never suggested.
+
+### Stale notes in the weekly review
+
+The weekly review runs the notebook check over the same notes and adds **Worth
+a look**: notes pointing at files or notes that no longer exist, then notes it
+thinks have gone out of date, each with the reason. Notes that are merely old
+are left out, so the section stays short enough to read.
+
 ### Everything in the `/` menu, input for code, a repository for saves, and one-step MCP
 
 - **The `/` menu holds every feature.** Blocks and the app's tools are listed

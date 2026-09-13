@@ -7,6 +7,7 @@ import {
   nextDue,
   parseSchedule,
   review,
+  wantsClozes,
   type Schedule,
 } from "./flashcards";
 
@@ -32,7 +33,8 @@ describe("findCards", () => {
       "    indented :: code",
       "| a :: b | c |",
       "## Heading :: not a card",
-      "`std::string` :: a type",
+      "`std::string` alone",
+      "::",
       "a::b without spaces",
     ].join("\n");
     expect(findCards("x.md", "x", content)).toEqual([]);
@@ -43,6 +45,109 @@ describe("findCards", () => {
     const [after] = findCards("a.md", "A", "New intro\n\ncapital of france :: Paris, on the Seine");
     expect(after!.id).toBe(before!.id);
     expect(cardId("b.md", "Capital of France")).not.toBe(before!.id);
+  });
+});
+
+describe("findCards — cards as people and the editor write them", () => {
+  const pairs = (content: string, clozes = false) =>
+    findCards("a.md", "A", content, { clozes }).map((card) => [card.question, card.answer]);
+
+  it("shows escaped characters, links and formatting the way a person reads them", () => {
+    const content = [
+      "2 \\* 3 :: 6",
+      "The \\[\\[Roadmap\\]\\] is :: due in *May*",
+      "snake\\_case :: words\\_joined\\_by\\_underscores",
+      "Mitochondria :: the powerhouse of the **cell**",
+      "Where :: [the docs](https://example.com) and [[Setup|the setup note]]",
+    ].join("\n");
+    expect(pairs(content)).toEqual([
+      ["2 * 3", "6"],
+      ["The Roadmap is", "due in May"],
+      ["snake_case", "words_joined_by_underscores"],
+      ["Mitochondria", "the powerhouse of the cell"],
+      ["Where", "the docs and the setup note"],
+    ]);
+  });
+
+  it("drops the backslash a line break in the rich editor leaves on an answer", () => {
+    expect(pairs("Capital of Portugal :: Lisbon\\\nLargest planet :: Jupiter")).toEqual([
+      ["Capital of Portugal", "Lisbon"],
+      ["Largest planet", "Jupiter"],
+    ]);
+  });
+
+  it("reads a card written without spaces when it reads like a question, never code", () => {
+    const content = [
+      "What is H2O?::Water",
+      "Capital of Portugal::Lisbon",
+      "std::vector",
+      "Foo::bar()",
+      "`std::string` :: a type",
+      "1. Ordered :: list",
+      "- [ ] Task box :: card",
+    ].join("\n");
+    expect(pairs(content)).toEqual([
+      ["What is H2O?", "Water"],
+      ["Capital of Portugal", "Lisbon"],
+      ["std::string", "a type"],
+      ["Ordered", "list"],
+      ["Task box", "card"],
+    ]);
+  });
+
+  it("makes two cards from :::, one each way", () => {
+    const cards = findCards("a.md", "A", "- Hola ::: Hello");
+    expect(cards.map((card) => [card.question, card.answer, card.kind])).toEqual([
+      ["Hola", "Hello", "basic"],
+      ["Hello", "Hola", "reversed"],
+    ]);
+    expect(cards[0]!.id).not.toBe(cards[1]!.id);
+  });
+
+  it("reads a card over several lines around a line holding only ?", () => {
+    const cards = findCards(
+      "a.md",
+      "A",
+      "What are the\nprimary colours?\n?\nred\nyellow\nblue\n\nnext :: one",
+    );
+    expect(cards.map((card) => [card.question, card.answer, card.line])).toEqual([
+      ["What are the\nprimary colours?", "red\nyellow\nblue", 0],
+      ["next", "one", 7],
+    ]);
+  });
+
+  it("reads the same card from the rich editor, where each line ends in a backslash", () => {
+    expect(pairs("What are the primary colours?\\\n?\\\nred\\\nyellow\\\nblue")).toEqual([
+      ["What are the primary colours?", "red\nyellow\nblue"],
+    ]);
+    expect(pairs("Bonjour\n??\nHello")).toEqual([
+      ["Bonjour", "Hello"],
+      ["Hello", "Bonjour"],
+    ]);
+  });
+
+  it("turns highlights into blanks only in a note that asks for them", () => {
+    const line = "Lisbon is the capital of ==Portugal== and ==Madrid== of Spain";
+    expect(pairs(line)).toEqual([]);
+    const cards = findCards("a.md", "A", line, { clozes: true });
+    expect(cards.map((card) => [card.question, card.answer, card.kind])).toEqual([
+      ["Lisbon is the capital of […] and Madrid of Spain", "Portugal", "cloze"],
+      ["Lisbon is the capital of Portugal and […] of Spain", "Madrid", "cloze"],
+    ]);
+  });
+
+  it("lists a card written twice only once", () => {
+    expect(pairs("Capital of Peru :: Lima\n\nCapital of Peru :: Lima")).toHaveLength(1);
+  });
+});
+
+describe("wantsClozes", () => {
+  it("is on for a note tagged flashcards, in its properties or its text", () => {
+    expect(wantsClozes({ tags: ["study", "Flashcards"] }, "")).toBe(true);
+    expect(wantsClozes({ tags: "flashcards" }, "")).toBe(true);
+    expect(wantsClozes({}, "Some notes #flashcards")).toBe(true);
+    expect(wantsClozes({}, "#flashcards\n\nText")).toBe(true);
+    expect(wantsClozes({ tags: ["study"] }, "==highlight==")).toBe(false);
   });
 });
 

@@ -115,16 +115,31 @@ otherwise it starts with the date, a to-do list and a notes section.
 
 ### Flashcards
 
-Write a card as one line in any note:
+Write a card in any note (or type `/flashcard`):
 
 ```markdown
 Capital of Portugal :: Lisbon
+What is H2O?::Water
+Hola ::: Hello
 
-- Mitochondria :: the powerhouse of the cell
+What are the primary colours?
+?
+red, yellow and blue
 ```
 
-⌘K → **Review flashcards** shows the cards due today, then new ones (up to 20
-a session).
+- `::` makes a card. Without spaces it still works when the question has several
+  words or ends in `?`, so `std::vector` never becomes a card.
+- `:::` makes two cards, one each way; `??` on its own line does the same for a
+  card over several lines.
+- A line holding only `?` splits a card over several lines: the question above,
+  the answer below, with no blank line in between.
+- In a note tagged `flashcards` (Tags field, or `#flashcards` in the text), each
+  `==highlight==` becomes a fill-in-the-blank card.
+- Formatting, links and the escapes the rich editor writes (`2 \* 3`) show as
+  plain words on the card. A card written twice is asked once.
+
+⌘K or `/` → **Review flashcards** shows the cards due today, then new ones (up
+to 20 a session).
 
 1. Read the question, press **Show answer** (or **Space**).
 2. Grade it: **Again**, **Hard**, **Good** or **Easy** (or **1**–**4**). Each
@@ -133,8 +148,7 @@ a session).
 
 The schedule is kept in `reviews/flashcards.md`, a table with one row per card,
 so it syncs to every device. Delete a row to start that card over. Lines in
-code blocks, tables, headings and inline code are never cards, so `std :: vector`
-is safe. Same spelling as Obsidian's spaced-repetition plugin.
+code blocks, tables and headings are never cards.
 
 ### Save from anywhere
 
@@ -170,7 +184,7 @@ kept.
 
 ### Browser extension
 
-**Save to ForkLeaf** lives in `apps/extension`. Load it from
+**Save to ForkLeaf** lives in `apps/extension` and works in Chrome, Edge, Brave, Arc and Firefox (121+; load `manifest.json` from `about:debugging`). Load it from
 `chrome://extensions` → **Developer mode** → **Load unpacked**, then set your
 ForkLeaf address in its **Options**.
 
@@ -202,11 +216,71 @@ pictures as pictures, links with their site, newest first.
 - **Worked on** — notes changed this week
 - **Deleted** — notes removed this week (connected repositories only)
 - **Overdue** and **Coming up** — dated to-dos, with a link to their note
+- **Worth a look** — notes pointing at files or notes that no longer exist, and
+  notes the notebook check thinks are out of date, each with the reason (only
+  when there are any)
 - **Looking back** — an empty heading for your own thoughts
 
 Running it again the same week opens the existing review instead of making a
 second one. Weeks start on Monday. To-dos are copied as plain lines, not boxes,
 so they are not counted twice in **Show every open to-do**.
+
+### Canvases
+
+- `/` → **New canvas** makes `canvases/Canvas YYYY-MM-DD.canvas` and opens it;
+  click any `.canvas` file in the sidebar (or ⌘K → **Open canvas: name**) to
+  open one.
+- **Add card** or double-click empty space for a text card; **Add a note…** puts
+  a note on the board (with **Open note**); paste an address for a link card;
+  **Add group** makes a group that carries the cards inside it.
+- Drag cards to move them (Shift-click for several), drag the corner square to
+  resize, and drag the dot on a selected card's right edge onto another card to
+  draw an arrow. Six colours, and Delete removes cards with their arrows.
+- Drag the background or scroll to move; pinch or ⌘/Ctrl-scroll to zoom; **Fit**
+  shows everything.
+- Saved a moment after each change as [JSON Canvas](https://jsoncanvas.org), the
+  format Obsidian uses — boards open in either, and fields Obsidian wrote are
+  kept. A file that is not a canvas is never opened as an empty board.
+
+### Ask your notebook
+
+`/` or ⌘K → **Ask your notebook**, type a question, press **Ask**.
+
+- The passages that answer it are quoted — paragraphs and list items — best
+  first, with the note, the heading and the line, and the matching words
+  highlighted.
+- **Open at line N** opens the note there (Split and Source scroll to the line;
+  Rich text scrolls to the paragraph).
+- Passages covering more of the question rank higher, rare words count for
+  more, word forms meet (`shipping` finds `ship`), and at most two passages
+  come from one note.
+- No AI writes the answer: everything shown is something you wrote, and nothing
+  leaves the device. Code, templates and encrypted notes are never quoted.
+
+### Meeting notes
+
+- `/` → **Start meeting notes** makes a dated note in `meetings/` with Date,
+  Attendees, Agenda and Notes.
+- Write as you go: `Decision: …`, `We agreed …`, `Action: Sam to … by
+2026-09-20`, `@Priya will …`, `Leo will review …`, `Question: …`. Transcript
+  lines like `**Ana:** Action: send the survey` give the action to the speaker.
+- `/` → **Pull out decisions and to-dos** writes a **Summary** at the end:
+  Decisions, Action items (as `- [ ]` to-dos with `@owner` and `📅 date`, so they
+  show in every open to-do and the weekly review) and Open questions. Running it
+  again replaces the summary instead of adding another.
+
+### Worth revisiting
+
+A few older notes come back each day, in **Worth revisiting** in the document
+panel (below Links), or with `/` → **Open a note worth revisiting**:
+
+1. notes linked to the open one, either way, untouched for a month;
+2. notes written on this day in an earlier year;
+3. the longest-forgotten notes, a different few each day.
+
+Each says why it was chosen, and the list holds still for the day. Templates,
+the flashcard schedule, encrypted notes and anything edited in the last month
+are never suggested.
 
 ### Encrypted notes
 

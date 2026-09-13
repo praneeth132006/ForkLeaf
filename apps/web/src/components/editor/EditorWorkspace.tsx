@@ -73,13 +73,15 @@ import { DeletedNotesDialog } from "@/components/DeletedNotesDialog";
 import { GraphDialog } from "@/components/GraphDialog";
 import { FolderViewsDialog, type FolderView } from "@/components/FolderViewsDialog";
 import { FlashcardsDialog } from "@/components/FlashcardsDialog";
-import { SCHEDULE_PATH, findCards } from "@/lib/flashcards";
+import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
 import {
   formatWeeklyReview,
   isoWeek,
   summariseWeek,
   weeklyReviewPath,
   weeklyReviewTitle,
+  staleEntries,
+  type StaleEntry,
 } from "@/lib/weekly-review";
 import { daysBefore, deletedSince } from "@/lib/deleted-notes";
 import { SaveDialog } from "@/components/SaveDialog";
@@ -88,6 +90,19 @@ import { EncryptDialog } from "@/components/EncryptDialog";
 import { VoiceNoteDialog } from "@/components/VoiceNoteDialog";
 import { ImportDialog } from "@/components/ImportDialog";
 import { ToolsDialog } from "@/components/ToolsDialog";
+import { resurface, type Resurfaced } from "@/lib/resurface";
+import { AskDialog } from "@/components/AskDialog";
+import { MEETING_FOLDER, extractMeeting, meetingNote, withMeetingSummary } from "@/lib/meeting";
+import { plainText } from "@/lib/mind";
+import { CanvasDialog, type CanvasNoteChoice } from "@/components/CanvasDialog";
+import {
+  canvasTitle,
+  emptyCanvas,
+  isCanvasPath,
+  newCanvasPath,
+  serializeCanvas,
+} from "@/lib/canvas";
+import { surveyNotebook } from "@/lib/notebook-freshness";
 import { ConnectAssistantDialog } from "@/components/ConnectAssistantDialog";
 import type { InsertAction } from "@forkleaf/editor";
 import { isSavedOnGitHub, mindItemsFromSaves, type SavesListing } from "@/lib/saved-items";
@@ -156,7 +171,7 @@ import { revealAsset } from "@/lib/reveal-asset";
 import { imageTypeFor } from "@/lib/media";
 import { collectFilePaths, collectFolders } from "@/lib/tree";
 import { hasRelativeImages, repairNoteLinks } from "@/lib/repair-links";
-import { flattenTree, isMarkdown } from "@/lib/library";
+import { excerptOf, flattenTree, isMarkdown } from "@/lib/library";
 import { track } from "@/lib/firebase/analytics";
 import { upsertUserProfile } from "@/lib/firebase/users";
 
@@ -461,6 +476,7 @@ export function EditorWorkspace() {
     | "graph"
     | "folder-views"
     | "flashcards"
+    | "ask"
     | "mind"
     | "encrypt"
     | "voice"
@@ -2271,15 +2287,34 @@ export function EditorWorkspace() {
       }
     }
 
+    // The notebook check over the same notes: what points at nothing, and what
+    // has probably gone out of date. Best effort — a review without it is still
+    // a review.
+    let stale: StaleEntry[] = [];
+    try {
+      const survey = surveyNotebook(
+        notes.map((entry) => ({
+          path: entry.path,
+          content: entry.content,
+          updatedAt: entry.updatedAt,
+          frontmatterTitle: entry.title,
+        })),
+        { files: new Set(await knownFiles()) },
+      );
+      stale = staleEntries(survey.notes);
+    } catch {
+      // Leave the section out.
+    }
+
     const created = await notebook.createNote(
       weeklyReviewTitle(now),
       JOURNAL_FOLDER,
-      formatWeeklyReview(summariseWeek(notes, now, deleted)),
+      formatWeeklyReview(summariseWeek(notes, now, deleted, stale)),
     );
     if (!created) return;
     track("note_created");
     setNotice(`Wrote this week's review, ${created.path}`);
-  }, [notebook, takenPaths, workspace]);
+  }, [notebook, takenPaths, workspace, knownFiles]);
 
   const encryptCurrent = useCallback(
     async (passphrase: string) => {
@@ -2363,6 +2398,105 @@ export function EditorWorkspace() {
     if (written === null) return;
     setNotice(`Saved ${path} — it is now under “New note from template” in ⌘K`);
   }, [note, title, takenPaths, notebook]);
+
+  // ── Opening a note at a line ────────────────────────────────────────────
+
+  /**
+   * A place to open a note at, from an answer to a question.
+   *
+   * Split and Source view take a line to scroll to. Rich text has no lines —
+   * the same note is a tree of blocks there — so the block holding that line's
+   * words is found and scrolled to instead, once, when the note appears.
+   */
+  const [reveal, setReveal] = useState<{ path: string; line: number } | null>(null);
+  const revealedRef = useRef<{ path: string; line: number } | null>(null);
+  const revealContent = note && reveal && note.path === reveal.path ? note.content : null;
+  useEffect(() => {
+    if (!reveal || revealContent === null || mode !== "wysiwyg") return;
+    if (revealedRef.current === reveal) return;
+    const wanted = plainText(revealContent.split("\n")[reveal.line - 1] ?? "")
+      .slice(0, 40)
+      .trim();
+    if (!wanted) return;
+    const timer = window.setTimeout(() => {
+      revealedRef.current = reveal;
+      const blocks = document.querySelectorAll<HTMLElement>(
+        ".ProseMirror p, .ProseMirror li, .ProseMirror blockquote, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3",
+      );
+      [...blocks]
+        .find((block) => block.textContent?.includes(wanted))
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [reveal, revealContent, mode]);
+
+  // ── Worth revisiting ────────────────────────────────────────────────────
+
+  /**
+   * A few older notes worth reading again, for the document panel and the
+   * "note worth revisiting" command. Worked out when the open note changes,
+   * and again when the day does, so the list holds still while you work.
+   */
+  const [resurfaced, setResurfaced] = useState<Resurfaced[]>([]);
+  const listAllNotes = notebook.allNotes;
+  const openPath = note?.path ?? null;
+  const resurfaceDay = dateStamp(new Date());
+  useEffect(() => {
+    if (!workspace) return;
+    let live = true;
+    void listAllNotes().then((entries) => {
+      if (!live) return;
+      setResurfaced(
+        resurface(
+          entries.map((entry) => {
+            const created = entry.frontmatter.created as unknown;
+            return {
+              path: entry.path,
+              title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+              content: entry.content,
+              updatedAt: entry.updatedAt,
+              created:
+                created instanceof Date
+                  ? created.toISOString()
+                  : typeof created === "string"
+                    ? created
+                    : null,
+            };
+          }),
+          { current: openPath, now: new Date() },
+        ),
+      );
+    });
+    return () => {
+      live = false;
+    };
+  }, [listAllNotes, openPath, workspace, resurfaceDay]);
+
+  // ── Canvases ────────────────────────────────────────────────────────────
+
+  /** The `.canvas` board open over the editor, and the notes it can place. */
+  const [canvasPath, setCanvasPath] = useState<string | null>(null);
+  const [canvasNotes, setCanvasNotes] = useState<CanvasNoteChoice[]>([]);
+  useEffect(() => {
+    if (!canvasPath) return;
+    let live = true;
+    void listAllNotes().then((entries) => {
+      if (!live) return;
+      setCanvasNotes(
+        entries
+          .filter((entry) => isMarkdown(entry.path))
+          .map((entry) => ({
+            path: entry.path,
+            title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+            excerpt: excerptOf(entry.content),
+          }))
+          .sort((a, b) => a.title.localeCompare(b.title)),
+      );
+    });
+    return () => {
+      live = false;
+    };
+  }, [canvasPath, listAllNotes]);
 
   const commands = useMemo<Command[]>(() => {
     const list: Command[] = [
@@ -2713,12 +2847,100 @@ export function EditorWorkspace() {
         run: () => setDialog("freshness"),
       });
       list.push({
+        id: "canvas-new",
+        label: "New canvas",
+        group: "Notes",
+        hint: "A board of cards, notes and links — saved as JSON Canvas, opens in Obsidian",
+        keywords: "canvas board whiteboard mind map spatial cards obsidian brainstorm",
+        run: async () => {
+          const path = newCanvasPath(takenPaths, new Date());
+          const written = await notebook.writeFile(path, serializeCanvas(emptyCanvas()));
+          if (!written) {
+            setNotice("The canvas could not be created.");
+            return;
+          }
+          setCanvasPath(path);
+        },
+      });
+      for (const path of takenPaths.filter(isCanvasPath)) {
+        list.push({
+          id: `canvas:${path}`,
+          label: `Open canvas: ${canvasTitle(path)}`,
+          group: "Notes",
+          hint: path,
+          keywords: "canvas board",
+          run: () => setCanvasPath(path),
+        });
+      }
+      list.push({
+        id: "ask",
+        label: "Ask your notebook",
+        group: "Notes",
+        hint: "Answers quoted from your own notes, with where each came from",
+        keywords: "ask question answer search recall what when who find",
+        run: () => setDialog("ask"),
+      });
+      list.push({
+        id: "meeting-new",
+        label: "Start meeting notes",
+        group: "Notes",
+        hint: "A dated note in meetings/ with Agenda and Notes",
+        keywords: "meeting minutes agenda attendees standup call",
+        run: async () => {
+          const made = meetingNote("Meeting", new Date());
+          const created = await notebook.createNote(made.title, MEETING_FOLDER, made.content);
+          if (created)
+            setNotice(`Started ${created.path} — rename it to what the meeting is about.`);
+        },
+      });
+      if (note && !sealed) {
+        list.push({
+          id: "meeting-summary",
+          label: "Pull out decisions and to-dos",
+          group: "Notes",
+          hint: "Decisions, action items and open questions, gathered at the end of this note",
+          keywords: "meeting summary decisions actions action items minutes transcript extract",
+          run: () => {
+            if (noteLocked) {
+              setNotice("This note is locked. Unlock it to add a summary.");
+              return;
+            }
+            const items = extractMeeting(note.content);
+            const found = items.decisions.length + items.actions.length + items.questions.length;
+            if (found === 0) {
+              setNotice(
+                "No decisions, action items or questions found. Write lines like “Decision: …”, “Action: …”, “Question: …” or “@Sam will send it”.",
+              );
+              return;
+            }
+            void notebook.saveNote(withMeetingSummary(note.content, items));
+            setNotice(
+              `Gathered ${items.decisions.length} decision${items.decisions.length === 1 ? "" : "s"}, ${items.actions.length} action item${items.actions.length === 1 ? "" : "s"} and ${items.questions.length} open question${items.questions.length === 1 ? "" : "s"} at the end of the note.`,
+            );
+          },
+        });
+      }
+      list.push({
         id: "tasks",
         label: "Show every open to-do",
         group: "Notes",
         hint: "Every unticked box in the notebook, overdue first",
         keywords: "tasks todo to-do checklist checkbox due overdue agenda action items",
         run: () => setDialog("tasks"),
+      });
+      list.push({
+        id: "resurface",
+        label: "Open a note worth revisiting",
+        group: "Notes",
+        hint: resurfaced[0]
+          ? `${resurfaced[0].title} — ${resurfaced[0].reason}`
+          : "Older notes come back here once they have gone a month untouched",
+        keywords: "resurface revisit old forgotten random memory on this day",
+        run: () => {
+          if (resurfaced[0]) notebook.openNote(resurfaced[0].path);
+          else
+            setNotice("Nothing to bring back yet — a note shows up here after a month untouched.");
+        },
       });
       list.push({
         id: "flashcards",
@@ -2964,6 +3186,8 @@ export function EditorWorkspace() {
 
     return list;
   }, [
+    takenPaths,
+    resurfaced,
     note,
     title,
     workspace,
@@ -3086,9 +3310,14 @@ export function EditorWorkspace() {
       ...templates,
       ...tool("save-template", "Templates", TOOL_ICONS.template),
       ...tool("voice", "Capture", TOOL_ICONS.mic),
+      ...tool("meeting-new", "Capture", TOOL_ICONS.template),
+      ...tool("meeting-summary", "Capture", TOOL_ICONS.check),
       ...tool("import", "Capture", TOOL_ICONS.download),
       ...tool("mind", "Capture", TOOL_ICONS.grid),
       ...tool("bookmarklet", "Capture", TOOL_ICONS.download),
+      ...tool("canvas-new", "See", TOOL_ICONS.grid, "A board of cards, notes and links"),
+      ...tool("ask", "See", TOOL_ICONS.help, "Answers quoted from your own notes"),
+      ...tool("resurface", "See", TOOL_ICONS.clock),
       ...tool("graph", "See", TOOL_ICONS.graph),
       ...tool("board", "See", TOOL_ICONS.grid),
       ...tool("table", "See", TOOL_ICONS.grid),
@@ -3328,6 +3557,7 @@ export function EditorWorkspace() {
                 // because ForkLeaf can open it; handing it to the notebook would
                 // make a note whose body is the raw bytes of a PDF.
                 if (isPdfPath(path)) openRepoPdf(path, "");
+                else if (isCanvasPath(path)) setCanvasPath(path);
                 else notebook.openNote(path);
                 // On a phone the drawer covers the note it just opened.
                 setDrawer(null);
@@ -3758,7 +3988,7 @@ export function EditorWorkspace() {
                   mode={mode}
                   theme={theme}
                   onCursorChange={setCursor}
-                  revealLine={followLine}
+                  revealLine={reveal && reveal.path === note.path ? reveal.line : followLine}
                   images={images}
                   links={linkBridge}
                   imageDestination={
@@ -3853,6 +4083,11 @@ export function EditorWorkspace() {
               workspace={workspace}
               locked={noteLocked || sealed}
               encrypted={sealed}
+              resurfaced={resurfaced}
+              onOpenNote={(path) => {
+                setDrawer(null);
+                notebook.openNote(path);
+              }}
               onFrontmatterChange={notebook.updateFrontmatter}
               onRewrite={notebook.saveNote}
               onExport={() => {
@@ -4073,7 +4308,9 @@ export function EditorWorkspace() {
           tree={notebook.tree}
           openNotes={notebook.openNotes}
           workspace={workspace}
-          onOpenNote={notebook.openNote}
+          onOpenNote={(path) =>
+            isCanvasPath(path) ? setCanvasPath(path) : notebook.openNote(path)
+          }
           // A notebook with no repository has no documents to reach: nothing
           // could have been read from one, and a result that opened nothing
           // would be worse than no result.
@@ -4291,6 +4528,41 @@ export function EditorWorkspace() {
         />
       )}
 
+      {canvasPath && workspace && (
+        <CanvasDialog
+          key={canvasPath}
+          path={canvasPath}
+          onClose={() => setCanvasPath(null)}
+          load={() => notebook.readNote(canvasPath)}
+          save={async (text) => {
+            const written = await notebook.writeFile(canvasPath, text);
+            if (!written) throw new Error("The canvas could not be saved.");
+          }}
+          notes={canvasNotes}
+          onOpenNote={(path) => notebook.openNote(path)}
+        />
+      )}
+
+      {openDialog === "ask" && workspace && (
+        <AskDialog
+          onClose={() => setDialog(null)}
+          loadNotes={async () =>
+            (await notebook.allNotes())
+              .filter((entry) => isMarkdown(entry.path))
+              .map((entry) => ({
+                path: entry.path,
+                title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+                content: entry.content,
+              }))
+          }
+          onOpen={(path, line) => {
+            setDialog(null);
+            setReveal({ path, line });
+            notebook.openNote(path);
+          }}
+        />
+      )}
+
       {openDialog === "flashcards" && workspace && (
         <FlashcardsDialog
           onClose={() => setDialog(null)}
@@ -4307,6 +4579,7 @@ export function EditorWorkspace() {
                   entry.path,
                   deriveTitle(entry.content, entry.frontmatter.title, entry.path),
                   entry.content,
+                  { clozes: wantsClozes(entry.frontmatter, entry.content) },
                 ),
               )
           }

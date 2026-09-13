@@ -217,7 +217,7 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         title: "Save to ForkLeaf extension",
         summary:
           "One click, or a right-click on a selection, link or image. No account and no host permissions.",
-        how: "Alt+Shift+S, or right-click → Save to ForkLeaf",
+        how: "Alt+Shift+S, or right-click → Save to ForkLeaf — in Chrome, Edge, Brave, Arc or Firefox",
         docs: "/docs/browser-extension",
         tags: ["new"],
       },
@@ -481,6 +481,50 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         how: "Save with the extension, share sheet or bookmarklet",
         docs: "/docs/saving",
         tags: ["new", "github"],
+      },
+      {
+        id: "canvases",
+        title: "Canvases",
+        summary:
+          "A board of cards, notes, links and groups joined by arrows, saved as JSON Canvas so it opens in Obsidian too.",
+        how: "/ → New canvas, or click a .canvas file",
+        docs: "/docs/canvases",
+        tags: ["new"],
+      },
+      {
+        id: "ask",
+        title: "Ask your notebook",
+        summary:
+          "Ask a question and get the passages in your notes that answer it, quoted with the note and line. No AI, nothing leaves the device.",
+        how: "/ → Ask your notebook",
+        docs: "/docs/ask",
+        tags: ["new"],
+      },
+      {
+        id: "meetings",
+        title: "Meeting notes",
+        summary:
+          "Start a meeting note, then pull out decisions, action items with owners and dates, and open questions into a summary.",
+        how: "/ → Start meeting notes, then / → Pull out decisions and to-dos",
+        docs: "/docs/meetings",
+        tags: ["new"],
+      },
+      {
+        id: "resurfacing",
+        title: "Worth revisiting",
+        summary:
+          "A few older notes each day — linked to what you are writing, written on this day, or long forgotten — with why each was chosen.",
+        how: "Document panel → Worth revisiting, or / → Open a note worth revisiting",
+        docs: "/docs/resurfacing",
+        tags: ["new"],
+      },
+      {
+        id: "weekly-stale",
+        title: "Stale notes in the weekly review",
+        summary:
+          "The weekly review lists notes pointing at things that no longer exist, and notes that have gone out of date.",
+        how: "/ → Write this week's review → Worth a look",
+        tags: ["new"],
       },
       {
         id: "import",

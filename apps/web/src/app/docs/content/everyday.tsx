@@ -108,10 +108,61 @@ export function Journal() {
       <H2 id="weekly-review">Weekly review</H2>
       <P>
         <strong>/ → Write this week&rsquo;s review</strong> makes <Code>journal/2026-w37.md</Code>{" "}
-        and lists the notes you started, worked on and deleted, overdue and upcoming to-dos, and an
-        empty <strong>Looking back</strong> heading for your own thoughts. Running it again the same
-        week opens the one you already have. Weeks start on Monday.
+        and lists:
       </P>
+      <UL>
+        <LI>the notes you started, worked on and deleted;</LI>
+        <LI>overdue and upcoming to-dos, each with a link to its note;</LI>
+        <LI>
+          <strong>Worth a look</strong> — notes that point at a file or a note that no longer
+          exists, and notes the notebook check thinks have gone out of date, each with the reason;
+        </LI>
+        <LI>
+          an empty <strong>Looking back</strong> heading for your own thoughts.
+        </LI>
+      </UL>
+      <P>Running it again the same week opens the one you already have. Weeks start on Monday.</P>
+    </>
+  );
+}
+
+export function Resurfacing() {
+  return (
+    <>
+      <Lead>
+        A few older notes worth reading again, chosen for what you are working on — so notes you
+        wrote to use later actually get used.
+      </Lead>
+
+      <H2 id="where">Where to find them</H2>
+      <UL>
+        <LI>
+          <strong>Worth revisiting</strong> in the document panel, below Links. Click one to open
+          it.
+        </LI>
+        <LI>
+          <strong>/ → Open a note worth revisiting</strong> opens the first one.
+        </LI>
+      </UL>
+
+      <H2 id="how">How they are chosen</H2>
+      <OL>
+        <LI>
+          Notes linked to the one you have open — either way — that nobody has edited for a month.
+          The context you already decided was related.
+        </LI>
+        <LI>Notes written on this day in an earlier year.</LI>
+        <LI>Notes that have gone longest without an edit, a different few each day.</LI>
+      </OL>
+      <P>
+        Each says why it was chosen — <em>Linked from this note · last edited 7 months ago</em>, or{" "}
+        <em>Written a year ago today</em>. The list holds still for the whole day while the same
+        note is open, so it is something to act on rather than something that shuffles.
+      </P>
+      <Note>
+        Templates, the flashcard schedule, encrypted notes and anything edited in the last month are
+        never suggested. A new notebook has nothing to show until its notes are a month old.
+      </Note>
     </>
   );
 }
@@ -153,22 +204,49 @@ export function Flashcards() {
   return (
     <>
       <Lead>
-        Write a card as one line in any note, and ForkLeaf shows it again just before you would
-        forget it.
+        Write a card in any note, and ForkLeaf shows it again just before you would forget it.
       </Lead>
 
       <H2 id="write">Writing cards</H2>
       <P>
-        Type <Code>/flashcard</Code>, or write a line with <Code>::</Code> between the question and
-        the answer:
+        Type <Code>/flashcard</Code>, or write any of these. They work in Rich, Split and Source
+        view, and they are the same spellings Obsidian&rsquo;s spaced-repetition plugin reads.
       </P>
-      <Pre label="in any note">{`Capital of Portugal :: Lisbon
-- Mitochondria :: the powerhouse of the cell`}</Pre>
+      <Table
+        head={["Write", "You get"]}
+        rows={[
+          [<Code key="1">Capital of Portugal :: Lisbon</Code>, "A card: question, then answer"],
+          [
+            <Code key="2">What is H2O?::Water</Code>,
+            "The same, without spaces — when the question has several words or a question mark",
+          ],
+          [<Code key="3">Hola ::: Hello</Code>, "Two cards, one each way"],
+          [
+            <Code key="4">Lisbon is the capital of ==Portugal==</Code>,
+            "A fill-in-the-blank card for each highlight, in notes tagged flashcards",
+          ],
+        ]}
+      />
+      <H3>A card over several lines</H3>
       <P>
-        Lines in code blocks, tables, headings and inline code are never cards, so{" "}
-        <Code>std :: vector</Code> is safe. It is the same spelling Obsidian&rsquo;s
-        spaced-repetition plugin reads.
+        Put the question, then a line holding only <Code>?</Code>, then the answer, with no blank
+        lines between them. Use <Code>??</Code> for a card each way.
       </P>
+      <Pre label="in your note">{`What are the primary colours?
+?
+red
+yellow
+blue`}</Pre>
+      <P>
+        Formatting, links and escaped characters show as plain words on the card, so{" "}
+        <Code>2 * 3 :: 6</Code> reads as written. Lines in code blocks, tables and headings are
+        never cards, and <Code>std::vector</Code> is safe. A card written twice is asked once.
+      </P>
+      <Note>
+        Highlights become blanks only in notes tagged <Code>flashcards</Code> — in the Tags field,
+        or with <Code>#flashcards</Code> in the text — so highlighting for emphasis elsewhere makes
+        no cards.
+      </Note>
 
       <H2 id="review">Reviewing</H2>
       <OL>
@@ -474,6 +552,168 @@ print(f"Hello {name}, next year you will be {age + 1}")
       <P>
         In a throwaway virtual machine made for the one run and destroyed afterwards — never on your
         computer. It has internet access, and a run can take up to 30 seconds.
+      </P>
+    </>
+  );
+}
+
+export function AskNotebook() {
+  return (
+    <>
+      <Lead>
+        Ask a question and get back the passages in your notes that answer it — quoted, with the
+        note, the heading and the line each came from.
+      </Lead>
+
+      <H2 id="use">Asking</H2>
+      <OL>
+        <LI>
+          <strong>/ → Ask your notebook</strong>, or ⌘K → <strong>Ask your notebook</strong>.
+        </LI>
+        <LI>
+          Type a question — <em>When do we launch the beta?</em> — and press <strong>Ask</strong>.
+        </LI>
+        <LI>
+          Read the quoted passages, best answer first. The words that matched are highlighted.
+        </LI>
+        <LI>
+          <strong>Open at line N</strong> opens the note there: Split and Source scroll to the line,
+          Rich text scrolls to the paragraph.
+        </LI>
+      </OL>
+
+      <H2 id="how">How it works</H2>
+      <UL>
+        <LI>
+          Every paragraph and list item is a possible answer. Passages that contain more of the
+          question beat ones that repeat one word, rare words count for more than common ones, and
+          the note&rsquo;s title and the heading above a passage count a little.
+        </LI>
+        <LI>
+          Word forms meet — <Code>shipping</Code>, <Code>ships</Code> and <Code>shipped</Code> all
+          find <Code>ship</Code> — and words every sentence has (<Code>what</Code>, <Code>the</Code>
+          ) are ignored.
+        </LI>
+        <LI>At most two passages come from one note, so one long note cannot fill the list.</LI>
+      </UL>
+      <Note>
+        No AI writes the answer. Everything shown is something you wrote, so it cannot say anything
+        your notes do not — and your notes never leave this device to be asked about. Code blocks,
+        templates and encrypted notes are never quoted.
+      </Note>
+    </>
+  );
+}
+
+export function MeetingNotes() {
+  return (
+    <>
+      <Lead>
+        Take notes in a meeting, or record it, and end with the three lists anybody needs a week
+        later: what was decided, who is doing what, and what is still open.
+      </Lead>
+
+      <H2 id="start">Starting</H2>
+      <P>
+        <strong>/ → Start meeting notes</strong> makes a dated note in <Code>meetings/</Code> with
+        Date, Attendees, Agenda and Notes. Rename it to what the meeting is about. To record
+        instead, use <strong>/ → Record a voice note</strong> with a transcript.
+      </P>
+
+      <H2 id="write">Writing so it can be gathered</H2>
+      <Table
+        head={["Write", "Becomes"]}
+        rows={[
+          [<Code key="1">Decision: ship the beta on 2026-10-03</Code>, "A decision"],
+          [<Code key="2">We agreed to keep the free plan</Code>, "A decision"],
+          [
+            <Code key="3">Action: Sam to draft the announcement by 2026-09-20</Code>,
+            "A to-do for Sam, due that day",
+          ],
+          [<Code key="4">@Priya will book the venue</Code>, "A to-do for Priya"],
+          [<Code key="5">Leo will review the pricing page</Code>, "A to-do for Leo"],
+          [<Code key="6">Question: do we need a waitlist?</Code>, "An open question"],
+        ]}
+      />
+      <P>
+        Transcript lines like <Code>**Ana:** Action: send the survey</Code> give the action to the
+        speaker. Lists, quotes and bold are read through; code blocks, headings and existing check
+        boxes are left alone.
+      </P>
+
+      <H2 id="gather">Gathering</H2>
+      <P>
+        <strong>/ → Pull out decisions and to-dos</strong> writes a <strong>Summary</strong> at the
+        end of the note, with <strong>Decisions</strong>, <strong>Action items</strong> and{" "}
+        <strong>Open questions</strong>. Action items are check boxes with the owner and date, so
+        they appear in <strong>Show every open to-do</strong> and the weekly review.
+      </P>
+      <P>
+        Run it again after more notes and the summary is replaced, not repeated — it sits under its
+        own heading, Meeting summary, and is never read back in as notes.
+      </P>
+    </>
+  );
+}
+
+export function Canvases() {
+  return (
+    <>
+      <Lead>
+        A board for thinking in space: cards, notes, links and groups placed anywhere and joined
+        with arrows — saved as a <Code>.canvas</Code> file that opens in Obsidian too.
+      </Lead>
+
+      <H2 id="start">Making one</H2>
+      <UL>
+        <LI>
+          <strong>/ → New canvas</strong> makes <Code>canvases/Canvas 2026-09-13.canvas</Code> and
+          opens it. Rename the file in the sidebar like any other.
+        </LI>
+        <LI>
+          Click a <Code>.canvas</Code> file in the sidebar, or ⌘K →{" "}
+          <strong>Open canvas: name</strong>, to open one.
+        </LI>
+      </UL>
+
+      <H2 id="cards">Cards</H2>
+      <Table
+        head={["To", "Do this"]}
+        rows={[
+          ["Add a card", "Add card, or double-click empty space. Type straight away."],
+          ["Edit a card", "Double-click it. Click the background or press Esc when done."],
+          [
+            "Put a note on the board",
+            "Add a note… — the card shows its title and first lines; Open note opens it",
+          ],
+          ["Add a link", "Paste an address into Paste a link… and press Add link"],
+          ["Group cards", "Add group, then drag cards inside it. Moving the group moves them."],
+          ["Colour", "Select cards, then pick one of the six colours, or No colour"],
+          ["Delete", "Select, then Delete or Backspace — its arrows go with it"],
+        ]}
+      />
+
+      <H2 id="moving">Moving around</H2>
+      <UL>
+        <LI>Drag a card to move it; Shift-click to select several and drag them together.</LI>
+        <LI>Drag the square in a selected card&rsquo;s corner to resize it.</LI>
+        <LI>
+          Drag the dot on a selected card&rsquo;s right edge onto another card to draw an arrow.
+          Click an arrow to select it.
+        </LI>
+        <LI>
+          Drag the background to move the board. Scroll to pan; pinch, or ⌘/Ctrl-scroll, to zoom.{" "}
+          <strong>Fit</strong> shows everything.
+        </LI>
+      </UL>
+
+      <H2 id="file">The file</H2>
+      <P>
+        Every change is saved a moment later. The file is{" "}
+        <A href="https://jsoncanvas.org">JSON Canvas</A>, the open format Obsidian uses, so a board
+        made here opens there and the other way round, and fields another app wrote are kept. A file
+        that is not a canvas is never opened as an empty board, so it cannot be overwritten by
+        accident.
       </P>
     </>
   );

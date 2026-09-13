@@ -7,7 +7,14 @@
   "permissions": ["contextMenus", "activeTab", "scripting", "storage"],
   "background": {
     "service_worker": "src/background.js",
+    "scripts": ["src/background.js"],
     "type": "module"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "save@forkleaf.app",
+      "strict_min_version": "121.0"
+    }
   },
   "action": {
     "default_title": "Save this page to ForkLeaf",

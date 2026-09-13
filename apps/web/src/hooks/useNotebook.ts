@@ -1751,6 +1751,19 @@ export function useNotebook(request: NotebookRequest = {}) {
     [state.activeWorkspace, state.tree, patch, patchOpenNote],
   );
 
+  /**
+   * Writes a whole file that is not a note — a canvas — exactly as given,
+   * creating it, and showing it in the sidebar, if it is new. False when no
+   * notebook is open, or the file is locked on this device.
+   */
+  const writeFile = useCallback(
+    async (path: string, text: string): Promise<boolean> => {
+      if (isLocked(path)) return false;
+      return (await upsertNote(path, () => text)) !== null;
+    },
+    [isLocked, upsertNote],
+  );
+
   /** Reads a file in the notebook, or null when there is not one. */
   const readNote = useCallback(
     async (path: string): Promise<string | null> => {
@@ -2259,6 +2272,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       restoreNote,
       setNoteProperties,
       writeDocument,
+      writeFile,
       importDocuments,
       saveDocumentText,
       documentText,
@@ -2331,6 +2345,7 @@ export function useNotebook(request: NotebookRequest = {}) {
       restoreNote,
       setNoteProperties,
       writeDocument,
+      writeFile,
       importDocuments,
       shrinkChange,
       setSyncMode,

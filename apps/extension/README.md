@@ -22,6 +22,19 @@ text you had selected. Nothing else is read.
    It defaults to `https://forkleaf.vercel.app`; for a local copy use
    `http://localhost:3000`.
 
+## Install (Firefox)
+
+1. Open `about:debugging#/runtime/this-firefox` and press **Load Temporary
+   Add-on…**.
+2. Choose `apps/extension/manifest.json`.
+3. Set your ForkLeaf address in the extension's **Preferences** if it is not
+   `https://forkleaf.vercel.app`.
+
+Firefox removes temporary add-ons when it restarts; load it again, or install a
+signed copy once one is published. The same folder works in both browsers:
+Chrome runs `background.service_worker`, Firefox (121 and later) runs
+`background.scripts`, and each ignores the other.
+
 ## Use
 
 - **Save the page:** press the toolbar button, or **Alt+Shift+S**. With text

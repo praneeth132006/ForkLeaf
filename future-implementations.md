@@ -29,18 +29,18 @@ When something on this list ships, tick it, add the date, and describe it in
 
 ### Thinking with your notes
 
-- [ ] **Ask your notebook.** Ask a question and get an answer written from your
+- [x] **Ask your notebook.** _(done 2026-09-13)_ Ask a question and get an answer written from your
       own notes, with every sentence linked to the lines it came from.
-- [ ] **Daily resurfacing.** Each morning, one older note or highlight related to
+- [x] **Daily resurfacing.** _(done 2026-09-13)_ Each morning, one older note or highlight related to
       what you are writing now.
-- [ ] **Stale-note alerts.** A weekly list of notes that point at code or files
+- [x] **Stale-note alerts.** _(done 2026-09-13)_ A weekly list of notes that point at code or files
       that have changed since the note was written.
 
 ### Capturing
 
 - [ ] **Highlights on any web page.** Highlight text with the extension; it is
       kept in a note for that page, and shown again when you come back to it.
-- [ ] **Meeting mode.** Record, transcribe, and pull the decisions and to-dos out
+- [x] **Meeting mode.** _(done 2026-09-13)_ Record, transcribe, and pull the decisions and to-dos out
       of the transcript into the note.
 - [ ] **Email to notebook.** Forward an email to a personal address and it arrives
       in your saves repository.
@@ -53,7 +53,7 @@ When something on this list ships, tick it, add the date, and describe it in
       graph, from your own repository.
 - [ ] **Shared notebooks with review.** A friend's edit arrives as a suggestion
       you accept, like a pull request, instead of overwriting the note.
-- [ ] **Canvas.** Place notes, pictures and PDFs freely on a board, saved as a
+- [x] **Canvas.** _(done 2026-09-13)_ Place notes, pictures and PDFs freely on a board, saved as a
       plain file in the repository.
 
 ### Distribution
@@ -61,6 +61,7 @@ When something on this list ships, tick it, add the date, and describe it in
 - [ ] **Chrome Web Store listing** for Save to ForkLeaf, so it installs in one
       click instead of from a copy of the repository. Needs a developer account
       and a store review.
-- [ ] **Firefox and Safari** versions of the extension.
+- [x] **Firefox** version of the extension _(done 2026-09-13)_.
+- [ ] **Safari** version of the extension (needs Xcode to convert and sign).
 - [ ] **`npx @forkleaf/mcp`** on npm, for people who want the local server
       without cloning the repository.

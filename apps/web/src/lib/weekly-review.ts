@@ -29,6 +29,59 @@ export interface WeekTask {
   due: string;
 }
 
+/** A note the notebook check flagged, and what it needs. */
+export interface StaleEntry {
+  path: string;
+  title: string;
+  reason: string;
+}
+
+/** The parts of a notebook-check finding the review reads. */
+export interface StaleFinding {
+  path: string;
+  title: string;
+  verdict: string;
+  reasons: string[];
+  missingFiles: string[];
+  missingLinks: string[];
+}
+
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
+/**
+ * What the notebook check found, as one line per note.
+ *
+ * Broken references are said plainly — they are facts. A note that has only
+ * aged is included when the check thinks it is likely out of date, with the
+ * check's own first reason, and left out when it is merely worth a glance: a
+ * weekly list that grows every week is a list nobody reads.
+ */
+export function staleEntries(findings: readonly StaleFinding[]): StaleEntry[] {
+  return findings.flatMap((finding) => {
+    const parts: string[] = [];
+    if (finding.missingFiles.length > 0) {
+      parts.push(
+        `points at ${plural(finding.missingFiles.length, "missing file", "missing files")}`,
+      );
+    }
+    if (finding.missingLinks.length > 0) {
+      parts.push(
+        plural(
+          finding.missingLinks.length,
+          "link to a note that does not exist",
+          "links to notes that do not exist",
+        ),
+      );
+    }
+    if (parts.length === 0 && finding.verdict === "likely-stale") {
+      parts.push(finding.reasons[0]?.replace(/\.$/, "") ?? "may be out of date");
+    }
+    return parts.length > 0
+      ? [{ path: finding.path, title: finding.title, reason: parts.join("; ") }]
+      : [];
+  });
+}
+
 export interface WeekSummary {
   year: number;
   week: number;
@@ -43,6 +96,8 @@ export interface WeekSummary {
   words: number;
   overdue: WeekTask[];
   comingUp: WeekTask[];
+  /** Notes the notebook check flagged, broken references first. */
+  stale: StaleEntry[];
 }
 
 /** ISO 8601 week: weeks start on Monday, week 1 holds the year's first Thursday. */
@@ -85,6 +140,7 @@ export function summariseWeek(
   notes: readonly WeekSource[],
   now: Date,
   deleted: readonly string[] = [],
+  stale: readonly StaleEntry[] = [],
 ): WeekSummary {
   const { year, week, monday } = isoWeek(now);
   const start = dateStamp(monday);
@@ -129,6 +185,7 @@ export function summariseWeek(
     words: created.reduce((sum, note) => sum + countWords(note.content), 0),
     overdue: overdue.sort(byDue),
     comingUp: comingUp.sort(byDue),
+    stale: stale.slice(0, 8),
   };
 }
 
@@ -192,6 +249,12 @@ export function formatWeeklyReview(summary: WeekSummary): string {
     "Coming up",
     summary.comingUp.map((task) => `- ${task.text} — ${link(task.path, task.title)}`),
   );
+  if (summary.stale.length > 0) {
+    section(
+      "Worth a look",
+      summary.stale.map((entry) => `- ${link(entry.path, entry.title)} — ${entry.reason}`),
+    );
+  }
   lines.push("## Looking back", "", "");
 
   return lines.join("\n");

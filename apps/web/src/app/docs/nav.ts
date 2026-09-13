@@ -106,7 +106,31 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         slug: "flashcards",
         title: "Flashcards",
-        summary: "Question :: Answer on one line, reviewed with spaced repetition.",
+        summary:
+          "Question :: Answer cards, both-way cards, multi-line cards and fill-in-the-blanks, with spaced repetition.",
+      },
+      {
+        slug: "canvases",
+        title: "Canvases",
+        summary:
+          "Cards, notes and links placed freely and joined with arrows, saved as JSON Canvas.",
+      },
+      {
+        slug: "ask",
+        title: "Ask your notebook",
+        summary:
+          "Questions answered with passages quoted from your own notes, and where each came from.",
+      },
+      {
+        slug: "meetings",
+        title: "Meeting notes",
+        summary:
+          "Decisions, action items and open questions, gathered from what was written or said.",
+      },
+      {
+        slug: "resurfacing",
+        title: "Worth revisiting",
+        summary: "A few older notes each day, chosen for what you are working on.",
       },
       {
         slug: "views",
