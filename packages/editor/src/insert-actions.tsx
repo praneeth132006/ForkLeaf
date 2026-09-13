@@ -216,6 +216,17 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     markdown: { text: "```deck\n```\n" },
   },
   {
+    id: "hands-free",
+    keywords: ["voice", "listen", "audio", "speak", "aloud", "walking", "flashcards", "review"],
+    label: "Hands-free review",
+    hint: "This note's cards read aloud and answered by voice",
+    icon: (
+      <Glyph d="M8 2.25a2 2 0 0 1 2 2v3.5a2 2 0 0 1-4 0v-3.5a2 2 0 0 1 2-2zM4.25 7.5a3.75 3.75 0 0 0 7.5 0M8 11.25v2.5" />
+    ),
+    rich: (editor) => editor.chain().focus().insertHandsFree().run(),
+    markdown: { text: "```hands-free\n```\n" },
+  },
+  {
     id: "h1",
     keywords: ["title", "big", "heading"],
     label: "Heading 1",

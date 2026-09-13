@@ -5,6 +5,12 @@ full record.
 
 ## Unreleased
 
+### Hands-free review
+
+`/` → **Hands-free review** reads a note's cards aloud, listens for the answer,
+says the right one when it was missed, and grades each card — with "repeat",
+"skip", "I don't know" and "stop" by voice — for studying while walking.
+
 ### Decks you can fork
 
 `/` → **Shared deck** shares a note's cards as a public GitHub repository

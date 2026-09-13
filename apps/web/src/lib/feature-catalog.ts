@@ -175,6 +175,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "hands-free",
+        title: "Hands-free review",
+        summary:
+          "A note's cards read aloud and answered by voice, each graded on its schedule — for studying while walking.",
+        how: "/ → Hands-free review",
+        tags: ["new"],
+      },
+      {
         id: "shared-decks",
         title: "Decks you can fork",
         summary:

@@ -76,6 +76,7 @@ import { CanvasBlock, type CanvasBridge } from "./extensions/CanvasBlock";
 import { ReadingBlock, type ReadingBridge } from "./extensions/ReadingBlock";
 import { CourseBlock, type CourseBridge } from "./extensions/CourseBlock";
 import { DeckBlock, type DeckBridge } from "./extensions/DeckBlock";
+import { HandsFreeBlock, browserSpeech, type SpeechKit } from "./extensions/HandsFreeBlock";
 import { Wikilink } from "./extensions/Wikilink";
 import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 import { ShortcutsAfterLineBreak } from "./extensions/ShortcutsAfterLineBreak";
@@ -121,6 +122,8 @@ export interface WysiwygEditorProps {
   course?: CourseBridge;
   /** Sharing this note's cards as a deck, and copying decks others shared. */
   deck?: DeckBridge;
+  /** Speaking and listening for hands-free review; the browser's own by default. */
+  speech?: () => SpeechKit | null;
   /**
    * Makes the note readable but not writable.
    *
@@ -157,6 +160,7 @@ export function WysiwygEditor({
   reading,
   course,
   deck,
+  speech,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -180,6 +184,8 @@ export function WysiwygEditor({
   courseRef.current = course;
   const deckRef = useRef<DeckBridge | undefined>(deck);
   deckRef.current = deck;
+  const speechRef = useRef(speech);
+  speechRef.current = speech;
 
   /**
    * Images waiting to hear that the resolver knows something new.
@@ -282,6 +288,9 @@ export function WysiwygEditor({
       ReadingBlock.configure({ bridge: () => readingRef.current }),
       CourseBlock.configure({ bridge: () => courseRef.current }),
       DeckBlock.configure({ bridge: () => deckRef.current }),
+      HandsFreeBlock.configure({
+        speech: () => (speechRef.current ? speechRef.current() : browserSpeech()),
+      }),
       // Read through the ref, not captured: the extension list is built once,
       // and the bridge arrives a render later once the workspace resolves.
       Wikilink.configure({ bridge: () => linksRef.current }),

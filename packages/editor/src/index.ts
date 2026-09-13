@@ -57,6 +57,8 @@ export {
   type CourseQuestion,
 } from "./extensions/CourseBlock";
 export { DeckBlock, type DeckBridge } from "./extensions/DeckBlock";
+export { HandsFreeBlock, browserSpeech, type SpeechKit } from "./extensions/HandsFreeBlock";
+export { judgeAnswer, commandOf, type Verdict, type VoiceCommand } from "./hands-free";
 export {
   CanvasBoard,
   readUrl,

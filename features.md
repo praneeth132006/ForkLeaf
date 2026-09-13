@@ -113,6 +113,17 @@ otherwise it starts with the date, a to-do list and a notes section.
   come first and are marked.
 - To-dos inside code blocks and in `templates/` are ignored.
 
+### Hands-free review
+
+`/` → **Hands-free review** puts a block in the note. Press **Start** and every
+card in the note is read aloud — due and new ones first. Answer out loud: a
+right answer is confirmed, a missed one is read out, and each card is graded on
+its schedule. Say **repeat**, **skip**, **I don't know** or **stop** at any
+question; it stops by itself after hearing nothing a few times. Answers are
+judged on their words, so "it's water" counts for `Water` and "six" for `6`.
+Needs a browser that can both speak and listen (Chrome, Edge, Safari), which may
+send what you say to its speech service. Nothing said is kept.
+
 ### Decks you can fork
 
 `/` → **Shared deck** puts a deck block in the note.
