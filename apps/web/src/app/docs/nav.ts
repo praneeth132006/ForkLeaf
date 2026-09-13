@@ -113,6 +113,23 @@ export const DOC_SECTIONS: DocSection[] = [
     ],
   },
   {
+    title: "Connect",
+    pages: [
+      {
+        slug: "browser-extension",
+        title: "Browser extension",
+        summary:
+          "Install Save to ForkLeaf in Chrome, Edge, Brave or Arc, and save pages, quotes, links and pictures with one click.",
+      },
+      {
+        slug: "mcp",
+        title: "Connect an AI assistant (MCP)",
+        summary:
+          "Let Claude Code, Claude Desktop, Cursor or any MCP client search, read and write your notebook — step by step.",
+      },
+    ],
+  },
+  {
     title: "Account",
     pages: [
       {
