@@ -153,22 +153,49 @@ export function Flashcards() {
   return (
     <>
       <Lead>
-        Write a card as one line in any note, and ForkLeaf shows it again just before you would
-        forget it.
+        Write a card in any note, and ForkLeaf shows it again just before you would forget it.
       </Lead>
 
       <H2 id="write">Writing cards</H2>
       <P>
-        Type <Code>/flashcard</Code>, or write a line with <Code>::</Code> between the question and
-        the answer:
+        Type <Code>/flashcard</Code>, or write any of these. They work in Rich, Split and Source
+        view, and they are the same spellings Obsidian&rsquo;s spaced-repetition plugin reads.
       </P>
-      <Pre label="in any note">{`Capital of Portugal :: Lisbon
-- Mitochondria :: the powerhouse of the cell`}</Pre>
+      <Table
+        head={["Write", "You get"]}
+        rows={[
+          [<Code key="1">Capital of Portugal :: Lisbon</Code>, "A card: question, then answer"],
+          [
+            <Code key="2">What is H2O?::Water</Code>,
+            "The same, without spaces — when the question has several words or a question mark",
+          ],
+          [<Code key="3">Hola ::: Hello</Code>, "Two cards, one each way"],
+          [
+            <Code key="4">Lisbon is the capital of ==Portugal==</Code>,
+            "A fill-in-the-blank card for each highlight, in notes tagged flashcards",
+          ],
+        ]}
+      />
+      <H3>A card over several lines</H3>
       <P>
-        Lines in code blocks, tables, headings and inline code are never cards, so{" "}
-        <Code>std :: vector</Code> is safe. It is the same spelling Obsidian&rsquo;s
-        spaced-repetition plugin reads.
+        Put the question, then a line holding only <Code>?</Code>, then the answer, with no blank
+        lines between them. Use <Code>??</Code> for a card each way.
       </P>
+      <Pre label="in your note">{`What are the primary colours?
+?
+red
+yellow
+blue`}</Pre>
+      <P>
+        Formatting, links and escaped characters show as plain words on the card, so{" "}
+        <Code>2 * 3 :: 6</Code> reads as written. Lines in code blocks, tables and headings are
+        never cards, and <Code>std::vector</Code> is safe. A card written twice is asked once.
+      </P>
+      <Note>
+        Highlights become blanks only in notes tagged <Code>flashcards</Code> — in the Tags field,
+        or with <Code>#flashcards</Code> in the text — so highlighting for emphasis elsewhere makes
+        no cards.
+      </Note>
 
       <H2 id="review">Reviewing</H2>
       <OL>

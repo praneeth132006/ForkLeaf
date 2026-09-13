@@ -115,16 +115,31 @@ otherwise it starts with the date, a to-do list and a notes section.
 
 ### Flashcards
 
-Write a card as one line in any note:
+Write a card in any note (or type `/flashcard`):
 
 ```markdown
 Capital of Portugal :: Lisbon
+What is H2O?::Water
+Hola ::: Hello
 
-- Mitochondria :: the powerhouse of the cell
+What are the primary colours?
+?
+red, yellow and blue
 ```
 
-⌘K → **Review flashcards** shows the cards due today, then new ones (up to 20
-a session).
+- `::` makes a card. Without spaces it still works when the question has several
+  words or ends in `?`, so `std::vector` never becomes a card.
+- `:::` makes two cards, one each way; `??` on its own line does the same for a
+  card over several lines.
+- A line holding only `?` splits a card over several lines: the question above,
+  the answer below, with no blank line in between.
+- In a note tagged `flashcards` (Tags field, or `#flashcards` in the text), each
+  `==highlight==` becomes a fill-in-the-blank card.
+- Formatting, links and the escapes the rich editor writes (`2 \* 3`) show as
+  plain words on the card. A card written twice is asked once.
+
+⌘K or `/` → **Review flashcards** shows the cards due today, then new ones (up
+to 20 a session).
 
 1. Read the question, press **Show answer** (or **Space**).
 2. Grade it: **Again**, **Hard**, **Good** or **Easy** (or **1**–**4**). Each
@@ -133,8 +148,7 @@ a session).
 
 The schedule is kept in `reviews/flashcards.md`, a table with one row per card,
 so it syncs to every device. Delete a row to start that card over. Lines in
-code blocks, tables, headings and inline code are never cards, so `std :: vector`
-is safe. Same spelling as Obsidian's spaced-repetition plugin.
+code blocks, tables and headings are never cards.
 
 ### Save from anywhere
 

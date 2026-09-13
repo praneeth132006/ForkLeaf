@@ -179,8 +179,10 @@ export function FlashcardsDialog({
           <div className="leading-relaxed text-[var(--fl-muted)]">
             <p>There are no flashcards in your notes yet.</p>
             <p className="mt-2">
-              Write a line like <code>Capital of Portugal :: Lisbon</code> in any note. Every line
-              with <code>::</code> between a question and its answer becomes a card.
+              Write a line like <code>Capital of Portugal :: Lisbon</code> in any note, or type{" "}
+              <code>/flashcard</code>. Every line with <code>::</code> between a question and its
+              answer becomes a card; <code>:::</code> makes one each way, and a line holding only{" "}
+              <code>?</code> splits a card over several lines.
             </p>
           </div>
         )}
@@ -204,7 +206,13 @@ export function FlashcardsDialog({
           <>
             <p className="text-[11.5px] text-[var(--fl-muted)]">
               {queue.length} left · {reviewed} reviewed ·{" "}
-              {schedule.has(card.id) ? "review" : "new card"} · from{" "}
+              {schedule.has(card.id) ? "review" : "new card"}
+              {card.kind === "cloze"
+                ? " · fill in the blank"
+                : card.kind === "reversed"
+                  ? " · reversed"
+                  : ""}{" "}
+              · from{" "}
               <button
                 type="button"
                 onClick={() => onOpenNote(card.path)}
@@ -215,11 +223,13 @@ export function FlashcardsDialog({
             </p>
 
             <div className="rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-6 text-center">
-              <p className="text-[17px] font-medium text-[var(--fl-text)]">{card.question}</p>
+              <p className="whitespace-pre-line text-[17px] font-medium text-[var(--fl-text)]">
+                {card.question}
+              </p>
               {revealed && (
                 <p
                   aria-live="polite"
-                  className="mt-4 border-t border-[var(--fl-border)] pt-4 text-[16px] text-[var(--fl-text)]"
+                  className="mt-4 whitespace-pre-line border-t border-[var(--fl-border)] pt-4 text-[16px] text-[var(--fl-text)]"
                 >
                   {card.answer}
                 </p>

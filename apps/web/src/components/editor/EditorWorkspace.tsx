@@ -73,7 +73,7 @@ import { DeletedNotesDialog } from "@/components/DeletedNotesDialog";
 import { GraphDialog } from "@/components/GraphDialog";
 import { FolderViewsDialog, type FolderView } from "@/components/FolderViewsDialog";
 import { FlashcardsDialog } from "@/components/FlashcardsDialog";
-import { SCHEDULE_PATH, findCards } from "@/lib/flashcards";
+import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
 import {
   formatWeeklyReview,
   isoWeek,
@@ -4307,6 +4307,7 @@ export function EditorWorkspace() {
                   entry.path,
                   deriveTitle(entry.content, entry.frontmatter.title, entry.path),
                   entry.content,
+                  { clozes: wantsClozes(entry.frontmatter, entry.content) },
                 ),
               )
           }
