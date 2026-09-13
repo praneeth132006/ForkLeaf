@@ -74,6 +74,7 @@ import { MermaidBlock } from "./extensions/MermaidBlock";
 import { FlashcardBlock, type FlashcardBridge } from "./extensions/FlashcardBlock";
 import { CanvasBlock, type CanvasBridge } from "./extensions/CanvasBlock";
 import { ReadingBlock, type ReadingBridge } from "./extensions/ReadingBlock";
+import { CourseBlock, type CourseBridge } from "./extensions/CourseBlock";
 import { Wikilink } from "./extensions/Wikilink";
 import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 import { ShortcutsAfterLineBreak } from "./extensions/ShortcutsAfterLineBreak";
@@ -115,6 +116,8 @@ export interface WysiwygEditorProps {
   canvas?: CanvasBridge;
   /** Today's highlights to reread, for a spaced-reading block in the note. */
   reading?: ReadingBridge;
+  /** A folder's notes as lessons, for a course block in the note. */
+  course?: CourseBridge;
   /**
    * Makes the note readable but not writable.
    *
@@ -149,6 +152,7 @@ export function WysiwygEditor({
   flashcards,
   canvas,
   reading,
+  course,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -168,6 +172,8 @@ export function WysiwygEditor({
   canvasRef.current = canvas;
   const readingRef = useRef<ReadingBridge | undefined>(reading);
   readingRef.current = reading;
+  const courseRef = useRef<CourseBridge | undefined>(course);
+  courseRef.current = course;
 
   /**
    * Images waiting to hear that the resolver knows something new.
@@ -268,6 +274,7 @@ export function WysiwygEditor({
       FlashcardBlock.configure({ bridge: () => flashcardsRef.current }),
       CanvasBlock.configure({ bridge: () => canvasRef.current }),
       ReadingBlock.configure({ bridge: () => readingRef.current }),
+      CourseBlock.configure({ bridge: () => courseRef.current }),
       // Read through the ref, not captured: the extension list is built once,
       // and the bridge arrives a render later once the workspace resolves.
       Wikilink.configure({ bridge: () => linksRef.current }),

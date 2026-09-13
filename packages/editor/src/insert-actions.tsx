@@ -198,6 +198,15 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     markdown: { text: "```reading\n```\n" },
   },
   {
+    id: "course",
+    keywords: ["lessons", "curriculum", "syllabus", "learn", "study", "quiz", "progress", "folder"],
+    label: "Course from a folder",
+    hint: "A folder's notes as ordered lessons, with progress and a quiz",
+    icon: <Glyph d="M2.5 3.5h11v9h-11zM5 6.5h6M5 9h4" />,
+    rich: (editor) => editor.chain().focus().insertCourse().run(),
+    markdown: { text: "```course\nfolder: \n```\n", cursor: 18 },
+  },
+  {
     id: "h1",
     keywords: ["title", "big", "heading"],
     label: "Heading 1",

@@ -44,8 +44,9 @@ When something on this list ships, tick it, add the date, and describe it in
 - [x] **Spaced reading.** _(done 2026-09-13)_ Highlights from PDFs and saved web
       pages come back on the flashcard schedule, like Readwise but in your own
       repository.
-- [ ] **Folder to course.** Turn a folder into an ordered course based on how its
-      notes link, with progress tracking, cards per lesson and a quiz at the end.
+- [x] **Folder to course.** _(done 2026-09-13)_ Turn a folder into an ordered
+      course based on how its notes link, with progress tracking, cards per
+      lesson and a quiz at the end.
 - [ ] **Decks you can fork.** Share a deck as a public GitHub repository. Others
       copy it, keep their progress private, and pull in your updates.
 - [ ] **Hands-free review.** Cards read aloud and answered by voice, for studying

@@ -13,6 +13,7 @@ import dynamic from "next/dynamic";
 import type { CanvasBridge, CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
 import { useInlineFlashcards } from "@/lib/inline-flashcards";
 import { useSpacedReading } from "@/lib/spaced-reading";
+import { useCourseBridge } from "@/lib/course-bridge";
 import { displayTitle, parseCitation, type PdfCitation } from "@forkleaf/pdf";
 import type { EditorViewMode, Note, Workspace } from "@forkleaf/types";
 import {
@@ -1460,6 +1461,30 @@ export function EditorWorkspace() {
     [workspace, allNotesForCanvas, readNoteForReading, upsertNoteForReading, openNoteForCanvas],
   );
   const readingBridge = useSpacedReading(readingStore);
+
+  /** A course block turns a folder's notes into ordered lessons with a quiz. */
+  const treeForCourse = notebook.tree;
+  const courseStore = useMemo(
+    () =>
+      workspace
+        ? {
+            folders: () =>
+              collectFolders(treeForCourse).filter((path) => !isTemplatePath(`${path}/`)),
+            allNotes: async () =>
+              (await allNotesForCanvas())
+                .filter((entry) => isMarkdown(entry.path))
+                .map((entry) => ({
+                  path: entry.path,
+                  title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+                  content: entry.content,
+                })),
+            openNote: openNoteForCanvas,
+            currentFolder: () => currentFolder || null,
+          }
+        : null,
+    [workspace, treeForCourse, allNotesForCanvas, openNoteForCanvas, currentFolder],
+  );
+  const courseBridge = useCourseBridge(courseStore);
 
   const linkBridge = useMemo<LinkBridge>(
     () => ({
@@ -4075,6 +4100,7 @@ export function EditorWorkspace() {
                   links={linkBridge}
                   canvas={canvasBridge}
                   {...(readingBridge ? { reading: readingBridge } : {})}
+                  {...(courseBridge ? { course: courseBridge } : {})}
                   {...(flashcardBridge ? { flashcards: flashcardBridge } : {})}
                   imageDestination={
                     workspace && !workspace.isLocal

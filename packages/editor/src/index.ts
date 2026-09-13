@@ -50,6 +50,13 @@ export {
   type ReadingPassage,
 } from "./extensions/ReadingBlock";
 export {
+  CourseBlock,
+  type CourseBridge,
+  type CourseData,
+  type CourseLesson,
+  type CourseQuestion,
+} from "./extensions/CourseBlock";
+export {
   CanvasBoard,
   readUrl,
   type CanvasBoardProps,

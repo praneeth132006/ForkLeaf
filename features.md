@@ -113,6 +113,18 @@ otherwise it starts with the date, a to-do list and a notes section.
   come first and are marked.
 - To-dos inside code blocks and in `templates/` are ignored.
 
+### A folder as a course
+
+`/` → **Course from a folder** puts a course block in the note. Pick a folder
+(or press **Make a course of** the note's own folder) and its notes become
+lessons, in the order they build on one another: a note comes after the notes
+it links to, a folder's `index.md` / `README.md` / `Overview.md` comes first and
+its links set the order, and circles of links are broken sensibly. Each lesson
+shows what it builds on and how many flashcards it holds; tick a lesson off and
+the progress bar and **Next** move on. **Take the quiz** asks up to ten cards
+drawn from every lesson in turn, answered in place, with a score at the end. The
+note stores a ` ```course ` block with the folder and the lessons done.
+
 ### Spaced reading
 
 `/` → **Spaced reading** puts a block in the note — today's note is a good home

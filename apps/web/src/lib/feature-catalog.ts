@@ -175,6 +175,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "course",
+        title: "A folder as a course",
+        summary:
+          "A folder's notes as lessons ordered by how they link, with progress, cards per lesson and a quiz at the end — in the note.",
+        how: "/ → Course from a folder",
+        tags: ["new"],
+      },
+      {
         id: "spaced-reading",
         title: "Spaced reading",
         summary:

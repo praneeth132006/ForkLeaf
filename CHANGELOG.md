@@ -5,6 +5,14 @@ full record.
 
 ## Unreleased
 
+### A folder as a course
+
+`/` → **Course from a folder** turns a folder's notes into lessons ordered by how
+they link, with an index note first, ticks for what is done, a progress bar and
+the next lesson, flashcards counted per lesson, and a quiz at the end drawn from
+all of them — in the note, with progress kept in the note's ` ```course `
+block.
+
 ### The editor no longer slides sideways in a narrow column
 
 With both side panels open, a wide window still leaves a narrow column for the

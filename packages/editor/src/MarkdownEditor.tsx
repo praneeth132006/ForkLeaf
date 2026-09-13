@@ -23,6 +23,7 @@ import type { LinkBridge } from "./links";
 import type { FlashcardBridge } from "./extensions/FlashcardBlock";
 import type { CanvasBridge } from "./extensions/CanvasBlock";
 import type { ReadingBridge } from "./extensions/ReadingBlock";
+import type { CourseBridge } from "./extensions/CourseBlock";
 
 export interface MarkdownEditorProps {
   /**
@@ -83,6 +84,8 @@ export interface MarkdownEditorProps {
   canvas?: CanvasBridge;
   /** Today's highlights to reread, for a spaced-reading block in the note. */
   reading?: ReadingBridge;
+  /** A folder's notes as lessons, for a course block in the note. */
+  course?: CourseBridge;
   /**
    * Makes the note readable but not writable, in every mode at once.
    *
@@ -133,6 +136,7 @@ export function MarkdownEditor({
   flashcards,
   canvas,
   reading,
+  course,
   readOnly = false,
 }: MarkdownEditorProps) {
   // Split view: the divider position, as a percentage of the container width.
@@ -446,6 +450,7 @@ export function MarkdownEditor({
             {...(flashcards ? { flashcards } : {})}
             {...(canvas ? { canvas } : {})}
             {...(reading ? { reading } : {})}
+            {...(course ? { course } : {})}
             {...(placeholder ? { placeholder } : {})}
             // A wide bottom pad so the last paragraph can be scrolled to the
             // middle of the screen instead of being pinned to the bottom edge.
