@@ -55,9 +55,13 @@ describe("filterSlashItems", () => {
     expect(
       filterSlashItems("flash", "rich", extras)
         .map((item) => item.id)
-        .slice(0, 2),
-    ).toEqual(["tool:flashcard", "tool:flashcards"]);
-    expect(filterSlashItems("anki", "rich", extras)[0]!.id).toBe("tool:flashcard");
+        .slice(0, 3),
+    ).toEqual(["flashcard", "tool:flashcard", "tool:flashcards"]);
+    // The built-in card comes first: it is drawn as a card in the note.
+    expect(filterSlashItems("anki", "rich", extras)[0]!.id).toBe("flashcard");
+    expect(filterSlashItems("anki", "rich", extras).map((item) => item.id)).toContain(
+      "tool:flashcard",
+    );
     expect(filterSlashItems("study", "rich", extras).map((item) => item.id)).toEqual(
       expect.arrayContaining(["tool:flashcard", "tool:flashcards"]),
     );

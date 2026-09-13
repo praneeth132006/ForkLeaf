@@ -819,6 +819,45 @@ mark.fl-hl-orange {
   border: 0;
 }
 
+/* A `Question :: Answer` line in a rendered note: the question, and the answer
+   behind a click. The rich editor draws the same line as a card it can grade. */
+.fl-flashcard {
+  margin: 0.75rem 0;
+  border: 1px solid var(--fl-border);
+  border-radius: 12px;
+  background: var(--fl-surface);
+  padding: 0.75rem 1rem;
+}
+
+.fl-flashcard > summary {
+  cursor: pointer;
+  font-weight: 500;
+  list-style: none;
+}
+
+.fl-flashcard > summary::-webkit-details-marker {
+  display: none;
+}
+
+.fl-flashcard > summary::after {
+  content: "Show answer";
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fl-muted);
+}
+
+.fl-flashcard[open] > summary::after {
+  content: none;
+}
+
+.fl-flashcard > p {
+  margin: 0.5rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--fl-border);
+}
+
 .fl-diagram,
 .fl-diagram-preview {
   margin: 1.5rem 0;

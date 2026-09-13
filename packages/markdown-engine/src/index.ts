@@ -161,3 +161,7 @@ export {
   type PerishableKind,
   type PerishableMention,
 } from "./decay";
+
+export * from "./canvas";
+
+export { cardSeparator, parseCardLine, type CardLine } from "./flashcard-line";

@@ -68,9 +68,11 @@ import {
   HIGHLIGHT_COLOURS,
   DEFAULT_HIGHLIGHT,
 } from "./extensions/ColouredHighlight";
-import { TextSelection } from "@tiptap/pm/state";
+import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { imagesFrom, type ImageBridge } from "./images";
 import { MermaidBlock } from "./extensions/MermaidBlock";
+import { FlashcardBlock, type FlashcardBridge } from "./extensions/FlashcardBlock";
+import { CanvasBlock, type CanvasBridge } from "./extensions/CanvasBlock";
 import { Wikilink } from "./extensions/Wikilink";
 import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 import { ShortcutsAfterLineBreak } from "./extensions/ShortcutsAfterLineBreak";
@@ -106,6 +108,10 @@ export interface WysiwygEditorProps {
   slashActions?: ActionContext;
   /** How `[[wikilinks]]` resolve, and what ⌘-clicking one does. */
   links?: LinkBridge;
+  /** How a flashcard in the note learns its schedule, and is graded in place. */
+  flashcards?: FlashcardBridge;
+  /** The notes a canvas in the note can place, and how it opens one. */
+  canvas?: CanvasBridge;
   /**
    * Makes the note readable but not writable.
    *
@@ -137,6 +143,8 @@ export function WysiwygEditor({
   slashActions,
   editable = true,
   links,
+  flashcards,
+  canvas,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -150,6 +158,10 @@ export function WysiwygEditor({
   onImageStatusRef.current = onImageStatus;
   const linksRef = useRef<LinkBridge | undefined>(links);
   linksRef.current = links;
+  const flashcardsRef = useRef<FlashcardBridge | undefined>(flashcards);
+  flashcardsRef.current = flashcards;
+  const canvasRef = useRef<CanvasBridge | undefined>(canvas);
+  canvasRef.current = canvas;
 
   /**
    * Images waiting to hear that the resolver knows something new.
@@ -245,6 +257,10 @@ export function WysiwygEditor({
       CodeBlock,
       MermaidBlock,
       YoutubeEmbed,
+      // Cards and boards drawn where they were written, rather than left as the
+      // text they are stored as or opened in a window of their own.
+      FlashcardBlock.configure({ bridge: () => flashcardsRef.current }),
+      CanvasBlock.configure({ bridge: () => canvasRef.current }),
       // Read through the ref, not captured: the extension list is built once,
       // and the bridge arrives a render later once the workspace resolves.
       Wikilink.configure({ bridge: () => linksRef.current }),
@@ -571,8 +587,12 @@ export function WysiwygEditor({
         // Only for real text selections. Without this the formatting toolbar
         // also pops up over a selected diagram or image, where none of the
         // buttons do anything.
+        // Text only. A diagram, a card or a board selected as a whole has no
+        // words to make bold, and the bar sat on top of the card's own buttons.
         shouldShow={({ editor: instance, from, to }) =>
-          from !== to && !instance.state.selection.empty && !instance.isActive("mermaidBlock")
+          from !== to &&
+          !instance.state.selection.empty &&
+          !(instance.state.selection instanceof NodeSelection)
         }
         className="flex items-center gap-0.5 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-inverse-bg)] p-1 shadow-lg"
       >

@@ -65,7 +65,7 @@ describe("CanvasDialog", () => {
     const { props } = open();
     const card = (await screen.findByText("First idea")).closest("[data-node-id]")!;
     fireEvent.pointerDown(card);
-    fireEvent.keyDown(window, { key: "Delete" });
+    fireEvent.keyDown(card, { key: "Delete" });
 
     await waitFor(() => expect(props.save).toHaveBeenCalled(), { timeout: 2000 });
     const saved = lastSaved(props.save);
@@ -142,7 +142,7 @@ describe("CanvasDialog", () => {
 
     fireEvent.pointerDown(card);
     expect(edit.disabled).toBe(false);
-    fireEvent.keyDown(window, { key: "Enter" });
+    fireEvent.keyDown(card, { key: "Enter" });
     expect(await screen.findByLabelText("Card text")).toBeTruthy();
   });
 

@@ -5,6 +5,23 @@ full record.
 
 ## Unreleased
 
+### Flashcards and canvases where you write them
+
+A `Question :: Answer` line stayed a line of text, with nothing to say it was a
+card or how to study it. It now turns into a card the moment Enter is pressed —
+and every such line is drawn as one when a note opens. Click to turn it over,
+grade it in place, and it says when it is next due; the grade goes into the same
+`reviews/flashcards.md` the review session uses. **Edit** changes it in place.
+The file keeps the plain line. The preview draws the same lines as cards that
+open to their answer. `Use std::vector here` is no longer read as a card.
+
+A canvas made from `/` opened in a window over the note and left nothing on the
+page, so a diagram you drew could not be seen where you were writing. `/` →
+**Canvas** now draws the board in the note itself, stored as a ` ```canvas `
+block of JSON Canvas. A board's Delete and Enter keys only act while the board
+has focus, so they no longer take Backspace from the paragraph below.
+`.canvas` files still open on their own.
+
 ### A flashcards home you can start from
 
 Flashcards opened straight into a review with no explanation, so there was no

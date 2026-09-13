@@ -10,7 +10,8 @@ import React, {
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import type { CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
+import type { CanvasBridge, CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
+import { useInlineFlashcards } from "@/lib/inline-flashcards";
 import { displayTitle, parseCitation, type PdfCitation } from "@forkleaf/pdf";
 import type { EditorViewMode, Note, Workspace } from "@forkleaf/types";
 import {
@@ -1407,6 +1408,32 @@ export function EditorWorkspace() {
       void notebook.createNote(target, folder);
     },
     [links, notePath, notebook],
+  );
+
+  /** Flashcards in the open note are graded where they are written. */
+  const flashcardBridge = useInlineFlashcards(
+    workspace && note && !sealed ? note.path : null,
+    notebook,
+    setNotice,
+  );
+
+  /** A canvas drawn in a note can place the notebook's notes, and open them. */
+  const allNotesForCanvas = notebook.allNotes;
+  const openNoteForCanvas = notebook.openNote;
+  const canvasBridge = useMemo<CanvasBridge>(
+    () => ({
+      loadNotes: async () =>
+        (await allNotesForCanvas())
+          .filter((entry) => isMarkdown(entry.path))
+          .map((entry) => ({
+            path: entry.path,
+            title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+            excerpt: excerptOf(entry.content),
+          }))
+          .sort((a, b) => a.title.localeCompare(b.title)),
+      openNote: (path) => openNoteForCanvas(path),
+    }),
+    [allNotesForCanvas, openNoteForCanvas],
   );
 
   const linkBridge = useMemo<LinkBridge>(
@@ -2849,9 +2876,9 @@ export function EditorWorkspace() {
       });
       list.push({
         id: "canvas-new",
-        label: "New canvas",
+        label: "New canvas file",
         group: "Notes",
-        hint: "A board of cards, notes and links — saved as JSON Canvas, opens in Obsidian",
+        hint: "A .canvas file of its own — type /canvas to draw a board inside a note",
         keywords: "canvas board whiteboard mind map spatial cards obsidian brainstorm",
         run: async () => {
           const path = newCanvasPath(takenPaths, new Date());
@@ -3259,8 +3286,8 @@ export function EditorWorkspace() {
    * Built from the command list rather than beside it, so a tool is in the
    * menu exactly when its command is available — "Lock this encrypted note"
    * only for an open encrypted note, board and table only with a folder — and
-   * running one is running the command. Two are text instead of a dialog: a
-   * flashcard and a dated to-do are typed straight in.
+   * running one is running the command. A dated to-do is typed straight in;
+   * a flashcard and a canvas are the editor's own blocks, drawn in the note.
    */
   const slashTools = useMemo<InsertAction[]>(() => {
     const byId = new Map(commands.map((command) => [command.id, command]));
@@ -3286,15 +3313,6 @@ export function EditorWorkspace() {
       );
 
     return [
-      {
-        id: "tool:flashcard",
-        label: "Flashcard",
-        hint: "Question :: Answer — shown again with spaced repetition",
-        group: "Study",
-        keywords: ["card", "anki", "spaced", "repetition", "memorise", "revise"],
-        icon: <ExtraGlyph d={TOOL_ICONS.cards} />,
-        insert: "Question :: Answer",
-      },
       ...tool(
         "flashcards",
         "Study",
@@ -3321,7 +3339,6 @@ export function EditorWorkspace() {
       ...tool("import", "Capture", TOOL_ICONS.download),
       ...tool("mind", "Capture", TOOL_ICONS.grid),
       ...tool("bookmarklet", "Capture", TOOL_ICONS.download),
-      ...tool("canvas-new", "See", TOOL_ICONS.grid, "A board of cards, notes and links"),
       ...tool("ask", "See", TOOL_ICONS.help, "Answers quoted from your own notes"),
       ...tool("resurface", "See", TOOL_ICONS.clock),
       ...tool("graph", "See", TOOL_ICONS.graph),
@@ -3997,6 +4014,8 @@ export function EditorWorkspace() {
                   revealLine={reveal && reveal.path === note.path ? reveal.line : followLine}
                   images={images}
                   links={linkBridge}
+                  canvas={canvasBridge}
+                  {...(flashcardBridge ? { flashcards: flashcardBridge } : {})}
                   imageDestination={
                     workspace && !workspace.isLocal
                       ? `Committed to ${workspace.repo.owner}/${workspace.repo.repo}`

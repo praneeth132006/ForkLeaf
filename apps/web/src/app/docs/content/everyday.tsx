@@ -211,9 +211,18 @@ export function Flashcards() {
 
       <H2 id="start">Where to start</H2>
       <P>
-        <strong>/ → Flashcards</strong> (or ⌘K → <strong>Flashcards</strong>) opens the flashcards
-        home. It shows how many cards are waiting today, explains how it works, and has everything
-        below in one place.
+        Type <Code>Question :: Answer</Code> in any note and press Enter. The line becomes a card
+        right there: click it to turn it over, then press <strong>Forgot</strong>,{" "}
+        <strong>Hard</strong>, <strong>Good</strong> or <strong>Easy</strong>. Each grade says when
+        the card comes back, and the card shows whether it is new, due today, or when it is next
+        due. <strong>Edit</strong> changes the question or answer in place, and{" "}
+        <strong>/ → Flashcard</strong> adds an empty card with its fields open. The note keeps the
+        plain line, so it reads the same on GitHub.
+      </P>
+      <P>
+        To review cards from every note at once, ⌘K → <strong>Flashcards</strong> opens the
+        flashcards home. It shows how many cards are waiting today, explains how it works, and has
+        everything below in one place.
       </P>
 
       <H2 id="make">Making cards</H2>
@@ -672,14 +681,21 @@ export function Canvases() {
     <>
       <Lead>
         A board for thinking in space: cards, notes, links and groups placed anywhere and joined
-        with arrows — saved as a <Code>.canvas</Code> file that opens in Obsidian too.
+        with arrows — drawn in the note where you make it, saved as JSON Canvas so it opens in
+        Obsidian too.
       </Lead>
 
       <H2 id="start">Making one</H2>
       <UL>
         <LI>
-          <strong>/ → New canvas</strong> makes <Code>canvases/Canvas 2026-09-13.canvas</Code> and
-          opens it. Rename the file in the sidebar like any other.
+          Type <strong>/canvas</strong> on an empty line. The board appears right there in the note
+          and stays there; the note stores it as a <Code>```canvas</Code> block. Scrolling over it
+          scrolls the page — Shift-scroll pans the board — and <strong>Taller</strong> gives it more
+          room.
+        </LI>
+        <LI>
+          ⌘K → <strong>New canvas file</strong> makes <Code>canvases/Canvas 2026-09-13.canvas</Code>{" "}
+          instead, a board of its own.
         </LI>
         <LI>
           Click a <Code>.canvas</Code> file in the sidebar, or ⌘K →{" "}

@@ -178,8 +178,8 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         id: "flashcards",
         title: "Flashcards",
         summary:
-          "Write Question :: Answer in any note and review it on a spaced-repetition schedule that syncs with the notebook.",
-        how: "⌘K → Review flashcards",
+          "Type Question :: Answer and press Enter: it becomes a card in the note that you turn over and grade in place, or review them all at once, on a spaced-repetition schedule that syncs with the notebook.",
+        how: "Type Question :: Answer, or / → Flashcard",
         tags: ["new"],
       },
       {
@@ -486,8 +486,8 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         id: "canvases",
         title: "Canvases",
         summary:
-          "A board of cards, notes, links and groups joined by arrows, saved as JSON Canvas so it opens in Obsidian too.",
-        how: "/ → New canvas, or click a .canvas file",
+          "A board of cards, notes, links and groups joined by arrows, drawn in the note where you make it and saved as JSON Canvas so it opens in Obsidian too.",
+        how: "/ → Canvas, or click a .canvas file",
         docs: "/docs/canvases",
         tags: ["new"],
       },

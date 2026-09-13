@@ -20,6 +20,8 @@ import { LinkDialog } from "./ui/LinkDialog";
 import type { InsertAction } from "./EditorToolbar";
 import type { ImageBridge } from "./images";
 import type { LinkBridge } from "./links";
+import type { FlashcardBridge } from "./extensions/FlashcardBlock";
+import type { CanvasBridge } from "./extensions/CanvasBlock";
 
 export interface MarkdownEditorProps {
   /**
@@ -74,6 +76,10 @@ export interface MarkdownEditorProps {
   imageDestination?: string;
   /** How `[[wikilinks]]` resolve, and what clicking one does. */
   links?: LinkBridge;
+  /** How a flashcard in the note learns its schedule, and is graded in place. */
+  flashcards?: FlashcardBridge;
+  /** The notes a canvas in the note can place, and how it opens one. */
+  canvas?: CanvasBridge;
   /**
    * Makes the note readable but not writable, in every mode at once.
    *
@@ -121,6 +127,8 @@ export function MarkdownEditor({
   images,
   imageDestination,
   links,
+  flashcards,
+  canvas,
   readOnly = false,
 }: MarkdownEditorProps) {
   // Split view: the divider position, as a percentage of the container width.
@@ -431,6 +439,8 @@ export function MarkdownEditor({
             slashActions={actionContext}
             {...(images ? { images } : {})}
             {...(links ? { links } : {})}
+            {...(flashcards ? { flashcards } : {})}
+            {...(canvas ? { canvas } : {})}
             {...(placeholder ? { placeholder } : {})}
             // A wide bottom pad so the last paragraph can be scrolled to the
             // middle of the screen instead of being pinned to the bottom edge.

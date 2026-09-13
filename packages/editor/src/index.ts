@@ -36,6 +36,19 @@ export { Wikilink, type WikilinkOptions } from "./extensions/Wikilink";
 export { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 export { ResolvedImage, type ResolvedImageOptions } from "./extensions/ResolvedImage";
 export { YoutubeEmbed } from "./extensions/YoutubeEmbed";
+export {
+  FlashcardBlock,
+  type FlashcardBridge,
+  type FlashcardFace,
+  type FlashcardGrade,
+} from "./extensions/FlashcardBlock";
+export { CanvasBlock, type CanvasBridge } from "./extensions/CanvasBlock";
+export {
+  CanvasBoard,
+  readUrl,
+  type CanvasBoardProps,
+  type CanvasNoteChoice,
+} from "./canvas/CanvasBoard";
 
 export { DiagramStudio, type DiagramStudioProps, type StudioView } from "./mermaid/DiagramStudio";
 export {

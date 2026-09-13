@@ -115,8 +115,17 @@ otherwise it starts with the date, a to-do list and a notes section.
 
 ### Flashcards
 
-`/` or ⌘K → **Flashcards** opens the flashcards home: how many cards are waiting
-today, a short **How flashcards work**, and everything below.
+**In the note.** Type `Question :: Answer` and press Enter — the line turns into
+a card right there. Click the card to turn it over, then grade it (**Forgot** /
+**Hard** / **Good** / **Easy**); each grade says when the card comes back, and
+the card shows **New card**, **Due today** or when it is next due. **Edit** opens
+question and answer fields in place. `/` → **Flashcard** inserts an empty card
+with its fields open. The note still holds the plain line `Question :: Answer`,
+so it reads the same on GitHub and in Obsidian. A line with bold, a link or code
+in it stays text (and is still a card in reviews); so does `std::vector`.
+
+**Reviewing many at once.** ⌘K → **Flashcards** opens the flashcards home: how
+many cards are waiting today, a short **How flashcards work**, and everything below.
 
 - **Add a card** — type a question and answer, choose **Save to**, press **Add
   card**. The first card goes into `flashcards/Flashcards.md`.
@@ -210,7 +219,11 @@ so they are not counted twice in **Show every open to-do**.
 
 ### Canvases
 
-- `/` → **New canvas** makes `canvases/Canvas YYYY-MM-DD.canvas` and opens it;
+- `/` → **Canvas** draws a board inside the note, where you typed it, and it
+  stays there: the note holds it as a ` ```canvas ` block of JSON Canvas.
+  Scrolling over it scrolls the page; Shift-scroll pans the board, and
+  **Taller** gives it more room. Drag the strip along its top to move it.
+- ⌘K → **New canvas file** makes `canvases/Canvas YYYY-MM-DD.canvas` instead;
   click any `.canvas` file in the sidebar (or ⌘K → **Open canvas: name**) to
   open one.
 - **Add card** or double-click empty space for a text card; **Add a note…** puts
