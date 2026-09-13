@@ -36,6 +36,34 @@ When something on this list ships, tick it, add the date, and describe it in
 - [x] **Stale-note alerts.** _(done 2026-09-13)_ A weekly list of notes that point at code or files
       that have changed since the note was written.
 
+### Ideas that set ForkLeaf apart
+
+- [x] **Explain it back.** _(done 2026-09-13)_ Hide a note, write down what you
+      remember, then see a side-by-side comparison with the original that shows
+      exactly what you forgot.
+- [x] **Spaced reading.** _(done 2026-09-13)_ Highlights from PDFs and saved web
+      pages come back on the flashcard schedule, like Readwise but in your own
+      repository.
+- [x] **Folder to course.** _(done 2026-09-13)_ Turn a folder into an ordered
+      course based on how its notes link, with progress tracking, cards per
+      lesson and a quiz at the end.
+- [x] **Decks you can fork.** _(done 2026-09-13)_ Share a deck as a public
+      GitHub repository. Others copy it, keep their progress private, and pull
+      in your updates.
+- [x] **Hands-free review.** _(done 2026-09-13)_ Cards read aloud and answered
+      by voice, for studying while walking.
+- [x] **Map this note.** _(done 2026-09-13)_ One click builds a canvas of a
+      note and everything it links to, laid out automatically.
+- [x] **Claim checker.** _(done 2026-09-13)_ While writing, flag sentences that
+      nothing in your notes or saved sources supports.
+- [x] **Decision notes.** _(done 2026-09-13)_ Branch a decision into options,
+      score the pros and cons, and keep the chosen option with its history.
+- [x] **Notebook health badge.** _(done 2026-09-13)_ A README badge for your
+      notes repository showing broken links, stale notes and review streaks.
+- [x] **What I learned this month.** _(done 2026-09-13)_ An automatic page built
+      from your flashcard progress, new notes and meeting decisions, which you
+      can publish.
+
 ### Capturing
 
 - [ ] **Highlights on any web page.** Highlight text with the extension; it is

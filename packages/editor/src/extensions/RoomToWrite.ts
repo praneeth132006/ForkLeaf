@@ -70,20 +70,9 @@ export const RoomToWrite = Extension.create({
           handleDOMEvents: {
             mousedown: (view, event) => {
               if ((event as MouseEvent).button !== 0) return false;
-
-              const last = view.state.doc.lastChild;
-              if (!last || isWritable(last.type.name)) return false;
-
-              // Below everything in the document, rather than on it. The
-              // editor's own padding is the target: a click on the block
-              // itself must still go where it was aimed.
-              const dom = view.dom as HTMLElement;
-              const bottom = dom.lastElementChild?.getBoundingClientRect().bottom;
-              if (bottom === undefined || (event as MouseEvent).clientY <= bottom) return false;
-              if (!dom.getBoundingClientRect().width) return false;
-
+              if (!roomBelow(view, (event as MouseEvent).clientY)) return false;
               event.preventDefault();
-              return appendParagraph(view.state, view);
+              return true;
             },
           },
         },
@@ -91,6 +80,30 @@ export const RoomToWrite = Extension.create({
     ];
   },
 });
+
+/**
+ * A click below everything in the note, when the note ends in a block that
+ * cannot be typed in: a paragraph goes there, with the caret in it.
+ *
+ * Exported for the editor's surroundings as well as the editor itself. In a
+ * note taller than the screen, the empty space under the last block is the
+ * padding of the page around the editor, not the editor — so a click there
+ * never reached the handler above, and a note ending in a canvas or a card
+ * had nowhere to type after it.
+ */
+export function roomBelow(view: EditorView, clientY: number): boolean {
+  const last = view.state.doc.lastChild;
+  if (!last || isWritable(last.type.name)) return false;
+
+  // Below everything in the document, rather than on it: a click on the block
+  // itself must still go where it was aimed.
+  const dom = view.dom as HTMLElement;
+  const bottom = dom.lastElementChild?.getBoundingClientRect().bottom;
+  if (bottom === undefined || clientY <= bottom) return false;
+  if (!dom.getBoundingClientRect().width) return false;
+
+  return appendParagraph(view.state, view);
+}
 
 /** Blocks you can already type in, which need no help from any of this. */
 function isWritable(name: string): boolean {

@@ -67,6 +67,8 @@ export interface EditorStatusBarProps {
   ) => Promise<{ before: number; after: number; width: number; height: number }>;
   /** Opens the note an unsynced file lives in, so it can be dealt with. */
   onLocateChange: (path: string) => void;
+  /** Opens the steps for connecting Claude, Cursor or VS Code over MCP. */
+  onConnectAssistant?: () => void;
 }
 
 /**
@@ -94,6 +96,7 @@ export function EditorStatusBar({
   onDiscardChange,
   onShrinkChange,
   onLocateChange,
+  onConnectAssistant,
   sessionExpired = false,
 }: EditorStatusBarProps) {
   /**
@@ -189,6 +192,32 @@ export function EditorStatusBar({
             Propose changes…
           </button>
         </>
+      )}
+
+      {/* Always in reach, not only in ⌘K: connecting an assistant is a thing
+          people look for, and the bar at the bottom is where they look. */}
+      {onConnectAssistant && (
+        <button
+          type="button"
+          onClick={onConnectAssistant}
+          title="Connect Claude, Cursor or VS Code to this notebook over MCP"
+          className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            className="h-3 w-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M6 2.5v3M10 2.5v3M4.5 5.5h7v2.5a3.5 3.5 0 0 1-7 0zM8 11.5v2" />
+          </svg>
+          <span className="hidden sm:inline">Connect AI assistant</span>
+          <span className="sr-only sm:hidden">Connect AI assistant</span>
+        </button>
       )}
 
       {/* Only when the status control is not already saying it: the same

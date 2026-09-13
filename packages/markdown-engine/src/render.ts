@@ -13,6 +13,7 @@ import type { Root as MdastRoot, Text as MdastText, PhrasingContent, Parent } fr
 import type { Root as HastRoot, Element } from "hast";
 import { remarkWikilink, type WikilinkResolver } from "./wikilinks";
 import { youtubeEmbedUrl, youtubeVideoFrom, YOUTUBE_EMBED_ORIGIN } from "./youtube";
+import { parseCardLine } from "./flashcard-line";
 
 /**
  * Markdown → HTML rendering.
@@ -59,6 +60,9 @@ const schema: SanitizeSchema = {
       ["type", "checkbox"],
     ],
     div: [...(defaultSchema.attributes?.div ?? []), "className", "dataMermaid"],
+    // A flashcard: the question as the summary, the answer inside.
+    details: [...(defaultSchema.attributes?.details ?? []), ["className", "fl-flashcard"]],
+    summary: [...(defaultSchema.attributes?.summary ?? []), ["className", "fl-flashcard-question"]],
     // Highlight colours, by name from a closed set — never an arbitrary class,
     // which would let note content borrow any style in the app.
     mark: [
@@ -361,6 +365,89 @@ function rehypeYoutube() {
   };
 }
 
+/**
+ * A `Question :: Answer` line becomes a card that opens to show the answer.
+ *
+ * The same lines the rich editor draws as cards: plain text, in a paragraph of
+ * its own or one line of several. Anything else on those lines stays a
+ * paragraph around the cards. A `<details>` needs no script, so the card works
+ * in the preview, an export and a published page alike.
+ */
+function rehypeFlashcards() {
+  return (tree: HastRoot) => {
+    visit(tree, "element", (node: Element, index, parent) => {
+      if (node.tagName !== "p" || !parent || index === undefined) return;
+      if (parent.type !== "root") return;
+
+      const lines: Element["children"][] = [[]];
+      for (const child of node.children) {
+        if (child.type === "element" && child.tagName === "br") lines.push([]);
+        else lines[lines.length - 1]!.push(child);
+      }
+      const cards = lines.map((line) =>
+        line.every((child) => child.type === "text")
+          ? parseCardLine(
+              line
+                .map((child) => (child.type === "text" ? child.value : ""))
+                .join("")
+                .trim(),
+            )
+          : null,
+      );
+      if (!cards.some(Boolean)) return;
+
+      const replacement: Element[] = [];
+      let run: Element["children"] = [];
+      const flush = () => {
+        if (run.length === 0) return;
+        replacement.push({ type: "element", tagName: "p", properties: {}, children: run });
+        run = [];
+      };
+      lines.forEach((line, at) => {
+        const card = cards[at];
+        if (!card) {
+          if (run.length > 0) {
+            run.push({ type: "element", tagName: "br", properties: {}, children: [] });
+          }
+          // The newline after a `<br>` belonged to the line break, not the text.
+          run.push(
+            ...line.map((child, position) =>
+              position === 0 && child.type === "text"
+                ? { ...child, value: child.value.replace(/^\n/, "") }
+                : child,
+            ),
+          );
+          return;
+        }
+        flush();
+        replacement.push({
+          type: "element",
+          tagName: "details",
+          properties: { className: ["fl-flashcard"] },
+          children: [
+            {
+              type: "element",
+              tagName: "summary",
+              properties: { className: ["fl-flashcard-question"] },
+              children: [{ type: "text", value: card.question.replace(/\\(.)/g, "$1") }],
+            },
+            {
+              type: "element",
+              tagName: "p",
+              properties: {},
+              children: [{ type: "text", value: card.answer.replace(/\\(.)/g, "$1") }],
+            },
+          ],
+        });
+      });
+      flush();
+
+      parent.children.splice(index, 1, ...replacement);
+      return index + replacement.length;
+    });
+  };
+}
+
 const AUDIO_PATH = /\.(webm|ogg|oga|m4a|mp3|wav)$/i;
 
 /**
@@ -453,6 +540,7 @@ const buildHtmlPipeline = (options: RenderOptions) =>
     .use(rehypeHighlight, { detect: false, languages: allLanguages })
     .use(rehypeImages, options)
     .use(rehypeYoutube)
+    .use(rehypeFlashcards)
     // After the YouTube pass, which turns some links into iframes and leaves
     // the rest as links — those are the ones that need a tab of their own.
     .use(rehypeExternalLinks)

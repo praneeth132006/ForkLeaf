@@ -113,42 +113,150 @@ otherwise it starts with the date, a to-do list and a notes section.
   come first and are marked.
 - To-dos inside code blocks and in `templates/` are ignored.
 
+### What I learned this month
+
+⌘K or `/` → **What I learned this month** writes `journal/YYYY-MM-learned.md` and
+opens it: the notes started this month (and how many words), the notes worked
+on, how the flashcards are coming along — mature (a gap of three weeks or more),
+still learning, not started, and the biggest decks — and the decisions made,
+both from decision blocks chosen this month and from meeting notes. It ends
+with an empty **Looking back** section to write in. Running it again later in
+the month opens the page already written. It is an ordinary note, so ⌘K →
+**Publish this note as a page…** shares it.
+
+### Notebook health badge
+
+`/` → **Notebook health badge** (in a notebook on GitHub) types the markdown for a
+badge — put it in your repository's `README.md`. The badge shows how many links
+and file references go nowhere, how many notes have probably gone stale, and how
+many days in a row flashcards have been reviewed: green when all is well, yellow
+when notes are stale, red when something is broken. It is drawn by
+`/api/badge?owner=…&repo=…`, which reads public repositories only, without
+signing in, and is cached for an hour; a private or missing repository gets a
+grey badge saying so.
+
+### Decision notes
+
+`/` → **Decision** puts a decision in the note: the question, options side by
+side, and for each option pros and cons weighed 1 to 3. Each option shows its
+score (pros less cons) and the highest one is marked. **Choose** records the
+choice with the date and every option's score at the time; choosing again later
+adds a "changed to" line, so the history of the decision stays with it. **+ Add
+an option** and **×** add and remove. The note holds a readable
+` ```decision ` block — `question:`, `option:`, `+ pro (2)`, `- con (1)`,
+`chosen:` and `history:` lines.
+
+### Claim checker
+
+⌘K or `/` → **Check claims in this note** turns the checker on for the open note
+(it stays on for that note on this device). While you write, a sentence that
+states something — a number, "is", "causes", "always" — gets a dotted underline
+when nothing in your other notes, saved pages and quotes, or PDF highlights backs
+it: most of its words and every number in it. Hover a backed sentence to see which
+note and line backs it. Questions, plans, opinions ("I think", "maybe") and
+sentences that already cite a link are left alone. It says where you have a
+source, not whether a claim is true, and the note's text is never changed. Run
+the command again to turn it off.
+
+### Map this note
+
+`/` → **Map this note** draws a canvas right where you typed it: the open note in
+the middle, the notes it links to on the right, the notes that link to it on the
+left, notes linked both ways across the top, and an arrow for every link between
+them. **Map this note, two links deep** also places the notes those lead to on
+an outer ring. It is an ordinary canvas block — move cards, add your own, and it
+is saved in the note.
+
+### Hands-free review
+
+`/` → **Hands-free review** puts a block in the note. Press **Start** and every
+card in the note is read aloud — due and new ones first. Answer out loud: a
+right answer is confirmed, a missed one is read out, and each card is graded on
+its schedule. Say **repeat**, **skip**, **I don't know** or **stop** at any
+question; it stops by itself after hearing nothing a few times. Answers are
+judged on their words, so "it's water" counts for `Water` and "six" for `6`.
+Needs a browser that can both speak and listen (Chrome, Edge, Safari), which may
+send what you say to its speech service. Nothing said is kept.
+
+### Decks you can fork
+
+`/` → **Shared deck** puts a deck block in the note.
+
+- **Share:** in a note with cards, **Share as a public repository** (signed in
+  with GitHub) asks first, then makes `your-name/<title>-deck` holding a README
+  and `deck.md` — only the `Question :: Answer` lines, nothing else from the
+  note. Change the cards later and **Publish changes**.
+- **Copy:** paste `owner/repo` or a GitHub link and **Copy the cards here**. The
+  cards land under the block as your own; your progress stays in your own
+  schedule. Works without signing in for public decks.
+- **Update:** **Check for updates** compares the version you copied with the
+  newest one and lists new, changed and removed cards; **Pull them in** applies
+  them. Cards you rewrote, and cards you added yourself, are left alone.
+
+The block is a ` ```deck ` fence naming the repository and version.
+
+### A folder as a course
+
+`/` → **Course from a folder** puts a course block in the note. Pick a folder
+(or press **Make a course of** the note's own folder) and its notes become
+lessons, in the order they build on one another: a note comes after the notes
+it links to, a folder's `index.md` / `README.md` / `Overview.md` comes first and
+its links set the order, and circles of links are broken sensibly. Each lesson
+shows what it builds on and how many flashcards it holds; tick a lesson off and
+the progress bar and **Next** move on. **Take the quiz** asks up to ten cards
+drawn from every lesson in turn, answered in place, with a score at the end. The
+note stores a ` ```course ` block with the folder and the lessons done.
+
+### Spaced reading
+
+`/` → **Spaced reading** puts a block in the note — today's note is a good home
+for it — listing a few passages to reread each day: highlights from your PDFs
+(the `.highlights.md` beside each document), quotes saved from the web, and
+`==highlights==` on saved pages. Reread one, then choose **Again soon**,
+**Later** or **Done with it**; it says when the passage returns. Passages share
+the flashcard schedule in `reviews/flashcards.md`, so it syncs like everything
+else. Click where a passage came from to open it. The note stores only an empty
+` ```reading ` block — the passages are always read fresh.
+
+### Explain it back
+
+⌘K or `/` → **Explain it back** hides the open note, in its own place, and asks
+you to write down everything you remember about it. **Compare with the note**
+(⌘↵) then shows the two side by side: every sentence of the note marked
+**Remembered**, **Partly** or **Missed**, with the words you left out named
+under it, and a score for how many of the note's key ideas came back. Anything
+you wrote that the note does not say is marked too, so a confident wrong memory
+is caught. **Edit my answer** or **Try again**, and **Back to the note** when
+done. The comparison runs on the device and nothing is saved.
+
 ### Flashcards
 
-Write a card in any note (or type `/flashcard`):
+**In the note.** Type `Question :: Answer` and press Enter — the line turns into
+a card right there. Click the card to turn it over, then grade it (**Forgot** /
+**Hard** / **Good** / **Easy**); each grade says when the card comes back, and
+the card shows **New card**, **Due today** or when it is next due. **Edit** opens
+question and answer fields in place. `/` → **Flashcard** inserts an empty card
+with its fields open. The note still holds the plain line `Question :: Answer`,
+so it reads the same on GitHub and in Obsidian. A line with bold, a link or code
+in it stays text (and is still a card in reviews); so does `std::vector`.
 
-```markdown
-Capital of Portugal :: Lisbon
-What is H2O?::Water
-Hola ::: Hello
+**Reviewing many at once.** ⌘K → **Flashcards** opens the flashcards home: how
+many cards are waiting today, a short **How flashcards work**, and everything below.
 
-What are the primary colours?
-?
-red, yellow and blue
-```
+- **Add a card** — type a question and answer, choose **Save to**, press **Add
+  card**. The first card goes into `flashcards/Flashcards.md`.
+- **Cards from this note** — definitions the open note already has (`**Term**:
+meaning`, `- Term — meaning`, a `## Question?` heading with its paragraph) are
+  listed; untick what you do not want and add the rest under `## Flashcards`.
+- **Write them yourself** — `Question :: Answer` (spaces optional when the
+  question reads like one), `:::` for both ways, a `?` line for multi-line
+  cards, `==highlights==` as blanks in notes tagged `flashcards`.
+- **Study** everything due, or one **deck** (a note with cards); **Practise** a
+  deck when nothing is due. Show the answer (**Space**), then **Again** / **Hard**
+  / **Good** / **Easy** (**1**–**4**) — each says when the card comes back.
 
-- `::` makes a card. Without spaces it still works when the question has several
-  words or ends in `?`, so `std::vector` never becomes a card.
-- `:::` makes two cards, one each way; `??` on its own line does the same for a
-  card over several lines.
-- A line holding only `?` splits a card over several lines: the question above,
-  the answer below, with no blank line in between.
-- In a note tagged `flashcards` (Tags field, or `#flashcards` in the text), each
-  `==highlight==` becomes a fill-in-the-blank card.
-- Formatting, links and the escapes the rich editor writes (`2 \* 3`) show as
-  plain words on the card. A card written twice is asked once.
-
-⌘K or `/` → **Review flashcards** shows the cards due today, then new ones (up
-to 20 a session).
-
-1. Read the question, press **Show answer** (or **Space**).
-2. Grade it: **Again**, **Hard**, **Good** or **Easy** (or **1**–**4**). Each
-   button shows when the card will come back.
-3. A card you forgot comes round again before the session ends.
-
-The schedule is kept in `reviews/flashcards.md`, a table with one row per card,
-so it syncs to every device. Delete a row to start that card over. Lines in
-code blocks, tables and headings are never cards.
+The schedule is kept in `reviews/flashcards.md`, one row per card, so it syncs
+to every device. Delete a row to start that card over.
 
 ### Save from anywhere
 
@@ -227,12 +335,18 @@ so they are not counted twice in **Show every open to-do**.
 
 ### Canvases
 
-- `/` → **New canvas** makes `canvases/Canvas YYYY-MM-DD.canvas` and opens it;
+- `/` → **Canvas** draws a board inside the note, where you typed it, and it
+  stays there: the note holds it as a ` ```canvas ` block of JSON Canvas.
+  Scrolling over it scrolls the page; Shift-scroll pans the board, and
+  **Taller** gives it more room. Drag the strip along its top to move it.
+- ⌘K → **New canvas file** makes `canvases/Canvas YYYY-MM-DD.canvas` instead;
   click any `.canvas` file in the sidebar (or ⌘K → **Open canvas: name**) to
   open one.
 - **Add card** or double-click empty space for a text card; **Add a note…** puts
   a note on the board (with **Open note**); paste an address for a link card;
   **Add group** makes a group that carries the cards inside it.
+- Double-click a card to write in it (or select it and press Enter, or **Edit**);
+  double-click a group to rename it.
 - Drag cards to move them (Shift-click for several), drag the corner square to
   resize, and drag the dot on a selected card's right edge onto another card to
   draw an arrow. Six colours, and Delete removes cards with their arrows.

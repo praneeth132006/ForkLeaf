@@ -5,6 +5,134 @@ full record.
 
 ## Unreleased
 
+### Connect an AI assistant, from the bottom bar
+
+**Connect AI assistant** now sits in the editor's bottom bar and opens the MCP
+setup for Claude Code, Claude Desktop, Cursor and VS Code; the site footer links
+to the MCP guide too. It was only reachable from ⌘K before.
+
+### What I learned this month
+
+⌘K or `/` → **What I learned this month** writes a journal page from the month's
+new notes, flashcard progress and the decisions made in decision blocks and
+meetings — ready to add a few thoughts to and publish as a page.
+
+### Notebook health badge
+
+A README badge for a notes repository — broken links, stale notes and the
+flashcard review streak — served by `/api/badge` for public repositories and
+added to a note with `/` → **Notebook health badge**. It never shows as a broken
+image: a repository it cannot read gets a grey badge saying why.
+
+### Decision notes
+
+`/` → **Decision** lays out options with weighed pros and cons and a score for
+each, then keeps the chosen option with a dated history of every choice and
+change of mind — as plain lines in a ` ```decision ` block in the note.
+
+### Claim checker
+
+⌘K or `/` → **Check claims in this note** underlines, as you write, sentences
+that state something nothing in your other notes, saved sources or highlights
+backs — and says which note and line backs the ones that are. On per note,
+remembered on this device, and the note's text is never touched.
+
+### Map this note
+
+`/` → **Map this note** builds a canvas of the note and every note it links with
+— links out on the right, links in on the left, arrows following each link — laid
+out automatically and placed in the note, one or two links deep.
+
+### Hands-free review
+
+`/` → **Hands-free review** reads a note's cards aloud, listens for the answer,
+says the right one when it was missed, and grades each card — with "repeat",
+"skip", "I don't know" and "stop" by voice — for studying while walking.
+
+### Decks you can fork
+
+`/` → **Shared deck** shares a note's cards as a public GitHub repository
+(after asking, and with only the card lines), copies someone's shared deck into
+a note, and later pulls in a newer version — adding, changing and removing
+cards while keeping any card you rewrote or added. Progress stays private in
+your own schedule.
+
+### A folder as a course
+
+`/` → **Course from a folder** turns a folder's notes into lessons ordered by how
+they link, with an index note first, ticks for what is done, a progress bar and
+the next lesson, flashcards counted per lesson, and a quiz at the end drawn from
+all of them — in the note, with progress kept in the note's ` ```course `
+block.
+
+### The editor no longer slides sideways in a narrow column
+
+With both side panels open, a wide window still leaves a narrow column for the
+note, but the header chose its labels by the window's width. Search and All
+tools were drawn in full, the last buttons were pushed past the edge, the open
+note tabs shrank to nothing, and the whole column scrolled sideways whenever a
+button in it took focus. The header now sizes its labels by its own width.
+
+### Writing below a card, a board or a diagram at the end of a long note
+
+A note that ended in a canvas, a flashcard, a spaced-reading block or a diagram
+had nowhere to type after it once it was taller than the screen: the space
+under the last block belongs to the page around the editor, and clicks there
+were never seen. Clicking below the last block now puts a line there, and
+clicking below text puts the caret at its end.
+
+### Spaced reading
+
+Highlights were made and never seen again. `/` → **Spaced reading** puts a
+block in the note that brings back a few passages a day — PDF highlights, saved
+quotes, and highlights on saved pages — on the flashcard schedule, in your own
+repository. Each is sent back soon, later, or never, and says when it returns.
+
+### Explain it back
+
+⌘K or `/` → **Explain it back** hides the note where it was and asks for what
+you remember of it, then compares the two side by side: each sentence of the
+note marked remembered, partly or missed, the words left out named, a score for
+the key ideas recalled, and anything written that the note does not support
+flagged. Stemmed word matching on the device — no account, no upload.
+
+### Flashcards and canvases where you write them
+
+A `Question :: Answer` line stayed a line of text, with nothing to say it was a
+card or how to study it. It now turns into a card the moment Enter is pressed —
+and every such line is drawn as one when a note opens. Click to turn it over,
+grade it in place, and it says when it is next due; the grade goes into the same
+`reviews/flashcards.md` the review session uses. **Edit** changes it in place.
+The file keeps the plain line. The preview draws the same lines as cards that
+open to their answer. `Use std::vector here` is no longer read as a card.
+
+A canvas made from `/` opened in a window over the note and left nothing on the
+page, so a diagram you drew could not be seen where you were writing. `/` →
+**Canvas** now draws the board in the note itself, stored as a ` ```canvas `
+block of JSON Canvas. A board's Delete and Enter keys only act while the board
+has focus, so they no longer take Backspace from the paragraph below.
+`.canvas` files still open on their own.
+
+### A flashcards home you can start from
+
+Flashcards opened straight into a review with no explanation, so there was no
+way to tell what a card was, how to make one, or why cards came back. `/` →
+**Flashcards** now opens a home: how many cards are waiting, a three-step **How
+flashcards work**, **Add a card** with question and answer fields (no syntax),
+**Cards from this note** — definitions the open note already holds, ticked and
+added under `## Flashcards` — and **Decks**, one per note, each studied or
+practised on its own. Grades say what they mean (Forgot it, Barely, Knew it,
+Too easy) and when the card comes back, and a session ends with a way back.
+
+### Canvas cards can be edited again
+
+Double-clicking a card made a new empty card under it instead of opening the
+card: pressing a card captures the pointer on the board so it can be dragged,
+and the browser then sends the double-click to the board. Double presses are
+now timed on the card itself, so double-clicking writes in a card or renames a
+group, double-clicking empty space adds one, and a selected card also opens with
+Enter or the new **Edit** button.
+
 ### Canvases
 
 `/` → **New canvas** opens a board for placing cards, notes, links and groups

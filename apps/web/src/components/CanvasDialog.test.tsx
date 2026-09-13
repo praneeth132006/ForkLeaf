@@ -65,7 +65,7 @@ describe("CanvasDialog", () => {
     const { props } = open();
     const card = (await screen.findByText("First idea")).closest("[data-node-id]")!;
     fireEvent.pointerDown(card);
-    fireEvent.keyDown(window, { key: "Delete" });
+    fireEvent.keyDown(card, { key: "Delete" });
 
     await waitFor(() => expect(props.save).toHaveBeenCalled(), { timeout: 2000 });
     const saved = lastSaved(props.save);
@@ -114,5 +114,46 @@ describe("CanvasDialog", () => {
     expect(await screen.findByText(/Double-click anywhere to add a card/)).toBeTruthy();
     await new Promise((resolve) => setTimeout(resolve, 800));
     expect(props.save).not.toHaveBeenCalled();
+  });
+
+  it("writes in an existing card on a double press, instead of adding a new one", async () => {
+    const { props } = open();
+    const card = (await screen.findByText("First idea")).closest("[data-node-id]")!;
+    fireEvent.pointerDown(card);
+    fireEvent.pointerUp(card);
+    // The second press keeps the browser from moving focus off the new text box.
+    expect(fireEvent.pointerDown(card)).toBe(false);
+
+    const area = (await screen.findByLabelText("Card text")) as HTMLTextAreaElement;
+    expect(area.value).toBe("First idea");
+    expect(document.querySelectorAll("[data-node-id]")).toHaveLength(2);
+
+    fireEvent.change(area, { target: { value: "First idea, edited" } });
+    await waitFor(() => expect(props.save).toHaveBeenCalled(), { timeout: 2000 });
+    expect(lastSaved(props.save).nodes).toHaveLength(2);
+    expect(vi.mocked(props.save).mock.calls.at(-1)![0]).toContain("First idea, edited");
+  });
+
+  it("writes in a selected card with Enter or the Edit button", async () => {
+    open();
+    const card = (await screen.findByText("First idea")).closest("[data-node-id]")!;
+    const edit = screen.getByRole("button", { name: "Edit" }) as HTMLButtonElement;
+    expect(edit.disabled).toBe(true);
+
+    fireEvent.pointerDown(card);
+    expect(edit.disabled).toBe(false);
+    fireEvent.keyDown(card, { key: "Enter" });
+    expect(await screen.findByLabelText("Card text")).toBeTruthy();
+  });
+
+  it("adds a card on a double press on empty space", async () => {
+    open();
+    await screen.findByText("First idea");
+    const viewport = screen.getByTestId("canvas-viewport");
+    fireEvent.pointerDown(viewport);
+    fireEvent.pointerUp(viewport);
+    fireEvent.pointerDown(viewport);
+    expect(await screen.findByLabelText("Card text")).toBeTruthy();
+    expect(document.querySelectorAll("[data-node-id]")).toHaveLength(3);
   });
 });

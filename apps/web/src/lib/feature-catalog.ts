@@ -175,11 +175,91 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "learned-this-month",
+        title: "What I learned this month",
+        summary:
+          "A journal page built from the month's new notes, flashcard progress and decisions, which you can publish.",
+        how: "⌘K → What I learned this month",
+        tags: ["new"],
+      },
+      {
+        id: "health-badge",
+        title: "Notebook health badge",
+        summary:
+          "A README badge for your notes repository showing broken links, stale notes and your review streak.",
+        how: "/ → Notebook health badge",
+        tags: ["new", "github"],
+      },
+      {
+        id: "decisions",
+        title: "Decision notes",
+        summary:
+          "Options with pros and cons weighed and scored, and the chosen option kept with a dated history of the decision.",
+        how: "/ → Decision",
+        tags: ["new"],
+      },
+      {
+        id: "claim-checker",
+        title: "Claim checker",
+        summary:
+          "While you write, underline sentences that nothing in your notes or saved sources backs, and see what backs the rest.",
+        how: "⌘K → Check claims in this note",
+        tags: ["new"],
+      },
+      {
+        id: "map-note",
+        title: "Map this note",
+        summary:
+          "A canvas of the note and every note it links with, laid out automatically, right in the note.",
+        how: "/ → Map this note",
+        tags: ["new"],
+      },
+      {
+        id: "hands-free",
+        title: "Hands-free review",
+        summary:
+          "A note's cards read aloud and answered by voice, each graded on its schedule — for studying while walking.",
+        how: "/ → Hands-free review",
+        tags: ["new"],
+      },
+      {
+        id: "shared-decks",
+        title: "Decks you can fork",
+        summary:
+          "Share a note's flashcards as a public GitHub repository; others copy it, keep their progress private, and pull in your updates.",
+        how: "/ → Shared deck",
+        tags: ["new", "github"],
+      },
+      {
+        id: "course",
+        title: "A folder as a course",
+        summary:
+          "A folder's notes as lessons ordered by how they link, with progress, cards per lesson and a quiz at the end — in the note.",
+        how: "/ → Course from a folder",
+        tags: ["new"],
+      },
+      {
+        id: "spaced-reading",
+        title: "Spaced reading",
+        summary:
+          "Highlights from PDFs and quotes saved from the web come back a few a day, in the note, on the flashcard schedule.",
+        how: "/ → Spaced reading",
+        tags: ["new"],
+      },
+      {
+        id: "explain-back",
+        title: "Explain it back",
+        summary:
+          "Hide a note, write down what you remember, and see it side by side with the original — every sentence marked by what you forgot.",
+        how: "⌘K → Explain it back",
+        tags: ["new"],
+      },
+      {
         id: "flashcards",
         title: "Flashcards",
         summary:
-          "Write Question :: Answer in any note and review it on a spaced-repetition schedule that syncs with the notebook.",
-        how: "⌘K → Review flashcards",
+          "Type Question :: Answer and press Enter: it becomes a card in the note that you turn over and grade in place, or review them all at once, on a spaced-repetition schedule that syncs with the notebook.",
+        how: "Type Question :: Answer, or / → Flashcard",
         tags: ["new"],
       },
       {
@@ -486,8 +566,8 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         id: "canvases",
         title: "Canvases",
         summary:
-          "A board of cards, notes, links and groups joined by arrows, saved as JSON Canvas so it opens in Obsidian too.",
-        how: "/ → New canvas, or click a .canvas file",
+          "A board of cards, notes, links and groups joined by arrows, drawn in the note where you make it and saved as JSON Canvas so it opens in Obsidian too.",
+        how: "/ → Canvas, or click a .canvas file",
         docs: "/docs/canvases",
         tags: ["new"],
       },

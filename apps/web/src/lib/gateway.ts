@@ -885,3 +885,32 @@ export async function unpublishBook(
     }),
   });
 }
+
+// ─── Decks you can fork ─────────────────────────────────────────────────────
+
+export interface SharedDeck {
+  owner: string;
+  repo: string;
+  sha: string;
+  content: string;
+}
+
+/** A shared deck's `deck.md`, now or at an earlier commit. Works signed out. */
+export async function readSharedDeck(
+  owner: string,
+  repo: string,
+  ref?: string,
+): Promise<SharedDeck> {
+  const params = new URLSearchParams({ owner, repo });
+  if (ref) params.set("ref", ref);
+  return call(`/api/gh/deck?${params.toString()}`, { timeoutMs: 20_000 });
+}
+
+/** Publishes card lines as a public deck repository of the signed-in user's. */
+export async function shareDeck(options: {
+  title: string;
+  cards: string;
+  repo?: string;
+}): Promise<{ owner: string; repo: string; sha: string; cards: number }> {
+  return call("/api/gh/deck", { method: "POST", body: JSON.stringify(options) });
+}

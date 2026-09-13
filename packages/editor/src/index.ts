@@ -36,6 +36,42 @@ export { Wikilink, type WikilinkOptions } from "./extensions/Wikilink";
 export { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 export { ResolvedImage, type ResolvedImageOptions } from "./extensions/ResolvedImage";
 export { YoutubeEmbed } from "./extensions/YoutubeEmbed";
+export {
+  FlashcardBlock,
+  type FlashcardBridge,
+  type FlashcardFace,
+  type FlashcardGrade,
+} from "./extensions/FlashcardBlock";
+export { CanvasBlock, type CanvasBridge } from "./extensions/CanvasBlock";
+export {
+  ReadingBlock,
+  type ReadingBridge,
+  type ReadingChoice,
+  type ReadingPassage,
+} from "./extensions/ReadingBlock";
+export {
+  CourseBlock,
+  type CourseBridge,
+  type CourseData,
+  type CourseLesson,
+  type CourseQuestion,
+} from "./extensions/CourseBlock";
+export { DeckBlock, type DeckBridge } from "./extensions/DeckBlock";
+export { HandsFreeBlock, browserSpeech, type SpeechKit } from "./extensions/HandsFreeBlock";
+export {
+  ClaimChecker,
+  claimCheckerKey,
+  type ClaimBridge,
+  type ClaimVerdict,
+} from "./extensions/ClaimChecker";
+export { DecisionBlock } from "./extensions/DecisionBlock";
+export { judgeAnswer, commandOf, type Verdict, type VoiceCommand } from "./hands-free";
+export {
+  CanvasBoard,
+  readUrl,
+  type CanvasBoardProps,
+  type CanvasNoteChoice,
+} from "./canvas/CanvasBoard";
 
 export { DiagramStudio, type DiagramStudioProps, type StudioView } from "./mermaid/DiagramStudio";
 export {

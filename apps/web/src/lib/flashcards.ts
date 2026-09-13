@@ -1,3 +1,4 @@
+import { parseCardLine } from "@forkleaf/markdown-engine";
 import { dateStamp } from "@/lib/templates";
 
 /**
@@ -106,43 +107,13 @@ export function readable(markdown: string): string {
     .trim();
 }
 
-/** Where `::` (or `:::`) splits a line, ignoring inline code and escapes. */
-function separator(text: string): { at: number; length: number } | null {
-  let code = false;
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i];
-    if (char === "\\") {
-      i += 1;
-      continue;
-    }
-    if (char === "`") {
-      code = !code;
-      continue;
-    }
-    if (code || char !== ":" || text[i + 1] !== ":") continue;
-    let length = 2;
-    while (text[i + length] === ":") length += 1;
-    return length <= 3 ? { at: i, length } : null;
-  }
-  return null;
-}
-
 function inlineCard(body: string): { question: string; answer: string; reversed: boolean } | null {
-  const found = separator(body);
+  const found = parseCardLine(body);
   if (!found) return null;
-  const left = body.slice(0, found.at);
-  const right = body.slice(found.at + found.length);
-
-  // `std::vector` and `Foo::bar()` are code. A card written without spaces
-  // around `::` has to read like a question: several words, or a question mark.
-  const tight = !/\s$/.test(left) && !/^\s/.test(right);
-  if (tight && !/\s/.test(left.trim()) && !left.trim().endsWith("?")) return null;
-  if (separator(right)) return null;
-
-  const question = readable(left);
-  const answer = readable(right);
+  const question = readable(found.question);
+  const answer = readable(found.answer);
   if (!question || !answer) return null;
-  return { question, answer, reversed: found.length === 3 };
+  return { question, answer, reversed: found.reversed };
 }
 
 /** One card per highlighted blank: the line with that blank hidden. */

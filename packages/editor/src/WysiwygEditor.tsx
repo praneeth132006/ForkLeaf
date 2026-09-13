@@ -68,15 +68,23 @@ import {
   HIGHLIGHT_COLOURS,
   DEFAULT_HIGHLIGHT,
 } from "./extensions/ColouredHighlight";
-import { TextSelection } from "@tiptap/pm/state";
+import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { imagesFrom, type ImageBridge } from "./images";
 import { MermaidBlock } from "./extensions/MermaidBlock";
+import { FlashcardBlock, type FlashcardBridge } from "./extensions/FlashcardBlock";
+import { CanvasBlock, type CanvasBridge } from "./extensions/CanvasBlock";
+import { ReadingBlock, type ReadingBridge } from "./extensions/ReadingBlock";
+import { CourseBlock, type CourseBridge } from "./extensions/CourseBlock";
+import { DeckBlock, type DeckBridge } from "./extensions/DeckBlock";
+import { HandsFreeBlock, browserSpeech, type SpeechKit } from "./extensions/HandsFreeBlock";
+import { ClaimChecker, claimCheckerKey, type ClaimBridge } from "./extensions/ClaimChecker";
+import { DecisionBlock } from "./extensions/DecisionBlock";
 import { Wikilink } from "./extensions/Wikilink";
 import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 import { ShortcutsAfterLineBreak } from "./extensions/ShortcutsAfterLineBreak";
 import { SmartPaste } from "./extensions/SmartPaste";
 import { LeaveInlineMark } from "./extensions/LeaveInlineMark";
-import { RoomToWrite } from "./extensions/RoomToWrite";
+import { RoomToWrite, roomBelow } from "./extensions/RoomToWrite";
 import type { LinkBridge } from "./links";
 import { readSlashState } from "./extensions/SlashCommands";
 import { isolateCurrentLine } from "./isolate-line";
@@ -106,6 +114,22 @@ export interface WysiwygEditorProps {
   slashActions?: ActionContext;
   /** How `[[wikilinks]]` resolve, and what ⌘-clicking one does. */
   links?: LinkBridge;
+  /** How a flashcard in the note learns its schedule, and is graded in place. */
+  flashcards?: FlashcardBridge;
+  /** The notes a canvas in the note can place, and how it opens one. */
+  canvas?: CanvasBridge;
+  /** Today's highlights to reread, for a spaced-reading block in the note. */
+  reading?: ReadingBridge;
+  /** A folder's notes as lessons, for a course block in the note. */
+  course?: CourseBridge;
+  /** Sharing this note's cards as a deck, and copying decks others shared. */
+  deck?: DeckBridge;
+  /** Speaking and listening for hands-free review; the browser's own by default. */
+  speech?: () => SpeechKit | null;
+  /** Underlines claims nothing in the notebook backs, while it is on for the note. */
+  claims?: ClaimBridge;
+  /** Today, as `YYYY-MM-DD`, for dating decisions. The device's own by default. */
+  today?: () => string;
   /**
    * Makes the note readable but not writable.
    *
@@ -137,6 +161,14 @@ export function WysiwygEditor({
   slashActions,
   editable = true,
   links,
+  flashcards,
+  canvas,
+  reading,
+  course,
+  deck,
+  speech,
+  claims,
+  today,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -150,6 +182,22 @@ export function WysiwygEditor({
   onImageStatusRef.current = onImageStatus;
   const linksRef = useRef<LinkBridge | undefined>(links);
   linksRef.current = links;
+  const flashcardsRef = useRef<FlashcardBridge | undefined>(flashcards);
+  flashcardsRef.current = flashcards;
+  const canvasRef = useRef<CanvasBridge | undefined>(canvas);
+  canvasRef.current = canvas;
+  const readingRef = useRef<ReadingBridge | undefined>(reading);
+  readingRef.current = reading;
+  const courseRef = useRef<CourseBridge | undefined>(course);
+  courseRef.current = course;
+  const deckRef = useRef<DeckBridge | undefined>(deck);
+  deckRef.current = deck;
+  const speechRef = useRef(speech);
+  speechRef.current = speech;
+  const claimsRef = useRef<ClaimBridge | undefined>(claims);
+  claimsRef.current = claims;
+  const todayRef = useRef(today);
+  todayRef.current = today;
 
   /**
    * Images waiting to hear that the resolver knows something new.
@@ -245,6 +293,25 @@ export function WysiwygEditor({
       CodeBlock,
       MermaidBlock,
       YoutubeEmbed,
+      // Cards and boards drawn where they were written, rather than left as the
+      // text they are stored as or opened in a window of their own.
+      FlashcardBlock.configure({ bridge: () => flashcardsRef.current }),
+      CanvasBlock.configure({ bridge: () => canvasRef.current }),
+      ReadingBlock.configure({ bridge: () => readingRef.current }),
+      CourseBlock.configure({ bridge: () => courseRef.current }),
+      DeckBlock.configure({ bridge: () => deckRef.current }),
+      ClaimChecker.configure({ bridge: () => claimsRef.current }),
+      DecisionBlock.configure({
+        today: () => {
+          if (todayRef.current) return todayRef.current();
+          const now = new Date();
+          const pad = (n: number) => String(n).padStart(2, "0");
+          return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        },
+      }),
+      HandsFreeBlock.configure({
+        speech: () => (speechRef.current ? speechRef.current() : browserSpeech()),
+      }),
       // Read through the ref, not captured: the extension list is built once,
       // and the bridge arrives a render later once the workspace resolves.
       Wikilink.configure({ bridge: () => linksRef.current }),
@@ -516,6 +583,25 @@ export function WysiwygEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
+  // The claim checker was switched, or has a newer notebook to check against:
+  // repaint its marks. A meta-only transaction, so the note does not change.
+  //
+  // Only when it actually changes after the editor exists: the extension reads
+  // the bridge as it is built, and a transaction on mount — even one that
+  // changes nothing — let a note that ends in a card grow a paragraph and
+  // report an edit just for being opened.
+  const paintedClaims = useRef<{ editor: Editor | null; claims: ClaimBridge | undefined }>({
+    editor: null,
+    claims,
+  });
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const painted = paintedClaims.current;
+    paintedClaims.current = { editor, claims };
+    if (painted.editor !== editor || painted.claims === claims) return;
+    editor.view.dispatch(editor.state.tr.setMeta(claimCheckerKey, true));
+  }, [editor, claims]);
+
   // Hand the instance to the parent once it exists, and take it back on
   // unmount so a toolbar never holds a destroyed editor.
   const onReadyRef = useRef(onReady);
@@ -562,7 +648,24 @@ export function WysiwygEditor({
   }
 
   return (
-    <div className={className}>
+    <div
+      className={className}
+      // The space under a long note belongs to this wrapper, not the editor.
+      // A click there writes below the last block, or at the end of the text.
+      onMouseDown={(event) => {
+        if (!editor || !editor.isEditable || event.button !== 0) return;
+        if (editor.view.dom.contains(event.target as globalThis.Node)) return;
+        if (roomBelow(editor.view, event.clientY)) {
+          event.preventDefault();
+          editor.view.focus();
+          return;
+        }
+        if (event.clientY > editor.view.dom.getBoundingClientRect().bottom) {
+          event.preventDefault();
+          editor.commands.focus("end");
+        }
+      }}
+    >
       <SlashMenu editor={editor} actions={slashActions ?? {}} />
 
       <BubbleMenu
@@ -571,8 +674,12 @@ export function WysiwygEditor({
         // Only for real text selections. Without this the formatting toolbar
         // also pops up over a selected diagram or image, where none of the
         // buttons do anything.
+        // Text only. A diagram, a card or a board selected as a whole has no
+        // words to make bold, and the bar sat on top of the card's own buttons.
         shouldShow={({ editor: instance, from, to }) =>
-          from !== to && !instance.state.selection.empty && !instance.isActive("mermaidBlock")
+          from !== to &&
+          !instance.state.selection.empty &&
+          !(instance.state.selection instanceof NodeSelection)
         }
         className="flex items-center gap-0.5 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-inverse-bg)] p-1 shadow-lg"
       >

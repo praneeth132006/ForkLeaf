@@ -14,7 +14,7 @@ describe("FeatureCatalog", () => {
     for (const category of FEATURE_CATEGORIES) {
       expect(screen.getByRole("heading", { level: 2, name: category.title })).toBeTruthy();
     }
-    expect(screen.getByText("⌘K → Review flashcards")).toBeTruthy();
+    expect(screen.getByText("Type Question :: Answer, or / → Flashcard")).toBeTruthy();
   });
 
   it("links each category from the bar at the top", () => {

@@ -44,6 +44,7 @@ const COLUMNS = [
       { label: "Diagrams", href: "/docs/diagrams" },
       { label: "Keyboard shortcuts", href: "/docs/shortcuts" },
       { label: "Exporting", href: "/docs/export" },
+      { label: "Connect an AI assistant (MCP)", href: "/docs/mcp" },
     ],
   },
   {

@@ -20,6 +20,12 @@ import { LinkDialog } from "./ui/LinkDialog";
 import type { InsertAction } from "./EditorToolbar";
 import type { ImageBridge } from "./images";
 import type { LinkBridge } from "./links";
+import type { FlashcardBridge } from "./extensions/FlashcardBlock";
+import type { CanvasBridge } from "./extensions/CanvasBlock";
+import type { ReadingBridge } from "./extensions/ReadingBlock";
+import type { CourseBridge } from "./extensions/CourseBlock";
+import type { DeckBridge } from "./extensions/DeckBlock";
+import type { ClaimBridge } from "./extensions/ClaimChecker";
 
 export interface MarkdownEditorProps {
   /**
@@ -74,6 +80,18 @@ export interface MarkdownEditorProps {
   imageDestination?: string;
   /** How `[[wikilinks]]` resolve, and what clicking one does. */
   links?: LinkBridge;
+  /** How a flashcard in the note learns its schedule, and is graded in place. */
+  flashcards?: FlashcardBridge;
+  /** The notes a canvas in the note can place, and how it opens one. */
+  canvas?: CanvasBridge;
+  /** Today's highlights to reread, for a spaced-reading block in the note. */
+  reading?: ReadingBridge;
+  /** A folder's notes as lessons, for a course block in the note. */
+  course?: CourseBridge;
+  /** Sharing this note's cards as a deck, and copying decks others shared. */
+  deck?: DeckBridge;
+  /** Underlines claims nothing in the notebook backs, while it is on for the note. */
+  claims?: ClaimBridge;
   /**
    * Makes the note readable but not writable, in every mode at once.
    *
@@ -121,6 +139,12 @@ export function MarkdownEditor({
   images,
   imageDestination,
   links,
+  flashcards,
+  canvas,
+  reading,
+  course,
+  deck,
+  claims,
   readOnly = false,
 }: MarkdownEditorProps) {
   // Split view: the divider position, as a percentage of the container width.
@@ -431,6 +455,12 @@ export function MarkdownEditor({
             slashActions={actionContext}
             {...(images ? { images } : {})}
             {...(links ? { links } : {})}
+            {...(flashcards ? { flashcards } : {})}
+            {...(canvas ? { canvas } : {})}
+            {...(reading ? { reading } : {})}
+            {...(course ? { course } : {})}
+            {...(deck ? { deck } : {})}
+            {...(claims ? { claims } : {})}
             {...(placeholder ? { placeholder } : {})}
             // A wide bottom pad so the last paragraph can be scrolled to the
             // middle of the screen instead of being pinned to the bottom edge.

@@ -10,7 +10,22 @@ import React, {
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import type { CursorPosition, ImageBridge, LinkBridge } from "@forkleaf/editor";
+import type {
+  CanvasBridge,
+  CursorPosition,
+  ClaimBridge,
+  DeckBridge,
+  ImageBridge,
+  LinkBridge,
+} from "@forkleaf/editor";
+import { readSharedDeck, shareDeck } from "@/lib/gateway";
+import { useInlineFlashcards } from "@/lib/inline-flashcards";
+import { useSpacedReading } from "@/lib/spaced-reading";
+import { useCourseBridge } from "@/lib/course-bridge";
+import { mapNote, noteMapMarkdown } from "@/lib/note-map";
+import { buildSupportIndex, checkClaim, type SupportIndex } from "@/lib/claims";
+import { badgeMarkdown } from "@/lib/notebook-health";
+import { formatMonthlyPage, monthlyPagePath, summariseMonth } from "@/lib/monthly-learning";
 import { displayTitle, parseCitation, type PdfCitation } from "@forkleaf/pdf";
 import type { EditorViewMode, Note, Workspace } from "@forkleaf/types";
 import {
@@ -91,10 +106,12 @@ import { VoiceNoteDialog } from "@/components/VoiceNoteDialog";
 import { ImportDialog } from "@/components/ImportDialog";
 import { ToolsDialog } from "@/components/ToolsDialog";
 import { resurface, type Resurfaced } from "@/lib/resurface";
+import { withCards } from "@/lib/flashcard-suggestions";
 import { AskDialog } from "@/components/AskDialog";
 import { MEETING_FOLDER, extractMeeting, meetingNote, withMeetingSummary } from "@/lib/meeting";
 import { plainText } from "@/lib/mind";
 import { CanvasDialog, type CanvasNoteChoice } from "@/components/CanvasDialog";
+import { ExplainBack } from "@/components/ExplainBack";
 import {
   canvasTitle,
   emptyCanvas,
@@ -1408,6 +1425,174 @@ export function EditorWorkspace() {
     [links, notePath, notebook],
   );
 
+  /** Flashcards in the open note are graded where they are written. */
+  const flashcardBridge = useInlineFlashcards(
+    workspace && note && !sealed ? note.path : null,
+    notebook,
+    setNotice,
+  );
+
+  /** A canvas drawn in a note can place the notebook's notes, and open them. */
+  const allNotesForCanvas = notebook.allNotes;
+  const openNoteForCanvas = notebook.openNote;
+  const canvasBridge = useMemo<CanvasBridge>(
+    () => ({
+      loadNotes: async () =>
+        (await allNotesForCanvas())
+          .filter((entry) => isMarkdown(entry.path))
+          .map((entry) => ({
+            path: entry.path,
+            title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+            excerpt: excerptOf(entry.content),
+          }))
+          .sort((a, b) => a.title.localeCompare(b.title)),
+      openNote: (path) => openNoteForCanvas(path),
+    }),
+    [allNotesForCanvas, openNoteForCanvas],
+  );
+
+  /** A spaced-reading block brings back highlights and saved quotes to reread. */
+  const readNoteForReading = notebook.readNote;
+  const upsertNoteForReading = notebook.upsertNote;
+  const readingStore = useMemo(
+    () =>
+      workspace
+        ? {
+            allNotes: async () =>
+              (await allNotesForCanvas()).map((entry) => ({
+                path: entry.path,
+                title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+                content: entry.content,
+                frontmatter: entry.frontmatter,
+              })),
+            readNote: readNoteForReading,
+            upsertNote: upsertNoteForReading,
+            openNote: openNoteForCanvas,
+          }
+        : null,
+    [workspace, allNotesForCanvas, readNoteForReading, upsertNoteForReading, openNoteForCanvas],
+  );
+  const readingBridge = useSpacedReading(readingStore);
+
+  /** A course block turns a folder's notes into ordered lessons with a quiz. */
+  const treeForCourse = notebook.tree;
+  const courseStore = useMemo(
+    () =>
+      workspace
+        ? {
+            folders: () =>
+              collectFolders(treeForCourse).filter((path) => !isTemplatePath(`${path}/`)),
+            allNotes: async () =>
+              (await allNotesForCanvas())
+                .filter((entry) => isMarkdown(entry.path))
+                .map((entry) => ({
+                  path: entry.path,
+                  title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+                  content: entry.content,
+                })),
+            openNote: openNoteForCanvas,
+            currentFolder: () => currentFolder || null,
+          }
+        : null,
+    [workspace, treeForCourse, allNotesForCanvas, openNoteForCanvas, currentFolder],
+  );
+  const courseBridge = useCourseBridge(courseStore);
+
+  /**
+   * The claim checker, on per note and remembered on this device. While it is
+   * on, the notebook is indexed once and every sentence written is checked
+   * against the other notes, saved pages and highlights.
+   */
+  const [claimsOn, setClaimsOn] = useState<ReadonlySet<string>>(() => {
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(CLAIMS_KEY) ?? "[]") as unknown;
+      return new Set(
+        Array.isArray(stored) ? stored.filter((each) => typeof each === "string") : [],
+      );
+    } catch {
+      return new Set();
+    }
+  });
+  const toggleClaims = useCallback((path: string) => {
+    setClaimsOn((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      try {
+        window.localStorage.setItem(CLAIMS_KEY, JSON.stringify([...next]));
+      } catch {
+        // Storage can be blocked; the choice lasts for this visit.
+      }
+      return next;
+    });
+  }, []);
+  const checkingClaims = Boolean(notePath && claimsOn.has(notePath));
+  const [supportIndex, setSupportIndex] = useState<SupportIndex | null>(null);
+  const treeForClaims = notebook.tree;
+  useEffect(() => {
+    if (!checkingClaims) return;
+    let live = true;
+    void allNotesForCanvas().then((entries) => {
+      if (!live) return;
+      setSupportIndex(
+        buildSupportIndex(
+          entries
+            .filter((entry) => isMarkdown(entry.path) && !isTemplatePath(entry.path))
+            .map((entry) => ({
+              path: entry.path,
+              title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+              content: entry.content,
+            })),
+        ),
+      );
+    });
+    return () => {
+      live = false;
+    };
+  }, [checkingClaims, allNotesForCanvas, treeForClaims]);
+  const claimBridge = useMemo<ClaimBridge>(() => {
+    const seen = new Map<string, ReturnType<ClaimBridge["check"]>>();
+    return {
+      enabled: checkingClaims && supportIndex !== null,
+      check: (sentence) => {
+        if (!supportIndex) return null;
+        if (!seen.has(sentence)) {
+          const result = checkClaim(supportIndex, sentence, notePath);
+          seen.set(
+            sentence,
+            result.status === "unsupported"
+              ? { status: "unsupported" }
+              : result.status === "supported"
+                ? {
+                    status: "supported",
+                    title: `${result.source.title}, line ${result.source.line}`,
+                  }
+                : null,
+          );
+        }
+        return seen.get(sentence) ?? null;
+      },
+    };
+  }, [checkingClaims, supportIndex, notePath]);
+
+  /** A deck block shares this note's cards publicly, or copies a shared deck in. */
+  const deckBridge = useMemo<DeckBridge>(
+    () => ({
+      signedIn: () => user !== null,
+      noteTitle: () => title || "Flashcards",
+      read: async (repo, ref) => {
+        const [owner = "", name = ""] = repo.split("/");
+        const deck = await readSharedDeck(owner, name, ref);
+        return { sha: deck.sha, content: deck.content };
+      },
+      share: async (input) => {
+        const shared = await shareDeck(input);
+        return { repo: `${shared.owner}/${shared.repo}`, sha: shared.sha };
+      },
+    }),
+    [user, title],
+  );
+
   const linkBridge = useMemo<LinkBridge>(
     () => ({
       resolve: links.resolve,
@@ -2316,6 +2501,45 @@ export function EditorWorkspace() {
     setNotice(`Wrote this week's review, ${created.path}`);
   }, [notebook, takenPaths, workspace, knownFiles]);
 
+  /** What I learned this month: written once a month, opened after that. */
+  const writeMonthlyPage = useCallback(async () => {
+    const now = new Date();
+    const path = monthlyPagePath(now);
+    if (takenPaths.includes(path)) {
+      notebook.openNote(path);
+      return;
+    }
+    const [entries, schedule] = await Promise.all([
+      notebook.allNotes(),
+      notebook.readNote(SCHEDULE_PATH),
+    ]);
+    const notes = entries
+      .filter((entry) => isMarkdown(entry.path))
+      .map((entry) => {
+        const created = entry.frontmatter.created as unknown;
+        return {
+          path: entry.path,
+          title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+          content: entry.content,
+          created:
+            created instanceof Date
+              ? created.toISOString()
+              : typeof created === "string"
+                ? created
+                : null,
+          updatedAt: entry.updatedAt,
+        };
+      });
+    const created = await notebook.createNote(
+      path.replace(/^.*\//, "").replace(/\.md$/, ""),
+      JOURNAL_FOLDER,
+      formatMonthlyPage(summariseMonth(notes, schedule, now)),
+    );
+    if (!created) return;
+    track("note_created");
+    setNotice(`Wrote what you learned this month, ${created.path}`);
+  }, [notebook, takenPaths]);
+
   const encryptCurrent = useCallback(
     async (passphrase: string) => {
       if (!note) return;
@@ -2476,6 +2700,13 @@ export function EditorWorkspace() {
 
   /** The `.canvas` board open over the editor, and the notes it can place. */
   const [canvasPath, setCanvasPath] = useState<string | null>(null);
+
+  /**
+   * Explain it back: the note's place taken by a page for writing what you
+   * remember of it, then the comparison. Leaves with the note it was for.
+   */
+  const [explainingPath, setExplainingPath] = useState<string | null>(null);
+  const explaining = note !== null && explainingPath === note.path;
   const [canvasNotes, setCanvasNotes] = useState<CanvasNoteChoice[]>([]);
   useEffect(() => {
     if (!canvasPath) return;
@@ -2515,6 +2746,15 @@ export function EditorWorkspace() {
         hint: dailyNotePath(new Date()),
         keywords: "daily journal diary today log day date",
         run: () => void openToday(),
+      },
+      {
+        id: "learned-this-month",
+        label: "What I learned this month",
+        group: "Notes",
+        hint: monthlyPagePath(new Date()),
+        keywords:
+          "month monthly learned learning summary digest review progress flashcards decisions publish",
+        run: () => void writeMonthlyPage(),
       },
       {
         id: "weekly-review",
@@ -2848,9 +3088,9 @@ export function EditorWorkspace() {
       });
       list.push({
         id: "canvas-new",
-        label: "New canvas",
+        label: "New canvas file",
         group: "Notes",
-        hint: "A board of cards, notes and links — saved as JSON Canvas, opens in Obsidian",
+        hint: "A .canvas file of its own — type /canvas to draw a board inside a note",
         keywords: "canvas board whiteboard mind map spatial cards obsidian brainstorm",
         run: async () => {
           const path = newCanvasPath(takenPaths, new Date());
@@ -2942,11 +3182,32 @@ export function EditorWorkspace() {
             setNotice("Nothing to bring back yet — a note shows up here after a month untouched.");
         },
       });
+      if (note && !(sealed && !opened)) {
+        list.push({
+          id: "claims",
+          label: claimsOn.has(note.path)
+            ? "Stop checking claims in this note"
+            : "Check claims in this note",
+          group: "Notes",
+          hint: "Underline sentences that nothing in your notes or saved sources backs",
+          keywords:
+            "claim check fact source cite citation evidence support verify unsupported proof",
+          run: () => toggleClaims(note.path),
+        });
+        list.push({
+          id: "explain-back",
+          label: "Explain it back",
+          group: "Notes",
+          hint: "Hide this note, write what you remember, and see exactly what you forgot",
+          keywords: "explain recall remember feynman test memory study learn compare forgot hide",
+          run: () => setExplainingPath(note.path),
+        });
+      }
       list.push({
         id: "flashcards",
-        label: "Review flashcards",
+        label: "Flashcards",
         group: "Notes",
-        hint: "Every question :: answer line in your notes, when it is due",
+        hint: "Study what is due, add cards, or make them from this note",
         keywords: "flashcards cards spaced repetition review study learn quiz anki memorise",
         run: () => setDialog("flashcards"),
       });
@@ -3186,6 +3447,8 @@ export function EditorWorkspace() {
 
     return list;
   }, [
+    claimsOn,
+    toggleClaims,
     takenPaths,
     resurfaced,
     note,
@@ -3224,6 +3487,7 @@ export function EditorWorkspace() {
     newFromTemplate,
     saveAsTemplate,
     writeWeeklyReview,
+    writeMonthlyPage,
     sealed,
     opened,
     encrypted,
@@ -3258,8 +3522,8 @@ export function EditorWorkspace() {
    * Built from the command list rather than beside it, so a tool is in the
    * menu exactly when its command is available — "Lock this encrypted note"
    * only for an open encrypted note, board and table only with a folder — and
-   * running one is running the command. Two are text instead of a dialog: a
-   * flashcard and a dated to-do are typed straight in.
+   * running one is running the command. A dated to-do is typed straight in;
+   * a flashcard and a canvas are the editor's own blocks, drawn in the note.
    */
   const slashTools = useMemo<InsertAction[]>(() => {
     const byId = new Map(commands.map((command) => [command.id, command]));
@@ -3285,16 +3549,53 @@ export function EditorWorkspace() {
       );
 
     return [
-      {
-        id: "tool:flashcard",
-        label: "Flashcard",
-        hint: "Question :: Answer — shown again with spaced repetition",
-        group: "Study",
-        keywords: ["card", "anki", "spaced", "repetition", "memorise", "revise"],
-        icon: <ExtraGlyph d={TOOL_ICONS.cards} />,
-        insert: "Question :: Answer",
-      },
-      ...tool("flashcards", "Study", TOOL_ICONS.cards, "The cards due today"),
+      ...tool(
+        "explain-back",
+        "Study",
+        TOOL_ICONS.help,
+        "Hide the note, write what you remember, see what you missed",
+      ),
+      ...tool(
+        "flashcards",
+        "Study",
+        TOOL_ICONS.cards,
+        "Study, add cards, or make them from this note",
+      ),
+      ...(notePath && links.ready
+        ? [
+            {
+              id: "tool:map-note",
+              label: "Map this note",
+              hint: "A canvas of this note and every note it links with, laid out here",
+              group: "See",
+              keywords: ["map", "canvas", "links", "graph", "mind", "diagram", "connections"],
+              icon: <ExtraGlyph d={TOOL_ICONS.graph} />,
+              insert: () => noteMapMarkdown(mapNote(links.graph, notePath)),
+            },
+            {
+              id: "tool:map-note-wide",
+              label: "Map this note, two links deep",
+              hint: "Also the notes its links lead to",
+              group: "See",
+              keywords: ["map", "canvas", "links", "graph", "wide", "deep", "neighbourhood"],
+              icon: <ExtraGlyph d={TOOL_ICONS.graph} />,
+              insert: () => noteMapMarkdown(mapNote(links.graph, notePath, { depth: 2 })),
+            },
+          ]
+        : []),
+      ...(workspace && !workspace.isLocal
+        ? [
+            {
+              id: "tool:health-badge",
+              label: "Notebook health badge",
+              hint: "A README badge: broken links, stale notes and your review streak",
+              group: "Share",
+              keywords: ["badge", "readme", "health", "shields", "status", "streak", "broken"],
+              icon: <ExtraGlyph d={TOOL_ICONS.check} />,
+              insert: () => badgeMarkdown(window.location.origin, workspace.repo),
+            },
+          ]
+        : []),
       {
         id: "tool:dated-todo",
         label: "To-do with a date",
@@ -3307,6 +3608,12 @@ export function EditorWorkspace() {
       ...tool("tasks", "Plan", TOOL_ICONS.check, "Every unticked box in the notebook"),
       ...tool("today", "Plan", TOOL_ICONS.calendar),
       ...tool("weekly-review", "Plan", TOOL_ICONS.calendar),
+      ...tool(
+        "learned-this-month",
+        "Plan",
+        TOOL_ICONS.calendar,
+        "A page of this month's notes, cards and decisions",
+      ),
       ...templates,
       ...tool("save-template", "Templates", TOOL_ICONS.template),
       ...tool("voice", "Capture", TOOL_ICONS.mic),
@@ -3315,8 +3622,8 @@ export function EditorWorkspace() {
       ...tool("import", "Capture", TOOL_ICONS.download),
       ...tool("mind", "Capture", TOOL_ICONS.grid),
       ...tool("bookmarklet", "Capture", TOOL_ICONS.download),
-      ...tool("canvas-new", "See", TOOL_ICONS.grid, "A board of cards, notes and links"),
       ...tool("ask", "See", TOOL_ICONS.help, "Answers quoted from your own notes"),
+      ...tool("claims", "See", TOOL_ICONS.check, "Underline what nothing in your notes backs"),
       ...tool("resurface", "See", TOOL_ICONS.clock),
       ...tool("graph", "See", TOOL_ICONS.graph),
       ...tool("board", "See", TOOL_ICONS.grid),
@@ -3336,7 +3643,7 @@ export function EditorWorkspace() {
       ...tool("extension-docs", "Help", TOOL_ICONS.help),
       ...tool("help", "Help", TOOL_ICONS.help),
     ];
-  }, [commands]);
+  }, [commands, notePath, links.graph, links.ready, workspace]);
 
   /** What the editor reports chosen: a `/` tool, or one of its own extras. */
   const runEditorAction = useCallback(
@@ -3645,7 +3952,7 @@ export function EditorWorkspace() {
               is left after the controls have what they need, and scroll when
               that is not enough — which is what makes this fit every width. */}
             <header
-              className={`${focusMode ? "hidden" : "flex"} h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-2`}
+              className={`${focusMode ? "hidden" : "flex"} @container h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-2`}
             >
               {/* The way into the file tree — and therefore into the
                 dashboard, the repository picker and everything else that
@@ -3712,7 +4019,7 @@ export function EditorWorkspace() {
                   type="button"
                   onClick={() => setPaletteOpen(true)}
                   title="Search notes and commands (⌘K)"
-                  className="hidden items-center gap-2 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] py-1.5 pl-2.5 pr-2 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)] sm:inline-flex"
+                  className="hidden items-center gap-2 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] py-1.5 pl-2.5 pr-2 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)] @2xl:inline-flex"
                 >
                   <SearchGlyph />
                   <span>Search</span>
@@ -3762,8 +4069,12 @@ export function EditorWorkspace() {
                     <rect x="2" y="9" width="5" height="5" rx="1.2" />
                     <rect x="9" y="9" width="5" height="5" rx="1.2" />
                   </svg>
-                  <span className="hidden md:inline">All tools</span>
-                  <span className="sr-only md:hidden">All tools</span>
+                  {/* By the header's own width, not the window's: with both side
+                      panels open a wide window still leaves a narrow column,
+                      and labels sized for the window pushed the last buttons
+                      off the edge, so the column scrolled sideways. */}
+                  <span className="hidden @3xl:inline">All tools</span>
+                  <span className="sr-only @3xl:hidden">All tools</span>
                 </button>
 
                 <IconButton onClick={() => setDialog("help")} label="Help (⌘⇧?)">
@@ -3974,6 +4285,13 @@ export function EditorWorkspace() {
                   noteTitle={note.path}
                   onUnlock={(passphrase) => encrypted.open(note.path, note.content, passphrase)}
                 />
+              ) : note && explaining ? (
+                <ExplainBack
+                  key={note.id}
+                  title={title}
+                  content={opened ? opened.body : note.content}
+                  onClose={() => setExplainingPath(null)}
+                />
               ) : note ? (
                 <MarkdownEditor
                   key={opened ? `${note.id}:unlocked` : note.id}
@@ -3991,6 +4309,12 @@ export function EditorWorkspace() {
                   revealLine={reveal && reveal.path === note.path ? reveal.line : followLine}
                   images={images}
                   links={linkBridge}
+                  canvas={canvasBridge}
+                  {...(readingBridge ? { reading: readingBridge } : {})}
+                  {...(courseBridge ? { course: courseBridge } : {})}
+                  deck={deckBridge}
+                  claims={claimBridge}
+                  {...(flashcardBridge ? { flashcards: flashcardBridge } : {})}
                   imageDestination={
                     workspace && !workspace.isLocal
                       ? `Committed to ${workspace.repo.owner}/${workspace.repo.repo}`
@@ -4175,6 +4499,7 @@ export function EditorWorkspace() {
           onDiscardChange={(id) => void notebook.discardChange(id)}
           onShrinkChange={notebook.shrinkChange}
           onLocateChange={(path) => void locateUnsynced(path)}
+          onConnectAssistant={() => setDialog("connect-assistant")}
         />
       )}
 
@@ -4583,6 +4908,11 @@ export function EditorWorkspace() {
                 ),
               )
           }
+          onAddCards={async (path, cards) => {
+            const written = await notebook.upsertNote(path, (content) => withCards(content, cards));
+            if (written === null) throw new Error("The cards could not be saved.");
+          }}
+          currentNote={note && !sealed ? { path: note.path, title, content: note.content } : null}
           readSchedule={() => notebook.readNote(SCHEDULE_PATH)}
           writeSchedule={async (content) => {
             const written = await notebook.upsertNote(SCHEDULE_PATH, () => content);
@@ -4843,6 +5173,9 @@ function EmptyState({
  * exported, and the two icons it draws beside these have to match to the pixel.
  */
 /** Icons for the `/` menu's tools, on the same 16px grid as the editor's own. */
+/** Notes the claim checker is on for, on this device. */
+const CLAIMS_KEY = "forkleaf:claims-on";
+
 const TOOL_ICONS = {
   cards: "M2.75 5.25h8.5v8h-8.5zM5 2.75h8.25v8",
   check: "M3 4.5l1.25 1.25L6.5 3.5M8.5 4.75h5M3 10.5l1.25 1.25L6.5 9.5M8.5 10.75h5",
