@@ -176,8 +176,17 @@ function policy(nonce: string | null, isDev: boolean): string {
  * omit it, and blocking those would break the app while adding nothing — a
  * browser doing a cross-site write always sends one.
  */
+/**
+ * Endpoints an AI assistant calls. They take a bearer token or nothing and
+ * never read this site's cookies, so a request from another origin cannot
+ * borrow a signed-in session through them — and browser-based MCP clients
+ * could not connect if they were refused.
+ */
+const BEARER_ONLY = new Set(["/api/mcp", "/api/mcp/oauth/token", "/api/mcp/oauth/register"]);
+
 function isForbiddenCrossOriginWrite(request: NextRequest): boolean {
   if (!WRITE_METHODS.has(request.method)) return false;
+  if (BEARER_ONLY.has(request.nextUrl.pathname)) return false;
 
   const origin = request.headers.get("origin");
   if (!origin) return false;

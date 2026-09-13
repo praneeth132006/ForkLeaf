@@ -15,6 +15,7 @@
     "@forkleaf/exporter": "workspace:*",
     "@forkleaf/github-client": "workspace:*",
     "@forkleaf/markdown-engine": "workspace:*",
+    "@forkleaf/mcp": "workspace:*",
     "@forkleaf/pdf": "workspace:*",
     "@forkleaf/store": "workspace:*",
     "@forkleaf/types": "workspace:*",

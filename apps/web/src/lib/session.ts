@@ -322,3 +322,55 @@ function timingSafeEqual(a: string, b: string): boolean {
   }
   return diff === 0;
 }
+
+// ─── Sealed values for connected assistants ─────────────────────────────────
+
+/**
+ * Encrypts a value for one purpose, under the same key as the session.
+ *
+ * The purpose travels inside the encrypted payload and is checked on the way
+ * out, so a value sealed as one thing — a client registration, a code, a
+ * token — can never be presented as another, and a session cookie is none of
+ * them.
+ */
+export async function sealValue(
+  payload: Record<string, unknown>,
+  purpose: string,
+  ttlSeconds: number,
+): Promise<string> {
+  return new EncryptJWT({ ...payload, purpose })
+    .setProtectedHeader({ alg: "dir", enc: "A256GCM" })
+    .setIssuedAt()
+    .setExpirationTime(`${Math.max(1, Math.floor(ttlSeconds))}s`)
+    .encrypt(await encryptionKey());
+}
+
+/** Opens a sealed value, or null when it is expired, tampered with, or for another purpose. */
+export async function openValue<T>(
+  value: string | null | undefined,
+  purpose: string,
+): Promise<T | null> {
+  if (!value) return null;
+  try {
+    const { payload } = await jwtDecrypt(value, await encryptionKey());
+    return payload.purpose === purpose ? (payload as unknown as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+const MCP_PENDING_COOKIE = "forkleaf_mcp_pending";
+
+/** Keeps an assistant's authorisation request across the round trip to GitHub. */
+export async function setMcpPending(value: string): Promise<void> {
+  const store = await cookies();
+  store.set(MCP_PENDING_COOKIE, value, { ...cookieOptions, maxAge: 600 });
+}
+
+/** Reads and clears it. Single use, like the OAuth state. */
+export async function consumeMcpPending(): Promise<string | null> {
+  const store = await cookies();
+  const value = store.get(MCP_PENDING_COOKIE)?.value ?? null;
+  if (value) store.delete(MCP_PENDING_COOKIE);
+  return value;
+}

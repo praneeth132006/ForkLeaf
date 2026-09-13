@@ -137,17 +137,40 @@ describe("POST /api/run — running a block", () => {
 
     expect(writeFiles).toHaveBeenCalledWith([
       { path: "/tmp/block.py", content: Buffer.from("print(1)", "utf8") },
+      { path: "/tmp/stdin.txt", content: Buffer.from("", "utf8") },
     ]);
-    expect(runCommand).toHaveBeenCalledWith("python3", ["/tmp/block.py"], {
-      timeoutMs: 30_000,
-    });
+    expect(runCommand).toHaveBeenCalledWith(
+      "bash",
+      ["-c", 'exec "$0" "$1" < /tmp/stdin.txt', "python3", "/tmp/block.py"],
+      { timeoutMs: 30_000 },
+    );
+  });
+
+  it("gives the program what was typed as its input", async () => {
+    sandboxReturning({ stdout: "Ada\n" });
+    await post({ language: "python", code: "print(input())", stdin: "Ada\n" });
+
+    expect(writeFiles).toHaveBeenCalledWith(
+      expect.arrayContaining([{ path: "/tmp/stdin.txt", content: Buffer.from("Ada\n", "utf8") }]),
+    );
+  });
+
+  it("refuses program input that is not text, or far too long", async () => {
+    expect((await post({ language: "python", code: "print(1)", stdin: 5 })).status).toBe(400);
+    expect(
+      (await post({ language: "python", code: "print(1)", stdin: "x".repeat(20_001) })).status,
+    ).toBe(400);
   });
 
   it("runs a shell block under bash whichever alias was fenced", async () => {
     sandboxReturning({ stdout: "" });
     await post({ language: "sh", code: "ls" });
 
-    expect(runCommand).toHaveBeenCalledWith("bash", ["/tmp/block.sh"], expect.anything());
+    expect(runCommand).toHaveBeenCalledWith(
+      "bash",
+      ["-c", expect.any(String), "bash", "/tmp/block.sh"],
+      expect.anything(),
+    );
   });
 
   it("uses the universal image, which carries all three interpreters", async () => {

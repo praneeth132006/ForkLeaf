@@ -3,7 +3,7 @@ import React from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { FeatureCatalog } from "./FeatureCatalog";
-import { FEATURE_CATEGORIES, allFeatures } from "@/lib/feature-catalog";
+import { FEATURE_CATEGORIES, allFeatures, searchFeatures } from "@/lib/feature-catalog";
 
 afterEach(cleanup);
 
@@ -27,7 +27,12 @@ describe("FeatureCatalog", () => {
   it("narrows to a search, and says when nothing matches", () => {
     render(<FeatureCatalog />);
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "flashcards" } });
-    expect(screen.getByRole("status").textContent).toBe(`1 of ${allFeatures().length} features`);
+    // Every feature that mentions flashcards — the card itself, and the / menu that offers them.
+    const matching = searchFeatures("flashcards", null).flatMap((category) => category.features);
+    expect(matching.length).toBeGreaterThan(0);
+    expect(screen.getByRole("status").textContent).toBe(
+      `${matching.length} of ${allFeatures().length} features`,
+    );
     expect(screen.getByRole("heading", { level: 3, name: "Flashcards" })).toBeTruthy();
 
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "teleportation" } });

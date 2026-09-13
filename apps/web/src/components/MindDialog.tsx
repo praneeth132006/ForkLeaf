@@ -25,6 +25,8 @@ export interface MindDialogProps {
   loadNotes: () => Promise<MindSource[]>;
   onOpenNote: (path: string) => void;
   onCopyBookmarklet: () => void;
+  /** Saves kept in the saves repository, already shaped as cards. */
+  loadSaved?: () => Promise<MindItem[]>;
 }
 
 type Load =
@@ -40,7 +42,13 @@ const FILTERS: { value: MindFilter; label: string }[] = [
 
 export const proxiedImage = (url: string) => `/api/link-image?url=${encodeURIComponent(url)}`;
 
-export function MindDialog({ onClose, loadNotes, onOpenNote, onCopyBookmarklet }: MindDialogProps) {
+export function MindDialog({
+  onClose,
+  loadNotes,
+  onOpenNote,
+  onCopyBookmarklet,
+  loadSaved,
+}: MindDialogProps) {
   const [load, setLoad] = useState<Load>({ kind: "reading" });
   const [filter, setFilter] = useState<MindFilter>("all");
   const [query, setQuery] = useState("");
@@ -50,11 +58,22 @@ export function MindDialog({ onClose, loadNotes, onOpenNote, onCopyBookmarklet }
   useEffect(() => {
     loadRef.current = loadNotes;
   }, [loadNotes]);
+  const savedRef = useRef(loadSaved);
+  useEffect(() => {
+    savedRef.current = loadSaved;
+  }, [loadSaved]);
 
   useEffect(() => {
     let live = true;
-    loadRef.current().then(
-      (notes) => live && setLoad({ kind: "done", items: mindItems(notes) }),
+    Promise.all([loadRef.current(), savedRef.current?.() ?? Promise.resolve([])]).then(
+      ([notes, saved]) =>
+        live &&
+        setLoad({
+          kind: "done",
+          items: [...saved, ...mindItems(notes)].sort((a, b) =>
+            (b.saved ?? "").localeCompare(a.saved ?? ""),
+          ),
+        }),
       (error: unknown) =>
         live &&
         setLoad({
@@ -74,7 +93,7 @@ export function MindDialog({ onClose, loadNotes, onOpenNote, onCopyBookmarklet }
   return (
     <Dialog
       title="Everything you saved"
-      subtitle="Pages, quotes, links and pictures kept in inbox/, newest first"
+      subtitle="Pages, quotes, links and pictures you saved, newest first"
       onClose={onClose}
       wide
       steady
@@ -97,7 +116,10 @@ export function MindDialog({ onClose, loadNotes, onOpenNote, onCopyBookmarklet }
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>On a phone, install ForkLeaf and use Share → ForkLeaf.</li>
               <li>In a browser, use the Save to ForkLeaf extension or bookmarklet.</li>
-              <li>Everything lands in inbox/ as an ordinary note, and shows up here.</li>
+              <li>
+                Signed in, saves go to your private forkleaf-saves repository, filed by kind and
+                month, and show up here.
+              </li>
             </ul>
             <button
               type="button"

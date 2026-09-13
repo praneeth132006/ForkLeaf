@@ -5,6 +5,55 @@ full record.
 
 ## Unreleased
 
+### Everything in the `/` menu, input for code, a repository for saves, and one-step MCP
+
+- **The `/` menu holds every feature.** Blocks and the app's tools are listed
+  together under headings — Text, Lists, Insert, Study, Plan, Templates,
+  Capture, See, Protect, History, Help, Formatting — and one search covers all
+  of them, by name, keyword or group. Flashcards, dated to-dos, voice notes,
+  the graph, board and table, encryption and history were reachable only
+  through ⌘K before. A tool appears only when its command can run, and running
+  it is running the command, so the two cannot disagree. A flashcard and a
+  dated to-do are typed straight in. The same list works in Source view.
+- **The menu no longer covers what is being typed.** It was positioned against
+  the editor's box while drawn inside a padded container, so it landed a line
+  too high, over the `/` it was answering. It is now fixed at the caret — below
+  the line, or above it near the bottom of the window — follows scrolling, and
+  repeats the query at the top.
+- **Code that asks for input works.** A run's standard input comes from a
+  file written beside the script, so `input()`, `read` and `process.stdin` get
+  answers instead of an immediate end-of-file. Pressing Run on a program that
+  reads input opens a **Program input** box first; a run that still stops for
+  want of input reopens it and says why. The interpreter and script reach bash
+  as arguments, never as shell text. The input is not written into the note.
+- **Saves have their own repository.** The extension, bookmarklet and share
+  sheet now open `/save`, which files each save into a private
+  `forkleaf-saves` repository — `pages/`, `quotes/`, `links/`, `images/`, each
+  by year and month, with the date first in every name — and rewrites
+  `INDEX.md` (by month and kind, newest first) and `index.json` in the same
+  commit. Saving the same page twice says when it was saved before. Signed out,
+  the page offers to sign in (the request survives the trip) or to keep the
+  save in this device's inbox. **Everything I saved** shows both, and opens a
+  repository save on GitHub. An old `/editor?save=1` address redirects.
+- **Connecting an AI assistant is one address and a sign-in.** `/api/mcp` is a
+  remote MCP server (Streamable HTTP) with OAuth 2.1: the assistant registers
+  itself, opens a ForkLeaf page where the person chooses the repository —
+  optionally a folder, a branch and read-only — and gets tokens it keeps and
+  renews. Nothing is stored on the server: registrations, codes and tokens are
+  sealed with the session secret and carry their purpose, and each assistant
+  gets a GitHub grant of its own, since GitHub refresh tokens can be spent only
+  once. Codes need the PKCE verifier and last five minutes. **All tools →
+  Connect an AI assistant** has a copy-ready step for Claude Code, Claude
+  Desktop and claude.ai, Cursor and VS Code. The local `packages/mcp` server
+  remains for people who want to run it themselves.
+- **A documentation page for every feature**, in a new _Everyday features_
+  section: the `/` menu, templates and journal, to-dos, flashcards, views,
+  saving from the web, running code with input, voice notes, encrypted notes
+  and importing. The MCP and extension guides are rewritten for the above.
+- `future-implementations.md` tracks what is done and what is next.
+- The All tools button and the extension and MCP guides, which were pushed
+  after #69 was merged, are included here.
+
 ### Every tool as a button, and setup guides for the extension and MCP
 
 - **All tools** in the editor header opens every command as a clickable button,

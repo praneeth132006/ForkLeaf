@@ -1,6 +1,7 @@
 import type { CompletionContext, CompletionResult, Completion } from "@codemirror/autocomplete";
 import type { EditorView } from "@codemirror/view";
-import { filterInsertActions, type ActionContext, type InsertDefinition } from "../insert-actions";
+import type { ActionContext, InsertDefinition } from "../insert-actions";
+import { filterSlashItems, insertTextOf, type SlashItem } from "../slash-items";
 
 /**
  * Slash commands for the raw-Markdown editor.
@@ -9,29 +10,43 @@ import { filterInsertActions, type ActionContext, type InsertDefinition } from "
  * Source view, so the same keystroke silently meant two different things
  * depending on which tab you were on.
  *
- * The list is not defined here — it comes from `insert-actions`, the same
- * source the toolbar and the rich-text slash menu read. That is deliberate:
- * this file previously carried its own parallel copy of the snippets, which is
- * exactly the arrangement where one list quietly grows an item the other never
- * gets.
- *
- * Implemented as a CodeMirror completion source rather than a bespoke popup so
- * it inherits arrow-key navigation, Enter to accept, Escape to dismiss, and the
- * existing tooltip theming for free.
+ * The list is not defined here — it comes from `slash-items`, the same source
+ * the rich-text menu reads: the editor's blocks from `insert-actions` and the
+ * app's tools, in the same groups. Implemented as a CodeMirror completion
+ * source rather than a bespoke popup so it inherits arrow-key navigation,
+ * Enter to accept, Escape to dismiss, and the tooltip theming for free.
  */
 
 /**
- * Applies a definition in place of the typed `/query`.
+ * Applies an item in place of the typed `/query`.
  *
  * An explicit `apply` rather than letting CodeMirror splice the label in,
  * because the inserted text and the searchable label are different things —
  * you type "/diagram" and get a fenced mermaid block.
  */
-function applyDefinition(definition: InsertDefinition, context: ActionContext) {
+function applyItem(item: SlashItem, context: ActionContext) {
   return (view: EditorView, _completion: Completion, from: number, to: number) => {
+    const { target } = item;
+
+    if (target.kind === "app") {
+      const text = insertTextOf(target.action);
+      if (text !== null) {
+        view.dispatch({
+          changes: { from, to, insert: text },
+          selection: { anchor: from + text.length },
+          scrollIntoView: true,
+        });
+        return;
+      }
+      // A tool opens something in the app; the typed query still has to go.
+      view.dispatch({ changes: { from, to, insert: "" }, selection: { anchor: from } });
+      context.runExtra?.(target.action.id);
+      return;
+    }
+
+    const definition = target.definition;
     // Images and links are questions for the app — it is the only thing that
-    // knows whether there is a repository to upload into. The typed `/query`
-    // still has to go, or the dialog would insert its result after it.
+    // knows whether there is a repository to upload into.
     const ask =
       (definition.id === "image" && context.requestImage) ||
       (definition.id === "link" && context.requestLink);
@@ -73,10 +88,15 @@ export function markdownSlashCommands(
   if (charBefore && !/\s/.test(charBefore)) return null;
 
   // Filtered here rather than by CodeMirror, which only scores against the
-  // visible label — that would stop "/erd" or "/flowchart" from finding
-  // "Diagram", the single most useful entry in the list.
-  const matches = filterInsertActions(match.text.slice(1), "source");
+  // visible label — that would stop "/erd" finding "Diagram", or "/anki"
+  // finding "Flashcard".
+  const matches = filterSlashItems(match.text.slice(1), "source", actions.extras ?? []);
   if (matches.length === 0) return null;
+
+  // Sections in the order their first item appears, so the best match's group
+  // leads rather than whichever name sorts first.
+  const ranks = new Map<string, number>();
+  for (const item of matches) if (!ranks.has(item.group)) ranks.set(item.group, ranks.size);
 
   return {
     from: match.from,
@@ -84,12 +104,14 @@ export function markdownSlashCommands(
     // re-querying the source on every keystroke.
     validFor: /^\/[a-zA-Z0-9]*$/,
     filter: false,
-    options: matches.map((definition) => ({
-      label: `/${definition.label}`,
-      detail: detailFor(definition),
-      info: definition.hint,
+    options: matches.map((item, index) => ({
+      label: `/${item.label}`,
+      detail: item.target.kind === "block" ? detailFor(item.target.definition) : "",
+      info: item.hint,
       type: "keyword",
-      apply: applyDefinition(definition, actions),
+      boost: -index,
+      section: { name: item.group, rank: ranks.get(item.group) ?? 0 },
+      apply: applyItem(item, actions),
     })),
   };
 }

@@ -81,7 +81,8 @@ import type { LinkBridge } from "./links";
 import { readSlashState } from "./extensions/SlashCommands";
 import { isolateCurrentLine } from "./isolate-line";
 import { caretBelow } from "./caret";
-import { filterInsertActions, type ActionContext, type InsertDefinition } from "./insert-actions";
+import { type ActionContext } from "./insert-actions";
+import { filterSlashItems, groupSlashItems, insertTextOf, type SlashItem } from "./slash-items";
 
 export interface WysiwygEditorProps {
   /** Markdown body, excluding frontmatter. */
@@ -754,43 +755,95 @@ function HighlightPicker({ editor }: { editor: Editor }) {
 
 // ─── Slash menu ─────────────────────────────────────────────────────────────
 
+/** Where the menu sits: under the line being typed, or over it near the bottom of the window. */
+interface MenuPlace {
+  left: number;
+  top?: number;
+  bottom?: number;
+}
+
+const MENU_WIDTH = 320;
+const MENU_HEIGHT = 380;
+const MENU_GAP = 8;
+
+/**
+ * Places the menu beside the line, never on it.
+ *
+ * The menu used to be positioned against the editor's own box while being
+ * drawn inside a padded container, so it landed a line too high — over the
+ * very `/` it was answering, hiding what was being typed. It is now fixed to
+ * the window at the caret: below the line when there is room, above it when
+ * there is not, and kept inside the window sideways.
+ */
+function placeMenu(caret: { left: number; top: number; bottom: number }): MenuPlace {
+  const left = Math.max(MENU_GAP, Math.min(caret.left, window.innerWidth - MENU_WIDTH - MENU_GAP));
+  const roomBelow = window.innerHeight - caret.bottom;
+  if (roomBelow < MENU_HEIGHT + MENU_GAP * 2 && caret.top > roomBelow) {
+    return { left, bottom: window.innerHeight - caret.top + MENU_GAP };
+  }
+  return { left, top: caret.bottom + MENU_GAP };
+}
+
 function SlashMenu({ editor, actions }: { editor: Editor; actions: ActionContext }) {
   const [state, setState] = useState({ active: false, query: "", from: 0 });
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const [place, setPlace] = useState<MenuPlace>({ left: 0, top: 0 });
+  const listRef = useRef<HTMLDivElement>(null);
+  const extras = actions.extras;
 
-  const commands = useMemo(() => filterInsertActions(state.query, "rich"), [state.query]);
+  const commands = useMemo(
+    () => filterSlashItems(state.query, "rich", extras ?? []),
+    [state.query, extras],
+  );
+  // Headings while browsing; one ranked list once something is typed, where
+  // the best match belongs at the top whatever group it is in.
+  const sections = useMemo(
+    () => (state.query ? [{ group: "", items: commands }] : groupSlashItems(commands)),
+    [state.query, commands],
+  );
 
-  // Track the slash state on every transaction.
+  // Track the slash state on every transaction, and keep the menu at the caret
+  // while the page scrolls under it.
   useEffect(() => {
+    const reposition = (next: { active: boolean; from: number }) => {
+      if (!next.active) return;
+      try {
+        setPlace(placeMenu(editor.view.coordsAtPos(next.from)));
+      } catch {
+        // Position can momentarily be out of range during a large edit.
+      }
+    };
     const update = () => {
       const next = readSlashState(editor);
       setState(next);
-
-      if (next.active) {
-        try {
-          const coords = editor.view.coordsAtPos(next.from);
-          const parent = editor.view.dom.getBoundingClientRect();
-          setPosition({ top: coords.bottom - parent.top + 6, left: coords.left - parent.left });
-        } catch {
-          // Position can momentarily be out of range during a large edit.
-        }
-      }
+      reposition(next);
     };
+    const follow = () => reposition(readSlashState(editor));
 
     editor.on("transaction", update);
     editor.on("focus", update);
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
     return () => {
       editor.off("transaction", update);
       editor.off("focus", update);
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
     };
   }, [editor]);
 
   // Reset the highlight whenever the result set changes.
   useEffect(() => setSelectedIndex(0), [state.query]);
 
+  // Keep the highlighted row in view as the arrow keys move through a long list.
+  useEffect(() => {
+    listRef.current
+      ?.querySelector<HTMLElement>('[aria-selected="true"]')
+      ?.scrollIntoView?.({ block: "nearest" });
+  }, [selectedIndex]);
+
   const run = useCallback(
-    (command: InsertDefinition) => {
+    (item: SlashItem) => {
       // Remove the "/query" text before running, so the command applies to a
       // clean block.
       editor
@@ -799,17 +852,25 @@ function SlashMenu({ editor, actions }: { editor: Editor; actions: ActionContext
         .deleteRange({ from: state.from, to: state.from + state.query.length + 1 })
         .run();
 
-      // Enter inserts a hard break here, so the paragraph the cursor is in is
-      // usually several visible lines. A command that replaces the block has to
-      // be handed the one line the writer typed the slash on, or it takes every
-      // line above it with it.
-      if (!command.inline) isolateCurrentLine(editor);
+      const { target } = item;
+      if (target.kind === "block") {
+        const command = target.definition;
+        // Enter inserts a hard break here, so the paragraph the cursor is in is
+        // usually several visible lines. A command that replaces the block has
+        // to be handed the one line the writer typed the slash on, or it takes
+        // every line above it with it.
+        if (!command.inline) isolateCurrentLine(editor);
 
-      // Images and links defer to the app, which is the only thing that knows
-      // where a file would be stored.
-      if (command.id === "image" && actions.requestImage) actions.requestImage();
-      else if (command.id === "link" && actions.requestLink) actions.requestLink();
-      else command.rich(editor);
+        // Images and links defer to the app, which is the only thing that knows
+        // where a file would be stored.
+        if (command.id === "image" && actions.requestImage) actions.requestImage();
+        else if (command.id === "link" && actions.requestLink) actions.requestLink();
+        else command.rich(editor);
+      } else {
+        const text = insertTextOf(target.action);
+        if (text !== null) editor.chain().focus().insertContent(text).run();
+        else actions.runExtra?.(target.action.id);
+      }
 
       setState({ active: false, query: "", from: 0 });
     },
@@ -872,62 +933,103 @@ function SlashMenu({ editor, actions }: { editor: Editor; actions: ActionContext
 
   if (!state.active) return null;
 
+  const style = {
+    left: place.left,
+    ...(place.top !== undefined ? { top: place.top } : { bottom: place.bottom }),
+  };
+
+  // What is being typed, repeated at the top of the menu, so the query is in
+  // view even when the menu sits over the line.
+  const typing = (
+    <div className="flex items-center justify-between gap-2 border-b border-[var(--fl-border)] px-3 py-1.5 text-[11.5px] text-[var(--fl-muted)]">
+      <span>
+        Typing{" "}
+        <kbd className="rounded border border-[var(--fl-border)] bg-[var(--fl-bg)] px-1 font-mono text-[11px] text-[var(--fl-text)]">
+          /{state.query}
+        </kbd>
+      </span>
+      <span>↑↓ Enter · Esc</span>
+    </div>
+  );
+
   // An empty result set gets a row saying so rather than the menu disappearing.
   // Vanishing is indistinguishable from the feature not existing, and it is the
   // state a mistyped query lands in most often.
   if (commands.length === 0) {
     return (
       <div
-        className="absolute z-50 w-72 rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-2.5 shadow-[var(--fl-shadow-lg)]"
-        style={{ top: position.top, left: position.left }}
+        className="fixed z-50 w-80 rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] shadow-[var(--fl-shadow-lg)]"
+        style={style}
       >
-        <p className="text-[13px] text-[var(--fl-text)]">
-          No blocks match &ldquo;{state.query}&rdquo;
-        </p>
-        <p className="mt-0.5 text-[11.5px] text-[var(--fl-muted)]">
-          Try heading, list, table, code, diagram — or press Escape.
-        </p>
+        {typing}
+        <div className="px-3 py-2.5">
+          <p className="text-[13px] text-[var(--fl-text)]">
+            Nothing matches &ldquo;{state.query}&rdquo;
+          </p>
+          <p className="mt-0.5 text-[11.5px] text-[var(--fl-muted)]">
+            Try heading, table, flashcard, to-do, voice or graph — or press Escape.
+          </p>
+        </div>
       </div>
     );
   }
 
+  const indexOf = new Map(commands.map((command, index) => [command, index]));
+
   return (
     <div
-      role="listbox"
-      aria-label="Insert block"
-      className="absolute z-50 max-h-80 w-72 overflow-y-auto rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1 shadow-[var(--fl-shadow-lg)]"
-      style={{ top: position.top, left: position.left }}
+      className="fixed z-50 flex max-h-[380px] w-80 flex-col overflow-hidden rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] shadow-[var(--fl-shadow-lg)]"
+      style={style}
     >
-      {commands.map((command, index) => (
-        <button
-          key={command.id}
-          type="button"
-          role="option"
-          aria-selected={index === selectedIndex}
-          // Prevent the editor losing focus before the click registers.
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => run(command)}
-          onMouseEnter={() => setSelectedIndex(index)}
-          className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${
-            index === selectedIndex ? "bg-[var(--fl-elevated)]" : ""
-          }`}
-        >
-          <span
-            aria-hidden="true"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--fl-border)] bg-[var(--fl-bg)] text-[var(--fl-muted)]"
+      {typing}
+      <div ref={listRef} role="listbox" aria-label="Insert block" className="overflow-y-auto p-1">
+        {sections.map((section) => (
+          <div
+            key={section.group || "results"}
+            role="group"
+            aria-label={section.group || "Results"}
           >
-            {command.icon}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-[13px] font-medium text-[var(--fl-text)]">
-              {command.label}
-            </span>
-            <span className="block truncate text-[11.5px] text-[var(--fl-muted)]">
-              {command.hint}
-            </span>
-          </span>
-        </button>
-      ))}
+            {section.group && (
+              <div className="px-2 pb-1 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[var(--fl-muted)]">
+                {section.group}
+              </div>
+            )}
+            {section.items.map((command) => {
+              const index = indexOf.get(command) ?? 0;
+              return (
+                <button
+                  key={command.id}
+                  type="button"
+                  role="option"
+                  aria-selected={index === selectedIndex}
+                  // Prevent the editor losing focus before the click registers.
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => run(command)}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors ${
+                    index === selectedIndex ? "bg-[var(--fl-elevated)]" : ""
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--fl-border)] bg-[var(--fl-bg)] text-[var(--fl-muted)]"
+                  >
+                    {command.icon}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13px] font-medium text-[var(--fl-text)]">
+                      {command.label}
+                    </span>
+                    <span className="block truncate text-[11.5px] text-[var(--fl-muted)]">
+                      {state.query ? `${command.group} · ${command.hint}` : command.hint}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

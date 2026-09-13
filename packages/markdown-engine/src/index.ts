@@ -113,6 +113,9 @@ export {
   runnerFor,
   type RunResult,
   type Runner,
+  MAX_INPUT,
+  ranOutOfInput,
+  readsInput,
 } from "./runnable";
 
 export {

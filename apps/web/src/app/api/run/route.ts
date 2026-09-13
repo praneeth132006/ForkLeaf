@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 import { handle, requireClient, ApiError } from "@/lib/api-helpers";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { MAX_OUTPUT, runnerFor } from "@forkleaf/markdown-engine";
+import { MAX_INPUT, MAX_OUTPUT, runnerFor } from "@forkleaf/markdown-engine";
 
 /**
  * Runs one fenced code block in a throwaway virtual machine.
@@ -32,6 +32,19 @@ const SANDBOX_TIMEOUT_MS = 90_000;
  */
 const MAX_CODE = 64_000;
 
+/** Where a run's input is written, and fed to the program from. */
+const STDIN_PATH = "/tmp/stdin.txt";
+
+/**
+ * Runs the interpreter with the input file as its standard input.
+ *
+ * The interpreter and the script reach bash as arguments (`$0` and `$1`), not
+ * as part of this string, so nothing from the request is ever shell syntax.
+ * Without the redirect, a program that asks a question reads end-of-file at
+ * once and stops — which is why `input()` used to fail in every block.
+ */
+const WITH_INPUT = `exec "$0" "$1" < ${STDIN_PATH}`;
+
 /** Runs allowed per client, per window. Compute is not free and this is a note. */
 const RATE_LIMIT = { name: "run", limit: 12, windowMs: 5 * 60_000 };
 
@@ -57,12 +70,12 @@ function sandboxCredentials(): Record<string, string> | null {
   return null;
 }
 
-function readBody(body: unknown): { language: string; code: string } {
+function readBody(body: unknown): { language: string; code: string; stdin: string } {
   if (typeof body !== "object" || body === null) {
     throw new ApiError(400, "validation", "Expected a JSON body.");
   }
 
-  const { language, code } = body as Record<string, unknown>;
+  const { language, code, stdin } = body as Record<string, unknown>;
 
   if (typeof language !== "string" || typeof code !== "string") {
     throw new ApiError(400, "validation", "A language and some code are required.");
@@ -80,7 +93,19 @@ function readBody(body: unknown): { language: string; code: string } {
     );
   }
 
-  return { language, code };
+  if (stdin !== undefined && typeof stdin !== "string") {
+    throw new ApiError(400, "validation", "Program input must be text.");
+  }
+
+  if (typeof stdin === "string" && stdin.length > MAX_INPUT) {
+    throw new ApiError(
+      400,
+      "validation",
+      `Program input is limited to ${MAX_INPUT.toLocaleString("en-US")} characters.`,
+    );
+  }
+
+  return { language, code, stdin: typeof stdin === "string" ? stdin : "" };
 }
 
 export async function POST(request: NextRequest) {
@@ -89,7 +114,7 @@ export async function POST(request: NextRequest) {
     await requireClient();
     enforceRateLimit(request, RATE_LIMIT);
 
-    const { language, code } = readBody(await request.json().catch(() => null));
+    const { language, code, stdin } = readBody(await request.json().catch(() => null));
 
     // The allow-list is the security boundary that matters here: the language
     // decides the interpreter, and nothing from the request reaches a shell as
@@ -132,9 +157,12 @@ export async function POST(request: NextRequest) {
       });
 
       const path = `/tmp/block.${runner.extension}`;
-      await sandbox.writeFiles([{ path, content: Buffer.from(code, "utf8") }]);
+      await sandbox.writeFiles([
+        { path, content: Buffer.from(code, "utf8") },
+        { path: STDIN_PATH, content: Buffer.from(stdin, "utf8") },
+      ]);
 
-      const finished = await sandbox.runCommand(runner.command, [path], {
+      const finished = await sandbox.runCommand("bash", ["-c", WITH_INPUT, runner.command, path], {
         timeoutMs: RUN_TIMEOUT_MS,
       });
 

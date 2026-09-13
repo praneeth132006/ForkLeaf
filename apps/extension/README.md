@@ -29,8 +29,11 @@ text you had selected. Nothing else is read.
 - **Right-click** a page, a selection, a link or an image and choose **Save … to
   ForkLeaf**.
 
-Saves become notes in `inbox/`. In ForkLeaf, ⌘K → **Show everything I saved**
-shows them as a grid.
+Signed in, saves go to a private `forkleaf-saves` repository on your GitHub
+account, filed automatically as `pages/`, `quotes/`, `links/` and `images/` by
+year and month, with an `INDEX.md` listing everything newest first. Signed out,
+ForkLeaf offers to sign in or to keep the save in the open notebook's `inbox/`.
+In ForkLeaf, ⌘K → **Show everything I saved** shows them as a grid.
 
 ## Permissions
 

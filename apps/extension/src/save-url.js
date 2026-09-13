@@ -4,7 +4,7 @@
  * The address that hands something to ForkLeaf.
  *
  * The extension never writes to anybody's notebook itself. It opens ForkLeaf
- * at `/editor?save=1…`, the same address the phone's share sheet and the
+ * at `/save?…`, the same address the phone's share sheet and the
  * bookmarklet use, and ForkLeaf shows what will be saved and asks. So the
  * extension holds no token, needs no sign-in of its own, and cannot write
  * anything the person has not seen.
@@ -70,7 +70,7 @@ export function saveUrl(origin, request) {
   const title = (request.title ?? "").trim().slice(0, LIMITS.title);
   if (title) params.set("title", title);
 
-  const base = `${origin}/editor?${params.toString()}`;
+  const base = `${origin}/save?${params.toString()}`;
   let text = (request.text ?? "").trim();
   if (!text) return base;
 

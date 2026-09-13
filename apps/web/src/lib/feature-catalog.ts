@@ -453,8 +453,33 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         title: "Use your notebook from an AI assistant",
         summary:
           "An MCP server so Claude and other assistants can search, read and write your notes, talking to GitHub directly.",
-        how: "Add packages/mcp to Claude Code, Claude Desktop or Cursor",
+        how: "All tools → Connect an AI assistant: paste one address, sign in",
         docs: "/docs/mcp",
+        tags: ["new", "github"],
+      },
+      {
+        id: "slash-tools",
+        title: "Every feature in the / menu",
+        summary:
+          "Blocks and tools together — flashcards, to-dos, voice notes, graph, encryption, history — grouped and searchable, beside the line you are typing.",
+        how: "Type / at the start of a line, then keep typing to search",
+        tags: ["new"],
+      },
+      {
+        id: "program-input",
+        title: "Code that asks for input",
+        summary:
+          "Runnable Python, shell and JavaScript blocks can read input — ForkLeaf asks for the answers before the run.",
+        how: "Run a block that uses input(), then fill in Program input",
+        tags: ["new"],
+      },
+      {
+        id: "saves-repo",
+        title: "A repository for everything you save",
+        summary:
+          "Pages, quotes, links and pictures saved from the web are filed into a private forkleaf-saves repository by kind and month, with an index.",
+        how: "Save with the extension, share sheet or bookmarklet",
+        docs: "/docs/saving",
         tags: ["new", "github"],
       },
       {

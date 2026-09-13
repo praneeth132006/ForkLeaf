@@ -119,7 +119,7 @@ export default function manifest(): MetadataRoute.Manifest {
      * none. The parameter names are read by `lib/inbox`.
      */
     share_target: {
-      action: "/editor",
+      action: "/save",
       method: "GET",
       params: { title: "share_title", text: "share_text", url: "share_url" },
     },

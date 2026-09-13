@@ -9,7 +9,15 @@ import {
   type NodeViewProps,
 } from "@tiptap/react";
 import { all, createLowlight } from "lowlight";
-import { OUTPUT_LANGUAGE, formatOutput, isOutput, runnerFor } from "@forkleaf/markdown-engine";
+import {
+  MAX_INPUT,
+  OUTPUT_LANGUAGE,
+  formatOutput,
+  isOutput,
+  ranOutOfInput,
+  readsInput,
+  runnerFor,
+} from "@forkleaf/markdown-engine";
 
 /**
  * Code blocks in the rich editor: syntax-highlighted, with the language on the
@@ -195,6 +203,16 @@ function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps
    */
   const [problem, setProblem] = useState<string | null>(null);
 
+  /**
+   * What the program reads while it runs — the answers to its questions.
+   *
+   * Kept beside the block, not written into the note: it is usually a name or
+   * a test number, and saving it would make every run's answers part of the
+   * document.
+   */
+  const [input, setInput] = useState("");
+  const [inputOpen, setInputOpen] = useState(false);
+
   const runner = runnerFor(language);
 
   const languages = useMemo(() => {
@@ -272,6 +290,16 @@ function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps
   const run = async () => {
     if (!runner || running) return;
 
+    // A program that asks for input and gets none reads end-of-file and stops.
+    // Asking for the answers first beats showing that error.
+    if (!inputOpen && !input && readsInput(language, node.textContent)) {
+      setInputOpen(true);
+      setProblem(
+        "This program reads input. Type what it should read under Program input — one answer per line — then press Run.",
+      );
+      return;
+    }
+
     setRunning(true);
     setProblem(null);
 
@@ -279,7 +307,13 @@ function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps
       const response = await fetch("/api/run", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ language, code: node.textContent }),
+        body: JSON.stringify({
+          language,
+          code: node.textContent,
+          // A last answer without a newline is still an answer: `read` in a
+          // shell reports failure on a final line that never ends.
+          stdin: input && !input.endsWith("\n") ? `${input}\n` : input,
+        }),
       });
 
       const body = await response.json().catch(() => null);
@@ -290,6 +324,13 @@ function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps
       }
 
       writeOutput(formatOutput(body));
+
+      if (!input && ranOutOfInput(body)) {
+        setInputOpen(true);
+        setProblem(
+          "The program stopped because it was waiting for input. Add it under Program input and run again.",
+        );
+      }
     } catch {
       // Offline, or the request never arrived. Nothing ran, so nothing is
       // written down.
@@ -354,6 +395,18 @@ function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps
             </button>
           )}
 
+          {runner && (
+            <button
+              type="button"
+              onClick={() => setInputOpen((open) => !open)}
+              aria-expanded={inputOpen}
+              className="fl-code-copy"
+              title="What the program reads while it runs — for input(), read or stdin"
+            >
+              {input ? "Input ✓" : "Input"}
+            </button>
+          )}
+
           <button type="button" onClick={copy} className="fl-code-copy">
             {copied ? "Copied" : "Copy"}
           </button>
@@ -363,6 +416,25 @@ function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps
       {problem && (
         <div contentEditable={false} className="fl-code-problem" role="status">
           {problem}
+        </div>
+      )}
+
+      {runner && inputOpen && (
+        <div contentEditable={false} className="border-b border-[var(--fl-border)] px-3 py-2">
+          <label className="flex flex-col gap-1 text-[12px] text-[var(--fl-muted)]">
+            <span>
+              <strong className="font-medium text-[var(--fl-text)]">Program input</strong> — what
+              the program reads while it runs, one answer per line
+            </span>
+            <textarea
+              value={input}
+              onChange={(event) => setInput(event.target.value.slice(0, MAX_INPUT))}
+              rows={3}
+              spellCheck={false}
+              placeholder={"Ada\n42"}
+              className="w-full resize-y rounded-md border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1.5 font-mono text-[12.5px] text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
+            />
+          </label>
         </div>
       )}
 

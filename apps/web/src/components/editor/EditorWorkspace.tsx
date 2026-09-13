@@ -88,11 +88,21 @@ import { EncryptDialog } from "@/components/EncryptDialog";
 import { VoiceNoteDialog } from "@/components/VoiceNoteDialog";
 import { ImportDialog } from "@/components/ImportDialog";
 import { ToolsDialog } from "@/components/ToolsDialog";
+import { ConnectAssistantDialog } from "@/components/ConnectAssistantDialog";
+import type { InsertAction } from "@forkleaf/editor";
+import { isSavedOnGitHub, mindItemsFromSaves, type SavesListing } from "@/lib/saved-items";
 import { voiceNoteMarkdown } from "@/lib/voice";
 import { UnlockPanel } from "@/components/UnlockPanel";
 import { isEncrypted } from "@/lib/encryption";
 import { useEncryptedNotes } from "@/hooks/useEncryptedNotes";
-import { INBOX_FOLDER, bookmarklet, findSaved, inboxNote, parseSaveRequest } from "@/lib/inbox";
+import {
+  INBOX_FOLDER,
+  bookmarklet,
+  findSaved,
+  inboxNote,
+  isSaveRequest,
+  parseSaveRequest,
+} from "@/lib/inbox";
 import { setTaskDone } from "@/lib/tasks";
 import {
   DAILY_TEMPLATE,
@@ -322,7 +332,17 @@ export function EditorWorkspace() {
    * cannot save the same thing twice.
    */
   const saveKey = searchParams.toString();
-  const incomingSave = useMemo(() => parseSaveRequest(new URLSearchParams(saveKey)), [saveKey]);
+  // Saves from the web belong on the save page, and from there in their own
+  // repository. Only one kept on this device on purpose (`local=1`) is asked
+  // about here, into this notebook's inbox.
+  const incomingSave = useMemo(() => {
+    const params = new URLSearchParams(saveKey);
+    return params.get("local") === "1" ? parseSaveRequest(params) : null;
+  }, [saveKey]);
+  useEffect(() => {
+    const params = new URLSearchParams(saveKey);
+    if (isSaveRequest(params) && params.get("local") !== "1") router.replace(`/save?${saveKey}`);
+  }, [saveKey, router]);
   const [answeredSave, setAnsweredSave] = useState<string | null>(null);
   const [earlierSave, setEarlierSave] = useState<{
     key: string;
@@ -446,6 +466,7 @@ export function EditorWorkspace() {
     | "voice"
     | "import"
     | "tools"
+    | "connect-assistant"
     | "time-machine"
     | "suggestions"
     | "document-versions"
@@ -2726,8 +2747,8 @@ export function EditorWorkspace() {
           id: "mcp-docs",
           label: "Connect an AI assistant (MCP)",
           group: "Go to",
-          keywords: "claude cursor model context protocol ai",
-          run: () => router.push("/docs/mcp"),
+          keywords: "claude cursor vscode mcp model context protocol ai connect",
+          run: () => setDialog("connect-assistant"),
         },
       );
       list.push({
@@ -3003,6 +3024,108 @@ export function EditorWorkspace() {
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
+  }, []);
+
+  // ── The / menu's tools ──────────────────────────────────────────────────
+
+  /**
+   * The app's features in the `/` menu, grouped.
+   *
+   * Built from the command list rather than beside it, so a tool is in the
+   * menu exactly when its command is available — "Lock this encrypted note"
+   * only for an open encrypted note, board and table only with a folder — and
+   * running one is running the command. Two are text instead of a dialog: a
+   * flashcard and a dated to-do are typed straight in.
+   */
+  const slashTools = useMemo<InsertAction[]>(() => {
+    const byId = new Map(commands.map((command) => [command.id, command]));
+    const tool = (id: string, group: string, icon: string, hint?: string): InsertAction[] => {
+      const command = byId.get(id);
+      if (!command) return [];
+      const described = command.hint && !/[⌘⇧⌥⌃]/.test(command.hint) ? command.hint : null;
+      return [
+        {
+          id: `tool:${id}`,
+          label: command.label,
+          hint: hint ?? described ?? command.group,
+          group,
+          keywords: command.keywords ? command.keywords.split(/\s+/) : [],
+          icon: <ExtraGlyph d={icon} />,
+        },
+      ];
+    };
+    const templates = commands
+      .filter((command) => command.id.startsWith("template-"))
+      .flatMap((command) =>
+        tool(command.id, "Templates", TOOL_ICONS.template, "A new note from this template"),
+      );
+
+    return [
+      {
+        id: "tool:flashcard",
+        label: "Flashcard",
+        hint: "Question :: Answer — shown again with spaced repetition",
+        group: "Study",
+        keywords: ["card", "anki", "spaced", "repetition", "memorise", "revise"],
+        icon: <ExtraGlyph d={TOOL_ICONS.cards} />,
+        insert: "Question :: Answer",
+      },
+      ...tool("flashcards", "Study", TOOL_ICONS.cards, "The cards due today"),
+      {
+        id: "tool:dated-todo",
+        label: "To-do with a date",
+        hint: "Due tomorrow — change the date; it shows in every open to-do",
+        group: "Plan",
+        keywords: ["task", "due", "deadline", "reminder", "todo"],
+        icon: <ExtraGlyph d={TOOL_ICONS.check} />,
+        insert: () => `- [ ] Task 📅 ${dateStamp(new Date(Date.now() + 86_400_000))}`,
+      },
+      ...tool("tasks", "Plan", TOOL_ICONS.check, "Every unticked box in the notebook"),
+      ...tool("today", "Plan", TOOL_ICONS.calendar),
+      ...tool("weekly-review", "Plan", TOOL_ICONS.calendar),
+      ...templates,
+      ...tool("save-template", "Templates", TOOL_ICONS.template),
+      ...tool("voice", "Capture", TOOL_ICONS.mic),
+      ...tool("import", "Capture", TOOL_ICONS.download),
+      ...tool("mind", "Capture", TOOL_ICONS.grid),
+      ...tool("bookmarklet", "Capture", TOOL_ICONS.download),
+      ...tool("graph", "See", TOOL_ICONS.graph),
+      ...tool("board", "See", TOOL_ICONS.grid),
+      ...tool("table", "See", TOOL_ICONS.grid),
+      ...tool("focus", "See", TOOL_ICONS.grid, "Hide everything but the note (⌘⇧F)"),
+      ...tool("encrypt", "Protect", TOOL_ICONS.lock),
+      ...tool("lock-encrypted", "Protect", TOOL_ICONS.lock),
+      ...tool("decrypt", "Protect", TOOL_ICONS.lock),
+      ...tool("lock", "Protect", TOOL_ICONS.lock, "Stop edits without stopping reading (⌘⇧L)"),
+      ...tool("history", "History", TOOL_ICONS.clock),
+      ...tool("replay", "History", TOOL_ICONS.clock),
+      ...tool("blame", "History", TOOL_ICONS.clock),
+      ...tool("deleted", "History", TOOL_ICONS.clock),
+      ...tool("time-machine", "History", TOOL_ICONS.clock),
+      ...tool("tools", "Help", TOOL_ICONS.grid, "Every tool in the editor, as buttons"),
+      ...tool("mcp-docs", "Help", TOOL_ICONS.help, "Claude, Cursor or VS Code, in one step"),
+      ...tool("extension-docs", "Help", TOOL_ICONS.help),
+      ...tool("help", "Help", TOOL_ICONS.help),
+    ];
+  }, [commands]);
+
+  /** What the editor reports chosen: a `/` tool, or one of its own extras. */
+  const runEditorAction = useCallback(
+    (id: string) => {
+      if (id.startsWith("tool:")) {
+        const command = commands.find((each) => each.id === id.slice("tool:".length));
+        if (command) void command.run();
+        return;
+      }
+      setDialog(id === "link-file" ? "link-file" : "capture");
+    },
+    [commands],
+  );
+
+  const loadSavedItems = useCallback(async () => {
+    const response = await fetch("/api/saves", { cache: "no-store" });
+    if (!response.ok) return [];
+    return mindItemsFromSaves((await response.json()) as SavesListing);
   }, []);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
@@ -3626,7 +3749,8 @@ export function EditorWorkspace() {
                   key={opened ? `${note.id}:unlocked` : note.id}
                   readOnly={noteLocked}
                   extraActions={editorExtras}
-                  onExtraAction={(id) => setDialog(id === "link-file" ? "link-file" : "capture")}
+                  onExtraAction={runEditorAction}
+                  slashTools={slashTools}
                   value={opened ? opened.body : note.content}
                   onChange={
                     opened ? (text: string) => encrypted.save(note.path, text) : notebook.saveNote
@@ -4047,6 +4171,10 @@ export function EditorWorkspace() {
         />
       )}
 
+      {openDialog === "connect-assistant" && (
+        <ConnectAssistantDialog onClose={() => setDialog(null)} />
+      )}
+
       {openDialog === "tools" && (
         <ToolsDialog
           commands={commands.filter((command) => command.id !== "tools")}
@@ -4107,6 +4235,7 @@ export function EditorWorkspace() {
       {openDialog === "mind" && workspace && (
         <MindDialog
           onClose={() => setDialog(null)}
+          {...(user ? { loadSaved: loadSavedItems } : {})}
           loadNotes={async () =>
             (await notebook.allNotes()).map((entry) => ({
               path: entry.path,
@@ -4116,6 +4245,12 @@ export function EditorWorkspace() {
             }))
           }
           onOpenNote={(path) => {
+            // A save from the saves repository is a file on GitHub, not a
+            // note in this notebook.
+            if (isSavedOnGitHub(path)) {
+              window.open(path, "_blank", "noopener,noreferrer");
+              return;
+            }
             setDialog(null);
             notebook.openNote(path);
           }}
@@ -4434,6 +4569,22 @@ function EmptyState({
  * it: that one is an implementation detail of the block list and is not
  * exported, and the two icons it draws beside these have to match to the pixel.
  */
+/** Icons for the `/` menu's tools, on the same 16px grid as the editor's own. */
+const TOOL_ICONS = {
+  cards: "M2.75 5.25h8.5v8h-8.5zM5 2.75h8.25v8",
+  check: "M3 4.5l1.25 1.25L6.5 3.5M8.5 4.75h5M3 10.5l1.25 1.25L6.5 9.5M8.5 10.75h5",
+  calendar: "M2.75 3.75h10.5v9.5H2.75zM2.75 6.75h10.5M5.5 2.25v3M10.5 2.25v3",
+  template: "M3.75 2.75h8.5v10.5h-8.5zM6 5.75h4M6 8.25h4M6 10.75h2",
+  mic: "M8 2.25a2 2 0 0 1 2 2v3.5a2 2 0 0 1-4 0v-3.5a2 2 0 0 1 2-2zM4.25 7.5a3.75 3.75 0 0 0 7.5 0M8 11.25v2.5",
+  download: "M8 2.5v7M5 6.75l3 3 3-3M3 12.75h10",
+  grid: "M2.75 2.75h4.5v4.5h-4.5zM8.75 2.75h4.5v4.5h-4.5zM2.75 8.75h4.5v4.5h-4.5zM8.75 8.75h4.5v4.5h-4.5z",
+  graph:
+    "M4 6a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM12 6a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM8 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM4.6 5.8l2.8 5M11.4 5.8l-2.8 5M5.5 4.5h5",
+  lock: "M4.25 7.25h7.5v6h-7.5zM5.75 7.25V5.5a2.25 2.25 0 0 1 4.5 0v1.75",
+  clock: "M8 2.75a5.25 5.25 0 1 0 0 10.5 5.25 5.25 0 0 0 0-10.5zM8 5v3.25l2 1.25",
+  help: "M8 2.75a5.25 5.25 0 1 0 0 10.5 5.25 5.25 0 0 0 0-10.5zM6.4 6.4a1.7 1.7 0 1 1 2.1 1.9v.9M8.5 11h.01",
+};
+
 function ExtraGlyph({ d }: { d: string }) {
   return (
     <svg

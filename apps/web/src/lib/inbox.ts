@@ -193,7 +193,7 @@ export function findSaved<T extends { path: string; frontmatter: Record<string, 
 
 /** The bookmarklet for this deployment: saves the page, and the selection as a quote. */
 export function bookmarklet(origin: string): string {
-  const target = JSON.stringify(`${origin}/editor?save=1`);
+  const target = JSON.stringify(`${origin}/save?save=1`);
   return (
     "javascript:(()=>{const s=String(getSelection()).trim();" +
     `window.open(${target}+'&kind='+(s?'quote':'page')+'&url='+encodeURIComponent(location.href)` +

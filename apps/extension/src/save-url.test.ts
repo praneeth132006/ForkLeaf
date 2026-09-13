@@ -44,7 +44,7 @@ describe("saveUrl", () => {
         text: "Some words",
       }),
     );
-    expect(url.origin + url.pathname).toBe("https://forkleaf.vercel.app/editor");
+    expect(url.origin + url.pathname).toBe("https://forkleaf.vercel.app/save");
     expect(Object.fromEntries(url.searchParams)).toEqual({
       save: "1",
       kind: "quote",

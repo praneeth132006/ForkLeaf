@@ -4,7 +4,19 @@ import { Editor, Diagrams, Properties, Export, Shortcuts } from "./writing";
 import { Reading } from "./reading";
 import { CitationLinks } from "./citation-links";
 import { Features } from "./features";
-import { BrowserExtension, McpServer } from "./connect";
+import { BrowserExtension, McpServer } from "./setup";
+import {
+  EncryptedNotes,
+  Flashcards,
+  Importing,
+  Journal,
+  RunningCode,
+  Saving,
+  SlashMenu,
+  Tasks,
+  Views,
+  VoiceNotes,
+} from "./everyday";
 import { SigningIn, Repositories, Sync, Conflicts } from "./github";
 import { Plans, PrivacyAndData, Security } from "./account";
 import { Troubleshooting, Faq, Support } from "./running";
@@ -34,6 +46,16 @@ export const DOC_CONTENT: Record<string, () => React.JSX.Element> = {
   conflicts: Conflicts,
   "browser-extension": BrowserExtension,
   mcp: McpServer,
+  "slash-menu": SlashMenu,
+  journal: Journal,
+  tasks: Tasks,
+  flashcards: Flashcards,
+  views: Views,
+  saving: Saving,
+  "voice-notes": VoiceNotes,
+  "encrypted-notes": EncryptedNotes,
+  importing: Importing,
+  "running-code": RunningCode,
   plans: Plans,
   "privacy-and-data": PrivacyAndData,
   security: Security,

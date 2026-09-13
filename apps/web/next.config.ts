@@ -23,6 +23,7 @@ const nextConfig: NextConfig = {
     "@forkleaf/exporter",
     "@forkleaf/editor",
     "@forkleaf/pdf",
+    "@forkleaf/mcp",
   ],
 
   /**
