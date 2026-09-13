@@ -4,9 +4,18 @@ import { inboxNote } from "./inbox";
 
 const NOW = new Date(2026, 8, 13);
 
-function saved(path: string, request: Parameters<typeof inboxNote>[0], extra: Record<string, unknown> = {}) {
+function saved(
+  path: string,
+  request: Parameters<typeof inboxNote>[0],
+  extra: Record<string, unknown> = {},
+) {
   const note = inboxNote(request, NOW);
-  return { path, title: note.title, content: note.content, frontmatter: { ...note.frontmatter, ...extra } };
+  return {
+    path,
+    title: note.title,
+    content: note.content,
+    frontmatter: { ...note.frontmatter, ...extra },
+  };
 }
 
 const NOTES = [
@@ -16,22 +25,42 @@ const NOTES = [
     title: "Lisbon",
     text: "Lisbon is the **capital** of Portugal.",
   }),
-  saved("inbox/tram.md", { kind: "image", url: "https://a.com/tram.jpg", title: "Tram 28", text: "" }, {
-    saved: "2026-09-10",
-    tags: ["travel", 3],
-  }),
-  saved("inbox/rust.md", { kind: "link", url: "https://blog.rust-lang.org/", title: "Rust blog", text: "" }, {
-    saved: "2026-09-12",
-  }),
-  { path: "inbox/typed.md", title: "Typed by hand", content: "# Heading\n\nSee [the site](https://x.com) and [[other note|Other]].", frontmatter: { type: "weird" } },
-  { path: "work/plan.md", title: "Plan", content: "not in the inbox", frontmatter: { type: "page" } },
+  saved(
+    "inbox/tram.md",
+    { kind: "image", url: "https://a.com/tram.jpg", title: "Tram 28", text: "" },
+    {
+      saved: "2026-09-10",
+      tags: ["travel", 3],
+    },
+  ),
+  saved(
+    "inbox/rust.md",
+    { kind: "link", url: "https://blog.rust-lang.org/", title: "Rust blog", text: "" },
+    {
+      saved: "2026-09-12",
+    },
+  ),
+  {
+    path: "inbox/typed.md",
+    title: "Typed by hand",
+    content: "# Heading\n\nSee [the site](https://x.com) and [[other note|Other]].",
+    frontmatter: { type: "weird" },
+  },
+  {
+    path: "work/plan.md",
+    title: "Plan",
+    content: "not in the inbox",
+    frontmatter: { type: "page" },
+  },
 ];
 
 describe("plainText", () => {
   it("keeps the words and drops the markup", () => {
-    expect(plainText("# Title\n\n> A **bold** [link](https://x.com) and `code`\n\n![pic](https://x.com/p.png) [[a|b]]")).toBe(
-      "Title A bold link and code b",
-    );
+    expect(
+      plainText(
+        "# Title\n\n> A **bold** [link](https://x.com) and `code`\n\n![pic](https://x.com/p.png) [[a|b]]",
+      ),
+    ).toBe("Title A bold link and code b");
     expect(plainText("On \\[brackets\\]")).toBe("On [brackets]");
   });
 });
@@ -58,8 +87,17 @@ describe("mindItems", () => {
       image: null,
     });
     expect(rust).toMatchObject({ kind: "link", excerpt: "Rust blog" });
-    expect(tram).toMatchObject({ kind: "image", image: "https://a.com/tram.jpg", tags: ["travel"] });
-    expect(typed).toMatchObject({ kind: "page", url: null, saved: null, excerpt: "Heading See the site and Other." });
+    expect(tram).toMatchObject({
+      kind: "image",
+      image: "https://a.com/tram.jpg",
+      tags: ["travel"],
+    });
+    expect(typed).toMatchObject({
+      kind: "page",
+      url: null,
+      saved: null,
+      excerpt: "Heading See the site and Other.",
+    });
   });
 
   it("does not offer a picture that is not a web address", () => {
@@ -75,7 +113,9 @@ describe("filterMind and countByKind", () => {
 
   it("filters by kind and by every word typed", () => {
     expect(filterMind(items, "image", "").map((item) => item.title)).toEqual(["Tram 28"]);
-    expect(filterMind(items, "all", "portugal capital").map((item) => item.title)).toEqual(["Lisbon"]);
+    expect(filterMind(items, "all", "portugal capital").map((item) => item.title)).toEqual([
+      "Lisbon",
+    ]);
     expect(filterMind(items, "all", "travel").map((item) => item.title)).toEqual(["Tram 28"]);
     expect(filterMind(items, "link", "portugal")).toEqual([]);
   });
