@@ -113,6 +113,17 @@ otherwise it starts with the date, a to-do list and a notes section.
   come first and are marked.
 - To-dos inside code blocks and in `templates/` are ignored.
 
+### Decision notes
+
+`/` → **Decision** puts a decision in the note: the question, options side by
+side, and for each option pros and cons weighed 1 to 3. Each option shows its
+score (pros less cons) and the highest one is marked. **Choose** records the
+choice with the date and every option's score at the time; choosing again later
+adds a "changed to" line, so the history of the decision stays with it. **+ Add
+an option** and **×** add and remove. The note holds a readable
+` ```decision ` block — `question:`, `option:`, `+ pro (2)`, `- con (1)`,
+`chosen:` and `history:` lines.
+
 ### Claim checker
 
 ⌘K or `/` → **Check claims in this note** turns the checker on for the open note

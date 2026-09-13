@@ -183,3 +183,15 @@ export {
   type DeckChanges,
   type DeckPlan,
 } from "./deck";
+
+export {
+  choose,
+  emptyDecision,
+  formatDecision,
+  leading,
+  parseDecision,
+  scoreOf,
+  type Decision,
+  type DecisionOption,
+  type Point,
+} from "./decision";

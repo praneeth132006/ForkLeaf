@@ -175,6 +175,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "decisions",
+        title: "Decision notes",
+        summary:
+          "Options with pros and cons weighed and scored, and the chosen option kept with a dated history of the decision.",
+        how: "/ → Decision",
+        tags: ["new"],
+      },
+      {
         id: "claim-checker",
         title: "Claim checker",
         summary:

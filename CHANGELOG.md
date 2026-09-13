@@ -5,6 +5,12 @@ full record.
 
 ## Unreleased
 
+### Decision notes
+
+`/` → **Decision** lays out options with weighed pros and cons and a score for
+each, then keeps the chosen option with a dated history of every choice and
+change of mind — as plain lines in a ` ```decision ` block in the note.
+
 ### Claim checker
 
 ⌘K or `/` → **Check claims in this note** underlines, as you write, sentences

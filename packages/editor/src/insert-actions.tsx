@@ -227,6 +227,15 @@ export const INSERT_DEFINITIONS: InsertDefinition[] = [
     markdown: { text: "```hands-free\n```\n" },
   },
   {
+    id: "decision",
+    keywords: ["decide", "choice", "options", "pros", "cons", "compare", "tradeoff", "adr"],
+    label: "Decision",
+    hint: "Options with weighed pros and cons, and the choice with its history",
+    icon: <Glyph d="M8 2.5v4M8 6.5 4 10.5M8 6.5l4 4M2.5 11h3v2.5h-3zM10.5 11h3v2.5h-3z" />,
+    rich: (editor) => editor.chain().focus().insertDecision().run(),
+    markdown: { text: "```decision\nquestion: \noption: Option A\noption: Option B\n```\n" },
+  },
+  {
     id: "h1",
     keywords: ["title", "big", "heading"],
     label: "Heading 1",

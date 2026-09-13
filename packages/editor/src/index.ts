@@ -64,6 +64,7 @@ export {
   type ClaimBridge,
   type ClaimVerdict,
 } from "./extensions/ClaimChecker";
+export { DecisionBlock } from "./extensions/DecisionBlock";
 export { judgeAnswer, commandOf, type Verdict, type VoiceCommand } from "./hands-free";
 export {
   CanvasBoard,

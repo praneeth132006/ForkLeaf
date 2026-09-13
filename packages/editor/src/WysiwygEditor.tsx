@@ -78,6 +78,7 @@ import { CourseBlock, type CourseBridge } from "./extensions/CourseBlock";
 import { DeckBlock, type DeckBridge } from "./extensions/DeckBlock";
 import { HandsFreeBlock, browserSpeech, type SpeechKit } from "./extensions/HandsFreeBlock";
 import { ClaimChecker, claimCheckerKey, type ClaimBridge } from "./extensions/ClaimChecker";
+import { DecisionBlock } from "./extensions/DecisionBlock";
 import { Wikilink } from "./extensions/Wikilink";
 import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 import { ShortcutsAfterLineBreak } from "./extensions/ShortcutsAfterLineBreak";
@@ -127,6 +128,8 @@ export interface WysiwygEditorProps {
   speech?: () => SpeechKit | null;
   /** Underlines claims nothing in the notebook backs, while it is on for the note. */
   claims?: ClaimBridge;
+  /** Today, as `YYYY-MM-DD`, for dating decisions. The device's own by default. */
+  today?: () => string;
   /**
    * Makes the note readable but not writable.
    *
@@ -165,6 +168,7 @@ export function WysiwygEditor({
   deck,
   speech,
   claims,
+  today,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -192,6 +196,8 @@ export function WysiwygEditor({
   speechRef.current = speech;
   const claimsRef = useRef<ClaimBridge | undefined>(claims);
   claimsRef.current = claims;
+  const todayRef = useRef(today);
+  todayRef.current = today;
 
   /**
    * Images waiting to hear that the resolver knows something new.
@@ -295,6 +301,14 @@ export function WysiwygEditor({
       CourseBlock.configure({ bridge: () => courseRef.current }),
       DeckBlock.configure({ bridge: () => deckRef.current }),
       ClaimChecker.configure({ bridge: () => claimsRef.current }),
+      DecisionBlock.configure({
+        today: () => {
+          if (todayRef.current) return todayRef.current();
+          const now = new Date();
+          const pad = (n: number) => String(n).padStart(2, "0");
+          return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        },
+      }),
       HandsFreeBlock.configure({
         speech: () => (speechRef.current ? speechRef.current() : browserSpeech()),
       }),
