@@ -216,11 +216,27 @@ pictures as pictures, links with their site, newest first.
 - **Worked on** — notes changed this week
 - **Deleted** — notes removed this week (connected repositories only)
 - **Overdue** and **Coming up** — dated to-dos, with a link to their note
+- **Worth a look** — notes pointing at files or notes that no longer exist, and
+  notes the notebook check thinks are out of date, each with the reason (only
+  when there are any)
 - **Looking back** — an empty heading for your own thoughts
 
 Running it again the same week opens the existing review instead of making a
 second one. Weeks start on Monday. To-dos are copied as plain lines, not boxes,
 so they are not counted twice in **Show every open to-do**.
+
+### Worth revisiting
+
+A few older notes come back each day, in **Worth revisiting** in the document
+panel (below Links), or with `/` → **Open a note worth revisiting**:
+
+1. notes linked to the open one, either way, untouched for a month;
+2. notes written on this day in an earlier year;
+3. the longest-forgotten notes, a different few each day.
+
+Each says why it was chosen, and the list holds still for the day. Templates,
+the flashcard schedule, encrypted notes and anything edited in the last month
+are never suggested.
 
 ### Encrypted notes
 

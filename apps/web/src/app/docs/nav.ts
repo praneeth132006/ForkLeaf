@@ -106,7 +106,13 @@ export const DOC_SECTIONS: DocSection[] = [
       {
         slug: "flashcards",
         title: "Flashcards",
-        summary: "Question :: Answer on one line, reviewed with spaced repetition.",
+        summary:
+          "Question :: Answer cards, both-way cards, multi-line cards and fill-in-the-blanks, with spaced repetition.",
+      },
+      {
+        slug: "resurfacing",
+        title: "Worth revisiting",
+        summary: "A few older notes each day, chosen for what you are working on.",
       },
       {
         slug: "views",

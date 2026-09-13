@@ -80,6 +80,8 @@ import {
   summariseWeek,
   weeklyReviewPath,
   weeklyReviewTitle,
+  staleEntries,
+  type StaleEntry,
 } from "@/lib/weekly-review";
 import { daysBefore, deletedSince } from "@/lib/deleted-notes";
 import { SaveDialog } from "@/components/SaveDialog";
@@ -88,6 +90,8 @@ import { EncryptDialog } from "@/components/EncryptDialog";
 import { VoiceNoteDialog } from "@/components/VoiceNoteDialog";
 import { ImportDialog } from "@/components/ImportDialog";
 import { ToolsDialog } from "@/components/ToolsDialog";
+import { resurface, type Resurfaced } from "@/lib/resurface";
+import { surveyNotebook } from "@/lib/notebook-freshness";
 import { ConnectAssistantDialog } from "@/components/ConnectAssistantDialog";
 import type { InsertAction } from "@forkleaf/editor";
 import { isSavedOnGitHub, mindItemsFromSaves, type SavesListing } from "@/lib/saved-items";
@@ -2271,15 +2275,34 @@ export function EditorWorkspace() {
       }
     }
 
+    // The notebook check over the same notes: what points at nothing, and what
+    // has probably gone out of date. Best effort — a review without it is still
+    // a review.
+    let stale: StaleEntry[] = [];
+    try {
+      const survey = surveyNotebook(
+        notes.map((entry) => ({
+          path: entry.path,
+          content: entry.content,
+          updatedAt: entry.updatedAt,
+          frontmatterTitle: entry.title,
+        })),
+        { files: new Set(await knownFiles()) },
+      );
+      stale = staleEntries(survey.notes);
+    } catch {
+      // Leave the section out.
+    }
+
     const created = await notebook.createNote(
       weeklyReviewTitle(now),
       JOURNAL_FOLDER,
-      formatWeeklyReview(summariseWeek(notes, now, deleted)),
+      formatWeeklyReview(summariseWeek(notes, now, deleted, stale)),
     );
     if (!created) return;
     track("note_created");
     setNotice(`Wrote this week's review, ${created.path}`);
-  }, [notebook, takenPaths, workspace]);
+  }, [notebook, takenPaths, workspace, knownFiles]);
 
   const encryptCurrent = useCallback(
     async (passphrase: string) => {
@@ -2363,6 +2386,48 @@ export function EditorWorkspace() {
     if (written === null) return;
     setNotice(`Saved ${path} — it is now under “New note from template” in ⌘K`);
   }, [note, title, takenPaths, notebook]);
+
+  // ── Worth revisiting ────────────────────────────────────────────────────
+
+  /**
+   * A few older notes worth reading again, for the document panel and the
+   * "note worth revisiting" command. Worked out when the open note changes,
+   * and again when the day does, so the list holds still while you work.
+   */
+  const [resurfaced, setResurfaced] = useState<Resurfaced[]>([]);
+  const listAllNotes = notebook.allNotes;
+  const openPath = note?.path ?? null;
+  const resurfaceDay = dateStamp(new Date());
+  useEffect(() => {
+    if (!workspace) return;
+    let live = true;
+    void listAllNotes().then((entries) => {
+      if (!live) return;
+      setResurfaced(
+        resurface(
+          entries.map((entry) => {
+            const created = entry.frontmatter.created as unknown;
+            return {
+              path: entry.path,
+              title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+              content: entry.content,
+              updatedAt: entry.updatedAt,
+              created:
+                created instanceof Date
+                  ? created.toISOString()
+                  : typeof created === "string"
+                    ? created
+                    : null,
+            };
+          }),
+          { current: openPath, now: new Date() },
+        ),
+      );
+    });
+    return () => {
+      live = false;
+    };
+  }, [listAllNotes, openPath, workspace, resurfaceDay]);
 
   const commands = useMemo<Command[]>(() => {
     const list: Command[] = [
@@ -2721,6 +2786,20 @@ export function EditorWorkspace() {
         run: () => setDialog("tasks"),
       });
       list.push({
+        id: "resurface",
+        label: "Open a note worth revisiting",
+        group: "Notes",
+        hint: resurfaced[0]
+          ? `${resurfaced[0].title} — ${resurfaced[0].reason}`
+          : "Older notes come back here once they have gone a month untouched",
+        keywords: "resurface revisit old forgotten random memory on this day",
+        run: () => {
+          if (resurfaced[0]) notebook.openNote(resurfaced[0].path);
+          else
+            setNotice("Nothing to bring back yet — a note shows up here after a month untouched.");
+        },
+      });
+      list.push({
         id: "flashcards",
         label: "Review flashcards",
         group: "Notes",
@@ -2964,6 +3043,7 @@ export function EditorWorkspace() {
 
     return list;
   }, [
+    resurfaced,
     note,
     title,
     workspace,
@@ -3853,6 +3933,11 @@ export function EditorWorkspace() {
               workspace={workspace}
               locked={noteLocked || sealed}
               encrypted={sealed}
+              resurfaced={resurfaced}
+              onOpenNote={(path) => {
+                setDrawer(null);
+                notebook.openNote(path);
+              }}
               onFrontmatterChange={notebook.updateFrontmatter}
               onRewrite={notebook.saveNote}
               onExport={() => {

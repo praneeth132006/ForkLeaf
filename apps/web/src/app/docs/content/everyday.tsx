@@ -108,10 +108,61 @@ export function Journal() {
       <H2 id="weekly-review">Weekly review</H2>
       <P>
         <strong>/ → Write this week&rsquo;s review</strong> makes <Code>journal/2026-w37.md</Code>{" "}
-        and lists the notes you started, worked on and deleted, overdue and upcoming to-dos, and an
-        empty <strong>Looking back</strong> heading for your own thoughts. Running it again the same
-        week opens the one you already have. Weeks start on Monday.
+        and lists:
       </P>
+      <UL>
+        <LI>the notes you started, worked on and deleted;</LI>
+        <LI>overdue and upcoming to-dos, each with a link to its note;</LI>
+        <LI>
+          <strong>Worth a look</strong> — notes that point at a file or a note that no longer
+          exists, and notes the notebook check thinks have gone out of date, each with the reason;
+        </LI>
+        <LI>
+          an empty <strong>Looking back</strong> heading for your own thoughts.
+        </LI>
+      </UL>
+      <P>Running it again the same week opens the one you already have. Weeks start on Monday.</P>
+    </>
+  );
+}
+
+export function Resurfacing() {
+  return (
+    <>
+      <Lead>
+        A few older notes worth reading again, chosen for what you are working on — so notes you
+        wrote to use later actually get used.
+      </Lead>
+
+      <H2 id="where">Where to find them</H2>
+      <UL>
+        <LI>
+          <strong>Worth revisiting</strong> in the document panel, below Links. Click one to open
+          it.
+        </LI>
+        <LI>
+          <strong>/ → Open a note worth revisiting</strong> opens the first one.
+        </LI>
+      </UL>
+
+      <H2 id="how">How they are chosen</H2>
+      <OL>
+        <LI>
+          Notes linked to the one you have open — either way — that nobody has edited for a month.
+          The context you already decided was related.
+        </LI>
+        <LI>Notes written on this day in an earlier year.</LI>
+        <LI>Notes that have gone longest without an edit, a different few each day.</LI>
+      </OL>
+      <P>
+        Each says why it was chosen — <em>Linked from this note · last edited 7 months ago</em>, or{" "}
+        <em>Written a year ago today</em>. The list holds still for the whole day while the same
+        note is open, so it is something to act on rather than something that shuffles.
+      </P>
+      <Note>
+        Templates, the flashcard schedule, encrypted notes and anything edited in the last month are
+        never suggested. A new notebook has nothing to show until its notes are a month old.
+      </Note>
     </>
   );
 }

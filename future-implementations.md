@@ -31,9 +31,9 @@ When something on this list ships, tick it, add the date, and describe it in
 
 - [ ] **Ask your notebook.** Ask a question and get an answer written from your
       own notes, with every sentence linked to the lines it came from.
-- [ ] **Daily resurfacing.** Each morning, one older note or highlight related to
+- [x] **Daily resurfacing.** _(done 2026-09-13)_ Each morning, one older note or highlight related to
       what you are writing now.
-- [ ] **Stale-note alerts.** A weekly list of notes that point at code or files
+- [x] **Stale-note alerts.** _(done 2026-09-13)_ A weekly list of notes that point at code or files
       that have changed since the note was written.
 
 ### Capturing

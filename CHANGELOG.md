@@ -5,6 +5,37 @@ full record.
 
 ## Unreleased
 
+### Flashcards that work the way they are written
+
+Cards written in the rich editor came out wrong. The editor escapes what it
+saves, so `2 * 3 :: 6` was asked as "2 \* 3", `[[links]]` kept escaped
+brackets, formatting marks showed raw, and every line ending inside a paragraph
+left a backslash on its answer. `Question::Answer` without spaces made no card.
+
+Cards are now shown as a person reads them, and the spellings Obsidian's
+spaced-repetition plugin reads all work: `::` with or without spaces (a tight
+card needs a question that reads like one, so `std::vector` stays code), `:::`
+for a card each way, a line holding only `?` or `??` to split a card over
+several lines, and `==highlights==` as fill-in-the-blank cards in notes tagged
+`flashcards`. `::` inside inline code is not a separator, a card written twice
+is asked once, and the review keeps multi-line answers' line breaks and says
+when a card is reversed or a blank.
+
+### Worth revisiting
+
+A few older notes come back each day — in the document panel and through `/` →
+**Open a note worth revisiting** — each with the reason it was chosen: linked to
+the open note and untouched for a month, written on this day in an earlier year,
+or among the longest forgotten. The choice holds for the day. Templates, the
+flashcard schedule and encrypted notes are never suggested.
+
+### Stale notes in the weekly review
+
+The weekly review runs the notebook check over the same notes and adds **Worth
+a look**: notes pointing at files or notes that no longer exist, then notes it
+thinks have gone out of date, each with the reason. Notes that are merely old
+are left out, so the section stays short enough to read.
+
 ### Everything in the `/` menu, input for code, a repository for saves, and one-step MCP
 
 - **The `/` menu holds every feature.** Blocks and the app's tools are listed

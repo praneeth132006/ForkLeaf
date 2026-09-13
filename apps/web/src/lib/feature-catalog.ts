@@ -483,6 +483,23 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new", "github"],
       },
       {
+        id: "resurfacing",
+        title: "Worth revisiting",
+        summary:
+          "A few older notes each day — linked to what you are writing, written on this day, or long forgotten — with why each was chosen.",
+        how: "Document panel → Worth revisiting, or / → Open a note worth revisiting",
+        docs: "/docs/resurfacing",
+        tags: ["new"],
+      },
+      {
+        id: "weekly-stale",
+        title: "Stale notes in the weekly review",
+        summary:
+          "The weekly review lists notes pointing at things that no longer exist, and notes that have gone out of date.",
+        how: "/ → Write this week's review → Worth a look",
+        tags: ["new"],
+      },
+      {
         id: "import",
         title: "Import from Obsidian or Notion",
         summary:
