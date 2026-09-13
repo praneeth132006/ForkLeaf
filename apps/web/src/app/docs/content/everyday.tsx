@@ -556,3 +556,102 @@ print(f"Hello {name}, next year you will be {age + 1}")
     </>
   );
 }
+
+export function AskNotebook() {
+  return (
+    <>
+      <Lead>
+        Ask a question and get back the passages in your notes that answer it — quoted, with the
+        note, the heading and the line each came from.
+      </Lead>
+
+      <H2 id="use">Asking</H2>
+      <OL>
+        <LI>
+          <strong>/ → Ask your notebook</strong>, or ⌘K → <strong>Ask your notebook</strong>.
+        </LI>
+        <LI>
+          Type a question — <em>When do we launch the beta?</em> — and press <strong>Ask</strong>.
+        </LI>
+        <LI>
+          Read the quoted passages, best answer first. The words that matched are highlighted.
+        </LI>
+        <LI>
+          <strong>Open at line N</strong> opens the note there: Split and Source scroll to the line,
+          Rich text scrolls to the paragraph.
+        </LI>
+      </OL>
+
+      <H2 id="how">How it works</H2>
+      <UL>
+        <LI>
+          Every paragraph and list item is a possible answer. Passages that contain more of the
+          question beat ones that repeat one word, rare words count for more than common ones, and
+          the note&rsquo;s title and the heading above a passage count a little.
+        </LI>
+        <LI>
+          Word forms meet — <Code>shipping</Code>, <Code>ships</Code> and <Code>shipped</Code> all
+          find <Code>ship</Code> — and words every sentence has (<Code>what</Code>, <Code>the</Code>
+          ) are ignored.
+        </LI>
+        <LI>At most two passages come from one note, so one long note cannot fill the list.</LI>
+      </UL>
+      <Note>
+        No AI writes the answer. Everything shown is something you wrote, so it cannot say anything
+        your notes do not — and your notes never leave this device to be asked about. Code blocks,
+        templates and encrypted notes are never quoted.
+      </Note>
+    </>
+  );
+}
+
+export function MeetingNotes() {
+  return (
+    <>
+      <Lead>
+        Take notes in a meeting, or record it, and end with the three lists anybody needs a week
+        later: what was decided, who is doing what, and what is still open.
+      </Lead>
+
+      <H2 id="start">Starting</H2>
+      <P>
+        <strong>/ → Start meeting notes</strong> makes a dated note in <Code>meetings/</Code> with
+        Date, Attendees, Agenda and Notes. Rename it to what the meeting is about. To record
+        instead, use <strong>/ → Record a voice note</strong> with a transcript.
+      </P>
+
+      <H2 id="write">Writing so it can be gathered</H2>
+      <Table
+        head={["Write", "Becomes"]}
+        rows={[
+          [<Code key="1">Decision: ship the beta on 2026-10-03</Code>, "A decision"],
+          [<Code key="2">We agreed to keep the free plan</Code>, "A decision"],
+          [
+            <Code key="3">Action: Sam to draft the announcement by 2026-09-20</Code>,
+            "A to-do for Sam, due that day",
+          ],
+          [<Code key="4">@Priya will book the venue</Code>, "A to-do for Priya"],
+          [<Code key="5">Leo will review the pricing page</Code>, "A to-do for Leo"],
+          [<Code key="6">Question: do we need a waitlist?</Code>, "An open question"],
+        ]}
+      />
+      <P>
+        Transcript lines like <Code>**Ana:** Action: send the survey</Code> give the action to the
+        speaker. Lists, quotes and bold are read through; code blocks, headings and existing check
+        boxes are left alone.
+      </P>
+
+      <H2 id="gather">Gathering</H2>
+      <P>
+        <strong>/ → Pull out decisions and to-dos</strong> writes a <strong>Summary</strong> at the
+        end of the note, with <strong>Decisions</strong>, <strong>Action items</strong> and{" "}
+        <strong>Open questions</strong>. Action items are check boxes with the owner and date, so
+        they appear in <strong>Show every open to-do</strong> and the weekly review.
+      </P>
+      <P>
+        Run it again after more notes and the summary is replaced, not repeated — it sits under its
+        own heading, Meeting summary, and is never read back in as notes.
+      </P>
+    </>
+  );
+}

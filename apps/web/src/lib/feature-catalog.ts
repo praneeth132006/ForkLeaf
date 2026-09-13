@@ -483,6 +483,24 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new", "github"],
       },
       {
+        id: "ask",
+        title: "Ask your notebook",
+        summary:
+          "Ask a question and get the passages in your notes that answer it, quoted with the note and line. No AI, nothing leaves the device.",
+        how: "/ → Ask your notebook",
+        docs: "/docs/ask",
+        tags: ["new"],
+      },
+      {
+        id: "meetings",
+        title: "Meeting notes",
+        summary:
+          "Start a meeting note, then pull out decisions, action items with owners and dates, and open questions into a summary.",
+        how: "/ → Start meeting notes, then / → Pull out decisions and to-dos",
+        docs: "/docs/meetings",
+        tags: ["new"],
+      },
+      {
         id: "resurfacing",
         title: "Worth revisiting",
         summary:

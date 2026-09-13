@@ -91,6 +91,9 @@ import { VoiceNoteDialog } from "@/components/VoiceNoteDialog";
 import { ImportDialog } from "@/components/ImportDialog";
 import { ToolsDialog } from "@/components/ToolsDialog";
 import { resurface, type Resurfaced } from "@/lib/resurface";
+import { AskDialog } from "@/components/AskDialog";
+import { MEETING_FOLDER, extractMeeting, meetingNote, withMeetingSummary } from "@/lib/meeting";
+import { plainText } from "@/lib/mind";
 import { surveyNotebook } from "@/lib/notebook-freshness";
 import { ConnectAssistantDialog } from "@/components/ConnectAssistantDialog";
 import type { InsertAction } from "@forkleaf/editor";
@@ -465,6 +468,7 @@ export function EditorWorkspace() {
     | "graph"
     | "folder-views"
     | "flashcards"
+    | "ask"
     | "mind"
     | "encrypt"
     | "voice"
@@ -2387,6 +2391,37 @@ export function EditorWorkspace() {
     setNotice(`Saved ${path} — it is now under “New note from template” in ⌘K`);
   }, [note, title, takenPaths, notebook]);
 
+  // ── Opening a note at a line ────────────────────────────────────────────
+
+  /**
+   * A place to open a note at, from an answer to a question.
+   *
+   * Split and Source view take a line to scroll to. Rich text has no lines —
+   * the same note is a tree of blocks there — so the block holding that line's
+   * words is found and scrolled to instead, once, when the note appears.
+   */
+  const [reveal, setReveal] = useState<{ path: string; line: number } | null>(null);
+  const revealedRef = useRef<{ path: string; line: number } | null>(null);
+  const revealContent = note && reveal && note.path === reveal.path ? note.content : null;
+  useEffect(() => {
+    if (!reveal || revealContent === null || mode !== "wysiwyg") return;
+    if (revealedRef.current === reveal) return;
+    const wanted = plainText(revealContent.split("\n")[reveal.line - 1] ?? "")
+      .slice(0, 40)
+      .trim();
+    if (!wanted) return;
+    const timer = window.setTimeout(() => {
+      revealedRef.current = reveal;
+      const blocks = document.querySelectorAll<HTMLElement>(
+        ".ProseMirror p, .ProseMirror li, .ProseMirror blockquote, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3",
+      );
+      [...blocks]
+        .find((block) => block.textContent?.includes(wanted))
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [reveal, revealContent, mode]);
+
   // ── Worth revisiting ────────────────────────────────────────────────────
 
   /**
@@ -2778,6 +2813,54 @@ export function EditorWorkspace() {
         run: () => setDialog("freshness"),
       });
       list.push({
+        id: "ask",
+        label: "Ask your notebook",
+        group: "Notes",
+        hint: "Answers quoted from your own notes, with where each came from",
+        keywords: "ask question answer search recall what when who find",
+        run: () => setDialog("ask"),
+      });
+      list.push({
+        id: "meeting-new",
+        label: "Start meeting notes",
+        group: "Notes",
+        hint: "A dated note in meetings/ with Agenda and Notes",
+        keywords: "meeting minutes agenda attendees standup call",
+        run: async () => {
+          const made = meetingNote("Meeting", new Date());
+          const created = await notebook.createNote(made.title, MEETING_FOLDER, made.content);
+          if (created)
+            setNotice(`Started ${created.path} — rename it to what the meeting is about.`);
+        },
+      });
+      if (note && !sealed) {
+        list.push({
+          id: "meeting-summary",
+          label: "Pull out decisions and to-dos",
+          group: "Notes",
+          hint: "Decisions, action items and open questions, gathered at the end of this note",
+          keywords: "meeting summary decisions actions action items minutes transcript extract",
+          run: () => {
+            if (noteLocked) {
+              setNotice("This note is locked. Unlock it to add a summary.");
+              return;
+            }
+            const items = extractMeeting(note.content);
+            const found = items.decisions.length + items.actions.length + items.questions.length;
+            if (found === 0) {
+              setNotice(
+                "No decisions, action items or questions found. Write lines like “Decision: …”, “Action: …”, “Question: …” or “@Sam will send it”.",
+              );
+              return;
+            }
+            void notebook.saveNote(withMeetingSummary(note.content, items));
+            setNotice(
+              `Gathered ${items.decisions.length} decision${items.decisions.length === 1 ? "" : "s"}, ${items.actions.length} action item${items.actions.length === 1 ? "" : "s"} and ${items.questions.length} open question${items.questions.length === 1 ? "" : "s"} at the end of the note.`,
+            );
+          },
+        });
+      }
+      list.push({
         id: "tasks",
         label: "Show every open to-do",
         group: "Notes",
@@ -3166,9 +3249,13 @@ export function EditorWorkspace() {
       ...templates,
       ...tool("save-template", "Templates", TOOL_ICONS.template),
       ...tool("voice", "Capture", TOOL_ICONS.mic),
+      ...tool("meeting-new", "Capture", TOOL_ICONS.template),
+      ...tool("meeting-summary", "Capture", TOOL_ICONS.check),
       ...tool("import", "Capture", TOOL_ICONS.download),
       ...tool("mind", "Capture", TOOL_ICONS.grid),
       ...tool("bookmarklet", "Capture", TOOL_ICONS.download),
+      ...tool("ask", "See", TOOL_ICONS.help, "Answers quoted from your own notes"),
+      ...tool("resurface", "See", TOOL_ICONS.clock),
       ...tool("graph", "See", TOOL_ICONS.graph),
       ...tool("board", "See", TOOL_ICONS.grid),
       ...tool("table", "See", TOOL_ICONS.grid),
@@ -3838,7 +3925,7 @@ export function EditorWorkspace() {
                   mode={mode}
                   theme={theme}
                   onCursorChange={setCursor}
-                  revealLine={followLine}
+                  revealLine={reveal && reveal.path === note.path ? reveal.line : followLine}
                   images={images}
                   links={linkBridge}
                   imageDestination={
@@ -4371,6 +4458,26 @@ export function EditorWorkspace() {
           onClose={answerSave}
           onOpenExisting={(path) => {
             answerSave();
+            notebook.openNote(path);
+          }}
+        />
+      )}
+
+      {openDialog === "ask" && workspace && (
+        <AskDialog
+          onClose={() => setDialog(null)}
+          loadNotes={async () =>
+            (await notebook.allNotes())
+              .filter((entry) => isMarkdown(entry.path))
+              .map((entry) => ({
+                path: entry.path,
+                title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+                content: entry.content,
+              }))
+          }
+          onOpen={(path, line) => {
+            setDialog(null);
+            setReveal({ path, line });
             notebook.openNote(path);
           }}
         />

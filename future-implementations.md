@@ -29,7 +29,7 @@ When something on this list ships, tick it, add the date, and describe it in
 
 ### Thinking with your notes
 
-- [ ] **Ask your notebook.** Ask a question and get an answer written from your
+- [x] **Ask your notebook.** _(done 2026-09-13)_ Ask a question and get an answer written from your
       own notes, with every sentence linked to the lines it came from.
 - [x] **Daily resurfacing.** _(done 2026-09-13)_ Each morning, one older note or highlight related to
       what you are writing now.
@@ -40,7 +40,7 @@ When something on this list ships, tick it, add the date, and describe it in
 
 - [ ] **Highlights on any web page.** Highlight text with the extension; it is
       kept in a note for that page, and shown again when you come back to it.
-- [ ] **Meeting mode.** Record, transcribe, and pull the decisions and to-dos out
+- [x] **Meeting mode.** _(done 2026-09-13)_ Record, transcribe, and pull the decisions and to-dos out
       of the transcript into the note.
 - [ ] **Email to notebook.** Forward an email to a personal address and it arrives
       in your saves repository.

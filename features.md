@@ -225,6 +225,33 @@ Running it again the same week opens the existing review instead of making a
 second one. Weeks start on Monday. To-dos are copied as plain lines, not boxes,
 so they are not counted twice in **Show every open to-do**.
 
+### Ask your notebook
+
+`/` or ⌘K → **Ask your notebook**, type a question, press **Ask**.
+
+- The passages that answer it are quoted — paragraphs and list items — best
+  first, with the note, the heading and the line, and the matching words
+  highlighted.
+- **Open at line N** opens the note there (Split and Source scroll to the line;
+  Rich text scrolls to the paragraph).
+- Passages covering more of the question rank higher, rare words count for
+  more, word forms meet (`shipping` finds `ship`), and at most two passages
+  come from one note.
+- No AI writes the answer: everything shown is something you wrote, and nothing
+  leaves the device. Code, templates and encrypted notes are never quoted.
+
+### Meeting notes
+
+- `/` → **Start meeting notes** makes a dated note in `meetings/` with Date,
+  Attendees, Agenda and Notes.
+- Write as you go: `Decision: …`, `We agreed …`, `Action: Sam to … by
+2026-09-20`, `@Priya will …`, `Leo will review …`, `Question: …`. Transcript
+  lines like `**Ana:** Action: send the survey` give the action to the speaker.
+- `/` → **Pull out decisions and to-dos** writes a **Summary** at the end:
+  Decisions, Action items (as `- [ ]` to-dos with `@owner` and `📅 date`, so they
+  show in every open to-do and the weekly review) and Open questions. Running it
+  again replaces the summary instead of adding another.
+
 ### Worth revisiting
 
 A few older notes come back each day, in **Worth revisiting** in the document

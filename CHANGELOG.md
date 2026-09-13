@@ -5,6 +5,24 @@ full record.
 
 ## Unreleased
 
+### Ask your notebook
+
+`/` or ⌘K → **Ask your notebook** answers a question with the passages in your
+notes that answer it: paragraphs and list items, ranked by how much of the
+question they cover with rare words counting for more (BM25-style), quoted with
+the note, the heading and the line, matching words highlighted, at most two
+from one note. **Open at line N** opens the note there — the line in Split and
+Source, the paragraph in Rich text. No model writes anything, so it cannot say
+what your notes do not, and nothing leaves the device.
+
+### Meeting notes
+
+`/` → **Start meeting notes** makes a dated note in `meetings/`. **Pull out
+decisions and to-dos** reads the notes — or a voice note's transcript — for
+`Decision:`, "we agreed", `Action:`, "@Sam will", "Leo will review", `Question:`
+and speaker labels, and writes a Summary at the end: decisions, action items as
+to-dos with owner and date, and open questions. The summary sits under its own heading, so running it again replaces it, and it is never read back in.
+
 ### Flashcards that work the way they are written
 
 Cards written in the rich editor came out wrong. The editor escapes what it

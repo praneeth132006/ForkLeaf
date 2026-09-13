@@ -110,6 +110,18 @@ export const DOC_SECTIONS: DocSection[] = [
           "Question :: Answer cards, both-way cards, multi-line cards and fill-in-the-blanks, with spaced repetition.",
       },
       {
+        slug: "ask",
+        title: "Ask your notebook",
+        summary:
+          "Questions answered with passages quoted from your own notes, and where each came from.",
+      },
+      {
+        slug: "meetings",
+        title: "Meeting notes",
+        summary:
+          "Decisions, action items and open questions, gathered from what was written or said.",
+      },
+      {
         slug: "resurfacing",
         title: "Worth revisiting",
         summary: "A few older notes each day, chosen for what you are working on.",

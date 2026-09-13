@@ -6,10 +6,12 @@ import { CitationLinks } from "./citation-links";
 import { Features } from "./features";
 import { BrowserExtension, McpServer } from "./setup";
 import {
+  AskNotebook,
   EncryptedNotes,
   Flashcards,
   Importing,
   Journal,
+  MeetingNotes,
   Resurfacing,
   RunningCode,
   Saving,
@@ -58,6 +60,8 @@ export const DOC_CONTENT: Record<string, () => React.JSX.Element> = {
   importing: Importing,
   "running-code": RunningCode,
   resurfacing: Resurfacing,
+  ask: AskNotebook,
+  meetings: MeetingNotes,
   plans: Plans,
   "privacy-and-data": PrivacyAndData,
   security: Security,
