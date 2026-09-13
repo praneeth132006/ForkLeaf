@@ -3716,7 +3716,7 @@ export function EditorWorkspace() {
               is left after the controls have what they need, and scroll when
               that is not enough — which is what makes this fit every width. */}
             <header
-              className={`${focusMode ? "hidden" : "flex"} h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-2`}
+              className={`${focusMode ? "hidden" : "flex"} @container h-[52px] shrink-0 items-center gap-2 border-b border-[var(--fl-border)] px-2`}
             >
               {/* The way into the file tree — and therefore into the
                 dashboard, the repository picker and everything else that
@@ -3783,7 +3783,7 @@ export function EditorWorkspace() {
                   type="button"
                   onClick={() => setPaletteOpen(true)}
                   title="Search notes and commands (⌘K)"
-                  className="hidden items-center gap-2 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] py-1.5 pl-2.5 pr-2 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)] sm:inline-flex"
+                  className="hidden items-center gap-2 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] py-1.5 pl-2.5 pr-2 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)] @2xl:inline-flex"
                 >
                   <SearchGlyph />
                   <span>Search</span>
@@ -3833,8 +3833,12 @@ export function EditorWorkspace() {
                     <rect x="2" y="9" width="5" height="5" rx="1.2" />
                     <rect x="9" y="9" width="5" height="5" rx="1.2" />
                   </svg>
-                  <span className="hidden md:inline">All tools</span>
-                  <span className="sr-only md:hidden">All tools</span>
+                  {/* By the header's own width, not the window's: with both side
+                      panels open a wide window still leaves a narrow column,
+                      and labels sized for the window pushed the last buttons
+                      off the edge, so the column scrolled sideways. */}
+                  <span className="hidden @3xl:inline">All tools</span>
+                  <span className="sr-only @3xl:hidden">All tools</span>
                 </button>
 
                 <IconButton onClick={() => setDialog("help")} label="Help (⌘⇧?)">

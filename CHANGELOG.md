@@ -5,6 +5,14 @@ full record.
 
 ## Unreleased
 
+### The editor no longer slides sideways in a narrow column
+
+With both side panels open, a wide window still leaves a narrow column for the
+note, but the header chose its labels by the window's width. Search and All
+tools were drawn in full, the last buttons were pushed past the edge, the open
+note tabs shrank to nothing, and the whole column scrolled sideways whenever a
+button in it took focus. The header now sizes its labels by its own width.
+
 ### Writing below a card, a board or a diagram at the end of a long note
 
 A note that ended in a canvas, a flashcard, a spaced-reading block or a diagram
