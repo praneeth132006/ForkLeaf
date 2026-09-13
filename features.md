@@ -113,6 +113,17 @@ otherwise it starts with the date, a to-do list and a notes section.
   come first and are marked.
 - To-dos inside code blocks and in `templates/` are ignored.
 
+### Notebook health badge
+
+`/` → **Notebook health badge** (in a notebook on GitHub) types the markdown for a
+badge — put it in your repository's `README.md`. The badge shows how many links
+and file references go nowhere, how many notes have probably gone stale, and how
+many days in a row flashcards have been reviewed: green when all is well, yellow
+when notes are stale, red when something is broken. It is drawn by
+`/api/badge?owner=…&repo=…`, which reads public repositories only, without
+signing in, and is cached for an hour; a private or missing repository gets a
+grey badge saying so.
+
 ### Decision notes
 
 `/` → **Decision** puts a decision in the note: the question, options side by

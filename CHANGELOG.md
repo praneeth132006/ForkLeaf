@@ -5,6 +5,13 @@ full record.
 
 ## Unreleased
 
+### Notebook health badge
+
+A README badge for a notes repository — broken links, stale notes and the
+flashcard review streak — served by `/api/badge` for public repositories and
+added to a note with `/` → **Notebook health badge**. It never shows as a broken
+image: a repository it cannot read gets a grey badge saying why.
+
 ### Decision notes
 
 `/` → **Decision** lays out options with weighed pros and cons and a score for

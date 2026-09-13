@@ -24,6 +24,7 @@ import { useSpacedReading } from "@/lib/spaced-reading";
 import { useCourseBridge } from "@/lib/course-bridge";
 import { mapNote, noteMapMarkdown } from "@/lib/note-map";
 import { buildSupportIndex, checkClaim, type SupportIndex } from "@/lib/claims";
+import { badgeMarkdown } from "@/lib/notebook-health";
 import { displayTitle, parseCitation, type PdfCitation } from "@forkleaf/pdf";
 import type { EditorViewMode, Note, Workspace } from "@forkleaf/types";
 import {
@@ -3532,6 +3533,19 @@ export function EditorWorkspace() {
             },
           ]
         : []),
+      ...(workspace && !workspace.isLocal
+        ? [
+            {
+              id: "tool:health-badge",
+              label: "Notebook health badge",
+              hint: "A README badge: broken links, stale notes and your review streak",
+              group: "Share",
+              keywords: ["badge", "readme", "health", "shields", "status", "streak", "broken"],
+              icon: <ExtraGlyph d={TOOL_ICONS.check} />,
+              insert: () => badgeMarkdown(window.location.origin, workspace.repo),
+            },
+          ]
+        : []),
       {
         id: "tool:dated-todo",
         label: "To-do with a date",
@@ -3573,7 +3587,7 @@ export function EditorWorkspace() {
       ...tool("extension-docs", "Help", TOOL_ICONS.help),
       ...tool("help", "Help", TOOL_ICONS.help),
     ];
-  }, [commands, notePath, links.graph, links.ready]);
+  }, [commands, notePath, links.graph, links.ready, workspace]);
 
   /** What the editor reports chosen: a `/` tool, or one of its own extras. */
   const runEditorAction = useCallback(

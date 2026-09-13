@@ -175,6 +175,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "health-badge",
+        title: "Notebook health badge",
+        summary:
+          "A README badge for your notes repository showing broken links, stale notes and your review streak.",
+        how: "/ → Notebook health badge",
+        tags: ["new", "github"],
+      },
+      {
         id: "decisions",
         title: "Decision notes",
         summary:
