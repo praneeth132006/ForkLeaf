@@ -113,6 +113,17 @@ otherwise it starts with the date, a to-do list and a notes section.
   come first and are marked.
 - To-dos inside code blocks and in `templates/` are ignored.
 
+### Explain it back
+
+⌘K or `/` → **Explain it back** hides the open note, in its own place, and asks
+you to write down everything you remember about it. **Compare with the note**
+(⌘↵) then shows the two side by side: every sentence of the note marked
+**Remembered**, **Partly** or **Missed**, with the words you left out named
+under it, and a score for how many of the note's key ideas came back. Anything
+you wrote that the note does not say is marked too, so a confident wrong memory
+is caught. **Edit my answer** or **Try again**, and **Back to the note** when
+done. The comparison runs on the device and nothing is saved.
+
 ### Flashcards
 
 **In the note.** Type `Question :: Answer` and press Enter — the line turns into

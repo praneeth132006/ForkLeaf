@@ -5,6 +5,14 @@ full record.
 
 ## Unreleased
 
+### Explain it back
+
+⌘K or `/` → **Explain it back** hides the note where it was and asks for what
+you remember of it, then compares the two side by side: each sentence of the
+note marked remembered, partly or missed, the words left out named, a score for
+the key ideas recalled, and anything written that the note does not support
+flagged. Stemmed word matching on the device — no account, no upload.
+
 ### Flashcards and canvases where you write them
 
 A `Question :: Answer` line stayed a line of text, with nothing to say it was a

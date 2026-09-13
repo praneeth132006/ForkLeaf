@@ -97,6 +97,7 @@ import { AskDialog } from "@/components/AskDialog";
 import { MEETING_FOLDER, extractMeeting, meetingNote, withMeetingSummary } from "@/lib/meeting";
 import { plainText } from "@/lib/mind";
 import { CanvasDialog, type CanvasNoteChoice } from "@/components/CanvasDialog";
+import { ExplainBack } from "@/components/ExplainBack";
 import {
   canvasTitle,
   emptyCanvas,
@@ -2504,6 +2505,13 @@ export function EditorWorkspace() {
 
   /** The `.canvas` board open over the editor, and the notes it can place. */
   const [canvasPath, setCanvasPath] = useState<string | null>(null);
+
+  /**
+   * Explain it back: the note's place taken by a page for writing what you
+   * remember of it, then the comparison. Leaves with the note it was for.
+   */
+  const [explainingPath, setExplainingPath] = useState<string | null>(null);
+  const explaining = note !== null && explainingPath === note.path;
   const [canvasNotes, setCanvasNotes] = useState<CanvasNoteChoice[]>([]);
   useEffect(() => {
     if (!canvasPath) return;
@@ -2970,6 +2978,16 @@ export function EditorWorkspace() {
             setNotice("Nothing to bring back yet — a note shows up here after a month untouched.");
         },
       });
+      if (note && !(sealed && !opened)) {
+        list.push({
+          id: "explain-back",
+          label: "Explain it back",
+          group: "Notes",
+          hint: "Hide this note, write what you remember, and see exactly what you forgot",
+          keywords: "explain recall remember feynman test memory study learn compare forgot hide",
+          run: () => setExplainingPath(note.path),
+        });
+      }
       list.push({
         id: "flashcards",
         label: "Flashcards",
@@ -3313,6 +3331,12 @@ export function EditorWorkspace() {
       );
 
     return [
+      ...tool(
+        "explain-back",
+        "Study",
+        TOOL_ICONS.help,
+        "Hide the note, write what you remember, see what you missed",
+      ),
       ...tool(
         "flashcards",
         "Study",
@@ -3996,6 +4020,13 @@ export function EditorWorkspace() {
                   key={note.id}
                   noteTitle={note.path}
                   onUnlock={(passphrase) => encrypted.open(note.path, note.content, passphrase)}
+                />
+              ) : note && explaining ? (
+                <ExplainBack
+                  key={note.id}
+                  title={title}
+                  content={opened ? opened.body : note.content}
+                  onClose={() => setExplainingPath(null)}
                 />
               ) : note ? (
                 <MarkdownEditor

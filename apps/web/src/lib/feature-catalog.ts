@@ -175,6 +175,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "explain-back",
+        title: "Explain it back",
+        summary:
+          "Hide a note, write down what you remember, and see it side by side with the original — every sentence marked by what you forgot.",
+        how: "⌘K → Explain it back",
+        tags: ["new"],
+      },
+      {
         id: "flashcards",
         title: "Flashcards",
         summary:
