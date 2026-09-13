@@ -18,7 +18,6 @@ import { SectionLink } from "./SectionLink";
 
 const SECTIONS = [
   { hash: "#how", label: "How it works" },
-  { hash: "#features", label: "Features" },
   { hash: "#toolkit", label: "What it does" },
   { hash: "#compare", label: "Compare" },
   { hash: "#pricing", label: "Pricing" },
@@ -46,7 +45,16 @@ export function Nav({
           aria-label="Sections"
           className="hidden items-center gap-6 text-sm text-[var(--fl-muted)] lg:flex"
         >
-          {SECTIONS.map((section) => (
+          <SectionLink hash={SECTIONS[0].hash} className={linkClass}>
+            {SECTIONS[0].label}
+          </SectionLink>
+          {/* A page of its own rather than a section of the home page: every
+              feature, grouped and searchable, where the home page has room for
+              a dozen highlights. */}
+          <Link className={linkClass} href="/features">
+            Features
+          </Link>
+          {SECTIONS.slice(1).map((section) => (
             <SectionLink key={section.hash} hash={section.hash} className={linkClass}>
               {section.label}
             </SectionLink>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SectionHeading } from "./SectionHeading";
 
 /**
@@ -113,6 +114,12 @@ export function Features() {
             <div className="mt-6 flex-1">{feature.art}</div>
           </article>
         ))}
+      </div>
+
+      <div className="mt-10 flex justify-center">
+        <Link href="/features" className="fl-btn fl-btn-ghost">
+          See every feature →
+        </Link>
       </div>
     </section>
   );
