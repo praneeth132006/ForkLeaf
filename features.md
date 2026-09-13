@@ -44,6 +44,13 @@ Being built in this order. Ticked items are shipped and documented below.
 
 ---
 
+## Finding every tool
+
+Every command has a button. Press **All tools** (the four-squares button at the
+top right of the editor) for the whole list, grouped and filterable, with each
+shortcut shown beside its command. ⌘K is the same list, for when you know what
+to type.
+
 ## Writing
 
 | Feature                    | How to use it                                                                                                                                                                            |
@@ -152,7 +159,7 @@ ForkLeaf address in its **Options**.
 - Right-click a page, selection, link or image → **Save … to ForkLeaf**.
 
 It opens ForkLeaf's save address, so ForkLeaf still asks before saving. It needs
-no account and no host permissions. See `apps/extension/README.md`.
+no account and no host permissions. Step-by-step install: [/docs/browser-extension](https://forkleaf.vercel.app/docs/browser-extension), or `apps/extension/README.md`.
 
 ### Everything you saved
 
@@ -342,7 +349,7 @@ variable `FORKLEAF_SEND_TOKEN` to `true` so the job's own short-lived
 `packages/mcp` is an MCP server, so Claude Code, Claude Desktop or any other
 MCP client can work with your notes. Give it a GitHub token for your notes
 repository and add it to your assistant — the setup is in
-`packages/mcp/README.md`.
+`packages/mcp/README.md`. Step-by-step setup for Claude Code, Claude Desktop and Cursor: [/docs/mcp](https://forkleaf.vercel.app/docs/mcp).
 
 | Tool                   | What the assistant can do                           |
 | ---------------------- | --------------------------------------------------- |

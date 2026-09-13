@@ -5,6 +5,19 @@ full record.
 
 ## Unreleased
 
+### Every tool as a button, and setup guides for the extension and MCP
+
+- **All tools** in the editor header opens every command as a clickable button,
+  grouped, filterable, with its shortcut beside it. Until now many features were
+  reachable only through ⌘K or a shortcut, which is invisible to anyone who has
+  not read about them. It is the same list the palette runs, so nothing can be
+  in one and missing from the other.
+- **/docs/browser-extension** and **/docs/mcp**, under a new _Connect_ section
+  of the documentation: installing Save to ForkLeaf step by step, and connecting
+  Claude Code, Claude Desktop or Cursor with a fine-grained token, including
+  what to do when it does not connect. Reachable from All tools, ⌘K, and a
+  _Step-by-step setup_ link on both cards of the features page.
+
 ### Import from Obsidian and Notion
 
 ⌘K → **Import notes from Obsidian or Notion** reads a folder picked from disk,

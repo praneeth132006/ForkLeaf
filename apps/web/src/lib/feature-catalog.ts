@@ -17,6 +17,8 @@ export interface Feature {
   /** How to reach it — a command, a shortcut or a place in the app. */
   how: string;
   tags?: readonly FeatureTag[];
+  /** A documentation page with the full setup, for features that need one. */
+  docs?: string;
 }
 
 export interface FeatureCategory {
@@ -216,6 +218,7 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         summary:
           "One click, or a right-click on a selection, link or image. No account and no host permissions.",
         how: "Alt+Shift+S, or right-click → Save to ForkLeaf",
+        docs: "/docs/browser-extension",
         tags: ["new"],
       },
       {
@@ -450,7 +453,8 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         title: "Use your notebook from an AI assistant",
         summary:
           "An MCP server so Claude and other assistants can search, read and write your notes, talking to GitHub directly.",
-        how: "Add packages/mcp to Claude Code or Claude Desktop",
+        how: "Add packages/mcp to Claude Code, Claude Desktop or Cursor",
+        docs: "/docs/mcp",
         tags: ["new", "github"],
       },
       {

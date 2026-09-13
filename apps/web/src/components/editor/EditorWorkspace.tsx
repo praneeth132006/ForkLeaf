@@ -87,6 +87,7 @@ import { MindDialog } from "@/components/MindDialog";
 import { EncryptDialog } from "@/components/EncryptDialog";
 import { VoiceNoteDialog } from "@/components/VoiceNoteDialog";
 import { ImportDialog } from "@/components/ImportDialog";
+import { ToolsDialog } from "@/components/ToolsDialog";
 import { voiceNoteMarkdown } from "@/lib/voice";
 import { UnlockPanel } from "@/components/UnlockPanel";
 import { isEncrypted } from "@/lib/encryption";
@@ -444,6 +445,7 @@ export function EditorWorkspace() {
     | "encrypt"
     | "voice"
     | "import"
+    | "tools"
     | "time-machine"
     | "suggestions"
     | "document-versions"
@@ -2705,6 +2707,29 @@ export function EditorWorkspace() {
         keywords: "flashcards cards spaced repetition review study learn quiz anki memorise",
         run: () => setDialog("flashcards"),
       });
+      list.push(
+        {
+          id: "tools",
+          label: "Show all tools",
+          group: "Go to",
+          keywords: "menu features everything commands",
+          run: () => setDialog("tools"),
+        },
+        {
+          id: "extension-docs",
+          label: "Install the browser extension",
+          group: "Go to",
+          keywords: "chrome edge save web clipper",
+          run: () => router.push("/docs/browser-extension"),
+        },
+        {
+          id: "mcp-docs",
+          label: "Connect an AI assistant (MCP)",
+          group: "Go to",
+          keywords: "claude cursor model context protocol ai",
+          run: () => router.push("/docs/mcp"),
+        },
+      );
       list.push({
         id: "import",
         label: "Import notes from Obsidian or Notion",
@@ -3365,6 +3390,29 @@ export function EditorWorkspace() {
                   </IconButton>
                 )}
 
+                <button
+                  type="button"
+                  onClick={() => setDialog("tools")}
+                  title="Every tool in the editor, as buttons"
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+                >
+                  <svg
+                    viewBox="0 0 16 16"
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    aria-hidden="true"
+                  >
+                    <rect x="2" y="2" width="5" height="5" rx="1.2" />
+                    <rect x="9" y="2" width="5" height="5" rx="1.2" />
+                    <rect x="2" y="9" width="5" height="5" rx="1.2" />
+                    <rect x="9" y="9" width="5" height="5" rx="1.2" />
+                  </svg>
+                  <span className="hidden md:inline">All tools</span>
+                  <span className="sr-only md:hidden">All tools</span>
+                </button>
+
                 <IconButton onClick={() => setDialog("help")} label="Help (⌘⇧?)">
                   <svg
                     viewBox="0 0 16 16"
@@ -3996,6 +4044,13 @@ export function EditorWorkspace() {
             notebook.openNote(path);
           }}
           workspaceId={workspace.id}
+        />
+      )}
+
+      {openDialog === "tools" && (
+        <ToolsDialog
+          commands={commands.filter((command) => command.id !== "tools")}
+          onClose={() => setDialog(null)}
         />
       )}
 
