@@ -79,7 +79,7 @@ import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 import { ShortcutsAfterLineBreak } from "./extensions/ShortcutsAfterLineBreak";
 import { SmartPaste } from "./extensions/SmartPaste";
 import { LeaveInlineMark } from "./extensions/LeaveInlineMark";
-import { RoomToWrite } from "./extensions/RoomToWrite";
+import { RoomToWrite, roomBelow } from "./extensions/RoomToWrite";
 import type { LinkBridge } from "./links";
 import { readSlashState } from "./extensions/SlashCommands";
 import { isolateCurrentLine } from "./isolate-line";
@@ -585,7 +585,24 @@ export function WysiwygEditor({
   }
 
   return (
-    <div className={className}>
+    <div
+      className={className}
+      // The space under a long note belongs to this wrapper, not the editor.
+      // A click there writes below the last block, or at the end of the text.
+      onMouseDown={(event) => {
+        if (!editor || !editor.isEditable || event.button !== 0) return;
+        if (editor.view.dom.contains(event.target as globalThis.Node)) return;
+        if (roomBelow(editor.view, event.clientY)) {
+          event.preventDefault();
+          editor.view.focus();
+          return;
+        }
+        if (event.clientY > editor.view.dom.getBoundingClientRect().bottom) {
+          event.preventDefault();
+          editor.commands.focus("end");
+        }
+      }}
+    >
       <SlashMenu editor={editor} actions={slashActions ?? {}} />
 
       <BubbleMenu

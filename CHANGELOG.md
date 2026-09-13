@@ -5,6 +5,14 @@ full record.
 
 ## Unreleased
 
+### Writing below a card, a board or a diagram at the end of a long note
+
+A note that ended in a canvas, a flashcard, a spaced-reading block or a diagram
+had nowhere to type after it once it was taller than the screen: the space
+under the last block belongs to the page around the editor, and clicks there
+were never seen. Clicking below the last block now puts a line there, and
+clicking below text puts the caret at its end.
+
 ### Spaced reading
 
 Highlights were made and never seen again. `/` → **Spaced reading** puts a
