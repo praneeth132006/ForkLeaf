@@ -172,7 +172,7 @@ describe("bookmarklet", () => {
   it("opens this deployment's save address with the page and the selection", () => {
     const code = bookmarklet("https://forkleaf.app");
     expect(code.startsWith("javascript:")).toBe(true);
-    expect(code).toContain('"https://forkleaf.app/editor?save=1"');
+    expect(code).toContain('"https://forkleaf.app/save?save=1"');
     expect(code).toContain("encodeURIComponent(location.href)");
     expect(code).toContain("noopener");
   });

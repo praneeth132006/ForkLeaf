@@ -115,6 +115,10 @@ export interface ActionContext {
   requestImage?: () => void;
   /** Opens the app's link editor. */
   requestLink?: () => void;
+  /** The app's tools, offered in the `/` menu beside the built-in blocks. */
+  extras?: readonly InsertAction[];
+  /** Told which app tool was chosen from the `/` menu. */
+  runExtra?: (id: string) => void;
 }
 
 /** Prompts for an image URL, rejecting anything that is not http(s). */

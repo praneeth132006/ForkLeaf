@@ -85,6 +85,63 @@ export const DOC_SECTIONS: DocSection[] = [
     ],
   },
   {
+    title: "Everyday features",
+    pages: [
+      {
+        slug: "slash-menu",
+        title: "The / menu and All tools",
+        summary:
+          "Every block and every feature, grouped, one keystroke away — and the same list as buttons.",
+      },
+      {
+        slug: "journal",
+        title: "Templates, today's note & weekly review",
+        summary: "Notes you write often, a note for every day, and a weekly look back.",
+      },
+      {
+        slug: "tasks",
+        title: "To-dos",
+        summary: "Check boxes with due dates, and one list of every open to-do in the notebook.",
+      },
+      {
+        slug: "flashcards",
+        title: "Flashcards",
+        summary: "Question :: Answer on one line, reviewed with spaced repetition.",
+      },
+      {
+        slug: "views",
+        title: "Graph, board, table & focus",
+        summary: "The notebook as a map, a board or a spreadsheet — or nothing but the note.",
+      },
+      {
+        slug: "saving",
+        title: "Saving from the web",
+        summary:
+          "The extension, share sheet and bookmarklet, and the repository that files every save by kind and month.",
+      },
+      {
+        slug: "running-code",
+        title: "Running code, with input",
+        summary: "Run bash, Python and JavaScript blocks — including programs that ask for input.",
+      },
+      {
+        slug: "voice-notes",
+        title: "Voice notes",
+        summary: "Record into a note, with an optional transcript.",
+      },
+      {
+        slug: "encrypted-notes",
+        title: "Encrypted notes",
+        summary: "Seal a note so only its passphrase can read it.",
+      },
+      {
+        slug: "importing",
+        title: "Importing from Obsidian & Notion",
+        summary: "Bring a vault or an export across, links and pictures included.",
+      },
+    ],
+  },
+  {
     title: "GitHub",
     pages: [
       {
@@ -109,6 +166,23 @@ export const DOC_SECTIONS: DocSection[] = [
         slug: "conflicts",
         title: "Conflicts",
         summary: "What happens when two devices edit the same note, and how to resolve it.",
+      },
+    ],
+  },
+  {
+    title: "Connect",
+    pages: [
+      {
+        slug: "browser-extension",
+        title: "Browser extension",
+        summary:
+          "Install Save to ForkLeaf in Chrome, Edge, Brave or Arc, and save pages, quotes, links and pictures with one click.",
+      },
+      {
+        slug: "mcp",
+        title: "Connect an AI assistant (MCP)",
+        summary:
+          "Let Claude Code, Claude Desktop, Cursor or any MCP client search, read and write your notebook — step by step.",
       },
     ],
   },

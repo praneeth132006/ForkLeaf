@@ -32,6 +32,14 @@ export interface MarkdownEditorProps {
   extraActions?: InsertAction[];
   /** Told which app-supplied action was chosen. */
   onExtraAction?: (id: string) => void;
+  /**
+   * The app's tools for the `/` menu only — flashcards, voice notes, views.
+   *
+   * Kept out of the toolbar's Insert menu, which is for putting things into the
+   * text; the `/` menu is where people look for everything. A chosen tool is
+   * reported through `onExtraAction`, or typed in when it carries `insert`.
+   */
+  slashTools?: InsertAction[];
   value: string;
   onChange: (markdown: string) => void;
   mode: EditorViewMode;
@@ -98,6 +106,7 @@ const MODES: { value: EditorViewMode; label: string; hint: string }[] = [
 export function MarkdownEditor({
   extraActions,
   onExtraAction,
+  slashTools,
   value,
   onChange,
   mode,
@@ -290,8 +299,10 @@ export function MarkdownEditor({
           setLinkRequest({ text: sourceHandle.current?.selection() ?? "", url: "" });
         }
       },
+      extras: [...(extraActions ?? []), ...(slashTools ?? [])],
+      runExtra: (id: string) => onExtraAction?.(id),
     }),
-    [isRich, tiptap],
+    [isRich, tiptap, extraActions, slashTools, onExtraAction],
   );
 
   const runAction = useCallback(

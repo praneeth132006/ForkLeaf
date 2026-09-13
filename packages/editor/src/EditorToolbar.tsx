@@ -18,6 +18,16 @@ export interface InsertAction {
   icon: React.ReactNode;
   /** Shown directly in the bar rather than inside the "Insert" menu. */
   primary?: boolean;
+  /** The heading this sits under in the `/` menu. */
+  group?: string;
+  /** Extra words that find it in the `/` menu. */
+  keywords?: string[];
+  /**
+   * Markdown the `/` menu types in, for app tools that are text rather than a
+   * dialog — a flashcard, a dated to-do. A function is called at the moment it
+   * is chosen, so a date in it is that day's.
+   */
+  insert?: string | (() => string);
 }
 
 /** Inline marks the bar can toggle. Every one of them is plain markdown. */

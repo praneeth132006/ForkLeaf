@@ -1,8 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { GitHubClient } from "@forkleaf/github-client";
-import { appUrl, safeReturnPath } from "@/lib/app-url";
+import { appBaseUrl, appUrl, safeReturnPath } from "@/lib/app-url";
 import { exchangeCodeForToken } from "@/lib/github-oauth";
+import { grantFrom, openPending, sealCode } from "@/lib/mcp-grants";
+import { redirectWith } from "@/lib/mcp-oauth";
 import {
+  consumeMcpPending,
   consumeOAuthState,
   consumeReturnPath,
   setSessionCookie,
@@ -28,6 +31,14 @@ export async function GET(request: NextRequest) {
 
   // The user pressed "Cancel" on GitHub's consent screen.
   if (oauthError) {
+    // Cancelled while connecting an assistant: the assistant is told, rather
+    // than the person being left on ForkLeaf's home page wondering.
+    const pending = await openPending(await consumeMcpPending());
+    if (pending && pending.oauthState === state) {
+      return NextResponse.redirect(
+        redirectWith(pending.redirectUri, { error: "access_denied", state: pending.state }),
+      );
+    }
     return NextResponse.redirect(withError(home, "access_denied"));
   }
 
@@ -53,6 +64,37 @@ export async function GET(request: NextRequest) {
     // Confirm the token works and capture the profile in one call.
     const client = new GitHubClient({ token: grant.token });
     const user = await client.getAuthenticatedUser();
+
+    // Connecting an AI assistant, not signing in: the grant goes to the
+    // assistant as an authorisation code, and this browser's own session is
+    // left exactly as it was. Matched on the state, so a request abandoned
+    // earlier can never capture a later, ordinary sign-in.
+    const pending = await openPending(await consumeMcpPending());
+    if (pending && pending.oauthState === state) {
+      if (pending.target.login !== user.login) {
+        return NextResponse.redirect(
+          redirectWith(pending.redirectUri, {
+            error: "access_denied",
+            error_description: `GitHub signed in as ${user.login}, but the notebook was chosen by ${pending.target.login}.`,
+            state: pending.state,
+          }),
+        );
+      }
+      const code = await sealCode({
+        clientId: pending.clientId,
+        redirectUri: pending.redirectUri,
+        codeChallenge: pending.codeChallenge,
+        grant: grantFrom(grant),
+        target: pending.target,
+      });
+      return NextResponse.redirect(
+        redirectWith(pending.redirectUri, {
+          code,
+          state: pending.state,
+          iss: appBaseUrl(request).origin,
+        }),
+      );
+    }
 
     /**
      * The refresh token is kept, not discarded.

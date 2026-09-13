@@ -119,7 +119,33 @@ describe("running a block", () => {
         "/api/run",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify({ language: "bash", code: "echo hi" }),
+          body: JSON.stringify({ language: "bash", code: "echo hi", stdin: "" }),
+        }),
+      ),
+    );
+  });
+
+  it("asks for input first when the program reads it, then sends what was typed", async () => {
+    runs({ stdout: "Hello Ada" });
+    await mount('```python\nname = input("Name? ")\nprint("Hello", name)\n```');
+    fireEvent.click(runButton());
+
+    const box = await screen.findByPlaceholderText(/Ada/);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(screen.getByRole("status").textContent).toContain("This program reads input");
+
+    fireEvent.change(box, { target: { value: "Ada" } });
+    fireEvent.click(runButton());
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/run",
+        expect.objectContaining({
+          body: JSON.stringify({
+            language: "python",
+            code: 'name = input("Name? ")\nprint("Hello", name)',
+            stdin: "Ada\n",
+          }),
         }),
       ),
     );

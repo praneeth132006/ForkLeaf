@@ -164,3 +164,35 @@ export function formatOutput(result: RunResult): string {
   const body = cap(sections.join("\n\n"));
   return `${header}\n${body.text}`.replace(/\s+$/, "");
 }
+
+/**
+ * The most program input accepted, in characters.
+ *
+ * Input is what a program reads while it runs — the answers to its questions —
+ * typed by a person. Anything near this size is a file, not that.
+ */
+export const MAX_INPUT = 20_000;
+
+/** What reading input looks like in each language the sandbox runs. */
+const READS_INPUT: Record<string, RegExp> = {
+  bash: /(^|[\s;|&(])read\b|\/dev\/stdin|\$\(\s*cat\s*\)/m,
+  python: /\binput\s*\(|\bsys\.stdin\b|\bfileinput\b/,
+  javascript: /\bprocess\.stdin\b|\breadline\b|readFileSync\(\s*(?:0|["'`]\/dev\/stdin["'`])/,
+};
+
+/**
+ * True when a block looks like it reads input while it runs.
+ *
+ * A program that asks a question and gets no answer does not wait: it reads
+ * end-of-file and stops, usually with an error that says nothing about input.
+ * Spotting it before the run is what lets the block ask for the answers first.
+ */
+export function readsInput(language: string | null | undefined, code: string): boolean {
+  const runner = runnerFor(language);
+  return runner ? (READS_INPUT[runner.id]?.test(code) ?? false) : false;
+}
+
+/** True when a run failed because the program reached the end of its input. */
+export function ranOutOfInput(result: Pick<RunResult, "stderr">): boolean {
+  return /EOFError|EOF when reading a line|end of file|ERR_USE_AFTER_CLOSE/i.test(result.stderr);
+}

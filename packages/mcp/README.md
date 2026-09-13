@@ -8,6 +8,15 @@ It talks to your notes repository on GitHub directly, with a token you give it.
 Nothing goes through ForkLeaf's servers. Every write is an ordinary commit in
 your repository, marked `forkleaf:`, so it is in the history and can be undone.
 
+## The easy way: nothing to install
+
+ForkLeaf serves these same tools at `https://forkleaf.vercel.app/api/mcp`, with
+sign-in built in. Add that address to your assistant — for Claude Code,
+`claude mcp add --transport http forkleaf https://forkleaf.vercel.app/api/mcp` —
+and it opens ForkLeaf to choose a repository and sign in. No token to create.
+In the editor, **All tools → Connect an AI assistant** has the step for each
+assistant. The rest of this README is for running the server yourself.
+
 ## Tools
 
 | Tool                   | What it does                                                       |

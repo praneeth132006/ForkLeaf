@@ -41,8 +41,22 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] MCP server so AI assistants can use your notebook
 - [x] Voice notes
 - [x] Import from Obsidian and Notion
+- [x] Every tool grouped in the `/` menu, opening beside the line being typed
+- [x] Program input for runnable code blocks
+- [x] Saves from the web in their own repository, filed automatically
+- [x] Connect an AI assistant in one step
+- [x] A documentation page for every feature
+
+What comes next is tracked in [future-implementations.md](future-implementations.md).
 
 ---
+
+## Finding every tool
+
+Every command has a button. Press **All tools** (the four-squares button at the
+top right of the editor) for the whole list, grouped and filterable, with each
+shortcut shown beside its command. ⌘K is the same list, for when you know what
+to type.
 
 ## Writing
 
@@ -124,8 +138,21 @@ is safe. Same spelling as Obsidian's spaced-repetition plugin.
 
 ### Save from anywhere
 
-Keep a page, a quote, a link or an image from outside ForkLeaf. It lands as a
-note in `inbox/`, with the address, the site and the date as properties.
+Keep a page, a quote, a link or an image from outside ForkLeaf. Signed in, it
+goes to a private repository of its own, `forkleaf-saves` — never into your
+notebooks — filed automatically by kind, year and month:
+
+```text
+pages/2026/09/2026-09-13-how-rivers-move.md
+quotes/2026/09/2026-09-13-cities-are-for-people.md
+links/…   images/…
+INDEX.md      everything, newest first, grouped by month and kind
+```
+
+The repository is created (private) on your first save, and `INDEX.md` and
+`index.json` are rewritten in the same commit as each save. Not signed in, the
+save page offers to sign in, or **Keep it on this device instead**, which puts
+it in the open notebook's `inbox/`.
 
 - **From your phone:** install ForkLeaf from the browser, then use **Share →
   ForkLeaf** in any app.
@@ -133,10 +160,10 @@ note in `inbox/`, with the address, the site and the date as properties.
   new bookmark, and paste it as the address. Press it on any page to save the
   page — or, with text selected, to save that text as a quote.
 - **From anything else:** open
-  `/editor?save=1&kind=quote&url=…&title=…&text=…` (`kind` is `page`, `quote`,
+  `/save?kind=quote&url=…&title=…&text=…` (`kind` is `page`, `quote`,
   `link` or `image`).
 
-ForkLeaf always asks **Save to your notebook?** first, showing exactly what will
+ForkLeaf always asks **Save to ForkLeaf?** first, showing exactly what will
 be written, because anyone can put that address in a link. It also tells you
 when you have saved the same link before. Only `http` and `https` addresses are
 kept.
@@ -152,16 +179,17 @@ ForkLeaf address in its **Options**.
 - Right-click a page, selection, link or image → **Save … to ForkLeaf**.
 
 It opens ForkLeaf's save address, so ForkLeaf still asks before saving. It needs
-no account and no host permissions. See `apps/extension/README.md`.
+no account and no host permissions. Step-by-step install: [/docs/browser-extension](https://forkleaf.vercel.app/docs/browser-extension), or `apps/extension/README.md`.
 
 ### Everything you saved
 
-⌘K → **Show everything I saved** shows the inbox as a grid: quotes as quotes,
+⌘K → **Show everything I saved** shows your saves repository and `inbox/` as a grid: quotes as quotes,
 pictures as pictures, links with their site, newest first.
 
 - Filter by **Quotes**, **Links**, **Notes** or **Images**, or search inside all
   of them (titles, text, sites and tags).
-- Click a card to open its note; **Original** opens the page it came from.
+- Click a card to open it (a save in the repository opens on GitHub);
+  **Original** opens the page it came from.
 - Pictures load through ForkLeaf's image proxy, so the sites never see you
   looking.
 
@@ -217,6 +245,44 @@ and **Add to note**.
 **⌘⇧F** (or ⌘K → **Enter focus mode**) hides the file tree, tabs, side panel
 and status bar. Press it again, or **Leave focus** in the corner, to get your
 layout back.
+
+### The / menu
+
+Type `/` at the start of a line or after a space. The menu opens under the line
+(or above it near the bottom of the window), so what you type stays visible, and
+it repeats `/what you typed` at the top.
+
+- **Text, Lists, Insert** — headings, lists, to-dos, tables, images, code,
+  diagrams.
+- **Study** — insert a flashcard (`Question :: Answer`), review flashcards.
+- **Plan** — a to-do due tomorrow, every open to-do, today's note, weekly review.
+- **Templates** — a new note from each template, save this note as one.
+- **Capture** — voice note, import, everything you saved, the bookmarklet.
+- **See** — graph, board, table, focus mode.
+- **Protect** — encrypt, lock, remove encryption, lock against editing.
+- **History** — versions, replay, who wrote what, deleted notes, time machine.
+- **Help** — all tools, connect an AI assistant, the extension, help.
+- **Formatting, Advanced** — bold, italic, headings 4–6, footnotes, front matter.
+
+Keep typing to search every group (`/flash`, `/voice`, `/graph`, or a group name
+like `/study`). ↑↓ to choose, Enter or Tab to use, Esc to close. A tool only
+appears when it can be used — board and table with a folder, unlock with an
+encrypted note open.
+
+### Programs that ask for input
+
+A `bash`, `python` or `javascript` block that reads input (`input()`, `read`,
+`process.stdin`, `readline`) needs its answers before it runs.
+
+1. Press **Run**. ForkLeaf sees the program reads input and opens **Program
+   input** instead of running it.
+2. Type the answers, one per line.
+3. Press **Run** again. Each line is what the program reads the next time it
+   asks.
+
+**Input** in the block's header opens the box at any time (**Input ✓** when it
+has something in it). If a program still runs out of input, the box opens and
+says so. The input is not saved into the note; the output is.
 
 ## Links between notes
 
@@ -339,10 +405,20 @@ variable `FORKLEAF_SEND_TOKEN` to `true` so the job's own short-lived
 
 ### Use your notebook from an AI assistant
 
-`packages/mcp` is an MCP server, so Claude Code, Claude Desktop or any other
-MCP client can work with your notes. Give it a GitHub token for your notes
-repository and add it to your assistant — the setup is in
-`packages/mcp/README.md`.
+Claude Code, Claude Desktop, claude.ai, Cursor, VS Code or any other MCP client
+can work with your notes. Setup is one address and a sign-in:
+
+1. In the editor, **All tools → Connect an AI assistant** (or `/connect`) shows
+   the address, `https://forkleaf.vercel.app/api/mcp`, and a copy-ready step
+   for each assistant — for Claude Code:
+   `claude mcp add --transport http forkleaf https://forkleaf.vercel.app/api/mcp`.
+2. The assistant opens ForkLeaf in your browser. Choose the repository it may
+   use (optionally a folder, a branch, and **Read only**) and press **Allow**.
+
+There is no token to create. The assistant keeps and renews its own sign-in;
+ForkLeaf stores nothing about the connection. `packages/mcp` is the same set of
+tools as a local server, for anyone who would rather run it themselves. Full
+guide: [/docs/mcp](https://forkleaf.vercel.app/docs/mcp).
 
 | Tool                   | What the assistant can do                           |
 | ---------------------- | --------------------------------------------------- |
@@ -352,10 +428,11 @@ repository and add it to your assistant — the setup is in
 | `write_note`           | Create or replace a note, as one commit             |
 | `append_to_daily_note` | Add to today's `journal/YYYY-MM-DD.md`              |
 
-It talks to GitHub directly, never through ForkLeaf. It will not touch anything
+It works only on the repository you chose. It will not touch anything
 but notes, anything in a hidden folder, or anything outside the notebook, and it
-neither shows nor overwrites encrypted notes. Set `FORKLEAF_READ_ONLY=true` to
-offer only the tools that read.
+neither shows nor overwrites encrypted notes. Tick **Read only** when connecting
+(or set `FORKLEAF_READ_ONLY=true` for the local server) to offer only the tools
+that read.
 
 ### Import from Obsidian or Notion
 
