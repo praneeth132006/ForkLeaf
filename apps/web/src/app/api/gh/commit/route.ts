@@ -126,7 +126,11 @@ export async function POST(request: NextRequest) {
  */
 function assertBinary(content: string, path: string): void {
   if (!servableTypeFor(path)) {
-    throw new ApiError(400, "validation", "Only images and PDFs can be uploaded as files.");
+    throw new ApiError(
+      400,
+      "validation",
+      "Only images, PDFs and audio recordings can be uploaded as files.",
+    );
   }
 
   const packed = content.replace(/\s/g, "");

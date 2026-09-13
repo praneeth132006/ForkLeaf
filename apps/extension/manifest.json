@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Save to ForkLeaf",
+  "short_name": "ForkLeaf",
+  "version": "1.0.0",
+  "description": "Save pages, quotes, links and images into your ForkLeaf notebook. ForkLeaf asks before anything is written.",
+  "permissions": ["contextMenus", "activeTab", "scripting", "storage"],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Save this page to ForkLeaf",
+    "default_icon": { "128": "icons/icon-180.png" }
+  },
+  "options_ui": {
+    "page": "src/options.html",
+    "open_in_tab": false
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "Save this page to ForkLeaf"
+    }
+  },
+  "icons": {
+    "128": "icons/icon-180.png",
+    "512": "icons/icon-512.png"
+  }
+}

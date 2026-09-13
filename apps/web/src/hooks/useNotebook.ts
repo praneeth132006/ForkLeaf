@@ -25,7 +25,14 @@ import {
   type Workspace,
   type EditorViewMode,
 } from "@forkleaf/types";
-import { dirname, removeReferencesTo, serializeDocument } from "@forkleaf/markdown-engine";
+import {
+  dirname,
+  parseDocument,
+  removeReferencesTo,
+  serializeDocument,
+  uniquePath,
+  updateFrontmatter as mergeFrontmatter,
+} from "@forkleaf/markdown-engine";
 import {
   GitHubGateway,
   LocalGateway,
@@ -1758,6 +1765,110 @@ export function useNotebook(request: NotebookRequest = {}) {
   );
 
   /**
+   * Reads a file with its properties still attached, or null.
+   *
+   * `readNote` gives the body alone, which is right for the files the app
+   * keeps beside a document and wrong for a template, whose tags and fields
+   * are half of what it is for.
+   */
+  const readDocument = useCallback(
+    async (path: string): Promise<string | null> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace) return null;
+
+      const note = await notes.openNote(workspace.id, path).catch(() => null);
+      return note ? serializeDocument(note.content, note.frontmatter) : null;
+    },
+    [state.activeWorkspace],
+  );
+
+  /**
+   * Changes properties on any note, open or not.
+   *
+   * `updateFrontmatter` is the properties panel's, and acts on the note in
+   * front of you. A board or a table changes a property on a note somebody is
+   * looking at a card for, which is usually not the open one. A key set to
+   * `undefined` is removed. A locked note is left alone and reported as such.
+   */
+  const setNoteProperties = useCallback(
+    async (path: string, changes: Record<string, unknown>): Promise<boolean> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace || isLocked(path)) return false;
+
+      const open = state.openNotes.find((note) => note.path === path);
+      const note = open ?? (await notes.openNote(workspace.id, path).catch(() => null));
+      if (!note) return false;
+
+      const frontmatter = mergeFrontmatter(note.frontmatter, changes);
+      await notes.saveNote(note, note.content, frontmatter);
+      patchOpenNote(path, { frontmatter, dirty: true });
+      return true;
+    },
+    [state.activeWorkspace, state.openNotes, patchOpenNote, isLocked],
+  );
+
+  /**
+   * Replaces a note's body and properties together.
+   *
+   * `saveNote` writes the body and keeps the properties; `setNoteProperties`
+   * merges into them. Sealing a note needs neither: its title and tags have
+   * to leave the file entirely, or encrypting the body would still publish
+   * what the note is called and what it is about. The store stamps its own
+   * fields back on, which say nothing about the note.
+   */
+  const writeDocument = useCallback(
+    async (path: string, content: string, frontmatter: Note["frontmatter"]): Promise<boolean> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace || isLocked(path)) return false;
+
+      const open = state.openNotes.find((note) => note.path === path);
+      const note = open ?? (await notes.openNote(workspace.id, path).catch(() => null));
+      if (!note) return false;
+
+      const saved = await notes.saveNote(note, content, frontmatter);
+      patchOpenNote(path, { content, frontmatter: saved.frontmatter, dirty: true });
+      return true;
+    },
+    [state.activeWorkspace, state.openNotes, patchOpenNote, isLocked],
+  );
+
+  /**
+   * Writes a deleted note back from its raw text, at the path it had.
+   *
+   * Properties are split out first so they land as front matter rather than
+   * as a YAML block pasted into the body. When something new already lives at
+   * the old path, the note comes back beside it rather than over it.
+   */
+  const restoreNote = useCallback(
+    async (path: string, raw: string): Promise<string | null> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace) return null;
+
+      const target = uniquePath(path, collectPaths(state.tree));
+      const parsed = parseDocument(raw);
+      const blank: Note = {
+        id: `${workspace.id}::${target}`,
+        workspaceId: workspace.id,
+        path: target,
+        content: "",
+        frontmatter: {},
+        baseSha: null,
+        updatedAt: null,
+        dirty: true,
+      };
+
+      await notes.saveNote(blank, parsed.content, parsed.frontmatter);
+      patch({ tree: insertIntoTree(state.tree, target) });
+      return target;
+    },
+    [state.activeWorkspace, state.tree, patch],
+  );
+
+  /**
    * Drops one stuck change, so the queue behind it can move.
    *
    * The way out of a change that can never be pushed. Needs a refresh of the
@@ -1924,6 +2035,69 @@ export function useNotebook(request: NotebookRequest = {}) {
   );
 
   /**
+   * Writes many notes and files at once, from an import.
+   *
+   * One tree update at the end rather than one per note: each save would
+   * otherwise insert into the tree as it stood when this function was made,
+   * and every insert but the last would be lost. Paths arrive already chosen
+   * so as not to collide with anything in the notebook. A note that fails is
+   * reported and the rest carry on.
+   */
+  const importDocuments = useCallback(
+    async (
+      documents: readonly { path: string; raw: string }[],
+      files: readonly { path: string; file: File }[],
+    ): Promise<{ notes: number; assets: number; failed: { path: string; reason: string }[] }> => {
+      const notes = repoRef.current;
+      const workspace = state.activeWorkspace;
+      if (!notes || !workspace) {
+        return { notes: 0, assets: 0, failed: [{ path: "", reason: "No notebook is open." }] };
+      }
+
+      const failed: { path: string; reason: string }[] = [];
+      const reason = (error: unknown) => (error instanceof Error ? error.message : String(error));
+      let tree = state.tree;
+      let saved = 0;
+      let stored = 0;
+
+      for (const document of documents) {
+        try {
+          const parsed = parseDocument(document.raw);
+          const blank: Note = {
+            id: `${workspace.id}::${document.path}`,
+            workspaceId: workspace.id,
+            path: document.path,
+            content: "",
+            frontmatter: {},
+            baseSha: null,
+            updatedAt: null,
+            dirty: true,
+          };
+          await notes.saveNote(blank, parsed.content, parsed.frontmatter);
+          tree = insertIntoTree(tree, document.path);
+          saved += 1;
+        } catch (error) {
+          failed.push({ path: document.path, reason: reason(error) });
+        }
+      }
+
+      for (const item of files) {
+        try {
+          await putAsset(item.path, item.file, false);
+          if (/\.pdf$/i.test(item.path)) tree = insertIntoTree(tree, item.path);
+          stored += 1;
+        } catch (error) {
+          failed.push({ path: item.path, reason: reason(error) });
+        }
+      }
+
+      patch({ tree });
+      return { notes: saved, assets: stored, failed };
+    },
+    [state.activeWorkspace, state.tree, patch, putAsset],
+  );
+
+  /**
    * Makes a stuck image small enough to send, and sends it.
    *
    * The alternative on offer used to be deletion, full stop, which is a
@@ -2081,6 +2255,11 @@ export function useNotebook(request: NotebookRequest = {}) {
       rewriteNote,
       upsertNote,
       readNote,
+      readDocument,
+      restoreNote,
+      setNoteProperties,
+      writeDocument,
+      importDocuments,
       saveDocumentText,
       documentText,
       allDocumentText,
@@ -2148,6 +2327,11 @@ export function useNotebook(request: NotebookRequest = {}) {
       rewriteNote,
       upsertNote,
       readNote,
+      readDocument,
+      restoreNote,
+      setNoteProperties,
+      writeDocument,
+      importDocuments,
       shrinkChange,
       setSyncMode,
       resolveConflict,

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Save to ForkLeaf — options</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font:
+          14px/1.5 system-ui,
+          sans-serif;
+      }
+      body {
+        margin: 16px;
+        min-width: 320px;
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      input {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 6px 8px;
+        font: inherit;
+      }
+      p {
+        color: GrayText;
+        margin: 6px 0 12px;
+      }
+      #status {
+        min-height: 1.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <form id="form">
+      <label for="origin">Where is your ForkLeaf?</label>
+      <input id="origin" type="url" placeholder="https://forkleaf.vercel.app" required />
+      <p>
+        The address you open ForkLeaf at. Saving opens it in a new tab, where ForkLeaf shows what
+        will be saved and asks first.
+      </p>
+      <button type="submit">Save</button>
+      <span id="status" role="status"></span>
+    </form>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

@@ -5,6 +5,287 @@ full record.
 
 ## Unreleased
 
+### Import from Obsidian and Notion
+
+⌘K → **Import notes from Obsidian or Notion** reads a folder picked from disk,
+shows what will come across — how many notes and files, how many links were
+updated, what was left out and why — and imports only when asked, into a folder
+of its own so a mistaken import is one folder to delete.
+
+- **Obsidian vaults** keep their folders and front matter. `![[picture.png]]`
+  embeds, which Obsidian resolves by filename anywhere in the vault, become
+  ordinary markdown images pointing at where the picture landed, so they
+  render here and on github.com; `![[Note]]` embeds become `[[Note]]` links.
+  `.obsidian`, `.trash` and other hidden folders are left behind.
+- **Notion exports** (Markdown & CSV, unzipped) lose the 32-character id Notion
+  appends to every page and folder name, and their URL-encoded relative links
+  are rewritten to the cleaned paths. Database tables come out of Notion as CSV
+  and are skipped with that reason.
+
+Nothing already in the notebook is overwritten. Pictures, PDFs and recordings
+are copied through the same queue as a pasted image; anything else, and any
+file over the 3 MB a commit carries, is listed as left out. Up to 2,000 notes
+at a time. The notes are saved and then added to the sidebar in one step — one
+update per note would have kept only the last of them.
+
+### Voice notes
+
+⌘K → **Record a voice note** records in the browser, lets the recording be heard
+back and redone, and **Add to note** saves it in `assets/` beside the note — like
+a pasted picture, so it goes through the same queue, the same commit and the
+same history — with a **Listen to the recording** link at the end of the note.
+
+That link is the whole format. A paragraph that is only a link to a recording in
+the repository now renders as an audio player in the preview and on published
+pages, and stays a plain link to the file on github.com. Only repository files
+play: a link to audio on another site stays a link, because playing it would
+mean the page fetching from that site. The player is built after sanitising,
+from a link the sanitiser has already passed, and a recording that is not on this
+device stays a link rather than becoming a broken player.
+
+Recordings are WebM or Ogg with Opus where the browser can, MP4 in Safari, and
+stop at ten minutes, which keeps them inside the 3 MB a single commit carries.
+Audio joins the allowlist the commit and raw-file routes share, and the content
+security policy gains `media-src 'self' blob:` so a recording not yet pushed can
+play from this device.
+
+A transcript is optional, off by default, and says before it is switched on that
+the browser does it — Chrome sends the audio to Google. Refusing microphone
+permission is explained rather than failing silently, and a failed save keeps
+the recording. Recording is not offered in an encrypted note, whose audio would
+be stored in the clear.
+
+### Your notebook, from an AI assistant
+
+`packages/mcp` is a Model Context Protocol server. Added to Claude Code, Claude
+Desktop or another MCP client, it lets the assistant search the notebook
+(`search_notes`), list notes (`list_notes`), read one with the notes that link to
+it (`read_note`), create or replace a note (`write_note`) and add to today's
+journal note (`append_to_daily_note`).
+
+It reads and commits to the notes repository with a GitHub token the person
+gives it, directly — nothing passes through ForkLeaf. Writes are ordinary
+commits marked `forkleaf:`, so each one is in the history. It refuses anything
+that is not a `.md` or `.mdx` note, anything in a hidden folder such as
+`.github`, any path that climbs out with `..` (checked before normalising, which
+would otherwise quietly drop it), and anything outside `FORKLEAF_DIR` when that
+is set. Encrypted notes are neither shown nor overwritten — the server has no
+passphrase, so writing one could only destroy it. `FORKLEAF_READ_ONLY=true`
+removes the two writing tools entirely. Configuration mistakes are reported as a
+sentence naming the variable to set.
+
+The protocol is written by hand, like the GitHub client: newline-delimited
+JSON-RPC over stdio, with a malformed request answered as a JSON-RPC error and a
+tool that could not do what it was asked answered with `isError`, so the
+assistant can read why.
+
+### Notebook check on every pull request
+
+The stale-notes check that lived only in the editor now runs in CI.
+`docs/workflows/notebook-check.yml` is a workflow to copy into a notes
+repository: on a pull request it asks ForkLeaf to read the notes at that
+commit, puts the report in the job summary, marks each broken reference on its
+file, and fails the check when a note points at a file that is not there or a
+`[[link]]` matches no note. Notes whose claims may have aged are listed as worth
+re-reading and never fail anything. If ForkLeaf is unreachable the step warns
+and passes, so an outage elsewhere does not block a merge.
+
+Behind it is `GET /api/gh/notebook-check?owner=&repo=&ref=`, which reads every
+markdown file at one commit — so a push landing mid-check cannot produce a
+report mixing two versions — runs the same survey as the editor, and returns
+the findings and a ready-made markdown report. It answers without signing in for
+public repositories. A private repository needs a token: the signed-in session,
+or an explicit `Authorization: Bearer` header, which the workflow sends only when
+`FORKLEAF_SEND_TOKEN` is `true` and which is used for that request's reads and
+nothing else. It reads at most 400 notes and skips any over 512 KB, saying how
+many it skipped, and is rate limited.
+
+Shipped as a template in `docs/` rather than switched on for this repository:
+enabling it here would fail ForkLeaf's own pull requests against a production
+deployment that does not have the route yet.
+
+### Encrypted notes
+
+⌘K → **Encrypt this note…** seals a note so that only its passphrase can read
+it — in ForkLeaf, on github.com, in a clone on somebody else's machine. The
+words, the title and the tags all go inside; the file keeps nothing about the
+note but the fields ForkLeaf stamps on every note. It is still one ordinary
+`.md` file, which explains on github.com what it is and carries the sealed
+text, with the parameters needed to open it written beside it: AES-256-GCM,
+the key derived from the passphrase with PBKDF2-SHA256 at 600,000 iterations.
+
+Opening an encrypted note shows a passphrase box where the editor would be, so
+the sealed text is never on screen as if it were the note. Once opened it edits
+like any other note until the tab closes or ⌘K → **Lock this encrypted note**;
+typing is sealed again after a short pause, reusing the key derived when it was
+opened, with a fresh IV every save. **Remove encryption from this note** writes
+it back as plain text, after asking. A passphrase that is wrong, and a file that
+has been tampered with, both fail rather than showing garbage.
+
+What it does not hide, said before encrypting: the filename. What it cannot do:
+recover a forgotten passphrase — nobody holds a copy, ForkLeaf included. If a
+newer version of an open note arrives from another device, the note locks
+again instead of this tab overwriting it with what it remembered.
+
+### A browser extension, and everything you saved in one place
+
+- **Save to ForkLeaf**, a Chromium extension in `apps/extension`. The toolbar
+  button (or Alt+Shift+S) saves the page, or the selection as a quote; the
+  right-click menu saves a page, a selection, a link or an image. It opens
+  ForkLeaf's save address in a new tab rather than writing anything itself, so
+  it needs no account, holds no token, asks for no host permissions, and every
+  save still goes through ForkLeaf's confirmation. A selection too long for an
+  address is cut to fit and marked as cut. The decisions — what to save for each
+  menu, which addresses count, where ForkLeaf is — are plain modules with tests.
+
+- **Everything you saved.** ⌘K → **Show everything I saved** lays the inbox out
+  as a grid of what each thing is: quotes set as quotes, pictures shown, links
+  with their site and date. Filter by kind, search across titles, text, sites
+  and tags, open the note, or open the original. Pictures are fetched through
+  ForkLeaf's image proxy rather than by the browser, so browsing the inbox does
+  not tell every site in it that you looked; one that will not load is hidden
+  rather than drawn broken.
+
+### Save from anywhere
+
+Things worth keeping are mostly found somewhere other than a notes app. There
+are now three ways to send them here, and all of them arrive the same way.
+
+- **The share sheet.** Installed ForkLeaf registers as a share target, so
+  **Share → ForkLeaf** works from any app on a phone.
+- **A bookmarklet.** ⌘K → **Copy the Save to ForkLeaf bookmarklet** gives a
+  bookmark that saves the page you are on, or the text you selected as a quote.
+- **An address**, `/editor?save=1&kind=…&url=…&title=…&text=…`, for anything
+  else — the browser extension will use the same one.
+
+What is saved is a note in `inbox/` — a blockquote with its source for a quote,
+a link for a page, the picture for an image — with `type`, `url`, `site` and
+`saved` as properties. Nothing is fetched to make it; the words are the ones
+that were shared.
+
+**It always asks first.** A link to that address can be put on any website, so
+arriving at it is not consent to write into somebody's repository. A dialog
+shows exactly what will be saved, with Save focused so it is still one tap from
+the share sheet; declining writes nothing. The address is cleared afterwards, so
+a reload cannot save twice. Only `http` and `https` addresses are kept —
+`javascript:` and `data:` are dropped — control characters are stripped, lengths
+are capped, and parentheses in an address are escaped so they cannot break the
+link. Saving the same link again says where the first copy is.
+
+### This week, written down
+
+⌘K → **Write this week's review** makes `journal/2026-w37.md`: the notes started
+this week (and how many words they came to), the notes worked on, the notes
+deleted, the to-dos that are overdue and the ones due in the next seven days —
+each with a link to its note — and an empty **Looking back** heading for the part
+only you can write. Running it again the same week opens the note rather than
+writing a second one.
+
+Read from the notes themselves — their `created` dates and when they were last
+saved — so it works offline and in a notebook with no repository. On a
+connected repository, notes deleted this week are found the same way **Bring
+back a deleted note** finds them. To-dos are copied as plain lines rather than
+boxes, so a review does not add a second copy of every task to the to-do list.
+Weeks are ISO weeks, starting on Monday.
+
+### Flashcards
+
+A line written `Question :: Answer` in any note is a flashcard, and ⌘K →
+**Review flashcards** goes through the ones due today: the question, the answer
+when asked for, then **Again**, **Hard**, **Good** or **Easy** (or 1–4 on the
+keyboard). The gap before a card returns grows as it is remembered — SM-2, the
+schedule most flashcard apps descend from — and each button says what that gap
+will be. A forgotten card comes round again before the session ends.
+
+The schedule lives in `reviews/flashcards.md` as a table, one row per card, and
+each grade is written to it straight away: it syncs, it has history, and
+deleting a row starts that card over. A card is identified by its note and its
+question, so editing the answer or the rest of the note keeps its progress.
+`::` in code blocks, indented code, tables, headings and inline code is never
+read as a card. The spelling is the one Obsidian's spaced-repetition plugin
+reads, so the cards are not a ForkLeaf format.
+
+### A graph of the notebook, and a folder as a board or a table
+
+- **Graph.** ⌘K → **Show the graph of my notes** draws every note as a dot and
+  every `[[link]]` between two notes as a line. It opens on the notes within two
+  links of the one you are in; **Whole notebook** shows everything, and notes
+  with no links are hidden until asked for. Scroll to zoom, drag to move, point
+  at a note to light up its neighbours, type to find one, click to open it. The
+  layout is computed here rather than by a library, and is deterministic — the
+  same notebook draws the same picture every time, so where things are can be
+  learned.
+
+- **Board.** ⌘K → **Show this folder as a board** puts the folder's notes in
+  columns by their `status` property — or any other property you pick. Drag a
+  card, or use the menu on it, and that note's `status` changes; moving it to
+  **No status** removes the property. Columns come from the values the notes
+  already use, with To do / Doing / Done offered when the folder uses those or
+  nothing yet.
+
+- **Table.** ⌘K → **Show this folder as a table** lists the folder's notes with
+  a column for every property they have. Click a header to sort (numbers as
+  numbers, empty cells last), type to filter, click a cell to edit it. A
+  property keeps the shape it had: a list stays a list and a number a number.
+  **Add** gives every note a new, empty property column to fill in.
+
+Neither view stores anything of its own. The board and the table are rebuilt
+from the notes' front matter each time they open, so they cannot disagree with
+the files, and every change is an ordinary edit to one note. A note locked on
+this device is not changed, and the view says so.
+
+### Fixed
+
+- ⌘⇧F in the source view entered focus mode _and_ opened the editor's
+  find-and-replace bar underneath it. The shortcut is now taken before the
+  editor sees it.
+- The **Leave focus** button sat under the "only on this device" banner. The
+  banner steps away in focus mode with everything else.
+- A new day's note began with an empty `- [ ]`, which the rich editor showed
+  as a bullet reading "[ ]". It begins with the headings alone now.
+
+### Bring back a deleted note
+
+⌘K → **Bring back a deleted note** compares the notebook as it stood a week, a
+month, three months or a year ago with the notebook now, and lists the notes
+that have gone. Each can be read before deciding, and **Bring it back** writes
+it at the path it had, properties included, as an ordinary new change. When a
+file with the same name has appeared elsewhere since, the row says the note was
+probably moved rather than deleted. Nothing new on the server: the comparison is
+the time machine's read of an earlier day. When something new already lives at
+the old path, the note comes back beside it instead of over it.
+
+### Everyday writing: templates, today's note, to-dos and focus
+
+Four things every notes app is expected to do, which ForkLeaf did not. Each one
+is ordinary files and ordinary markdown, so nothing here works only inside
+ForkLeaf.
+
+- **Templates are files in `templates/`.** Every markdown file there appears in
+  ⌘K as **New note from template**, and **Save this note as a template** makes
+  one from what you have open. `{{title}}`, `{{date}}`, `{{time}}`,
+  `{{weekday}}`, `{{yesterday}}` and `{{tomorrow}}` are filled in; any other
+  braces are left alone, in case they are yours. A template's tags come along;
+  its own title and creation date do not, or every meeting note would claim to
+  have been written the day the template was.
+
+- **Today's note.** ⌘K → **Open today's note** opens `journal/2026-09-12.md`,
+  making it first if needed — from `templates/daily.md` when there is one, and a
+  plain dated page with a to-do list when there is not. "Today" is the writer's
+  own day, not UTC's.
+
+- **Every open to-do, in one list.** A `- [ ]` written in Tuesday's meeting
+  note was invisible from Wednesday's. ⌘K → **Show every open to-do** lists
+  every unticked box in the notebook, soonest due first, and ticking one there
+  ticks it in its note — one character, synced and in history like any edit.
+  Due dates are `📅 2026-09-14` (the Obsidian Tasks spelling) or
+  `due: 2026-09-14`. Boxes inside code blocks and templates are not tasks. When
+  a note has changed since the list was read and the line cannot be found
+  unambiguously, nothing is ticked and the list reads again.
+
+- **Focus mode.** ⌘⇧F puts away the file tree, the tabs, the document panel and
+  the status bar, and brings back exactly the layout you had when pressed again.
+
 ### Comparing two things, side by side
 
 Three places in ForkLeaf could tell you that something had changed and then

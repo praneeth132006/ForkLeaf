@@ -12,6 +12,18 @@ Ticked entries link to nothing; the git history is the record.
       with its contents beside it — not in a second browser tab
 - [x] **Every column can be resized**, by dragging the seam between panels
 
+## Everyday writing
+
+- [x] **Templates** — Small. Files in `templates/`, offered in ⌘K, with
+      `{{title}}` and `{{date}}`-style placeholders
+- [x] **Today's note** — Small. `journal/YYYY-MM-DD.md`, from
+      `templates/daily.md` when there is one
+- [x] **Every open to-do in one list** — Small. Tick from the list; overdue
+      first when a line carries `📅 YYYY-MM-DD`
+- [x] **Focus mode** — Small. ⌘⇧F, and everything but the note steps away
+- [ ] **Bring back a deleted note** — Medium. Git already has it; the app needs
+      a list of notes deleted in recent commits and a button to restore one
+
 ## The whole app
 
 - [x] **Try a rewrite without losing the original** — Medium. An experiment

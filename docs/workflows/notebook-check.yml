@@ -1,0 +1,88 @@
+# Notebook check
+#
+# Copy this file into your notes repository as .github/workflows/notebook-check.yml.
+#
+# On every pull request that touches markdown (and every push to main), ForkLeaf
+# reads the notes at that commit and checks that every file a note points at
+# exists and every [[link]] finds a note. The report goes in the job summary,
+# each broken reference is marked on its file, and the check fails only for
+# broken references — a claim that may have aged is listed, never failed.
+#
+# Public repositories need nothing else.
+#
+# Private repositories: set the repository variable FORKLEAF_SEND_TOKEN to
+# "true". The job's own GITHUB_TOKEN is then sent to ForkLeaf so it can read the
+# notes. That token can only read this repository, expires when the job ends,
+# and is used by ForkLeaf for this check's reads and nothing else. If you would
+# rather not send it anywhere, run your own ForkLeaf and set FORKLEAF_URL to it.
+#
+# If ForkLeaf cannot be reached, the step warns and passes: an outage elsewhere
+# should not block your pull request.
+
+name: Notebook check
+
+on:
+  pull_request:
+    paths:
+      - "**.md"
+      - "**.mdx"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notebook-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check notes for broken references
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ask ForkLeaf to check the notebook
+        env:
+          FORKLEAF_URL: ${{ vars.FORKLEAF_URL || 'https://forkleaf.vercel.app' }}
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.event.pull_request.head.sha || github.sha }}
+          TOKEN: ${{ vars.FORKLEAF_SEND_TOKEN == 'true' && github.token || '' }}
+        run: |
+          set -euo pipefail
+
+          owner="${REPOSITORY%%/*}"
+          repo="${REPOSITORY##*/}"
+
+          auth=()
+          if [ -n "${TOKEN}" ]; then
+            auth=(-H "Authorization: Bearer ${TOKEN}")
+          fi
+
+          if ! curl --fail --silent --show-error --max-time 90 "${auth[@]}" \
+              "${FORKLEAF_URL}/api/gh/notebook-check?owner=${owner}&repo=${repo}&ref=${REF}" \
+              --output report.json; then
+            echo "::warning::Could not reach ForkLeaf, so the notebook was not checked."
+            exit 0
+          fi
+
+          jq -r '.markdown' report.json >> "${GITHUB_STEP_SUMMARY}"
+
+          if [ "$(jq -r '.ok' report.json)" != "true" ]; then
+            # One annotation per broken note, shown on the file in the pull request.
+            # Workflow commands give %, CR and LF a meaning everywhere, and : and , a
+            # meaning in properties, so a path or message carrying them is encoded.
+            jq -r '
+              .notes[]
+              | select((.missingFiles | length) > 0 or (.missingLinks | length) > 0)
+              | def escape_data: gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A");
+              def escape_property: escape_data | gsub(":"; "%3A") | gsub(","; "%2C");
+              "::error file=\(.path | escape_property)::" + (
+                  [(.missingFiles[] | "points at \(.), which is not in the repository"),
+                   (.missingLinks[] | "links to [[\(.)]], which matches no note")]
+                  | join("; ")
+                  | escape_data
+                )
+            ' report.json
+            exit 1
+          fi

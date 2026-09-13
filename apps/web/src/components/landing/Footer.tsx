@@ -29,7 +29,7 @@ const COLUMNS = [
     links: [
       { label: "How it works", href: "#how" },
       { label: "What it does", href: "#toolkit" },
-      { label: "Features", href: "#features" },
+      { label: "Features", href: "/features" },
       { label: "Where it fits", href: "#why" },
       { label: "Pricing", href: "#pricing" },
       { label: "Open the editor", href: "/editor" },

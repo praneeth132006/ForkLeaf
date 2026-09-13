@@ -361,6 +361,57 @@ function rehypeYoutube() {
   };
 }
 
+const AUDIO_PATH = /\.(webm|ogg|oga|m4a|mp3|wav)$/i;
+
+/**
+ * A paragraph that is only a link to a recording in the repository becomes a
+ * player, with the link kept underneath it.
+ *
+ * Runs after the sanitiser, on a link the sanitiser has already passed, and
+ * builds only an `<audio>` element whose source is that link or what the
+ * resolver made of it. Only repository-relative links are played: a recording
+ * on another site would need the page to fetch from it, which the content
+ * security policy does not allow and a note should not be able to ask for.
+ *
+ * The file keeps a plain link, so the note reads the same on github.com.
+ */
+function rehypeAudio(options: RenderOptions) {
+  return (tree: HastRoot) => {
+    visit(tree, "element", (node: Element) => {
+      if (node.tagName !== "p") return;
+
+      const children = node.children.filter(
+        (child) => child.type !== "text" || child.value.trim() !== "",
+      );
+      const only = children.length === 1 ? children[0] : undefined;
+      if (!only || only.type !== "element" || only.tagName !== "a") return;
+
+      const href = typeof only.properties?.href === "string" ? only.properties.href : "";
+      const path = href.split(/[?#]/)[0] ?? "";
+      if (!AUDIO_PATH.test(path) || /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//")) {
+        return;
+      }
+
+      const src = options.resolveImageSrc ? options.resolveImageSrc(href) : href;
+      // The resolver answers with a placeholder picture for a file that is not
+      // on this device; that is no source for a player, so the link stays a link.
+      if (!src || src.startsWith("data:")) return;
+
+      node.tagName = "div";
+      node.properties = { className: ["fl-audio"] };
+      node.children = [
+        {
+          type: "element",
+          tagName: "audio",
+          properties: { controls: true, preload: "metadata", src },
+          children: [],
+        },
+        only,
+      ];
+    });
+  };
+}
+
 const buildHtmlPipeline = (options: RenderOptions) =>
   unified()
     .use(remarkParse)
@@ -406,6 +457,7 @@ const buildHtmlPipeline = (options: RenderOptions) =>
     // the rest as links — those are the ones that need a tab of their own.
     .use(rehypeExternalLinks)
     .use(rehypeSanitize, schema)
+    .use(rehypeAudio, options)
     .use(rehypeStringify);
 
 /**
