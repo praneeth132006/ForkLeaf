@@ -168,8 +168,38 @@ const CODE_LINE_SIGNALS: readonly RegExp[] = [
   /^\s*<\/?[a-zA-Z][\w-]*/,
 ];
 
+/** A comment is code whatever it says, however much it reads like a sentence. */
+const COMMENT_LINE = /^\s*(#|\/\/|\/\*|\*\/|--\s|<!--)/;
+
 function isCodeLine(line: string): boolean {
+  // Indentation, a bracket or a leading `for` say nothing about a sentence.
+  if (isProseLine(line)) return false;
   return CODE_LINE_SIGNALS.some((signal) => signal.test(line));
+}
+
+/** Characters a sentence has no use for and a program cannot do without. */
+const CODE_CHARACTERS = /[{};=<>|$`\\]|\w\(|::|->|=>/;
+
+/**
+ * A line of writing, whatever it is dressed in.
+ *
+ * Copying a bulleted list off a web page hands over plain text with every item
+ * indented, and indentation is one of the signals above — so four bullets of
+ * prose used to be four "lines of code" and the paste became a code block. A
+ * line of six or more ordinary words with none of the punctuation code needs
+ * is a sentence, and no amount of leading whitespace changes that.
+ */
+export function isProseLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (COMMENT_LINE.test(trimmed) || CODE_CHARACTERS.test(trimmed)) return false;
+
+  const words = trimmed.split(/\s+/);
+  if (words.length < 6) return false;
+
+  const plain = words.filter((word) =>
+    /^[("'‘“]?[\p{L}][\p{L}\p{M}'’-]*[)"'’”]?[.,:;!?]?$/u.test(word),
+  );
+  return plain.length / words.length >= 0.8;
 }
 
 /** Shell punctuation strong enough to say what the whole block is. */
@@ -251,6 +281,28 @@ export function evenSpacing(text: string): string {
     .replace(/[ \t]+$/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/^\n+|\n+$/g, "");
+}
+
+/**
+ * Whether pasted HTML is a document the source already laid out.
+ *
+ * A list, a heading or a quote copied off a web page or out of a chat reply is
+ * writing with structure, and ProseMirror rebuilds that structure faithfully.
+ * Its plain-text flavour is the worst reading of the same paste — bullets
+ * become indented lines, which is what code looks like — so when the HTML says
+ * this much, the plain text is not consulted at all. A `<pre>` anywhere means
+ * the source did have code in it, and the HTML is left to say so itself.
+ */
+export function isStructuredDocument(html: string, parse: (html: string) => Document): boolean {
+  const body = parse(html).body;
+  if (!body) return false;
+  if (body.querySelector("pre")) return false;
+  if (body.querySelector("h1,h2,h3,h4,h5,h6,ul,ol,li,blockquote")) return true;
+
+  // Paragraphs of prose, one `<p>` each: an article, not a script.
+  return Array.from(body.querySelectorAll("p")).some((block) =>
+    isProseLine(block.textContent ?? ""),
+  );
 }
 
 /** Elements that carry structure worth keeping exactly as the source had it. */

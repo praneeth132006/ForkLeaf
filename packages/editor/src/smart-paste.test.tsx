@@ -138,6 +138,42 @@ describe("pasting code", () => {
   });
 });
 
+describe("pasting a list copied off a web page", () => {
+  const ITEMS = [
+    [
+      "Threat modeling",
+      "Like imagining all the ways someone might break into your house, threat modeling helps developers figure out potential risks to the app early on.",
+    ],
+    [
+      "Servers and databases",
+      "These are like the land your house sits on and the water supply it uses. If they aren’t secure, the whole system is at risk.",
+    ],
+    [
+      "Authentication and authorization",
+      "Think of these as high-quality locks on your doors, so only the right people get in.",
+    ],
+  ];
+  const INTRO = "In software development, Security by Design works the same way. This can include:";
+  const TEXT = [INTRO, "", ...ITEMS.map(([term, body]) => `    ${term}: ${body}`)].join("\n");
+  const HTML = `<p>${INTRO}</p><ul>${ITEMS.map(([term, body]) => `<li><code>${term}</code>: ${body}</li>`).join("")}</ul>`;
+
+  it("keeps it a list rather than making a code block of it", async () => {
+    const editor = await mount();
+
+    // Handed back to ProseMirror, which builds the list from the HTML.
+    expect(paste(editor, TEXT, HTML)).toBe(false);
+    expect(editor.state.doc.content.content.some((node) => node.type.name === "codeBlock")).toBe(
+      false,
+    );
+  });
+
+  it("keeps it out of a code block when only the plain text arrives", async () => {
+    const editor = await mount();
+
+    expect(paste(editor, TEXT)).toBe(false);
+  });
+});
+
 describe("pasting from something that writes one paragraph per line", () => {
   const LINES = ["Subfinder - https://github.com/projectdiscovery/subfinder", "Amass - see wiki"];
   const HTML = LINES.map((line) => `<p>${line}</p>`).join("");

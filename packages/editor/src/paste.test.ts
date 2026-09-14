@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { detectLanguage, evenSpacing, isLinesOfText, looksLikeCode } from "./paste";
+import {
+  detectLanguage,
+  evenSpacing,
+  isLinesOfText,
+  isProseLine,
+  isStructuredDocument,
+  looksLikeCode,
+} from "./paste";
 
 const parse = (html: string) => new DOMParser().parseFromString(html, "text/html");
 
@@ -93,6 +100,41 @@ describe("telling code from writing", () => {
     expect(looksLikeCode("Here is the fix:\n\n```js\nconst a = 1;\n```")).toBe(false);
   });
 
+  it("leaves a bulleted list copied off a web page alone, indented as its plain text is", () => {
+    // What the browser puts on the clipboard for an article's <ul>: every item
+    // indented, which used to read as four lines of code.
+    const article = [
+      "In software development, Security by Design works the same way. When creating an app, developers think about security right from the planning stage. This can include:",
+      "",
+      "    Threat modeling: Like imagining all the ways someone might break into your house, threat modeling helps developers figure out potential risks to the app early on.",
+      "    Secure code reviews: After writing the code, developers carefully check it to make sure there are no weak spots, similar to inspecting the house’s foundation for cracks before finishing construction.",
+      "\tServers and databases: These are like the land your house sits on and the water supply it uses. If they aren’t secure, the whole system is at risk.",
+      "\tAuthentication and authorization: Think of these as high-quality locks on your doors. Authentication ensures only the right people can get in, while authorization makes sure they can only access the rooms (data) they’re allowed to.",
+    ].join("\n");
+
+    expect(looksLikeCode(article)).toBe(false);
+  });
+
+  it("leaves indented sentences that open with a keyword alone", () => {
+    const notes = [
+      "  if the build fails again we should roll back the release",
+      "  for now keep the old importer running (just in case)",
+      "  return the loaner laptop to Priya before the end of the week",
+    ].join("\n");
+
+    expect(looksLikeCode(notes)).toBe(false);
+  });
+
+  it("still knows indented code, and comments that read like sentences", () => {
+    const python = [
+      "# Work out which of the domains are still alive and worth a look",
+      "def alive(domains):",
+      "    return [d for d in domains if ping(d)]",
+    ].join("\n");
+
+    expect(looksLikeCode(python)).toBe(true);
+  });
+
   it("never turns a single line into a code block", () => {
     // Sentences have brackets in them, and one line is not a program.
     expect(looksLikeCode("Call Priya (she has the keys) before Friday.")).toBe(false);
@@ -168,5 +210,47 @@ describe("HTML that is only lines of text", () => {
   it("allows a bare address, which the plain text carries just as well", () => {
     const bare = '<p><a href="https://example.com">https://example.com</a></p><p>next line</p>';
     expect(isLinesOfText(bare, parse)).toBe(true);
+  });
+});
+
+describe("a line of writing", () => {
+  it("knows a sentence, however it is indented", () => {
+    expect(
+      isProseLine("    Threat modeling: Like imagining all the ways someone might break in."),
+    ).toBe(true);
+  });
+
+  it("does not take code or commands for one", () => {
+    expect(isProseLine("    return [d for d in domains if ping(d)]")).toBe(false);
+    expect(isProseLine('echo -e "${RED} [+] Launching subfinder ... ${RESET}"')).toBe(false);
+    expect(isProseLine("const total = items.length;")).toBe(false);
+    expect(isProseLine("amass enum -d tcm-sec.com")).toBe(false);
+  });
+});
+
+describe("HTML that is already a document", () => {
+  it("recognises lists, headings and quotes", () => {
+    expect(
+      isStructuredDocument("<ul><li><code>Threat modeling</code>: risks</li></ul>", parse),
+    ).toBe(true);
+    expect(isStructuredDocument("<h2>Setup</h2><p>one</p>", parse)).toBe(true);
+    expect(isStructuredDocument("<blockquote>said so</blockquote>", parse)).toBe(true);
+  });
+
+  it("recognises paragraphs of prose", () => {
+    const html = "<p>We agreed to ship the importer first and leave search until March.</p>";
+    expect(isStructuredDocument(html, parse)).toBe(true);
+  });
+
+  it("leaves code, and one paragraph per command, to the code check", () => {
+    expect(
+      isStructuredDocument("<pre><code>const a = 1;</code></pre><ul><li>x</li></ul>", parse),
+    ).toBe(false);
+    expect(
+      isStructuredDocument("<p>whois tcm-sec.com</p><p>subfinder -d tcm-sec.com</p>", parse),
+    ).toBe(false);
+    expect(isStructuredDocument("<div><span>const a = 1;</span></div>", parse)).toBe(false);
+    const script = "<p># Use the first argument as the domain name</p><p>domain=$1</p>";
+    expect(isStructuredDocument(script, parse)).toBe(false);
   });
 });

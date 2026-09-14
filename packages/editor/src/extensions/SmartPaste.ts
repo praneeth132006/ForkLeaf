@@ -1,7 +1,13 @@
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { detectLanguage, evenSpacing, isLinesOfText, looksLikeCode } from "../paste";
+import {
+  detectLanguage,
+  evenSpacing,
+  isLinesOfText,
+  isStructuredDocument,
+  looksLikeCode,
+} from "../paste";
 
 /**
  * Pasting things that are not prose.
@@ -54,12 +60,18 @@ export const SmartPaste = Extension.create({
             const text = evenSpacing(clipboard.getData("text/plain") ?? "");
             if (text === "") return false;
 
+            const html = clipboard.getData("text/html") ?? "";
+
+            // A list or an article copied off a page: its HTML is the truth,
+            // and its plain text — bullets turned into indented lines — is
+            // exactly what code looks like.
+            if (html !== "" && isStructuredDocument(html, parseHtml)) return false;
+
             if (looksLikeCode(text)) {
               event.preventDefault();
               return insertCodeBlock(view, text, detectLanguage(text));
             }
 
-            const html = clipboard.getData("text/html") ?? "";
             if (html !== "" && isLinesOfText(html, parseHtml)) {
               event.preventDefault();
               return insertAsMarkdown(view, text);
