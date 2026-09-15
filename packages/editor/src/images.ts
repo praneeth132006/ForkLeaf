@@ -22,6 +22,21 @@ export interface ImageBridge {
    * showing it.
    */
   resolve?: (src: string) => string;
+  /**
+   * Where a `src` in the open note really points, in a form that survives
+   * being carried to another note — or null for a src that needs no help,
+   * like an absolute URL.
+   *
+   * Images are written relative to their note (`./assets/shot.png`), so the
+   * same text pasted into a note in another folder points at nothing. Copying
+   * records this alongside the image; pasting hands it to `localize`.
+   */
+  portable?: (src: string) => string | null;
+  /**
+   * The `src` the open note should write for something `portable` produced,
+   * or null when it belongs to a notebook this is not.
+   */
+  localize?: (portable: string) => string | null;
   /** False when there is nowhere to store files, so the UI can say so. */
   canUpload?: boolean;
   /**

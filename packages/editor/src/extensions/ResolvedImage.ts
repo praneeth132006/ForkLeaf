@@ -20,7 +20,24 @@ export interface ResolvedImageOptions {
    * Returns an unsubscribe function.
    */
   subscribe?: (listener: () => void) => () => void;
+  /**
+   * Where a `src` really points, in a form another note can use; null when
+   * the src is already the same from anywhere.
+   */
+  portableSrc?: (src: string) => string | null;
+  /** The `src` this note should write for a `portableSrc` answer. */
+  localSrc?: (portable: string) => string | null;
 }
+
+/**
+ * The attribute a copied image carries its real location in.
+ *
+ * `data-src` alone is not enough: it is the path relative to the note it was
+ * copied *from*, and an image saved beside a note in one folder pasted into a
+ * note in another resolved to a file that was never there — a page of broken
+ * pictures with only their names showing.
+ */
+const PORTABLE_ATTRIBUTE = "data-fl-asset";
 
 /**
  * The image node, displayed through a resolver.
@@ -40,6 +57,8 @@ export const ResolvedImage = Image.extend<ResolvedImageOptions & Record<string, 
       ...this.parent?.(),
       resolveSrc: undefined,
       subscribe: undefined,
+      portableSrc: undefined,
+      localSrc: undefined,
     };
   },
 
@@ -48,17 +67,32 @@ export const ResolvedImage = Image.extend<ResolvedImageOptions & Record<string, 
       ...this.parent?.(),
       src: {
         default: null,
-        parseHTML: (element: HTMLElement) =>
-          element.getAttribute("data-src") ?? element.getAttribute("src"),
+        parseHTML: (element: HTMLElement) => {
+          // Pasted from another note: rewritten to be relative to this one.
+          const portable = element.getAttribute(PORTABLE_ATTRIBUTE);
+          const local = portable
+            ? (this.options as ResolvedImageOptions).localSrc?.(portable)
+            : null;
+          if (local) return local;
+          return element.getAttribute("data-src") ?? element.getAttribute("src");
+        },
         renderHTML: (attributes: Record<string, unknown>) => {
           const src = typeof attributes.src === "string" ? attributes.src : "";
           if (!src) return {};
 
-          const resolve = (this.options as ResolvedImageOptions).resolveSrc;
-          if (!resolve) return { src };
+          const options = this.options as ResolvedImageOptions;
+          const rendered: Record<string, string> = { src };
 
-          const resolved = resolve(src);
-          return resolved === src ? { src } : { src: resolved, "data-src": src };
+          const resolved = options.resolveSrc?.(src) ?? src;
+          if (resolved !== src) {
+            rendered.src = resolved;
+            rendered["data-src"] = src;
+          }
+
+          const portable = options.portableSrc?.(src);
+          if (portable) rendered[PORTABLE_ATTRIBUTE] = portable;
+
+          return rendered;
         },
       },
     };
@@ -85,7 +119,9 @@ export const ResolvedImage = Image.extend<ResolvedImageOptions & Record<string, 
       const dom = document.createElement("img");
 
       for (const [key, value] of Object.entries(HTMLAttributes)) {
-        if (key === "src" || key === "data-src") continue;
+        // Location attributes are painted below, and the portable one only
+        // matters on the clipboard, where `renderHTML` puts it.
+        if (key === "src" || key === "data-src" || key === PORTABLE_ATTRIBUTE) continue;
         if (value === null || value === undefined) continue;
         dom.setAttribute(key, String(value));
       }

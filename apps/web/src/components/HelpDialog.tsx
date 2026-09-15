@@ -5,6 +5,8 @@ import Link from "next/link";
 import type { SessionUser, Workspace } from "@forkleaf/types";
 import { Dialog } from "./Dialog";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "@/lib/constants";
+import { mcpServerUrl } from "@/lib/mcp-url";
+import { CopyLine } from "./ConnectAssistantDialog";
 
 export interface HelpDialogProps {
   onClose: () => void;
@@ -13,9 +15,14 @@ export interface HelpDialogProps {
   githubAvailable: boolean;
   onSignIn: () => void;
   onConnectRepo: () => void;
+  /** Opens the setup for Claude Code, Cursor and VS Code. */
+  onConnectAssistant?: () => void;
+  /** The tab to open on. */
+  initialTab?: Tab;
 }
 
-type Tab = "start" | "writing" | "papers" | "diagrams" | "checks" | "sync" | "keys";
+export type Tab =
+  "start" | "writing" | "papers" | "diagrams" | "checks" | "sync" | "assistant" | "keys";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "start", label: "Getting started" },
@@ -24,6 +31,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "diagrams", label: "Diagrams" },
   { id: "checks", label: "Checks & history" },
   { id: "sync", label: "GitHub & sync" },
+  { id: "assistant", label: "AI assistant" },
   { id: "keys", label: "Shortcuts" },
 ];
 
@@ -42,8 +50,10 @@ export function HelpDialog({
   githubAvailable,
   onSignIn,
   onConnectRepo,
+  onConnectAssistant,
+  initialTab = "start",
 }: HelpDialogProps) {
-  const [tab, setTab] = useState<Tab>("start");
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   return (
     <Dialog title="Help" subtitle="How ForkLeaf works, in about two minutes" onClose={onClose} wide>
@@ -662,6 +672,8 @@ export function HelpDialog({
         </Section>
       )}
 
+      {tab === "assistant" && <AssistantHelp onConnectAssistant={onConnectAssistant} />}
+
       {tab === "keys" && (
         <div className="grid gap-x-8 gap-y-1 sm:grid-cols-2">
           {[
@@ -705,6 +717,76 @@ export function HelpDialog({
         with what happened and what you expected.
       </p>
     </Dialog>
+  );
+}
+
+/**
+ * Connecting Claude, answered where people look for it.
+ *
+ * Claude's "Add custom connector" box asks for two things and explains
+ * neither in terms of this app, so these are the exact words to type into
+ * each field, with a copy button, followed by what happens next and what to
+ * ask once it is connected.
+ */
+function AssistantHelp({ onConnectAssistant }: { onConnectAssistant?: () => void }) {
+  const { url, local } = mcpServerUrl();
+
+  return (
+    <Section>
+      <p className="text-[13.5px] leading-relaxed text-[var(--fl-muted)]">
+        Connect Claude to this notebook and it can search, read and write your notes for you. Every
+        change it makes is a commit in your repository, like one you made yourself.
+      </p>
+
+      <Step n={1} title="Open the connector settings in Claude">
+        In claude.ai or Claude Desktop, go to <strong>Settings → Connectors</strong> and press{" "}
+        <strong>Add custom connector</strong>.
+      </Step>
+
+      <Step n={2} title="Name">
+        What it is called in your connectors list. Type:
+        <CopyLine text="ForkLeaf" label="Connector name" />
+      </Step>
+
+      <Step n={3} title="MCP server URL">
+        The address Claude talks to. Paste exactly this:
+        <CopyLine text={url} label="MCP server URL" />
+        {local && (
+          <Callout>
+            This is a copy of ForkLeaf running on your own computer, and Claude cannot reach{" "}
+            <Mono>localhost</Mono> from the internet. Use the address of your deployed ForkLeaf
+            instead — it reads the same GitHub repository.
+          </Callout>
+        )}
+      </Step>
+
+      <Step n={4} title="Continue, then Connect">
+        Press <strong>Continue</strong> (or <strong>Add</strong>), then <strong>Connect</strong>{" "}
+        beside ForkLeaf. A ForkLeaf window opens: sign in with GitHub, choose the repository Claude
+        may use, and tick <strong>Read only</strong> if it should not write.
+      </Step>
+
+      <Step n={5} title="Ask it something">
+        In a new chat, turn ForkLeaf on from the tools menu and ask in plain words:
+        <ul className="mt-2 list-disc space-y-1 pl-5">
+          <li>
+            <Mono>Search my ForkLeaf notes for brute force and summarise what I wrote</Mono>
+          </li>
+          <li>
+            <Mono>Make a checklist note from my Active Directory notes</Mono>
+          </li>
+          <li>
+            <Mono>Add what we just discussed to my note on authentication attacks</Mono>
+          </li>
+        </ul>
+      </Step>
+
+      {onConnectAssistant && (
+        <button type="button" onClick={onConnectAssistant} className="fl-btn fl-btn-ghost">
+          Using Claude Code, Cursor or VS Code instead?
+        </button>
+      )}
+    </Section>
   );
 }
 
