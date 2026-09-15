@@ -272,6 +272,8 @@ export function WysiwygEditor({
         allowBase64: true,
         resolveSrc: (src: string) => imagesRef.current?.resolve?.(src) ?? src,
         subscribe: subscribeToResolver,
+        portableSrc: (src: string) => imagesRef.current?.portable?.(src) ?? null,
+        localSrc: (portable: string) => imagesRef.current?.localize?.(portable) ?? null,
         HTMLAttributes: { loading: "lazy" },
       }),
       Link.configure({

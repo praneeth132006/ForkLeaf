@@ -1271,3 +1271,34 @@ mark.fl-hl-orange {
 .fl-prose code.language-output {
   color: color-mix(in srgb, var(--fl-inverse-text) 82%, transparent);
 }
+
+/* ─── Marquee ─────────────────────────────────────────────────────────────
+   Text too long for its slot in the status bar. The track holds the text
+   twice, so sliding it one copy's width lands exactly where it started. */
+@keyframes fl-marquee {
+  0%,
+  12% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(calc(-1 * var(--fl-marquee-shift, 0px)));
+  }
+}
+
+.fl-marquee[data-scrolling] .fl-marquee-track {
+  animation-name: fl-marquee;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.fl-marquee:hover .fl-marquee-track {
+  animation-play-state: paused;
+}
+
+/* Still, and cut off with the whole text in the title, rather than the global
+   reduced-motion rule turning an endless scroll into a flicker. */
+@media (prefers-reduced-motion: reduce) {
+  .fl-marquee[data-scrolling] .fl-marquee-track {
+    animation: none !important;
+  }
+}

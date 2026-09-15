@@ -108,7 +108,20 @@ export function proxy(request: NextRequest): NextResponse {
  * directive is identical, and the routes on this policy do not render note
  * content.
  */
-function policy(nonce: string | null, isDev: boolean): string {
+export function policy(
+  nonce: string | null,
+  isDev: boolean,
+  postHogHost: string | undefined = process.env.NEXT_PUBLIC_POSTHOG_HOST,
+): string {
+  /**
+   * PostHog's endpoints. `posthog.ts` sends events to `us.i.posthog.com` and
+   * fetches its remote config from `us-assets.i.posthog.com`, and neither was
+   * allowed here — so with a key configured, every event and every retry was
+   * blocked by this policy and analytics silently recorded nothing. A
+   * self-hosted or EU host named in the environment is allowed as well.
+   */
+  const postHog = ["https://*.i.posthog.com", ...originOf(postHogHost)].join(" ");
+
   const script = nonce
     ? // The hash covers the theme script inlined in the document head, which is
       // a build-time constant rather than a per-request tag.
@@ -121,7 +134,7 @@ function policy(nonce: string | null, isDev: boolean): string {
       // means the tag Firebase Analytics injects has to be named explicitly.
       // Without it the landing page loaded analytics and the browser blocked
       // it on every visit — `connect-src` below already expects it to work.
-      `'self' 'unsafe-inline' https://www.googletagmanager.com`;
+      `'self' 'unsafe-inline' https://www.googletagmanager.com ${postHog}`;
 
   return [
     "default-src 'self'",
@@ -152,6 +165,7 @@ function policy(nonce: string | null, isDev: boolean): string {
       "https://*.analytics.google.com",
       "https://*.firebaseio.com",
       "wss://*.firebaseio.com",
+      postHog,
     ].join(" "),
     "object-src 'none'",
     "base-uri 'self'",
@@ -167,6 +181,17 @@ function policy(nonce: string | null, isDev: boolean): string {
     "manifest-src 'self'",
     ...(isDev ? [] : ["upgrade-insecure-requests"]),
   ].join("; ");
+}
+
+/** The origin of a configured URL, or nothing if it is unset or not https. */
+function originOf(url: string | undefined): string[] {
+  if (!url) return [];
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" ? [parsed.origin] : [];
+  } catch {
+    return [];
+  }
 }
 
 /**

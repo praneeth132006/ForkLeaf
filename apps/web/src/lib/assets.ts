@@ -176,6 +176,40 @@ export function resolveImageSrc(
   return `/api/gh/raw?${params.toString()}`;
 }
 
+/**
+ * An image's location, in a form that means the same thing in every note.
+ *
+ * What a note writes is relative to that note, so `./assets/shot.png` copied
+ * out of one folder and pasted into another points at a file that does not
+ * exist. Copying carries this instead — the workspace and the repository path
+ * — and `localAssetSrc` turns it back into a path relative to wherever it
+ * lands. Null for anything already absolute.
+ */
+export function portableAssetSrc(
+  workspace: Workspace | null,
+  notePath: string | null,
+  src: string,
+): string | null {
+  if (!workspace || !notePath || !src || !isRepoRelative(src)) return null;
+  return `${workspace.id}#${resolveAgainstNote(notePath, src)}`;
+}
+
+/**
+ * The src the open note should write for a `portableAssetSrc` answer, or null
+ * when it came from another notebook, whose files this one does not have.
+ */
+export function localAssetSrc(
+  workspace: Workspace | null,
+  notePath: string | null,
+  portable: string,
+): string | null {
+  if (!workspace || !notePath) return null;
+  const prefix = `${workspace.id}#`;
+  if (!portable.startsWith(prefix)) return null;
+  const path = portable.slice(prefix.length);
+  return path ? relativeSrc(notePath, path) : null;
+}
+
 // ─── Local storage ──────────────────────────────────────────────────────────
 
 /**
