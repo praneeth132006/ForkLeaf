@@ -15,6 +15,7 @@ import {
   type FailureKind,
   type ProviderId,
 } from "@/lib/assistant";
+import { markdownToHtml } from "@forkleaf/markdown-engine";
 import { useAssistantKey, useAssistantSettings } from "@/hooks/useAssistant";
 
 /**
@@ -37,14 +38,25 @@ import { useAssistantKey, useAssistantSettings } from "@/hooks/useAssistant";
 export interface AssistantPanelProps {
   /** The open note, or null when no note is open. */
   note: { title: string; content: string } | null;
-  /**
-   * Adds an answer to the end of the open note.
-   *
-   * Absent when there is nowhere to put it — no note, or a locked one — which
-   * removes the button rather than leaving one that explains itself after the
-   * click.
-   */
+  /** Adds an answer to the end of the open note. */
   onInsert?: (markdown: string) => void;
+  /**
+   * Replaces the note's body with an answer.
+   *
+   * The missing half. Asking for a tidy-up returned a rewritten note and the
+   * only thing that could be done with it was to append it — leaving the note
+   * with both versions in it, one after the other, which is worse than what
+   * the reader started with.
+   */
+  onReplace?: (markdown: string) => void;
+  /**
+   * Why the note cannot be written to, when it cannot.
+   *
+   * The buttons used to simply not be there for a locked or encrypted note,
+   * which reads exactly like the assistant being unable to write to notes at
+   * all. An absence explains nothing; this sentence does.
+   */
+  cannotWrite?: string;
   onClose: () => void;
 }
 
@@ -65,7 +77,13 @@ const STARTERS = [
   },
 ];
 
-export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps) {
+export function AssistantPanel({
+  note,
+  onInsert,
+  onReplace,
+  cannotWrite,
+  onClose,
+}: AssistantPanelProps) {
   const [settings, update] = useAssistantSettings();
   const [key, setKey] = useAssistantKey(settings.provider);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -87,6 +105,14 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
     model: string;
   } | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
+  /**
+   * Which answers are being shown as the Markdown they are.
+   *
+   * Rendered by default, because raw `##` and `*` in a chat panel reads as the
+   * model writing badly rather than as Markdown doing its job. The raw text is
+   * one press away for anybody who wants to check exactly what will be pasted.
+   */
+  const [raw, setRaw] = useState<Record<number, boolean>>({});
   const abort = useRef<AbortController | null>(null);
   const thread = useRef<HTMLDivElement | null>(null);
 
@@ -561,19 +587,30 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
             </div>
           ) : (
             <div key={index} className="group">
-              {/* Plain text, wrapped where it was written. Rendering the reply
-                  as Markdown would hide the very characters somebody is about
-                  to paste into a Markdown file — a heading that shows as a
-                  heading is a heading you cannot check. */}
-              <p className="whitespace-pre-wrap break-words leading-relaxed text-[var(--fl-text)]">
-                {message.text}
-                {streaming && index === messages.length - 1 && (
-                  <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse bg-[var(--fl-accent)]" />
-                )}
-              </p>
+              {/* Rendered as the Markdown it is, unless asked otherwise.
+                  Showing raw `##` and `*` in the panel was a deliberate choice
+                  — a heading that looks like a heading is one you cannot check
+                  before pasting — and it was the wrong one: it made every
+                  answer look like the model writing badly. `markdownToHtml`
+                  sanitises, so this is safe to inject, and "Show Markdown"
+                  gets the exact characters back for anyone checking. */}
+              {raw[index] || (streaming && index === messages.length - 1) ? (
+                <p className="whitespace-pre-wrap break-words leading-relaxed text-[var(--fl-text)]">
+                  {message.text}
+                  {streaming && index === messages.length - 1 && (
+                    <span className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse bg-[var(--fl-accent)]" />
+                  )}
+                </p>
+              ) : (
+                <div
+                  className="fl-prose fl-assistant-answer text-[13px] break-words text-[var(--fl-text)]"
+                  // Safe: `markdownToHtml` sanitises its output.
+                  dangerouslySetInnerHTML={{ __html: markdownToHtml(message.text) }}
+                />
+              )}
 
               {message.text && !(streaming && index === messages.length - 1) && (
-                <div className="mt-1 flex gap-1.5 text-[11.5px] text-[var(--fl-muted)]">
+                <div className="mt-1 flex flex-wrap gap-1.5 text-[11.5px] text-[var(--fl-muted)]">
                   <button
                     type="button"
                     onClick={() => {
@@ -585,6 +622,7 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
                   >
                     {copied === index ? "Copied" : "Copy"}
                   </button>
+
                   {onInsert && (
                     <button
                       type="button"
@@ -593,6 +631,33 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
                     >
                       Add to note
                     </button>
+                  )}
+
+                  {/* For the answer that *is* the note: a tidy-up, a rewrite,
+                      a restructure. Appending one of those leaves the note
+                      holding both versions, which is worse than not asking. */}
+                  {onReplace && (
+                    <button
+                      type="button"
+                      onClick={() => onReplace(message.text)}
+                      className="rounded px-1.5 py-0.5 transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+                    >
+                      Replace the note
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setRaw((shown) => ({ ...shown, [index]: !shown[index] }))}
+                    className="rounded px-1.5 py-0.5 transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+                  >
+                    {raw[index] ? "Show formatted" : "Show Markdown"}
+                  </button>
+
+                  {/* Said once, on the last answer, rather than leaving the
+                      buttons mysteriously absent. */}
+                  {cannotWrite && index === messages.length - 1 && (
+                    <span className="w-full leading-snug">{cannotWrite}</span>
                   )}
                 </div>
               )}

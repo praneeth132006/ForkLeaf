@@ -4617,6 +4617,29 @@ export function EditorWorkspace() {
                     }
                   : undefined
               }
+              onReplace={
+                note && !noteLocked && !sealed
+                  ? (markdown) => {
+                      const current = notebook.note;
+                      if (!current) return;
+                      // Safe to do without asking: the previous text is one
+                      // ⌘Z away in the editor, and every save is a commit, so
+                      // the version replaced is still in the note's history.
+                      void notebook.saveNote(`${markdown.trim()}\n`);
+                      setNotice("Note replaced. ⌘Z puts it back.");
+                    }
+                  : undefined
+              }
+              /* Why, rather than a pair of buttons that quietly are not there. */
+              cannotWrite={
+                !note
+                  ? "Open a note to put answers into it."
+                  : sealed
+                    ? "This note is encrypted, so answers cannot be added to it."
+                    : noteLocked
+                      ? "This note is locked. Unlock it — ⌘⇧L — to add answers to it."
+                      : undefined
+              }
             />
           </div>
         )}

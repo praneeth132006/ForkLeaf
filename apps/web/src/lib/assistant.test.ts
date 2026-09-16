@@ -177,6 +177,42 @@ describe("listing the models a key can use", () => {
   });
 });
 
+describe("the instructions the model gets", () => {
+  it("does not ask for brevity, which only ever made answers thinner", () => {
+    const prompt = systemPrompt(null);
+    expect(prompt).not.toMatch(/\bbriefly\b/);
+    expect(prompt).toContain("depth it deserves");
+  });
+
+  it("bans the preamble, which is three lines to delete after every paste", () => {
+    expect(systemPrompt(null)).toContain("Never open with a preamble");
+  });
+
+  it("asks for the finished text alone when rewriting", () => {
+    expect(systemPrompt(null)).toContain("return only the finished text");
+  });
+});
+
+describe("room for an answer", () => {
+  it("gives a rewrite of a long note somewhere to go", () => {
+    const body = JSON.parse(buildRequest(settingsFor("anthropic"), "k", "sys", messages).body);
+    // 4096 cut thorough answers off mid-sentence, which reads as the model
+    // being bad at its job rather than as a ceiling we set.
+    expect(body.max_tokens).toBe(8192);
+
+    const google = JSON.parse(buildRequest(settingsFor("google"), "k", "sys", messages).body);
+    expect(google.generationConfig.maxOutputTokens).toBe(8192);
+  });
+
+  it("leaves an OpenAI-compatible server at its own default", () => {
+    // The field that caps these was renamed between model families, and
+    // sending the wrong one is a 400 on the models that expect the other.
+    const body = JSON.parse(buildRequest(settingsFor("openai"), "k", "sys", messages).body);
+    expect(body.max_tokens).toBeUndefined();
+    expect(body.max_completion_tokens).toBeUndefined();
+  });
+});
+
 describe("systemPrompt", () => {
   it("carries the note, and says when it was cut", () => {
     const short = systemPrompt({ title: "Bread", content: "# Bread\n\n220C." });

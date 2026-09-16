@@ -224,10 +224,28 @@ export function Assistant() {
 
       <H2 id="answers">Using an answer</H2>
       <P>
-        Answers are shown as the Markdown they are, so a heading looks like a heading you can check
-        before you keep it. <strong>Add to note</strong> puts one at the end of the open note — a
-        locked or encrypted note has no such button — and <strong>Copy</strong> takes it to the
-        clipboard for anywhere else. <strong>Stop</strong> ends a long answer mid-sentence.
+        Answers are formatted as you would see them in a note. Four things can be done with one:
+      </P>
+      <UL>
+        <LI>
+          <strong>Add to note</strong> puts it at the end of the open note.
+        </LI>
+        <LI>
+          <strong>Replace the note</strong> swaps the whole body for it — which is what a tidy-up or
+          a rewrite is for. The previous text is one <Code>⌘Z</Code> away, and every save is a
+          commit, so the version you replaced is still in the note&rsquo;s history.
+        </LI>
+        <LI>
+          <strong>Copy</strong> takes the Markdown to the clipboard for anywhere else.
+        </LI>
+        <LI>
+          <strong>Show Markdown</strong> swaps the formatted answer for the exact characters, for
+          checking before you keep them.
+        </LI>
+      </UL>
+      <P>
+        A locked or encrypted note cannot be written to, and the panel says which rather than
+        quietly dropping the buttons. <strong>Stop</strong> ends a long answer mid-sentence.
       </P>
 
       <H2 id="privacy">Where the key lives</H2>

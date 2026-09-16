@@ -248,6 +248,60 @@ describe("AssistantPanel", () => {
     expect(onInsert).toHaveBeenCalledWith("## Notes on heat");
   });
 
+  it("renders an answer as Markdown, and shows the raw text on request", async () => {
+    withKey();
+    stubStream("## Heading\n\n- one\n- two");
+    render(<AssistantPanel note={NOTE} onClose={vi.fn()} />);
+
+    await ask("Give me a list");
+
+    // Raw `##` and `*` in the panel read as the model writing badly.
+    const heading = await screen.findByRole("heading", { name: "Heading" });
+    expect(heading).toBeTruthy();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+
+    // And the exact characters are one press away, for checking before pasting.
+    fireEvent.click(screen.getByRole("button", { name: "Show Markdown" }));
+    expect(screen.getByText(/## Heading/)).toBeTruthy();
+  });
+
+  it("replaces the note when the answer is the note rewritten", async () => {
+    withKey();
+    stubStream("# Bread\n\nBake at 230 degrees.");
+    const onReplace = vi.fn();
+    const onInsert = vi.fn();
+    render(
+      <AssistantPanel note={NOTE} onInsert={onInsert} onReplace={onReplace} onClose={vi.fn()} />,
+    );
+
+    await ask("Tidy the writing");
+
+    // Appending a rewrite leaves the note holding both versions, which is the
+    // one outcome nobody asking for a tidy-up wants.
+    fireEvent.click(await screen.findByRole("button", { name: "Replace the note" }));
+    expect(onReplace).toHaveBeenCalledWith("# Bread\n\nBake at 230 degrees.");
+    expect(onInsert).not.toHaveBeenCalled();
+  });
+
+  it("says why it cannot write, rather than hiding the buttons", async () => {
+    withKey();
+    stubStream("Something useful");
+    render(
+      <AssistantPanel
+        note={NOTE}
+        cannotWrite="This note is locked. Unlock it — ⌘⇧L — to add answers to it."
+        onClose={vi.fn()}
+      />,
+    );
+
+    await ask("Say something");
+
+    // An absence explains nothing, and reads as the assistant being unable to
+    // write to notes at all.
+    expect(await screen.findByText(/This note is locked/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Add to note" })).toBeNull();
+  });
+
   it("offers no way to add to a note that cannot be written to", async () => {
     withKey();
     stubStream("Something");

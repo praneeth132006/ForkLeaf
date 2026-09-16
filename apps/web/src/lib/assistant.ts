@@ -218,6 +218,16 @@ export interface RequestPlan {
  */
 const CONTEXT_LIMIT = 24_000;
 
+/**
+ * How long an answer may be.
+ *
+ * Long enough to rewrite an ordinary note in full, which is the longest thing
+ * anybody asks for here. OpenAI-compatible servers are left at their own
+ * default: the field that caps them was renamed between model families, and
+ * sending the wrong one is a 400 on the models that expect the other.
+ */
+const MAX_ANSWER_TOKENS = 8192;
+
 export interface NoteContext {
   title: string;
   content: string;
@@ -232,12 +242,27 @@ export interface NoteContext {
  * asterisks in it.
  */
 export function systemPrompt(note: NoteContext | null): string {
+  /**
+   * The instructions that decide whether an answer is worth keeping.
+   *
+   * The first version of this told every model to answer "briefly", which is
+   * the single worst instruction to give one: it does not make an answer
+   * sharper, it makes it thinner, and a thin answer beside a note you are
+   * trying to think with is worse than no answer. Depth is the question's to
+   * decide, not ours.
+   *
+   * Banning the preamble matters nearly as much. "Certainly! Here is a summary
+   * of your note:" is three lines of nothing at the top of every answer, and
+   * it is three lines you have to delete by hand after pressing Add to note.
+   */
   const base = [
-    "You are the assistant panel inside ForkLeaf, a Markdown notes editor.",
-    "You are beside the note the reader is writing, not in a separate chat window.",
-    "Answer in Markdown, briefly, and in a form that can be pasted straight into a note.",
-    "When you are asked to write or rewrite part of the note, return only that part.",
-    "If the note does not contain what is needed to answer, say so rather than inventing it.",
+    "You are the assistant in ForkLeaf, a Markdown notes editor, in a panel beside the note being written.",
+    "Write Markdown that can go straight into a note: real headings, lists and tables where they earn their place.",
+    "Never open with a preamble — no 'Certainly', no 'Here is', no restating the question. Begin with the answer.",
+    "Give the question the depth it deserves. A factual question wants a short answer; 'explain', 'expand' or 'draft' wants a thorough one. Do not pad, and do not cut an answer short to seem concise.",
+    "When asked to rewrite or tidy, return only the finished text, with no commentary around it, and keep every fact and heading unless told otherwise.",
+    "Use the note when it is relevant, and say plainly when it does not contain what is needed rather than inventing it.",
+    "Never repeat the whole note back unless you were asked to rewrite it.",
   ].join(" ");
 
   if (!note) return base;
@@ -278,7 +303,9 @@ export function buildRequest(
       },
       body: JSON.stringify({
         model,
-        max_tokens: 4096,
+        // Room for a rewrite of a long note. The old 4096 cut thorough answers
+        // off mid-sentence, which reads as the model being bad at its job.
+        max_tokens: MAX_ANSWER_TOKENS,
         stream: true,
         system,
         messages: messages.map((message) => ({ role: message.role, content: message.text })),
@@ -293,6 +320,7 @@ export function buildRequest(
       url: `${base}/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
       headers: { "content-type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
+        generationConfig: { maxOutputTokens: MAX_ANSWER_TOKENS },
         systemInstruction: { parts: [{ text: system }] },
         contents: messages.map((message) => ({
           role: message.role === "assistant" ? "model" : "user",
