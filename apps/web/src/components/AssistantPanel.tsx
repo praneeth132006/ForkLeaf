@@ -101,8 +101,21 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
   });
   const listingFor = `${settings.provider} ${settings.baseUrl}`;
   const models = listed.from === listingFor ? listed.names : [];
-  /** True while the reader is typing a name that is not in the list. */
+  /**
+   * True while the reader is typing a name that is not in the list.
+   *
+   * Mirrored into a ref because the listing arrives asynchronously and has to
+   * know whether somebody is mid-word without re-running the request every
+   * time that changes. Reading it from a `setState` updater instead — which is
+   * what this did first — puts the read inside React's render phase, and the
+   * write that followed it updated a component while one was rendering.
+   */
   const [typingModel, setTypingModel] = useState(false);
+  const typingRef = useRef(false);
+  const setTyping = useCallback((value: boolean) => {
+    typingRef.current = value;
+    setTypingModel(value);
+  }, []);
 
   /** Stops any answer still arriving when the panel goes away. */
   useEffect(() => () => abort.current?.abort(), []);
@@ -141,13 +154,10 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
     }).then((found) => {
       if (controller.signal.aborted || found.length === 0) return;
       setListed({ from: listingFor, names: found });
-      // Only when the reader is not in the middle of typing one themselves.
-      setTypingModel((typing) => {
-        if (!typing && !found.includes(settings.model)) {
-          update({ ...settings, model: found[0] });
-        }
-        return typing;
-      });
+      // Not over a name the reader is in the middle of typing themselves.
+      if (!typingRef.current && !found.includes(settings.model)) {
+        update({ ...settings, model: found[0] });
+      }
     });
 
     return () => controller.abort();
@@ -238,7 +248,7 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
     const chosen = provider(id);
     // The old provider's models are not this one's — reading them back is
     // guarded by which provider they came from, so there is nothing to clear.
-    setTypingModel(false);
+    setTyping(false);
     editSetup({ ...settings, provider: id, model: chosen.models[0], baseUrl: chosen.baseUrl });
   };
 
@@ -346,7 +356,7 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
                 </select>
                 <button
                   type="button"
-                  onClick={() => setTypingModel(true)}
+                  onClick={() => setTyping(true)}
                   className="mt-1 text-[11.5px] text-[var(--fl-muted)] underline hover:text-[var(--fl-text)]"
                 >
                   Type a name instead
@@ -357,7 +367,7 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
                 <input
                   value={settings.model}
                   onChange={(event) => {
-                    setTypingModel(true);
+                    setTyping(true);
                     editSetup({ ...settings, model: event.target.value });
                   }}
                   placeholder={current.models[0]}
@@ -367,7 +377,7 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
                 {models.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => setTypingModel(false)}
+                    onClick={() => setTyping(false)}
                     className="mt-1 text-[11.5px] text-[var(--fl-muted)] underline hover:text-[var(--fl-text)]"
                   >
                     Choose from {models.length} models instead

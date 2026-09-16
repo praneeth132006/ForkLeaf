@@ -4,7 +4,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AssistantPanel } from "./AssistantPanel";
 
-afterEach(cleanup);
+/**
+ * Anything React complains about fails the test.
+ *
+ * React reports a state update made during render as a `console.error` and
+ * carries on rendering, which is how this suite passed green while the panel
+ * was doing exactly that — the listing effect read one piece of state from
+ * inside a `setState` updater and wrote another from there. A warning nobody
+ * asserts on is a warning that ships.
+ */
+const complaints: string[] = [];
+
+beforeEach(() => {
+  complaints.length = 0;
+  vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+    complaints.push(args.map(String).join(" "));
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  const seen = [...complaints];
+  vi.restoreAllMocks();
+  expect(seen).toEqual([]);
+});
 
 const NOTE = { title: "Bread", content: "# Bread\n\nBake at 220 degrees." };
 
