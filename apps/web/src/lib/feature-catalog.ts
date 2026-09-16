@@ -529,6 +529,15 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["github"],
       },
       {
+        id: "assistant",
+        title: "An assistant beside the note",
+        summary:
+          "Claude, GPT, Gemini or a model on your own machine, in a column next to what you are writing — with the note as context, and every answer one button from being part of it. Your key, kept in this browser; nothing passes through ForkLeaf.",
+        how: "⌥⌘A, or the sparkle in the header",
+        docs: "/docs/assistant",
+        tags: ["new"],
+      },
+      {
         id: "mcp",
         title: "Use your notebook from an AI assistant",
         summary:

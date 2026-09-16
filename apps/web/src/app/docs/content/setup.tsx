@@ -116,6 +116,124 @@ export function BrowserExtension() {
   );
 }
 
+export function Assistant() {
+  return (
+    <>
+      <Lead>
+        A model in a column beside the note you are writing — Claude, OpenAI, Gemini, or one running
+        on your own machine. Your key, your provider, and nothing in between.
+      </Lead>
+
+      <P>
+        Open it with <Code>⌥⌘A</Code>, the sparkle in the editor header, or{" "}
+        <Code>⌘K → Ask the assistant</Code>. It sits where the document panel sits, and the seam
+        beside it drags.
+      </P>
+
+      <Note>
+        This is the opposite way round from <A href="/docs/mcp">MCP</A>, and both are worth having.
+        MCP sends an assistant <em>to</em> your notebook, to work through GitHub while you are
+        elsewhere. This brings a model to the note in front of you, for the question you have while
+        writing.
+      </Note>
+
+      <H2 id="setup">Set it up once</H2>
+      <OL>
+        <LI>Choose a provider: Claude, OpenAI, Gemini, or Local or other.</LI>
+        <LI>
+          Paste your key. <strong>Get a key</strong> beside the field goes to the right page for the
+          provider you picked.
+        </LI>
+        <LI>
+          Change the model if you want a different one. It is a text field, not a menu, so a model
+          released tomorrow works today — the suggestions are only suggestions.
+        </LI>
+      </OL>
+      <P>
+        The form takes itself away as soon as there is a key. The chip in the panel header shows
+        which model you are talking to, and opens the form again.
+      </P>
+
+      <H3>Why a key, and not a sign-in?</H3>
+      <P>
+        Because none of the providers offer one. A Claude Pro, ChatGPT Plus or Google AI
+        subscription is for that company&rsquo;s own apps: there is no way for another application
+        to sign you in and use it on your behalf, and no OAuth flow published for it. The API key is
+        the only door any of them opens to a third party.
+      </P>
+      <P>
+        It is a different account balance from a subscription, so an API key is billed by usage and
+        a subscription you already pay for does not cover it. Creating one is free and takes about a
+        minute; the free tiers are generous enough to try this out on. If you would rather pay
+        nobody, run a model on your own machine — the next section.
+      </P>
+
+      <H2 id="models">Choosing a model</H2>
+      <P>
+        Once there is a key, the <strong>Model</strong> box is a list of what that key can actually
+        use, fetched from the provider — not a list written into ForkLeaf. If the model ForkLeaf was
+        holding is not on it, one that is gets chosen instead.
+      </P>
+      <P>
+        That is on purpose. Providers retire models without warning, and a name hard-coded here
+        would break the day they did — which is exactly what used to happen. Press{" "}
+        <strong>Type a name instead</strong> for one the listing does not mention, such as a model
+        on a server that has no listing at all.
+      </P>
+
+      <H2 id="local">A model on your own machine</H2>
+      <P>
+        Choose <strong>Local or other</strong> and give it the address. For{" "}
+        <A href="https://ollama.com">Ollama</A> that is <Code>http://localhost:11434/v1</Code>, and
+        no key is needed. Ollama has to be told this page may talk to it:
+      </P>
+      <Pre label="Terminal">{`OLLAMA_ORIGINS='*' ollama serve`}</Pre>
+      <P>
+        LM Studio and anything else that speaks the OpenAI API work the same way.{" "}
+        <A href="https://openrouter.ai">OpenRouter</A> is the one non-local address this option
+        accepts: <Code>https://openrouter.ai/api/v1</Code>, with an OpenRouter key.
+      </P>
+
+      <H2 id="note">What it can see</H2>
+      <P>
+        The open note travels with each question, which is what makes the answers about your writing
+        rather than about the world in general. The tick below the box says which note that is, and
+        turning it off sends the question alone — the thing to do when the note is one you would
+        rather not send anywhere.
+      </P>
+      <P>
+        Nothing else goes: not your other notes, not your repository, not your GitHub token. A very
+        long note is cut to fit, and the model is told it was.
+      </P>
+
+      <H2 id="answers">Using an answer</H2>
+      <P>
+        Answers are shown as the Markdown they are, so a heading looks like a heading you can check
+        before you keep it. <strong>Add to note</strong> puts one at the end of the open note — a
+        locked or encrypted note has no such button — and <strong>Copy</strong> takes it to the
+        clipboard for anywhere else. <strong>Stop</strong> ends a long answer mid-sentence.
+      </P>
+
+      <H2 id="privacy">Where the key lives</H2>
+      <P>
+        In this browser, and nowhere else. Questions go straight from the page to the provider you
+        chose: there is no ForkLeaf key, no ForkLeaf proxy and no ForkLeaf server in the path, and
+        we could not read your conversations if we wanted to. Nothing is written into your
+        repository either — a key is not a fact about your notebook.
+      </P>
+      <P>
+        The trade is that a key in a browser is readable by anything that manages to run script on
+        this page. It is your own key, scoped to your own account: if you ever want it gone, press{" "}
+        <strong>Forget this key</strong>, and revoke it at the provider.
+      </P>
+      <Note>
+        Billing is between you and the provider. ForkLeaf never sees a request and cannot be charged
+        for one, which is also why there is no limit on how much you use this.
+      </Note>
+    </>
+  );
+}
+
 export function McpServer() {
   return (
     <>
@@ -126,7 +244,9 @@ export function McpServer() {
 
       <Note>
         Your notebook needs to be connected to a GitHub repository. A notebook that lives only in
-        this browser is not somewhere an assistant can reach.
+        this browser is not somewhere an assistant can reach. For a model beside the note you are
+        writing rather than an assistant working on the notebook from outside, see{" "}
+        <A href="/docs/assistant">the assistant panel</A>.
       </Note>
 
       <H2 id="connect">Connect in one step</H2>

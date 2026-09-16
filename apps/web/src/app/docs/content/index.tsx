@@ -4,7 +4,7 @@ import { Editor, Diagrams, Properties, Export, Shortcuts } from "./writing";
 import { Reading } from "./reading";
 import { CitationLinks } from "./citation-links";
 import { Features } from "./features";
-import { BrowserExtension, McpServer } from "./setup";
+import { Assistant, BrowserExtension, McpServer } from "./setup";
 import {
   AskNotebook,
   Canvases,
@@ -49,6 +49,7 @@ export const DOC_CONTENT: Record<string, () => React.JSX.Element> = {
   sync: Sync,
   conflicts: Conflicts,
   "browser-extension": BrowserExtension,
+  assistant: Assistant,
   mcp: McpServer,
   "slash-menu": SlashMenu,
   journal: Journal,

@@ -160,6 +160,7 @@ import { ColumnResizer } from "@/components/ColumnResizer";
 import { useColumnWidth } from "@/hooks/useColumnWidth";
 import { EditorSidebar } from "@/components/EditorSidebar";
 import { EditorRightPanel } from "@/components/EditorRightPanel";
+import { AssistantPanel } from "@/components/AssistantPanel";
 import { EditorStatusBar } from "@/components/EditorStatusBar";
 import { EditorTabs } from "@/components/EditorTabs";
 import { ConflictDialog } from "@/components/ConflictDialog";
@@ -336,6 +337,7 @@ const COLUMNS = {
   panel: { key: "forkleaf:width:panel", start: 288, min: 240, max: 560 },
   reader: { key: "forkleaf:width:reader", start: 640, min: 360, max: 1120 },
   index: { key: "forkleaf:width:pdf-index", start: 288, min: 200, max: 520 },
+  assistant: { key: "forkleaf:width:assistant", start: 340, min: 280, max: 640 },
 } as const;
 
 const MODES: { value: EditorViewMode; label: string; hint: string }[] = [
@@ -429,6 +431,15 @@ export function EditorWorkspace() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   /**
+   * Whether the assistant is beside the note.
+   *
+   * Closed until asked for, and not remembered between sessions on purpose:
+   * the panel is where a question goes, not part of the furniture, and an
+   * editor that reopens with a chat column every morning is one that has
+   * decided for you what writing looks like.
+   */
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  /**
    * Everything but the note, put away.
    *
    * Separate from the two collapse toggles rather than built from them, so
@@ -459,6 +470,12 @@ export function EditorWorkspace() {
     COLUMNS.reader.min,
     COLUMNS.reader.max,
   );
+  const [assistantWidth, setAssistantWidth, resetAssistantWidth] = useColumnWidth(
+    COLUMNS.assistant.key,
+    COLUMNS.assistant.start,
+    COLUMNS.assistant.min,
+    COLUMNS.assistant.max,
+  );
   /**
    * Which panel is open over the document on a narrow screen.
    *
@@ -469,7 +486,7 @@ export function EditorWorkspace() {
    * nothing else. They are the same two panels; on a narrow screen they slide
    * over the document instead of sitting beside it.
    */
-  const [drawer, setDrawer] = useState<"files" | "document" | null>(null);
+  const [drawer, setDrawer] = useState<"files" | "document" | "assistant" | null>(null);
 
   /**
    * The folder being published as a book, and the notes to build it from.
@@ -2855,6 +2872,14 @@ export function EditorWorkspace() {
         run: () => setPanelCollapsed((value) => !value),
       },
       {
+        id: "assistant",
+        label: assistantOpen ? "Hide the assistant" : "Ask the assistant",
+        group: "View",
+        hint: "⌥⌘A",
+        keywords: "ai chat claude gpt gemini llm model ask copilot ollama",
+        run: () => setAssistantOpen((value) => !value),
+      },
+      {
         id: "help",
         label: "Help and shortcuts",
         group: "View",
@@ -3473,6 +3498,7 @@ export function EditorWorkspace() {
     theme,
     sidebarCollapsed,
     panelCollapsed,
+    assistantOpen,
     notebook,
     router,
     toggleTheme,
@@ -3519,6 +3545,31 @@ export function EditorWorkspace() {
       event.preventDefault();
       event.stopPropagation();
       setFocusMode((value) => !value);
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, []);
+
+  /**
+   * ⌥⌘A opens the assistant, also before the editor sees it.
+   *
+   * ⌘⇧A would have been the obvious spelling and is Chrome's own tab search,
+   * which a page cannot take back — a shortcut that does nothing in the most
+   * common browser is worse than one nobody guesses. The option key is the
+   * one modifier combination browsers leave alone.
+   */
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || !event.altKey || event.shiftKey) return;
+      if (event.key.toLowerCase() !== "a" && event.code !== "KeyA") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (window.matchMedia("(min-width: 1024px)").matches) {
+        setDrawer(null);
+        setAssistantOpen((open) => !open);
+        return;
+      }
+      setDrawer((open) => (open === "assistant" ? null : "assistant"));
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
@@ -4108,6 +4159,36 @@ export function EditorWorkspace() {
                   {theme === "dark" ? <SunGlyph /> : <MoonGlyph />}
                 </IconButton>
 
+                {/* The assistant. One button, in the header where the other
+                  panels are toggled, because a feature reachable only from the
+                  command palette is one only the people who already know about
+                  it ever use. It opens the column on a wide screen and the
+                  drawer on a narrow one — the same panel, put where there is
+                  room for it. */}
+                <IconButton
+                  onClick={() => {
+                    if (window.matchMedia("(min-width: 1024px)").matches) {
+                      setDrawer(null);
+                      setAssistantOpen((open) => !open);
+                      return;
+                    }
+                    setDrawer((open) => (open === "assistant" ? null : "assistant"));
+                  }}
+                  label="Assistant (⌥⌘A)"
+                >
+                  <svg
+                    viewBox="0 0 16 16"
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M6.4 2.2 7.5 5l2.8 1.1L7.5 7.2 6.4 10 5.3 7.2 2.5 6.1 5.3 5z" />
+                    <path d="M11.6 8.6l.6 1.5 1.5.6-1.5.6-.6 1.5-.6-1.5-1.5-.6 1.5-.6z" />
+                  </svg>
+                </IconButton>
+
                 {/* Export, publish, history and the note's properties all live
                   in the document panel, so below `lg` this button is the only
                   route to any of them. */}
@@ -4484,6 +4565,58 @@ export function EditorWorkspace() {
                 onOpen: notebook.openNote,
                 onCreate: createLinked,
               }}
+            />
+          </div>
+        )}
+
+        {/* ── The assistant ──────────────────────────────────────────────
+          Last in the row, so it is the column nearest the hand and never
+          between the note and the thing the note is about. Below `lg` it
+          slides over the document like the other two panels: a chat column
+          and a note side by side on a phone is two columns of neither. */}
+        {assistantOpen && !focusMode && (
+          <ColumnResizer
+            label="Assistant"
+            width={assistantWidth}
+            min={COLUMNS.assistant.min}
+            max={COLUMNS.assistant.max}
+            side="right"
+            onChange={setAssistantWidth}
+            onReset={resetAssistantWidth}
+            className="hidden lg:block"
+          />
+        )}
+
+        {(assistantOpen || drawer === "assistant") && !focusMode && (
+          <div
+            className={`fl-panel lg:w-[var(--fl-col)] ${
+              drawer === "assistant"
+                ? "fixed inset-y-2 right-2 z-40 flex w-[min(23rem,92vw)] shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:shadow-none"
+                : "hidden lg:flex"
+            }`}
+            style={{ "--fl-col": `${assistantWidth}px` } as React.CSSProperties}
+          >
+            <AssistantPanel
+              note={note ? { title, content: note.content } : null}
+              onClose={() => {
+                setDrawer(null);
+                setAssistantOpen(false);
+              }}
+              onInsert={
+                note && !noteLocked && !sealed
+                  ? (markdown) => {
+                      const current = notebook.note;
+                      if (!current) return;
+                      // Appended, like every other thing that arrives from
+                      // outside the editor: the editor owns the selection, and
+                      // this panel has had focus for the length of a
+                      // conversation.
+                      const separator = current.content.endsWith("\n") ? "" : "\n";
+                      void notebook.saveNote(`${current.content}${separator}\n${markdown}\n`);
+                      setNotice("Added to the end of this note.");
+                    }
+                  : undefined
+              }
             />
           </div>
         )}

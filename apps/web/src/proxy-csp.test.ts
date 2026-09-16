@@ -31,6 +31,22 @@ describe("the content security policy and PostHog", () => {
     expect(directive(policy("abc", false, "not a url"), "connect-src")).not.toContain("not");
   });
 
+  it("lets the assistant reach a model, and nothing else new", () => {
+    const sources = directive(policy("abc", false, undefined), "connect-src");
+    // Claude, OpenAI and OpenRouter by name; Gemini is under the googleapis
+    // wildcard Firebase already needed.
+    expect(sources).toContain("https://api.anthropic.com");
+    expect(sources).toContain("https://api.openai.com");
+    expect(sources).toContain("https://openrouter.ai");
+    expect(sources).toContain("https://*.googleapis.com");
+    // A model on the reader's own machine, on whichever port it chose.
+    expect(sources).toContain("http://localhost:*");
+    expect(sources).toContain("http://127.0.0.1:*");
+    // The widening is to named hosts only: nothing here allows any https host.
+    expect(sources).not.toContain("https:");
+    expect(sources).not.toContain("*");
+  });
+
   it("keeps a nonced page strict", () => {
     const script = directive(policy("abc", false, undefined), "script-src");
     expect(script).toContain("'strict-dynamic'");
