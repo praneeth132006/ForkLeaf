@@ -354,35 +354,160 @@ export function readDelta(id: ProviderId, data: string): string {
 }
 
 /**
- * What went wrong, said in the second person.
+ * What kind of thing went wrong, because the advice differs completely.
  *
- * The provider's own message is included when there is one, because "your
- * credit balance is too low" is the answer and no wording of ours improves on
- * it. What we add is the part the provider cannot know: which of the four
- * things a reader can get wrong here — the key, the model name, the address —
- * this status usually means.
+ * The distinction that matters most is `quota` against `rate`. Both arrive as
+ * a 429 and they mean opposite things: one is "you are going too fast", which
+ * waiting fixes, and the other is "this key may not use this model at all",
+ * which waiting never fixes. Telling somebody to wait a moment when their key
+ * has a hard limit of zero is advice that cannot come true.
  */
-export function describeFailure(status: number, body: string): string {
+export type FailureKind =
+  "key" | "model" | "quota" | "rate" | "provider" | "request" | "unreachable";
+
+export interface Failure {
+  message: string;
+  kind: FailureKind;
+  /** Seconds the provider asked us to wait, when it named a number. */
+  retryAfter?: number;
+}
+
+/**
+ * A failure the panel can act on, rather than only print.
+ *
+ * Carrying the kind through means the panel can offer the button that fits —
+ * choosing a different model against a quota wall, trying again against a rate
+ * limit — instead of one apology that fits nothing.
+ */
+export class AssistantError extends Error {
+  readonly kind: FailureKind;
+  readonly retryAfter?: number;
+
+  constructor(failure: Failure) {
+    super(failure.message);
+    this.name = "AssistantError";
+    this.kind = failure.kind;
+    this.retryAfter = failure.retryAfter;
+  }
+}
+
+/**
+ * Providers repeat themselves, at length.
+ *
+ * Google's quota refusal arrives as the same sentence four times over, joined
+ * by asterisks, and pasting it whole produced a panel that was more error than
+ * answer — a wall of red where an answer should be. The parts are split,
+ * de-duplicated in the order they arrived, and cut to something a person will
+ * actually read: the first one carries the meaning and the rest repeat it.
+ */
+export function tidyDetail(detail: string): string {
+  const seen = new Set<string>();
+  const parts = detail
+    .split(/\s*\*\s+|\n+/)
+    .map((part) => part.trim())
+    .filter((part) => {
+      if (!part || seen.has(part)) return false;
+      seen.add(part);
+      return true;
+    });
+
+  const joined = parts.join(" ");
+  if (joined.length <= 240) return joined;
+  // Cut at a word rather than mid-word, and show that it was cut.
+  const cut = joined.slice(0, 240);
+  return `${cut.slice(0, cut.lastIndexOf(" ")).replace(/[.,;:]$/, "")}…`;
+}
+
+/**
+ * What went wrong, said in the second person, with something to do about it.
+ *
+ * The provider's own words are kept: "check your plan and billing details" is
+ * the answer and no wording of ours improves on it. What we add is the part
+ * the provider cannot know — which of the things a reader can act on here this
+ * actually is.
+ */
+export function describeFailure(status: number, body: string, model = ""): Failure {
   let detail = "";
   try {
     const parsed = JSON.parse(body) as { error?: { message?: unknown } | string };
     const error = typeof parsed.error === "string" ? parsed.error : parsed.error?.message;
     if (typeof error === "string") detail = error;
   } catch {
-    detail = body.slice(0, 200);
+    detail = body;
   }
 
-  const lead =
-    status === 401 || status === 403
-      ? "The provider refused the key. Check it, or paste a new one."
-      : status === 404
-        ? "That model is not one this key can use. Pick another from the list beside the model box."
-        : status === 429
-          ? "The provider is rate-limiting this key. Wait a moment and ask again."
-          : status >= 500
-            ? "The provider had an error of its own."
-            : "The request was refused.";
+  /**
+   * What the provider said, and what we show, are not the same string.
+   *
+   * Everything below is decided from the whole message and only then trimmed
+   * for display. Reading the trimmed one instead is a real trap, and this walked
+   * into it: Google's boilerplate about plans and billing fills the first two
+   * hundred characters, so the `limit: 0` that distinguishes a plan wall from a
+   * queue fell off the end and the wrong advice came back.
+   */
+  const whole = detail;
+  detail = tidyDetail(detail);
 
+  // "Please retry in 48.883671819s", or a `retryDelay` of "48s".
+  const delay =
+    /retry (?:in|after) (\d+(?:\.\d+)?)s/i.exec(whole) ??
+    /"?retryDelay"?:\s*"?(\d+(?:\.\d+)?)s/i.exec(whole);
+  const retryAfter = delay ? Math.ceil(Number(delay[1])) : undefined;
+
+  /**
+   * A limit of zero is a plan, not a queue.
+   *
+   * Google's free keys report exactly this for the Pro models: the request was
+   * never going to be allowed, however long you wait. It is the difference
+   * between "later" and "not with this key", and only one of those is worth
+   * waiting out.
+   */
+  const noQuota = /limit:\s*0\b/.test(whole);
+  const named = model || "that model";
+
+  if (status === 401 || status === 403) {
+    return { kind: "key", message: say("The provider would not accept this key.", detail) };
+  }
+
+  if (status === 404) {
+    return {
+      kind: "model",
+      message: say(`${named} is not one this key can use. Choose another.`, detail),
+    };
+  }
+
+  if (status === 429 && noQuota) {
+    return {
+      kind: "quota",
+      message: say(
+        `This key has no quota for ${named}, so waiting will not help: it is a plan limit rather than a queue. Choose a model the key can use, or add billing at the provider.`,
+        detail,
+      ),
+    };
+  }
+
+  if (status === 429) {
+    return {
+      kind: "rate",
+      retryAfter,
+      message: say(
+        retryAfter
+          ? `Too many requests for this key just now. Try again in about ${retryAfter} ${retryAfter === 1 ? "second" : "seconds"}.`
+          : "Too many requests for this key just now. Try again in a moment.",
+        detail,
+      ),
+    };
+  }
+
+  if (status >= 500) {
+    return { kind: "provider", message: say("The provider had an error of its own.", detail) };
+  }
+
+  return { kind: "request", message: say("The request was refused.", detail) };
+}
+
+/** Our sentence and theirs, with no separator when there is no theirs. */
+function say(lead: string, detail: string): string {
   return detail ? `${lead} ${detail}` : lead;
 }
 
@@ -465,6 +590,26 @@ export function readModels(id: ProviderId, payload: unknown): string[] {
   return id === "anthropic" ? names : names.filter((name) => !NOT_FOR_CHAT.test(name)).sort();
 }
 
+/**
+ * Which of a key's models to choose when the reader has not chosen one.
+ *
+ * Being on the list is not the same as being usable. Google lists its Pro
+ * models to every key including the free ones, which are then refused with a
+ * quota of exactly zero — so picking the first name in the listing picked the
+ * one model most likely to fail, and the reader met a wall of red on a model
+ * they never chose. The Flash models are the ones a free Google key can
+ * actually run, so they are preferred when we are the ones deciding.
+ *
+ * Only when we are deciding. A name the reader picked is never second-guessed.
+ */
+export function preferredModel(id: ProviderId, names: readonly string[]): string {
+  if (names.length === 0) return "";
+  if (id === "google") {
+    return names.find((name) => /flash/i.test(name)) ?? names[0];
+  }
+  return names[0];
+}
+
 export interface ListOptions {
   settings: AssistantSettings;
   key: string;
@@ -530,17 +675,29 @@ export async function streamChat(options: StreamOptions): Promise<void> {
     // A browser will not tell a page why a cross-origin request failed, so the
     // honest message is the list of things it is: unreachable address, a local
     // server that has not been told to allow this origin, or no network.
-    throw new Error(
-      `Could not reach ${new URL(plan.url).host}. Check the address and that it allows requests from this page.${
+    throw new AssistantError({
+      kind: "unreachable",
+      message: `Could not reach ${new URL(plan.url).host}. Check the address, and that the server allows requests from this page.${
         error instanceof Error && error.message ? ` (${error.message})` : ""
       }`,
-    );
+    });
   }
 
   if (!response.ok) {
-    throw new Error(describeFailure(response.status, await response.text().catch(() => "")));
+    throw new AssistantError(
+      describeFailure(
+        response.status,
+        await response.text().catch(() => ""),
+        settings.model.trim(),
+      ),
+    );
   }
-  if (!response.body) throw new Error("The provider sent a reply with no body.");
+  if (!response.body) {
+    throw new AssistantError({
+      kind: "provider",
+      message: "The provider sent a reply with no body.",
+    });
+  }
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();

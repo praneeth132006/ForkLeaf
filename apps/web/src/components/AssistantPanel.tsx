@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AssistantError,
   PROVIDERS,
   isReady,
   listModels,
+  preferredModel,
   provider,
   streamChat,
   type ChatMessage,
+  type FailureKind,
   type ProviderId,
 } from "@/lib/assistant";
 import { useAssistantKey, useAssistantSettings } from "@/hooks/useAssistant";
@@ -66,7 +69,16 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  /**
+   * The last failure, kept with its kind so the panel can offer the one action
+   * that would actually help.
+   */
+  const [failure, setFailure] = useState<{
+    message: string;
+    kind: FailureKind;
+    /** The question that failed, so it can be sent again unedited. */
+    question: string;
+  } | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
   const abort = useRef<AbortController | null>(null);
   const thread = useRef<HTMLDivElement | null>(null);
@@ -156,7 +168,7 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
       setListed({ from: listingFor, names: found });
       // Not over a name the reader is in the middle of typing themselves.
       if (!typingRef.current && !found.includes(settings.model)) {
-        update({ ...settings, model: found[0] });
+        update({ ...settings, model: preferredModel(settings.provider, found) });
       }
     });
 
@@ -176,7 +188,7 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
         return;
       }
 
-      setError(null);
+      setFailure(null);
       setDraft("");
       // The empty assistant message is what turns into the answer. It is added
       // now rather than on the first token so the panel visibly starts working
@@ -204,15 +216,28 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
               return next;
             }),
         });
-      } catch (failure: unknown) {
-        setError(failure instanceof Error ? failure.message : "The request failed.");
-        // A failed question leaves no empty bubble behind; the question itself
-        // stays, so it can be asked again after the key is fixed.
-        setMessages((current) =>
-          current.length && current[current.length - 1].text === ""
-            ? current.slice(0, -1)
-            : current,
-        );
+      } catch (thrown: unknown) {
+        setFailure({
+          question: asked,
+          kind: thrown instanceof AssistantError ? thrown.kind : "request",
+          message: thrown instanceof Error ? thrown.message : "The request failed.",
+        });
+        /**
+         * A question that was never answered is not part of the conversation.
+         *
+         * Both halves of the failed exchange come back out — the empty bubble
+         * and the question above it. Leaving the question behind meant asking
+         * again put a second identical bubble under the first, and sent both
+         * to the model as two consecutive turns from the reader. The question
+         * is not lost: it is on the error, one button from being sent again.
+         */
+        setMessages((current) => {
+          // Unless some of the answer had already arrived before the
+          // connection went: a partial answer is worth more than a tidy
+          // thread, so that one stays and only the empty case rolls back.
+          const last = current[current.length - 1];
+          return last?.role === "assistant" && last.text === "" ? current.slice(0, -2) : current;
+        });
       } finally {
         setStreaming(false);
         abort.current = null;
@@ -276,7 +301,7 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
             onClick={() => {
               abort.current?.abort();
               setMessages([]);
-              setError(null);
+              setFailure(null);
             }}
             title="Start a new conversation"
             aria-label="Start a new conversation"
@@ -532,17 +557,57 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
           ),
         )}
 
-        {error && (
-          <p role="alert" className="leading-snug text-[var(--fl-danger)]">
-            {error}{" "}
-            <button
-              type="button"
-              onClick={() => setSetupChoice(true)}
-              className="underline hover:text-[var(--fl-text)]"
-            >
-              Check the settings
-            </button>
-          </p>
+        {failure && (
+          <div role="alert" className="space-y-2">
+            <p className="leading-snug text-[var(--fl-danger)]">{failure.message}</p>
+            {/* The action that fits what went wrong. A quota wall and a rate
+                limit are both a 429 and want opposite things — one wants a
+                different model, the other wants the same question again — and
+                offering "check the settings" for both was offering neither. */}
+            <div className="flex flex-wrap gap-1.5 text-[12px]">
+              {failure.kind === "quota" || failure.kind === "model" ? (
+                <button
+                  type="button"
+                  onClick={() => setSetupChoice(true)}
+                  className="fl-btn fl-btn-ghost"
+                >
+                  Choose another model
+                </button>
+              ) : failure.kind === "key" ? (
+                <button
+                  type="button"
+                  onClick={() => setSetupChoice(true)}
+                  className="fl-btn fl-btn-ghost"
+                >
+                  Check the key
+                </button>
+              ) : null}
+
+              {failure.kind !== "quota" && (
+                <button
+                  type="button"
+                  onClick={() => void send(failure.question)}
+                  disabled={streaming}
+                  className="fl-btn fl-btn-ghost disabled:opacity-60"
+                >
+                  Try again
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  // The question goes back where it was typed, so it can be
+                  // reworded rather than only repeated.
+                  setDraft(failure.question);
+                  setFailure(null);
+                }}
+                className="fl-btn fl-btn-ghost"
+              >
+                Edit the question
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
