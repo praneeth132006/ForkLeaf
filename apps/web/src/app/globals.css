@@ -419,6 +419,59 @@ select:focus-visible {
   margin-top: 1rem;
 }
 
+/* ── An answer in the assistant panel ──────────────────────────────────────
+   The same rendered markdown, in a column a third the width of a note. Left
+   at document proportions a two-line answer filled the panel and a heading
+   arrived at nearly twice the size of the text around it, which read as
+   shouting rather than as structure. Interface type, interface spacing, and
+   headings that are only a little larger than the body — enough to see the
+   shape of an answer, not enough to dominate the conversation it is in. */
+/* Written as `.fl-prose.fl-assistant-answer` on purpose. These are a variant
+   of the rules above, and `.fl-prose h2` is declared *after* this block — at
+   equal specificity that one would win, and an answer's heading came out at
+   24px against 13px body text. Two classes outrank one, whatever the order. */
+.fl-prose.fl-assistant-answer {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.fl-prose.fl-assistant-answer > * + * {
+  margin-top: 0.6rem;
+}
+
+.fl-prose.fl-assistant-answer h1,
+.fl-prose.fl-assistant-answer h2,
+.fl-prose.fl-assistant-answer h3,
+.fl-prose.fl-assistant-answer h4 {
+  font-size: 1.05em;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.fl-prose.fl-assistant-answer ul,
+.fl-prose.fl-assistant-answer ol {
+  padding-left: 1.2em;
+}
+
+.fl-prose.fl-assistant-answer li + li {
+  margin-top: 0.25rem;
+}
+
+/* A long URL or an unbroken token cannot be allowed to widen the column. */
+.fl-prose.fl-assistant-answer pre {
+  overflow-x: auto;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.5rem;
+  background: var(--fl-elevated);
+}
+
+.fl-prose.fl-assistant-answer table {
+  display: block;
+  overflow-x: auto;
+  font-size: 0.95em;
+}
+
 .fl-prose h1,
 .fl-prose h2,
 .fl-prose h3,
