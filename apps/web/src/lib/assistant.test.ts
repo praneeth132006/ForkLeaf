@@ -6,7 +6,9 @@ import {
   describeFailure,
   isReady,
   listModels,
+  preferredModel,
   readModels,
+  tidyDetail,
   provider,
   readDelta,
   streamChat,
@@ -200,18 +202,112 @@ describe("isReady", () => {
   });
 });
 
+/**
+ * Google's real refusal for a Pro model on a free key, which is the wall of
+ * red this was written against: the same sentence four times over, and advice
+ * to wait for a limit that is zero and will still be zero tomorrow.
+ */
+const GOOGLE_QUOTA = JSON.stringify({
+  error: {
+    message:
+      "You exceeded your current quota, please check your plan and billing details. " +
+      "For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. " +
+      "* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-3.1-pro " +
+      "* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-3.1-pro " +
+      "* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-3.1-pro " +
+      "* Please retry in 48.883671819s.",
+  },
+});
+
+describe("tidyDetail", () => {
+  it("says a repeated sentence once", () => {
+    const tidied = tidyDetail("first thing * same line * same line * same line");
+    expect(tidied).toBe("first thing same line");
+  });
+
+  it("cuts a very long message at a word, and shows that it was cut", () => {
+    const tidied = tidyDetail("word ".repeat(200));
+    expect(tidied.length).toBeLessThanOrEqual(241);
+    expect(tidied.endsWith("…")).toBe(true);
+    expect(tidied).not.toContain("wor…");
+  });
+
+  it("leaves a short message alone", () => {
+    expect(tidyDetail("just this")).toBe("just this");
+  });
+});
+
 describe("describeFailure", () => {
   it("names the likely cause and repeats what the provider said", () => {
-    expect(describeFailure(401, JSON.stringify({ error: { message: "invalid x-api-key" } }))).toBe(
-      "The provider refused the key. Check it, or paste a new one. invalid x-api-key",
+    const refused = describeFailure(
+      401,
+      JSON.stringify({ error: { message: "invalid x-api-key" } }),
     );
-    expect(describeFailure(404, "{}")).toContain("not one this key can use");
-    expect(describeFailure(429, "{}")).toContain("rate-limiting");
-    expect(describeFailure(503, "{}")).toContain("error of its own");
+    expect(refused.kind).toBe("key");
+    expect(refused.message).toContain("would not accept this key");
+    expect(refused.message).toContain("invalid x-api-key");
+
+    expect(describeFailure(404, "{}", "gpt-9").kind).toBe("model");
+    expect(describeFailure(404, "{}", "gpt-9").message).toContain(
+      "gpt-9 is not one this key can use",
+    );
+    expect(describeFailure(503, "{}").kind).toBe("provider");
+    expect(describeFailure(400, "{}").kind).toBe("request");
+  });
+
+  it("tells a plan limit apart from a queue, because waiting only fixes one", () => {
+    const quota = describeFailure(429, GOOGLE_QUOTA, "gemini-pro-latest");
+    expect(quota.kind).toBe("quota");
+    // The advice that used to be given here — "wait a moment and ask again" —
+    // could never come true against a limit of zero.
+    expect(quota.message).toContain("waiting will not help");
+    expect(quota.message).toContain("gemini-pro-latest");
+    expect(quota.message).not.toMatch(/Try again in/);
+  });
+
+  it("says how long to wait when it is really a queue", () => {
+    const busy = describeFailure(
+      429,
+      JSON.stringify({ error: { message: "Slow down. Please retry in 12.4s." } }),
+    );
+    expect(busy.kind).toBe("rate");
+    expect(busy.retryAfter).toBe(13);
+    expect(busy.message).toContain("about 13 seconds");
+  });
+
+  it("reads a retryDelay field as well as a sentence", () => {
+    const busy = describeFailure(429, JSON.stringify({ error: { message: 'retryDelay: "7s"' } }));
+    expect(busy.retryAfter).toBe(7);
+  });
+
+  it("does not repeat a provider's sentence four times", () => {
+    const quota = describeFailure(429, GOOGLE_QUOTA, "gemini-pro-latest");
+    const repeats = quota.message.match(/Quota exceeded for metric/g) ?? [];
+    expect(repeats).toHaveLength(1);
+    // Short enough to be read rather than scrolled past.
+    expect(quota.message.length).toBeLessThan(500);
   });
 
   it("falls back to the raw body when it is not the usual JSON", () => {
-    expect(describeFailure(400, "upstream said no")).toContain("upstream said no");
+    expect(describeFailure(400, "upstream said no").message).toContain("upstream said no");
+  });
+});
+
+describe("preferredModel", () => {
+  it("picks a Google model a free key can actually run", () => {
+    // Google lists its Pro models to every key and then refuses them with a
+    // quota of zero, so taking the first name picked the likeliest failure.
+    expect(
+      preferredModel("google", ["gemini-pro-latest", "gemini-3.1-pro", "gemini-flash-latest"]),
+    ).toBe("gemini-flash-latest");
+  });
+
+  it("takes the provider's own first choice everywhere else", () => {
+    expect(preferredModel("anthropic", ["claude-opus-5", "claude-sonnet-5"])).toBe("claude-opus-5");
+    expect(preferredModel("openai", ["gpt-4.1", "gpt-4.1-mini"])).toBe("gpt-4.1");
+    // And falls back to the first name when Google lists no flash model.
+    expect(preferredModel("google", ["gemini-pro-latest"])).toBe("gemini-pro-latest");
+    expect(preferredModel("google", [])).toBe("");
   });
 });
 
@@ -282,7 +378,7 @@ describe("streamChat", () => {
         signal: new AbortController().signal,
         fetchImpl,
       }),
-    ).rejects.toThrow(/refused the key.*no credit/);
+    ).rejects.toThrow(/would not accept this key.*no credit/);
   });
 
   it("names the host when the request never gets there", async () => {

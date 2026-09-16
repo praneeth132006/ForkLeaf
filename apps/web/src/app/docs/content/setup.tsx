@@ -181,6 +181,21 @@ export function Assistant() {
         on a server that has no listing at all.
       </P>
 
+      <H3>&ldquo;You exceeded your current quota&rdquo;</H3>
+      <P>
+        Two different things arrive as that message, and only one of them is worth waiting out. A
+        rate limit means you asked too quickly; the panel says roughly how long to wait and offers{" "}
+        <strong>Try again</strong>. A quota of <strong>zero</strong> means the key is not allowed to
+        use that model at all — which is what a free Google key gets for the Pro models — and no
+        amount of waiting changes it. There the panel says so and offers{" "}
+        <strong>Choose another model</strong> instead.
+      </P>
+      <P>
+        This is why ForkLeaf prefers a Flash model when it picks a Gemini model for you: it is the
+        one a free key can actually run. Pick a Pro model yourself and it will be respected — and
+        refused by Google until you add billing.
+      </P>
+
       <H2 id="local">A model on your own machine</H2>
       <P>
         Choose <strong>Local or other</strong> and give it the address. For{" "}

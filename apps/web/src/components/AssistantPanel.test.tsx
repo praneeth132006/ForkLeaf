@@ -259,7 +259,7 @@ describe("AssistantPanel", () => {
     expect(screen.queryByRole("button", { name: "Add to note" })).toBeNull();
   });
 
-  it("explains a refusal and keeps no empty answer on screen", async () => {
+  it("explains a refusal and leaves no half-exchange behind", async () => {
     withKey();
     vi.stubGlobal(
       "fetch",
@@ -273,10 +273,122 @@ describe("AssistantPanel", () => {
     await ask("Hello");
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("refused the key");
+    expect(alert.textContent).toContain("would not accept this key");
     expect(alert.textContent).toContain("bad key");
-    // The question stays; the blank reply does not.
-    expect(screen.getByText("Hello")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Check the key" })).toBeTruthy();
+    // Neither the question nor the blank reply is left in the thread.
+    expect(screen.queryByText("Hello")).toBeNull();
+  });
+
+  it("does not stack a second copy of a question that failed", async () => {
+    withKey();
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify({ error: { message: "bad key" } }), { status: 401 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AssistantPanel note={NOTE} onClose={vi.fn()} />);
+
+    // What a reader does after an error: ask the same thing again.
+    await ask("Summarise this");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    });
+
+    // Never two identical bubbles stacked, and never two consecutive reader
+    // turns sent to the model.
+    expect(screen.queryAllByText("Summarise this")).toHaveLength(0);
+    const asked = fetchMock.mock.calls
+      .map((call) => (call[1] as RequestInit | undefined)?.body)
+      .filter(Boolean)
+      .map((body) => JSON.parse(body as string));
+    expect(asked).toHaveLength(2);
+    for (const body of asked) {
+      expect(body.messages).toEqual([{ role: "user", content: "Summarise this" }]);
+    }
+  });
+
+  it("offers a different model, and not a pointless wait, when the key has no quota", async () => {
+    withKey();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async (_url, init) =>
+        (init as RequestInit | undefined)?.body
+          ? new Response(
+              JSON.stringify({
+                error: {
+                  message:
+                    "You exceeded your current quota. * Quota exceeded for metric: generate_content_free_tier_requests, limit: 0, model: claude-opus-5 * Please retry in 48.8s.",
+                },
+              }),
+              { status: 429 },
+            )
+          : Response.json({ data: [{ id: "claude-opus-5" }, { id: "claude-sonnet-5" }] }),
+      ),
+    );
+    render(<AssistantPanel note={NOTE} onClose={vi.fn()} />);
+
+    await ask("Anything");
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("waiting will not help");
+    expect(screen.getByRole("button", { name: "Choose another model" })).toBeTruthy();
+    // Retrying a plan limit is the one thing that cannot work.
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("puts a failed question back in the box to be reworded", async () => {
+    withKey();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () => new Response("{}", { status: 500 })),
+    );
+    render(<AssistantPanel note={NOTE} onClose={vi.fn()} />);
+
+    await ask("Summarise this badly");
+    fireEvent.click(await screen.findByRole("button", { name: "Edit the question" }));
+
+    expect((screen.getByLabelText("Ask the assistant") as HTMLTextAreaElement).value).toBe(
+      "Summarise this badly",
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("keeps an answer that had started arriving when the connection went", async () => {
+    withKey();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () => {
+        const encoder = new TextEncoder();
+        // Delivered, then dropped — `error()` in `start` would discard the
+        // chunk with it, which is a different case from a connection that
+        // goes after some of the answer has arrived.
+        let served = false;
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            pull(controller) {
+              if (served) {
+                controller.error(new Error("connection lost"));
+                return;
+              }
+              served = true;
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ type: "content_block_delta", delta: { text: "Half an ans" } })}\n\n`,
+                ),
+              );
+            },
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+    render(<AssistantPanel note={NOTE} onClose={vi.fn()} />);
+
+    await ask("Tell me");
+
+    // A partial answer is worth more than a tidy thread.
+    await waitFor(() => expect(screen.getByText("Half an ans")).toBeTruthy());
+    expect(screen.getByText("Tell me")).toBeTruthy();
   });
 
   it("says what it can and cannot do with no note open", async () => {
