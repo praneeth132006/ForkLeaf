@@ -307,22 +307,101 @@ describe("AssistantPanel", () => {
     }
   });
 
-  it("offers a different model, and not a pointless wait, when the key has no quota", async () => {
+  it("offers the model that will work, and asks again on it in one press", async () => {
+    // The whole reported failure, end to end: a free Google key, the Pro model
+    // ForkLeaf had chosen, and a quota of zero. Being told to "choose another
+    // model" sent the reader to a menu to guess again — on a listing that
+    // happily includes the models their key may not run.
+    localStorage.setItem("forkleaf:assistant:key:google", "AIza-test");
+    localStorage.setItem(
+      "forkleaf:assistant",
+      JSON.stringify({
+        provider: "google",
+        model: "gemini-pro-latest",
+        baseUrl: "https://generativelanguage.googleapis.com",
+      }),
+    );
+
+    const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
+      const address = String(url);
+      if (!(init as RequestInit | undefined)?.body) {
+        return Response.json({
+          models: [
+            { name: "models/gemini-pro-latest", supportedGenerationMethods: ["generateContent"] },
+            { name: "models/gemini-flash-latest", supportedGenerationMethods: ["generateContent"] },
+          ],
+        });
+      }
+      if (address.includes("gemini-pro-latest")) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              message:
+                "You exceeded your current quota, please check your plan and billing details. * Quota exceeded for metric: generate_content_free_tier_requests, limit: 0, model: gemini-3.1-pro * Please retry in 48.8s.",
+            },
+          }),
+          { status: 429 },
+        );
+      }
+      const encoder = new TextEncoder();
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: "Flash answered." }] } }] })}\n\n`,
+              ),
+            );
+            controller.close();
+          },
+        }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AssistantPanel note={NOTE} onClose={vi.fn()} />);
+    await ask("Summarise this note");
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("waiting will not help");
+    // Retrying a plan limit is the one thing that cannot work, so it is gone.
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+
+    // The alternative is named, not hinted at — and it is the Flash model,
+    // which is the one a free Google key can actually run.
+    const switcher = await screen.findByRole("button", {
+      name: "Use gemini-flash-latest instead",
+    });
+    await act(async () => {
+      fireEvent.click(switcher);
+    });
+
+    // One press: switched, asked again, answered.
+    await waitFor(() => expect(screen.getByText("Flash answered.")).toBeTruthy());
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(JSON.parse(localStorage.getItem("forkleaf:assistant") ?? "{}").model).toBe(
+      "gemini-flash-latest",
+    );
+
+    const asked = fetchMock.mock.calls
+      .filter((call) => (call[1] as RequestInit | undefined)?.body)
+      .map((call) => String(call[0]));
+    expect(asked[0]).toContain("gemini-pro-latest");
+    expect(asked[1]).toContain("gemini-flash-latest");
+  });
+
+  it("keeps the provider's own wording, folded away behind the part that matters", async () => {
     withKey();
     vi.stubGlobal(
       "fetch",
       vi.fn<typeof fetch>(async (_url, init) =>
         (init as RequestInit | undefined)?.body
           ? new Response(
-              JSON.stringify({
-                error: {
-                  message:
-                    "You exceeded your current quota. * Quota exceeded for metric: generate_content_free_tier_requests, limit: 0, model: claude-opus-5 * Please retry in 48.8s.",
-                },
-              }),
-              { status: 429 },
+              JSON.stringify({ error: { message: "Some very long provider explanation." } }),
+              { status: 500 },
             )
-          : Response.json({ data: [{ id: "claude-opus-5" }, { id: "claude-sonnet-5" }] }),
+          : Response.json({ data: [{ id: "claude-opus-5" }] }),
       ),
     );
     render(<AssistantPanel note={NOTE} onClose={vi.fn()} />);
@@ -330,10 +409,36 @@ describe("AssistantPanel", () => {
     await ask("Anything");
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("waiting will not help");
-    expect(screen.getByRole("button", { name: "Choose another model" })).toBeTruthy();
-    // Retrying a plan limit is the one thing that cannot work.
-    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    // Ours leads; theirs is there for anyone who wants it, not shouted.
+    expect(alert.querySelector("p")?.textContent).toBe("The provider had an error of its own.");
+    expect(alert.querySelector("details")?.textContent).toContain(
+      "Some very long provider explanation.",
+    );
+  });
+
+  it("still offers a choice when the provider lists nothing at all", async () => {
+    localStorage.setItem("forkleaf:assistant:key:google", "AIza-test");
+    localStorage.setItem(
+      "forkleaf:assistant",
+      JSON.stringify({
+        provider: "google",
+        model: "gemini-flash-latest",
+        baseUrl: "https://generativelanguage.googleapis.com",
+      }),
+    );
+    // A key that may not list, or a server that will not: the reader used to
+    // be told to choose another model and handed an empty text box.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () => new Response("nope", { status: 403 })),
+    );
+
+    render(<AssistantPanel note={NOTE} onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "gemini-flash-latest" }));
+
+    const picker = (await screen.findByLabelText("Model")) as HTMLSelectElement;
+    expect(picker.tagName).toBe("SELECT");
+    expect([...picker.options].map((option) => option.value)).toContain("gemini-pro-latest");
   });
 
   it("puts a failed question back in the box to be reworded", async () => {

@@ -4,11 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AssistantError,
   PROVIDERS,
+  alternativeTo,
   isReady,
   listModels,
   preferredModel,
   provider,
   streamChat,
+  type AssistantSettings,
   type ChatMessage,
   type FailureKind,
   type ProviderId,
@@ -74,10 +76,15 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
    * that would actually help.
    */
   const [failure, setFailure] = useState<{
-    message: string;
+    /** Our sentence, shown in full. */
+    lead: string;
+    /** The provider's own words, folded away behind a summary. */
+    detail: string;
     kind: FailureKind;
     /** The question that failed, so it can be sent again unedited. */
     question: string;
+    /** The model it was sent to, which may not be the one shown by now. */
+    model: string;
   } | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
   const abort = useRef<AbortController | null>(null);
@@ -113,6 +120,16 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
   });
   const listingFor = `${settings.provider} ${settings.baseUrl}`;
   const models = listed.from === listingFor ? listed.names : [];
+  /**
+   * What the picker offers.
+   *
+   * The provider's own listing when there is one, and our suggestions when
+   * there is not — a server that will not list its models, or a key that is
+   * not allowed to ask, used to leave the reader staring at an empty text box
+   * after being told to "choose another model". A menu of two known names
+   * beats a blank.
+   */
+  const choices = models.length > 0 ? models : provider(settings.provider).models;
   /**
    * True while the reader is typing a name that is not in the list.
    *
@@ -180,10 +197,21 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
   }, [key, listingFor]);
 
   const send = useCallback(
-    async (text: string) => {
+    /**
+     * `useModel` re-asks on a different model in one go.
+     *
+     * Switching and then sending as two steps cannot work here: the settings
+     * this closure captured are the old ones, so the second step would send
+     * the question to the model that just failed.
+     */
+    async (text: string, useModel?: string) => {
       const asked = text.trim();
       if (!asked || streaming) return;
-      if (!isReady(settings, key)) {
+
+      const active: AssistantSettings = useModel ? { ...settings, model: useModel } : settings;
+      if (useModel) update(active);
+
+      if (!isReady(active, key)) {
         setSetupChoice(true);
         return;
       }
@@ -202,7 +230,7 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
 
       try {
         await streamChat({
-          settings,
+          settings: active,
           key,
           note,
           messages: history,
@@ -219,8 +247,15 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
       } catch (thrown: unknown) {
         setFailure({
           question: asked,
+          model: active.model,
           kind: thrown instanceof AssistantError ? thrown.kind : "request",
-          message: thrown instanceof Error ? thrown.message : "The request failed.",
+          lead:
+            thrown instanceof AssistantError
+              ? thrown.lead
+              : thrown instanceof Error
+                ? thrown.message
+                : "The request failed.",
+          detail: thrown instanceof AssistantError ? thrown.detail : "",
         });
         /**
          * A question that was never answered is not part of the conversation.
@@ -243,10 +278,18 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
         abort.current = null;
       }
     },
-    [settings, key, streaming, messages, note],
+    [settings, update, key, streaming, messages, note],
   );
 
   const current = provider(settings.provider);
+
+  /**
+   * A model worth offering when the one just used was refused.
+   *
+   * Chosen from the provider's own listing where we have one, against the
+   * model that actually failed rather than whatever the picker shows now.
+   */
+  const alternative = failure ? alternativeTo(settings.provider, failure.model, choices) : "";
 
   /**
    * Changing something in the setup form keeps the setup form open.
@@ -359,7 +402,7 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
                 difference between choosing and guessing — and the guess is
                 what broke: a name that was fine when this shipped and had been
                 retired by the time anybody typed a question next to it. */}
-            {models.length > 0 && !typingModel ? (
+            {choices.length > 0 && !typingModel ? (
               <>
                 <select
                   value={settings.model}
@@ -370,10 +413,10 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
                   {/* A name the reader set by hand is kept in the list even if
                       the provider did not mention it, so choosing it again is
                       possible after looking at the others. */}
-                  {!models.includes(settings.model) && (
+                  {!choices.includes(settings.model) && (
                     <option value={settings.model}>{settings.model}</option>
                   )}
-                  {models.map((model) => (
+                  {choices.map((model) => (
                     <option key={model} value={model}>
                       {model}
                     </option>
@@ -399,13 +442,13 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
                   aria-label="Model"
                   className="fl-input w-full"
                 />
-                {models.length > 0 && (
+                {choices.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setTyping(false)}
                     className="mt-1 text-[11.5px] text-[var(--fl-muted)] underline hover:text-[var(--fl-text)]"
                   >
-                    Choose from {models.length} models instead
+                    Choose from {choices.length} models instead
                   </button>
                 )}
               </>
@@ -559,19 +602,48 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
 
         {failure && (
           <div role="alert" className="space-y-2">
-            <p className="leading-snug text-[var(--fl-danger)]">{failure.message}</p>
+            {/* Our sentence, which says what to do, and the provider's own
+                words folded away behind it. Both at full volume is what made
+                the panel a wall of red: the part that mattered was the first
+                line and it was buried by four lines of boilerplate. */}
+            <p className="leading-snug text-[var(--fl-danger)]">{failure.lead}</p>
+
+            {failure.detail && (
+              <details className="text-[11.5px] text-[var(--fl-muted)]">
+                <summary className="cursor-pointer hover:text-[var(--fl-text)]">
+                  What {current.label} said
+                </summary>
+                <p className="mt-1 leading-snug break-words">{failure.detail}</p>
+              </details>
+            )}
+
             {/* The action that fits what went wrong. A quota wall and a rate
                 limit are both a 429 and want opposite things — one wants a
                 different model, the other wants the same question again — and
                 offering "check the settings" for both was offering neither. */}
             <div className="flex flex-wrap gap-1.5 text-[12px]">
+              {/* Named, not hinted at. "Choose another model" sent the reader
+                  to a menu to guess again, on a provider whose listing happily
+                  includes the models their key may not run — which is how they
+                  got here. This switches and asks again in one press. */}
+              {(failure.kind === "quota" || failure.kind === "model") && alternative && (
+                <button
+                  type="button"
+                  onClick={() => void send(failure.question, alternative)}
+                  disabled={streaming}
+                  className="fl-btn fl-btn-primary disabled:opacity-60"
+                >
+                  Use {alternative} instead
+                </button>
+              )}
+
               {failure.kind === "quota" || failure.kind === "model" ? (
                 <button
                   type="button"
                   onClick={() => setSetupChoice(true)}
                   className="fl-btn fl-btn-ghost"
                 >
-                  Choose another model
+                  Pick a model myself
                 </button>
               ) : failure.kind === "key" ? (
                 <button
@@ -583,7 +655,7 @@ export function AssistantPanel({ note, onInsert, onClose }: AssistantPanelProps)
                 </button>
               ) : null}
 
-              {failure.kind !== "quota" && (
+              {failure.kind !== "quota" && failure.kind !== "model" && (
                 <button
                   type="button"
                   onClick={() => void send(failure.question)}
