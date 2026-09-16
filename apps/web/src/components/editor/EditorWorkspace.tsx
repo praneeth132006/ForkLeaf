@@ -183,7 +183,13 @@ import { BootScreen } from "@/components/BootScreen";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
 import { fetchSession, readNotebookAt, signOut } from "@/lib/gateway";
 import { postHogReset } from "@/lib/posthog";
-import { assetPathFor, relativeSrc, resolveImageSrc } from "@/lib/assets";
+import {
+  assetPathFor,
+  localAssetSrc,
+  portableAssetSrc,
+  relativeSrc,
+  resolveImageSrc,
+} from "@/lib/assets";
 import { revealAsset } from "@/lib/reveal-asset";
 import { imageTypeFor } from "@/lib/media";
 import { collectFilePaths, collectFolders } from "@/lib/tree";
@@ -611,6 +617,10 @@ export function EditorWorkspace() {
       canUpload: true,
       storesLocally: Boolean(workspace?.isLocal),
       resolve: (src: string) => resolveImageSrc(workspace, notePath, src, notebook.assetUrls),
+      // So an image copied out of one note still shows when pasted into a note
+      // in another folder, rather than keeping a path relative to the first.
+      portable: (src: string) => portableAssetSrc(workspace, notePath, src),
+      localize: (portable: string) => localAssetSrc(workspace, notePath, portable),
       upload: async (file: File) => {
         if (!workspace || !notePath) {
           throw new Error("Open a note before adding an image to it.");
@@ -4499,7 +4509,6 @@ export function EditorWorkspace() {
           onDiscardChange={(id) => void notebook.discardChange(id)}
           onShrinkChange={notebook.shrinkChange}
           onLocateChange={(path) => void locateUnsynced(path)}
-          onConnectAssistant={() => setDialog("connect-assistant")}
         />
       )}
 
@@ -4522,6 +4531,7 @@ export function EditorWorkspace() {
           githubAvailable={notebook.session?.githubAvailable ?? false}
           onSignIn={signIn}
           onConnectRepo={() => setDialog("connect")}
+          onConnectAssistant={() => setDialog("connect-assistant")}
         />
       )}
 

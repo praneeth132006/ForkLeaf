@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Dialog } from "@/components/Dialog";
+import { mcpServerUrl } from "@/lib/mcp-url";
 
 /**
  * Connecting an AI assistant, in one step per assistant.
@@ -16,7 +17,7 @@ export interface ConnectAssistantDialogProps {
   onClose: () => void;
 }
 
-function CopyLine({ text, label }: { text: string; label: string }) {
+export function CopyLine({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
@@ -43,7 +44,7 @@ function CopyLine({ text, label }: { text: string; label: string }) {
 }
 
 export function ConnectAssistantDialog({ onClose }: ConnectAssistantDialogProps) {
-  const url = `${window.location.origin}/api/mcp`;
+  const { url } = mcpServerUrl();
 
   return (
     <Dialog

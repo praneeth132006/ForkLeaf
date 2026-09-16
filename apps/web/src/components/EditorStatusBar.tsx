@@ -3,6 +3,7 @@
 import type { CursorPosition } from "@forkleaf/editor";
 import type { SyncMode, SyncPreference, SyncState, Workspace } from "@forkleaf/types";
 import { BranchMenu } from "./BranchMenu";
+import { Marquee } from "./Marquee";
 import { SyncModeMenu } from "./SyncModeMenu";
 import { SyncProblem } from "./SyncProblem";
 
@@ -67,8 +68,6 @@ export interface EditorStatusBarProps {
   ) => Promise<{ before: number; after: number; width: number; height: number }>;
   /** Opens the note an unsynced file lives in, so it can be dealt with. */
   onLocateChange: (path: string) => void;
-  /** Opens the steps for connecting Claude, Cursor or VS Code over MCP. */
-  onConnectAssistant?: () => void;
 }
 
 /**
@@ -96,7 +95,6 @@ export function EditorStatusBar({
   onDiscardChange,
   onShrinkChange,
   onLocateChange,
-  onConnectAssistant,
   sessionExpired = false,
 }: EditorStatusBarProps) {
   /**
@@ -120,8 +118,10 @@ export function EditorStatusBar({
     (expired && sync.pendingCount > 0);
   const status = describe(sync, expired, failing);
 
+  // A fixed height and nothing allowed to wrap: a long path used to push the
+  // bar onto two lines and squeeze every label beside it into a column.
   return (
-    <footer className="flex h-8 shrink-0 items-center gap-3 px-4 text-[0.7rem] text-[var(--fl-muted)]">
+    <footer className="flex h-8 min-w-0 shrink-0 items-center gap-3 overflow-hidden whitespace-nowrap px-4 text-[0.7rem] text-[var(--fl-muted)]">
       {failing ? (
         <SyncProblem
           sync={sync}
@@ -143,7 +143,7 @@ export function EditorStatusBar({
           type="button"
           onClick={onSyncNow}
           title="Sync now"
-          className="flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-[var(--fl-elevated)]"
+          className="flex shrink-0 items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-[var(--fl-elevated)]"
         >
           <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />
           <span className={status.className}>{status.label}</span>
@@ -167,9 +167,10 @@ export function EditorStatusBar({
 
       {workspace && !workspace.isLocal && (
         <>
-          <span className="hidden truncate sm:inline">
-            {workspace.repo.owner}/{workspace.repo.repo}
-          </span>
+          <Marquee
+            text={`${workspace.repo.owner}/${workspace.repo.repo}`}
+            className="hidden max-w-[10rem] shrink sm:block"
+          />
 
           {/* The branch is a control now, not a label: writing documentation
               straight onto a repository's default branch is rarely what anyone
@@ -187,37 +188,11 @@ export function EditorStatusBar({
             type="button"
             onClick={onPropose}
             title="Open a pull request for these changes"
-            className="hidden rounded px-1.5 py-0.5 transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] sm:inline"
+            className="hidden shrink-0 rounded px-1.5 py-0.5 transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)] sm:inline"
           >
             Propose changes…
           </button>
         </>
-      )}
-
-      {/* Always in reach, not only in ⌘K: connecting an assistant is a thing
-          people look for, and the bar at the bottom is where they look. */}
-      {onConnectAssistant && (
-        <button
-          type="button"
-          onClick={onConnectAssistant}
-          title="Connect Claude, Cursor or VS Code to this notebook over MCP"
-          className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
-        >
-          <svg
-            viewBox="0 0 16 16"
-            className="h-3 w-3"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M6 2.5v3M10 2.5v3M4.5 5.5h7v2.5a3.5 3.5 0 0 1-7 0zM8 11.5v2" />
-          </svg>
-          <span className="hidden sm:inline">Connect AI assistant</span>
-          <span className="sr-only sm:hidden">Connect AI assistant</span>
-        </button>
       )}
 
       {/* Only when the status control is not already saying it: the same
@@ -232,10 +207,9 @@ export function EditorStatusBar({
       )}
 
       {notePath && (!sync.lastError || failing) && (
-        <div className="ml-auto flex shrink-0 items-center gap-3">
-          <span className="hidden truncate font-mono lg:inline" title={notePath}>
-            {notePath}
-          </span>
+        <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-3">
+          {/* A set amount of room, scrolling when the path needs more. */}
+          <Marquee text={notePath} className="hidden max-w-[28rem] shrink font-mono lg:block" />
 
           {locked && (
             <span
@@ -282,7 +256,7 @@ export function EditorStatusBar({
           <span className="hidden md:inline">LF</span>
           <span className="hidden md:inline">Markdown</span>
 
-          <span className="tabular-nums">
+          <span className="shrink-0 tabular-nums">
             {words.toLocaleString()} {words === 1 ? "word" : "words"}
           </span>
         </div>
