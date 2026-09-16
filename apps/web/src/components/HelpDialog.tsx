@@ -686,6 +686,7 @@ export function HelpDialog({
             ["⌘1 / ⌘2 / ⌘3", "Rich, split and source views"],
             ["⌘\\", "Show or hide the sidebar"],
             ["⌘⇧F", "Focus mode — just the note"],
+            ["⌥⌘A", "Ask the assistant beside the note"],
             ["⌘B / ⌘I", "Bold / italic (rich text)"],
             ["⌘Z / ⌘⇧Z", "Undo / redo"],
             ["Tab", "Indent (source view)"],

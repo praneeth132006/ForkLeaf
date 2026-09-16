@@ -158,8 +158,26 @@ export function policy(
     // GitHub itself is never called from the browser — it goes through this
     // app's own routes. These are Firebase's endpoints, and only apply when a
     // Firebase project is configured.
+    //
+    // The model providers are here because the assistant panel talks to them
+    // from the page with the reader's own key, rather than through a route of
+    // ours holding a key of ours. That is a deliberate widening and a small
+    // one: each is a named API host that answers nothing without a bearer
+    // token, so none is a useful place for injected script to send anything.
+    // `*.googleapis.com` was already allowed for Firebase and covers Gemini.
+    //
+    // Loopback is how a model running on the reader's own machine — Ollama,
+    // LM Studio, llama.cpp — is reached. It stays `http:` deliberately: a
+    // local server has no certificate, and loopback is exempt both from
+    // mixed-content blocking and from `upgrade-insecure-requests` below,
+    // because it cannot be intercepted on the way.
     [
       "connect-src 'self'",
+      "https://api.anthropic.com",
+      "https://api.openai.com",
+      "https://openrouter.ai",
+      "http://localhost:*",
+      "http://127.0.0.1:*",
       "https://*.googleapis.com",
       "https://*.google-analytics.com",
       "https://*.analytics.google.com",

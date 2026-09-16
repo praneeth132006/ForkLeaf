@@ -203,6 +203,12 @@ export const DOC_SECTIONS: DocSection[] = [
           "Install Save to ForkLeaf in Chrome, Edge, Brave or Arc, and save pages, quotes, links and pictures with one click.",
       },
       {
+        slug: "assistant",
+        title: "The assistant beside your notes",
+        summary:
+          "Claude, OpenAI, Gemini or a model on your own machine, in a column next to the note — with your own key, kept in your browser.",
+      },
+      {
         slug: "mcp",
         title: "Connect an AI assistant (MCP)",
         summary:

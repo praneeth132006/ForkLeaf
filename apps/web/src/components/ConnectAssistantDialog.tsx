@@ -54,6 +54,16 @@ export function ConnectAssistantDialog({ onClose }: ConnectAssistantDialogProps)
       wide
     >
       <div className="flex flex-col gap-5 text-[13.5px] text-[var(--fl-muted)]">
+        <p className="rounded-lg border border-[var(--fl-border)] px-3 py-2">
+          This sends an assistant <em>to</em> your notebook, to work on it through GitHub while you
+          are elsewhere. For a model beside the note you are writing, with your own key, press{" "}
+          <strong>⌥⌘A</strong> —{" "}
+          <Link href="/docs/assistant" className="text-[var(--fl-accent)] underline">
+            the assistant panel
+          </Link>
+          .
+        </p>
+
         <section>
           <h3 className="font-semibold text-[var(--fl-text)]">The address</h3>
           <p>Every assistant uses this. It opens ForkLeaf to sign in the first time.</p>
