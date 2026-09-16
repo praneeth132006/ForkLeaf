@@ -92,7 +92,7 @@ export function SyncModeMenu({ preference, onChange, onSyncNow, pendingCount }: 
       {open && (
         <div
           role="menu"
-          className="absolute bottom-full left-0 z-40 mb-1.5 w-[19rem] overflow-hidden rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1 shadow-[var(--fl-shadow-lg)]"
+          className="absolute bottom-full left-0 z-40 mb-1.5 w-[19rem] whitespace-normal overflow-hidden rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1 shadow-[var(--fl-shadow-lg)]"
         >
           <p className="px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
             Push to GitHub

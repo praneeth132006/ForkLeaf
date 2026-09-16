@@ -53,7 +53,9 @@ describe("the status bar", () => {
     const footer = container.querySelector("footer")!;
 
     expect(footer.className).toContain("h-8");
-    expect(footer.className).toContain("overflow-hidden");
+    expect(footer.className).toContain("overflow-x-clip");
+    // Never both axes: the sync panel and menus open upward out of the bar.
+    expect(footer.className).not.toContain("overflow-hidden");
     expect(footer.className).toContain("whitespace-nowrap");
   });
 
