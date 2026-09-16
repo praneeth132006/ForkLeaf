@@ -193,7 +193,7 @@ export function SyncProblem({
         <div
           role="dialog"
           aria-label="Sync problem"
-          className="absolute bottom-full left-0 z-40 mb-1.5 w-[24rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] shadow-[var(--fl-shadow-lg)]"
+          className="absolute bottom-full left-0 z-40 mb-1.5 w-[24rem] max-w-[calc(100vw-2rem)] max-h-[calc(100vh-4rem)] overflow-y-auto whitespace-normal rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] shadow-[var(--fl-shadow-lg)]"
         >
           <div className="border-b border-[var(--fl-border)] px-3 py-2.5">
             <p className="text-[12.5px] font-semibold leading-snug text-[var(--fl-text)]">

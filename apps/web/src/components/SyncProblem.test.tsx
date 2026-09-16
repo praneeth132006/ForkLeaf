@@ -67,6 +67,17 @@ describe("SyncProblem — the reason, not just the failure", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("can be read inside a one-line status bar", () => {
+    view(state());
+    open();
+    const dialog = screen.getByRole("dialog");
+    // The bar forbids wrapping; the panel must undo that or every sentence is
+    // cut off at its right edge. And it scrolls rather than leaving the window.
+    expect(dialog.className).toContain("whitespace-normal");
+    expect(dialog.className).toContain("overflow-y-auto");
+    expect(dialog.className).toContain("max-h-");
+  });
+
   it("names what GitHub actually said, rather than hiding it in a tooltip", () => {
     view(state());
     open();

@@ -103,7 +103,7 @@ export function BranchMenu({ workspace, onSwitch }: BranchMenuProps) {
       {open && (
         <div
           role="listbox"
-          className="absolute bottom-full left-0 z-40 mb-1.5 w-72 overflow-hidden rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1 shadow-[var(--fl-shadow-lg)]"
+          className="absolute bottom-full left-0 z-40 mb-1.5 w-72 whitespace-normal overflow-hidden rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1 shadow-[var(--fl-shadow-lg)]"
         >
           {error && (
             <p role="alert" className="px-2.5 py-2 text-[12px] text-[var(--fl-danger)]">

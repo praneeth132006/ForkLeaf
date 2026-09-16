@@ -119,9 +119,11 @@ export function EditorStatusBar({
   const status = describe(sync, expired, failing);
 
   // A fixed height and nothing allowed to wrap: a long path used to push the
-  // bar onto two lines and squeeze every label beside it into a column.
+  // bar onto two lines and squeeze every label beside it into a column. Clipped
+  // sideways only: the sync panel and the menus open upward out of this bar,
+  // and `overflow-hidden` cut them off entirely, so clicking did nothing visible.
   return (
-    <footer className="flex h-8 min-w-0 shrink-0 items-center gap-3 overflow-hidden whitespace-nowrap px-4 text-[0.7rem] text-[var(--fl-muted)]">
+    <footer className="flex h-8 min-w-0 shrink-0 items-center gap-3 overflow-x-clip overflow-y-visible whitespace-nowrap px-4 text-[0.7rem] text-[var(--fl-muted)]">
       {failing ? (
         <SyncProblem
           sync={sync}
