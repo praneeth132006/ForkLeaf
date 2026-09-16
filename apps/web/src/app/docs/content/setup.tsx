@@ -191,9 +191,10 @@ export function Assistant() {
         <strong>Choose another model</strong> instead.
       </P>
       <P>
-        This is why ForkLeaf prefers a Flash model when it picks a Gemini model for you: it is the
-        one a free key can actually run. Pick a Pro model yourself and it will be respected — and
-        refused by Google until you add billing.
+        Where it happens, the panel names a model that will work and offers to ask again on it in
+        one press, rather than sending you to a menu to guess. This is also why ForkLeaf offers a
+        Flash model first for Gemini: it is the one a free Google key can actually run. Pick a Pro
+        model yourself and that choice is respected — and refused by Google until you add billing.
       </P>
 
       <H2 id="local">A model on your own machine</H2>

@@ -92,9 +92,17 @@ export const PROVIDERS: readonly Provider[] = [
     blurb: "Google AI Studio, direct from this browser",
     keyUrl: "https://aistudio.google.com/apikey",
     baseUrl: "https://generativelanguage.googleapis.com",
-    // The `-latest` aliases rather than a version: Google moves them forward,
-    // so they are the one name here that cannot go stale between releases.
-    models: ["gemini-pro-latest", "gemini-flash-latest"],
+    /**
+     * Flash first, and that order is the whole point.
+     *
+     * The `-latest` aliases rather than a version, because Google moves those
+     * forward and they cannot go stale between releases. But the Pro alias was
+     * listed first here, so choosing Gemini landed on a Pro model — which a
+     * free Google key is refused for, with a quota of exactly zero. Every new
+     * Gemini reader walked into a wall on their first question. Flash is the
+     * one a free key can actually run, so it is the one offered first.
+     */
+    models: ["gemini-flash-latest", "gemini-pro-latest"],
   },
   {
     id: "compatible",
@@ -366,6 +374,17 @@ export type FailureKind =
   "key" | "model" | "quota" | "rate" | "provider" | "request" | "unreachable";
 
 export interface Failure {
+  /**
+   * Our sentence: what happened, and what to do about it.
+   *
+   * Kept apart from the provider's own words so the panel can lead with this
+   * and fold the rest away. Run together, the line that says what to do was
+   * buried under four lines of boilerplate about plans and billing.
+   */
+  lead: string;
+  /** The provider's own words, de-duplicated and trimmed. Often empty. */
+  detail: string;
+  /** Both, for an `Error` message and for anything that wants one string. */
   message: string;
   kind: FailureKind;
   /** Seconds the provider asked us to wait, when it named a number. */
@@ -381,12 +400,16 @@ export interface Failure {
  */
 export class AssistantError extends Error {
   readonly kind: FailureKind;
+  readonly lead: string;
+  readonly detail: string;
   readonly retryAfter?: number;
 
   constructor(failure: Failure) {
     super(failure.message);
     this.name = "AssistantError";
     this.kind = failure.kind;
+    this.lead = failure.lead;
+    this.detail = failure.detail;
     this.retryAfter = failure.retryAfter;
   }
 }
@@ -466,49 +489,42 @@ export function describeFailure(status: number, body: string, model = ""): Failu
   const named = model || "that model";
 
   if (status === 401 || status === 403) {
-    return { kind: "key", message: say("The provider would not accept this key.", detail) };
+    return result("key", "The provider would not accept this key.", detail);
   }
 
   if (status === 404) {
-    return {
-      kind: "model",
-      message: say(`${named} is not one this key can use. Choose another.`, detail),
-    };
+    return result("model", `${named} is not one this key can use. Choose another.`, detail);
   }
 
   if (status === 429 && noQuota) {
-    return {
-      kind: "quota",
-      message: say(
-        `This key has no quota for ${named}, so waiting will not help: it is a plan limit rather than a queue. Choose a model the key can use, or add billing at the provider.`,
-        detail,
-      ),
-    };
+    return result(
+      "quota",
+      `This key has no quota for ${named}, so waiting will not help: it is a plan limit rather than a queue, and a free key is refused outright for the paid models.`,
+      detail,
+    );
   }
 
   if (status === 429) {
-    return {
-      kind: "rate",
+    return result(
+      "rate",
+      retryAfter
+        ? `Too many requests for this key just now. Try again in about ${retryAfter} ${retryAfter === 1 ? "second" : "seconds"}.`
+        : "Too many requests for this key just now. Try again in a moment.",
+      detail,
       retryAfter,
-      message: say(
-        retryAfter
-          ? `Too many requests for this key just now. Try again in about ${retryAfter} ${retryAfter === 1 ? "second" : "seconds"}.`
-          : "Too many requests for this key just now. Try again in a moment.",
-        detail,
-      ),
-    };
+    );
   }
 
   if (status >= 500) {
-    return { kind: "provider", message: say("The provider had an error of its own.", detail) };
+    return result("provider", "The provider had an error of its own.", detail);
   }
 
-  return { kind: "request", message: say("The request was refused.", detail) };
+  return result("request", "The request was refused.", detail);
 }
 
-/** Our sentence and theirs, with no separator when there is no theirs. */
-function say(lead: string, detail: string): string {
-  return detail ? `${lead} ${detail}` : lead;
+/** One failure, with our sentence and theirs kept apart and also joined. */
+function result(kind: FailureKind, lead: string, detail: string, retryAfter?: number): Failure {
+  return { kind, lead, detail, message: detail ? `${lead} ${detail}` : lead, retryAfter };
 }
 
 /**
@@ -610,6 +626,19 @@ export function preferredModel(id: ProviderId, names: readonly string[]): string
   return names[0];
 }
 
+/**
+ * Another model to try, when the one in hand has just been refused.
+ *
+ * Being told "choose another model" is only useful next to one worth choosing.
+ * Without this the reader is sent to a menu to guess again, on a provider
+ * whose listing cheerfully includes every model their key is *not* allowed to
+ * run — which is how they got here.
+ */
+export function alternativeTo(id: ProviderId, model: string, listed: readonly string[]): string {
+  const pool = (listed.length > 0 ? listed : provider(id).models).filter((name) => name !== model);
+  return preferredModel(id, pool);
+}
+
 export interface ListOptions {
   settings: AssistantSettings;
   key: string;
@@ -675,12 +704,13 @@ export async function streamChat(options: StreamOptions): Promise<void> {
     // A browser will not tell a page why a cross-origin request failed, so the
     // honest message is the list of things it is: unreachable address, a local
     // server that has not been told to allow this origin, or no network.
-    throw new AssistantError({
-      kind: "unreachable",
-      message: `Could not reach ${new URL(plan.url).host}. Check the address, and that the server allows requests from this page.${
-        error instanceof Error && error.message ? ` (${error.message})` : ""
-      }`,
-    });
+    throw new AssistantError(
+      result(
+        "unreachable",
+        `Could not reach ${new URL(plan.url).host}. Check the address, and that the server allows requests from this page.`,
+        error instanceof Error && error.message ? error.message : "",
+      ),
+    );
   }
 
   if (!response.ok) {
@@ -693,10 +723,7 @@ export async function streamChat(options: StreamOptions): Promise<void> {
     );
   }
   if (!response.body) {
-    throw new AssistantError({
-      kind: "provider",
-      message: "The provider sent a reply with no body.",
-    });
+    throw new AssistantError(result("provider", "The provider sent a reply with no body.", ""));
   }
 
   const reader = response.body.getReader();

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_SETTINGS,
   buildRequest,
+  alternativeTo,
   buildModelsRequest,
   describeFailure,
   isReady,
@@ -290,6 +291,33 @@ describe("describeFailure", () => {
 
   it("falls back to the raw body when it is not the usual JSON", () => {
     expect(describeFailure(400, "upstream said no").message).toContain("upstream said no");
+  });
+});
+
+describe("what a new Gemini reader is given", () => {
+  it("offers Flash before Pro, because a free key is refused for Pro", () => {
+    // Pro was listed first, so choosing Gemini landed on a model that a free
+    // Google key cannot run, and the first question hit a wall.
+    expect(provider("google").models[0]).toBe("gemini-flash-latest");
+  });
+});
+
+describe("alternativeTo", () => {
+  it("names a model worth trying instead of the one just refused", () => {
+    expect(
+      alternativeTo("google", "gemini-pro-latest", ["gemini-pro-latest", "gemini-flash-latest"]),
+    ).toBe("gemini-flash-latest");
+  });
+
+  it("falls back to what we know when the provider listed nothing", () => {
+    // A key that may not list models still deserves a suggestion.
+    expect(alternativeTo("google", "gemini-pro-latest", [])).toBe("gemini-flash-latest");
+    expect(alternativeTo("anthropic", "claude-opus-5", [])).toBe("claude-sonnet-5");
+  });
+
+  it("never suggests the model that just failed", () => {
+    expect(alternativeTo("google", "gemini-flash-latest", ["gemini-flash-latest"])).toBe("");
+    expect(alternativeTo("openai", "gpt-4.1", ["gpt-4.1", "gpt-4.1-mini"])).toBe("gpt-4.1-mini");
   });
 });
 
