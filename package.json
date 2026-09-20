@@ -36,5 +36,10 @@
   "engines": {
     "node": ">=20.9.0",
     "pnpm": ">=9"
+  },
+  "pnpm": {
+    "overrides": {
+      "sharp": "^0.35.4"
+    }
   }
 }
