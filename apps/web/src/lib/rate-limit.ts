@@ -53,7 +53,10 @@ export function clientKey(request: NextRequest): string {
 
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
-    const hops = forwarded.split(",").map((hop) => hop.trim()).filter(Boolean);
+    const hops = forwarded
+      .split(",")
+      .map((hop) => hop.trim())
+      .filter(Boolean);
     const trusted = hops[hops.length - 1];
     if (trusted) return trusted;
   }
