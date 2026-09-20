@@ -38,13 +38,27 @@ export interface RateLimitOptions {
 /**
  * Best-effort client identity.
  *
- * The forwarded headers are spoofable, which is fine for this purpose: the
- * limiter's job is to slow down clients that are not trying to evade it.
+ * The client IP is read from the values the hosting proxy sets, not from the
+ * ones the client can prepend. `x-real-ip` is written by the platform (Vercel)
+ * to the true source address, so it is preferred. `x-forwarded-for` is a chain
+ * the *left* of which the caller controls — `X-Forwarded-For: 1.2.3.4` on an
+ * incoming request would hand every request a fresh bucket and defeat the
+ * limiter entirely — so when it is the only signal, the *rightmost* entry is
+ * used: the hop appended by the trusted proxy nearest this server, which the
+ * caller cannot forge. A single-value header is unchanged by this.
  */
 export function clientKey(request: NextRequest): string {
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+
   const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]!.trim();
-  return request.headers.get("x-real-ip") ?? "unknown";
+  if (forwarded) {
+    const hops = forwarded.split(",").map((hop) => hop.trim()).filter(Boolean);
+    const trusted = hops[hops.length - 1];
+    if (trusted) return trusted;
+  }
+
+  return "unknown";
 }
 
 /** Throws a 429 when the caller is over budget. */
