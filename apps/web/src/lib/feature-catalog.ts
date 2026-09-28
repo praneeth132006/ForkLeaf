@@ -271,6 +271,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "map-of-contents",
+        title: "Map of contents",
+        summary:
+          "Writes a list of every note linked with this one and every note sharing its tags into the note, as ordinary [[links]]. Run it again to refresh it.",
+        how: "⌘K → Write this note's map of contents",
+        tags: ["new"],
+      },
+      {
         id: "present",
         title: "Present a note",
         summary:

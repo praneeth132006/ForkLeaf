@@ -30,6 +30,7 @@ import { displayTitle, parseCitation, type PdfCitation } from "@forkleaf/pdf";
 import type { EditorViewMode, Note, Workspace } from "@forkleaf/types";
 import {
   deriveTitle,
+  extractTags,
   dirname,
   documentStats,
   joinPath,
@@ -89,6 +90,7 @@ import { GraphDialog } from "@/components/GraphDialog";
 import { FolderViewsDialog, type FolderView } from "@/components/FolderViewsDialog";
 import { FlashcardsDialog } from "@/components/FlashcardsDialog";
 import { PresentMode } from "@/components/PresentMode";
+import { mapOfContents, withMapOfContents } from "@/lib/map-of-contents";
 import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
 import { cardsInNotes, useDueCount } from "@/lib/flashcard-due";
 import { cardsRequest, readCardReply } from "@/lib/ai-cards";
@@ -2578,6 +2580,36 @@ export function EditorWorkspace() {
   }, [notebook, takenPaths]);
 
   /** Writes this week's review into the journal, or opens it when it exists. */
+  /** Writes (or refreshes) the open note's map of contents from the link graph and its tags. */
+  const writeMapOfContents = useCallback(async () => {
+    if (!note || !links.ready) return;
+    const describe = (entry: {
+      path: string;
+      content: string;
+      frontmatter: Record<string, unknown>;
+    }) => ({
+      path: entry.path,
+      title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+      tags: extractTags(entry.content, entry.frontmatter.tags),
+    });
+    const all = (await notebook.allNotes())
+      .filter((entry) => isMarkdown(entry.path) && !isTemplatePath(entry.path))
+      .map(describe);
+    const self = describe(note);
+    const section = mapOfContents({
+      note: self,
+      linksTo: (links.graph.outgoing.get(note.path) ?? []).flatMap((ref) =>
+        ref.to ? [ref.to] : [],
+      ),
+      linkedFrom: (links.graph.backlinks.get(note.path) ?? []).map((ref) => ref.from),
+      notes: all,
+    });
+    const latest = notebook.note;
+    if (!latest || latest.path !== note.path) return;
+    notebook.saveNote(withMapOfContents(latest.content, section));
+    setNotice("Map of contents written at the end of the note. Run it again to refresh it.");
+  }, [note, links.ready, links.graph, notebook]);
+
   const writeWeeklyReview = useCallback(async () => {
     const now = new Date();
     const path = weeklyReviewPath(now);
@@ -3371,6 +3403,16 @@ export function EditorWorkspace() {
         keywords: "flashcards cards spaced repetition review study learn quiz anki memorise",
         run: () => openFlashcards(),
       });
+      if (note && !sealed && links.ready) {
+        list.push({
+          id: "map-of-contents",
+          label: "Write this note's map of contents",
+          group: "Notes",
+          hint: "The notes linked with this one and sharing its tags, as a list of links",
+          keywords: "moc map of contents index hub links backlinks tags related toc outline",
+          run: () => void writeMapOfContents(),
+        });
+      }
       if (note && !sealed) {
         list.push({
           id: "present",
@@ -3683,6 +3725,8 @@ export function EditorWorkspace() {
     removeEncryption,
     openFlashcards,
     noteCardCount,
+    links.ready,
+    writeMapOfContents,
   ]);
 
   /**
@@ -3766,6 +3810,12 @@ export function EditorWorkspace() {
 
     return [
       ...tool("present", "See", TOOL_ICONS.graph, "The note as slides, full screen"),
+      ...tool(
+        "map-of-contents",
+        "See",
+        TOOL_ICONS.graph,
+        "Links to every note linked with this one or sharing its tags",
+      ),
       ...tool(
         "explain-back",
         "Study",
