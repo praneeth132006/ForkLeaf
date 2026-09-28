@@ -190,7 +190,14 @@ import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { StorageBlocked } from "@/components/StorageBlocked";
 import { BootScreen } from "@/components/BootScreen";
 import { LocalOnlyBanner } from "@/components/LocalOnlyBanner";
-import { fetchSession, readNotebookAt, signOut } from "@/lib/gateway";
+import {
+  fetchSession,
+  listNoteHistory,
+  readNoteAtCommit,
+  readNotebookAt,
+  signOut,
+} from "@/lib/gateway";
+import { ThenAndNowDialog } from "@/components/ThenAndNowDialog";
 import { postHogReset } from "@/lib/posthog";
 import {
   assetPathFor,
@@ -536,6 +543,7 @@ export function EditorWorkspace() {
     | "document-versions"
     | "experiment-compare"
     | "borrow"
+    | "then-and-now"
     | null
   >(null);
   /**
@@ -3403,6 +3411,16 @@ export function EditorWorkspace() {
         keywords: "flashcards cards spaced repetition review study learn quiz anki memorise",
         run: () => openFlashcards(),
       });
+      if (note && !sealed && workspace && !workspace.isLocal) {
+        list.push({
+          id: "then-and-now",
+          label: "This note, then and now",
+          group: "Notes",
+          hint: "The note as it was a month, six months or a year ago, beside today's",
+          keywords: "year ago then now history compare past anniversary growth changed evolve",
+          run: () => setDialog("then-and-now"),
+        });
+      }
       if (note && !sealed && links.ready) {
         list.push({
           id: "map-of-contents",
@@ -3810,6 +3828,12 @@ export function EditorWorkspace() {
 
     return [
       ...tool("present", "See", TOOL_ICONS.graph, "The note as slides, full screen"),
+      ...tool(
+        "then-and-now",
+        "See",
+        TOOL_ICONS.graph,
+        "The note a month, half a year or a year ago",
+      ),
       ...tool(
         "map-of-contents",
         "See",
@@ -5043,6 +5067,16 @@ export function EditorWorkspace() {
       )}
 
       {prompt && <PromptDialog request={prompt} onClose={() => setPrompt(null)} />}
+
+      {openDialog === "then-and-now" && note && workspace && !workspace.isLocal && (
+        <ThenAndNowDialog
+          title={title}
+          now={serializeDocument(note.content, note.frontmatter)}
+          onClose={() => setDialog(null)}
+          loadHistory={() => listNoteHistory(workspace.repo, note.path, 100)}
+          readAt={(sha) => readNoteAtCommit(workspace.repo, note.path, sha)}
+        />
+      )}
 
       {presenting && note && !sealed && (
         <PresentMode

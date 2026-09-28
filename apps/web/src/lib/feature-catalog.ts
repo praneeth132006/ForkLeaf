@@ -271,6 +271,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "then-and-now",
+        title: "Then and now",
+        summary:
+          "The note as it was a month, six months or a year ago, beside today's — words, paragraphs added and let go, and the diff. Read from the repository's own history.",
+        how: "⌘K → This note, then and now",
+        tags: ["new", "github"],
+      },
+      {
         id: "map-of-contents",
         title: "Map of contents",
         summary:
