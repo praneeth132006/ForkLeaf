@@ -88,6 +88,7 @@ import { DeletedNotesDialog } from "@/components/DeletedNotesDialog";
 import { GraphDialog } from "@/components/GraphDialog";
 import { FolderViewsDialog, type FolderView } from "@/components/FolderViewsDialog";
 import { FlashcardsDialog } from "@/components/FlashcardsDialog";
+import { PresentMode } from "@/components/PresentMode";
 import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
 import { cardsInNotes, useDueCount } from "@/lib/flashcard-due";
 import { cardsRequest, readCardReply } from "@/lib/ai-cards";
@@ -1533,6 +1534,8 @@ export function EditorWorkspace() {
    * the overview, because the person pressing it already knows what they want.
    */
   const [flashcardsStart, setFlashcardsStart] = useState<"all" | string | null>(null);
+  /** The open note as slides, full screen. */
+  const [presenting, setPresenting] = useState(false);
   const openFlashcards = useCallback((start: "all" | string | null = null) => {
     setFlashcardsStart(start);
     setDialog("flashcards");
@@ -3368,6 +3371,16 @@ export function EditorWorkspace() {
         keywords: "flashcards cards spaced repetition review study learn quiz anki memorise",
         run: () => openFlashcards(),
       });
+      if (note && !sealed) {
+        list.push({
+          id: "present",
+          label: "Present this note",
+          group: "Notes",
+          hint: "Full screen, a slide per section — or per --- if the note has them",
+          keywords: "present presentation slides slideshow deck talk fullscreen projector marp",
+          run: () => setPresenting(true),
+        });
+      }
       list.push({
         id: "flashcards-study",
         label: "Study flashcards now",
@@ -3752,6 +3765,7 @@ export function EditorWorkspace() {
       );
 
     return [
+      ...tool("present", "See", TOOL_ICONS.graph, "The note as slides, full screen"),
       ...tool(
         "explain-back",
         "Study",
@@ -4979,6 +4993,16 @@ export function EditorWorkspace() {
       )}
 
       {prompt && <PromptDialog request={prompt} onClose={() => setPrompt(null)} />}
+
+      {presenting && note && !sealed && (
+        <PresentMode
+          title={title}
+          markdown={note.content}
+          onClose={() => setPresenting(false)}
+          resolveImageSrc={images.resolve}
+          links={linkBridge}
+        />
+      )}
 
       {paletteOpen && (
         <CommandPalette

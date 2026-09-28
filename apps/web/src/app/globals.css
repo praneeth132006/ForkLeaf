@@ -1355,3 +1355,9 @@ mark.fl-hl-orange {
     animation: none !important;
   }
 }
+
+/* Present mode: the note's own type, sized for a room rather than a desk. */
+.fl-slide .fl-prose {
+  font-size: clamp(1.1rem, 1.8vw, 1.9rem);
+  line-height: 1.5;
+}

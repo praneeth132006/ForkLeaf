@@ -271,6 +271,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "present",
+        title: "Present a note",
+        summary:
+          "The open note full screen, a slide per section — or per --- line if it has them — with diagrams and maths as they are in the note.",
+        how: "⌘K → Present this note",
+        tags: ["new"],
+      },
+      {
         id: "math",
         title: "Maths",
         summary:
