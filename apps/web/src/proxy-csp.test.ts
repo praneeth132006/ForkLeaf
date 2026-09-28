@@ -16,6 +16,13 @@ describe("the content security policy and PostHog", () => {
     expect(directive(csp, "connect-src")).toContain("https://*.i.posthog.com");
   });
 
+  it("lets Google Analytics hits that go to google.com through, and nothing else there", () => {
+    const sources = directive(policy("abc", false, undefined), "connect-src");
+    expect(sources).toContain("https://www.google.com/g/collect");
+    expect(sources).not.toContain("https://www.google.com");
+    expect(sources).not.toContain("https://*.google.com");
+  });
+
   it("lets prerendered pages load PostHog's config, where there is no strict-dynamic", () => {
     expect(directive(policy(null, false, undefined), "script-src")).toContain(
       "https://*.i.posthog.com",

@@ -1,6 +1,7 @@
 "use client";
 
-import { getAnalytics, isSupported, logEvent, type Analytics } from "firebase/analytics";
+import { initializeAnalytics, isSupported, logEvent, type Analytics } from "firebase/analytics";
+import { publicUrl } from "@/lib/analytics-privacy";
 import { firebaseApp } from "./client";
 import { postHogCapture } from "@/lib/posthog";
 
@@ -27,7 +28,15 @@ async function analytics(): Promise<Analytics | null> {
     if (!app) return null;
     if (!(await isSupported())) return null;
 
-    analyticsInstance = getAnalytics(app);
+    // No automatic page view: it would send the full address, notes and all,
+    // before anything could reduce it. The app sends its own, reduced.
+    analyticsInstance = initializeAnalytics(app, {
+      config: {
+        send_page_view: false,
+        page_location: publicUrl(window.location.href),
+        page_referrer: publicUrl(document.referrer),
+      },
+    });
     return analyticsInstance;
   })();
 
@@ -53,14 +62,21 @@ export function track(event: ForkLeafEvent, params?: Record<string, unknown>): v
   // Both sinks from the one call. A second analytics system with its own call
   // sites would drift from this one within a month, and half the events would
   // end up in only one of them.
-  postHogCapture(event, params);
+  // Every event carries the address it happened at unless told otherwise;
+  // this is the reduced one, so no note name goes with it.
+  const reduced = {
+    ...params,
+    page_location: publicUrl(typeof window === "undefined" ? undefined : window.location.href),
+    page_referrer: publicUrl(typeof document === "undefined" ? undefined : document.referrer),
+  };
+  postHogCapture(event, reduced);
 
   void analytics()
     .then((instance) => {
       // Widened to `string`: `logEvent` is overloaded per reserved event name
       // (`page_view` has its own signature), and TypeScript cannot resolve an
       // overload against a union of names.
-      if (instance) logEvent(instance, event as string, params);
+      if (instance) logEvent(instance, event as string, reduced);
     })
     .catch(() => {
       /* Analytics is best-effort by design. */

@@ -181,6 +181,9 @@ export function policy(
       "https://*.googleapis.com",
       "https://*.google-analytics.com",
       "https://*.analytics.google.com",
+      // Google's tag sends some hits to google.com itself; exactly that path,
+      // not the whole domain.
+      "https://www.google.com/g/collect",
       "https://*.firebaseio.com",
       "wss://*.firebaseio.com",
       postHog,

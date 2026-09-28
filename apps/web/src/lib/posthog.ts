@@ -1,6 +1,7 @@
 "use client";
 
 import posthog from "posthog-js";
+import { scrubEvent } from "@/lib/analytics-privacy";
 
 /**
  * PostHog, wrapped so call sites never have to care whether it is configured.
@@ -55,6 +56,10 @@ export function startPostHog(): void {
     mask_all_text: true,
     mask_all_element_attributes: true,
     persistence: "localStorage+cookie",
+    // Every address PostHog attaches by itself — the current page, the
+    // referrer, the landing page — reduced to origin, path and campaign tags,
+    // so the notes named in ForkLeaf's own query strings never leave.
+    before_send: (event) => scrubEvent(event),
   });
 }
 

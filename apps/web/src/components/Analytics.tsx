@@ -4,6 +4,7 @@ import { Suspense, useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { track } from "@/lib/firebase/analytics";
 import { postHogIdentify, startPostHog } from "@/lib/posthog";
+import { publicQuery } from "@/lib/analytics-privacy";
 
 /**
  * Reports page views to Firebase Analytics.
@@ -38,10 +39,9 @@ function PageViews() {
   useEffect(() => {
     track("page_view", {
       page_path: pathname,
-      page_location: typeof window === "undefined" ? undefined : window.location.href,
-      // Kept so campaign links can be attributed; note that ForkLeaf never puts
-      // anything about the user or their notes in a URL.
-      page_query: searchParams.toString() || undefined,
+      // Campaign tags only. ForkLeaf's own query strings name notes — the
+      // editor is ?note=<path> — and those must not reach analytics.
+      page_query: publicQuery(searchParams.toString()),
     });
   }, [pathname, searchParams]);
 
