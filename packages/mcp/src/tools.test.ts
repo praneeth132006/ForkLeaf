@@ -131,6 +131,20 @@ describe("the notebook tools", () => {
       ]);
     });
 
+    it("treats a note encrypted for people (v2) exactly like any encrypted note", async () => {
+      const shared =
+        "<!-- forkleaf:encrypted v2 -->\n\nThis note is encrypted for alice, bob.\n\n```forkleaf-shared\n{}\niv=AAAA\nAAAA\n```\n";
+      const { run, notebook } = setup({ ...NOTES, "team/plan.md": shared });
+      const read = await run("read_note", { path: "team/plan.md" });
+      expect(body(read)).toContain("is encrypted");
+      expect(body(read)).not.toContain("forkleaf-shared");
+      expect(body(await run("search_notes", { query: "alice" }))).not.toContain("team/plan.md");
+      await expect(run("write_note", { path: "team/plan.md", content: "oops" })).rejects.toThrow(
+        /encrypted/,
+      );
+      expect(notebook.files.get("team/plan.md")).toBe(shared);
+    });
+
     it("never overwrites an encrypted note it cannot read", async () => {
       const { run, notebook } = setup(NOTES);
       await expect(

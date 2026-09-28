@@ -99,6 +99,24 @@ import { reversals, withReason, type Reversal } from "@/lib/changes-of-mind";
 import { ChangesOfMindDialog } from "@/components/ChangesOfMindDialog";
 import { LineageDialog } from "@/components/LineageDialog";
 import { SwitchDialog } from "@/components/SwitchDialog";
+import { ShareEncryptDialog } from "@/components/ShareEncryptDialog";
+import {
+  ENCRYPTED_FOLDERS_PATH,
+  KEYS_FOLDER,
+  folderRuleFor,
+  formatFolderRules,
+  isShared,
+  keyPath,
+  openKey,
+  parseFolderRules,
+  parseKeyFile,
+  pin,
+  readersOf,
+  sealShared,
+  validName,
+  type Identity,
+  type KeyFile,
+} from "@/lib/shared-encryption";
 import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
 import { cardsInNotes, useDueCount } from "@/lib/flashcard-due";
 import { cardsRequest, readCardReply } from "@/lib/ai-cards";
@@ -557,6 +575,7 @@ export function EditorWorkspace() {
     | "changes-of-mind"
     | "lineage"
     | "switch"
+    | "encrypt-for-people"
     | null
   >(null);
   /**
@@ -610,6 +629,14 @@ export function EditorWorkspace() {
 
   /** Encrypted notes opened in this tab. See `useEncryptedNotes`. */
   const encrypted = useEncryptedNotes(notebook.writeDocument);
+
+  /**
+   * Encryption for people: this person's key, open in memory for the tab
+   * (never written anywhere open), and the folders whose notes are to be
+   * encrypted for a list of readers.
+   */
+  const [identity, setIdentity] = useState<Identity | null>(null);
+  const [encryptedFolders, setEncryptedFolders] = useState<Record<string, string[]>>({});
   const sealed = note ? isEncrypted(note.content) : false;
   const opened = encrypted.openedFor(note);
 
@@ -633,6 +660,37 @@ export function EditorWorkspace() {
    */
   const currentFolder = notePath ? dirname(notePath) : "";
   const takenPaths = useMemo(() => flattenTree(notebook.tree), [notebook.tree]);
+
+  /** Whose key this is: the GitHub login, or "me" in a notebook on this device. */
+  const keyName = (user?.login ?? "me").toLowerCase();
+  /** Everyone with a key in the repository. */
+  const knownKeys = useMemo(
+    () =>
+      takenPaths
+        .filter((path) => path.startsWith(`${KEYS_FOLDER}/`) && path.endsWith(".json"))
+        .map((path) => path.slice(KEYS_FOLDER.length + 1, -".json".length))
+        .filter(validName),
+    [takenPaths],
+  );
+  const loadKey = useCallback((name: string) => notebook.readNote(keyPath(name)), [notebook]);
+  const saveMyKey = useCallback(
+    (name: string, file: KeyFile) =>
+      notebook.writeFile(keyPath(name), `${JSON.stringify(file, null, 2)}\n`),
+    [notebook],
+  );
+  // Which folders are encrypted for whom, read once the notebook is there.
+  useEffect(() => {
+    if (!notebook.ready || !takenPaths.includes(ENCRYPTED_FOLDERS_PATH)) return;
+    let live = true;
+    notebook.readNote(ENCRYPTED_FOLDERS_PATH).then(
+      (text) => live && setEncryptedFolders(parseFolderRules(text)),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notebook.ready, takenPaths.includes(ENCRYPTED_FOLDERS_PATH)]);
 
   // Which folders the sidebar should offer to put back under the sort mode.
   const manualFolders = useMemo(
@@ -2999,11 +3057,34 @@ export function EditorWorkspace() {
     [note],
   );
 
-  /** Each note opened here is a visit, for the dashboard's "fading from memory". */
+  /**
+   * A note shared with you opens by itself once your key is open in this tab —
+   * the passphrase is for the key, not for each note.
+   */
+  const [sharedProblem, setSharedProblem] = useState<string | null>(null);
   useEffect(() => {
-    if (!workspace || !note) return;
-    recordVisit(`${workspace.id}::${note.path}`, dateStamp(new Date()));
-  }, [workspace, note?.path]);
+    if (!identity || !note || !sealed || opened || !isShared(note.content)) return;
+    let live = true;
+    encrypted.openFor(note.path, note.content, identity).then(
+      () => live && setSharedProblem(null),
+      (error: unknown) =>
+        live &&
+        setSharedProblem(error instanceof Error ? error.message : "It could not be opened."),
+    );
+    return () => {
+      live = false;
+    };
+  }, [identity, note, sealed, opened, encrypted]);
+
+  /** A plain note in a folder encrypted for people: offered encryption, not forced. */
+  const folderRule = note && !sealed ? folderRuleFor(note.path, encryptedFolders) : null;
+
+  /** Each note opened here is a visit, for the dashboard's "fading from memory". */
+  const visitedPath = note?.path ?? null;
+  useEffect(() => {
+    if (!workspace || !visitedPath) return;
+    recordVisit(`${workspace.id}::${visitedPath}`, dateStamp(new Date()));
+  }, [workspace, visitedPath]);
 
   /**
    * `?then=explain` from the dashboard: open the note straight into Explain it
@@ -3663,6 +3744,16 @@ export function EditorWorkspace() {
           hint: "Only its passphrase can read it — here, on GitHub, anywhere",
           keywords: "encrypt password passphrase private secret secure lock hide confidential",
           run: () => setDialog("encrypt"),
+        });
+      }
+      if (note && (!sealed || opened)) {
+        list.push({
+          id: "encrypt-for-people",
+          label: "Encrypt for people…",
+          group: "Notes",
+          hint: "Readable by the people you choose, each with their own key — this note or its whole folder",
+          keywords: "encrypt share people team key public private recipients folder secure",
+          run: () => setDialog("encrypt-for-people"),
         });
       }
       if (note && sealed && opened) {
@@ -4802,14 +4893,60 @@ export function EditorWorkspace() {
               />
             )}
 
+            {/* ── Encryption for people: a plain note in an encrypted folder,
+                or a shared note this key cannot open. ─────────────────── */}
+            {folderRule && (
+              <div className="flex flex-wrap items-center gap-2 border-b border-[var(--fl-border)] bg-[var(--fl-accent-soft)] px-4 py-2 text-[12.5px] text-[var(--fl-text)]">
+                <span className="flex-1">
+                  Notes in {folderRule.folder}/ are encrypted for {folderRule.readers.join(", ")}.
+                  This one is not yet.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDialog("encrypt-for-people")}
+                  className="rounded-lg bg-[var(--fl-accent)] px-2.5 py-1 font-medium text-[var(--fl-accent-contrast)]"
+                >
+                  Encrypt it too
+                </button>
+              </div>
+            )}
+            {sharedProblem && note && sealed && !opened && (
+              <p
+                role="alert"
+                className="border-b border-[var(--fl-border)] px-4 py-2 text-[12.5px] text-[var(--fl-danger)]"
+              >
+                {sharedProblem}
+              </p>
+            )}
+
             {/* ── Canvas ───────────────────────────────────────────────── */}
             <div ref={canvasRef} className="flex min-h-0 flex-1 flex-col">
               {note && sealed && !opened ? (
-                <UnlockPanel
-                  key={note.id}
-                  noteTitle={note.path}
-                  onUnlock={(passphrase) => encrypted.open(note.path, note.content, passphrase)}
-                />
+                isShared(note.content) ? (
+                  <UnlockPanel
+                    key={note.id}
+                    noteTitle={note.path}
+                    sharedWith={{ readers: readersOf(note.content), keyName }}
+                    onUnlock={async (passphrase) => {
+                      const text = await loadKey(keyName);
+                      if (!text) {
+                        throw new Error(
+                          `There is no key for ${keyName} in this repository, so no note can be encrypted for you here yet.`,
+                        );
+                      }
+                      const opened =
+                        identity ?? (await openKey(await parseKeyFile(text), passphrase));
+                      setIdentity(opened);
+                      await encrypted.openFor(note.path, note.content, opened);
+                    }}
+                  />
+                ) : (
+                  <UnlockPanel
+                    key={note.id}
+                    noteTitle={note.path}
+                    onUnlock={(passphrase) => encrypted.open(note.path, note.content, passphrase)}
+                  />
+                )
               ) : note && explaining ? (
                 <ExplainBack
                   key={note.id}
@@ -5242,6 +5379,66 @@ export function EditorWorkspace() {
             notebook.saveNote(withReason(latest.content, reversal, reason, dateStamp(new Date())));
             setNotice("Reason recorded under “Why I changed my mind”.");
           }}
+        />
+      )}
+
+      {openDialog === "encrypt-for-people" && note && (
+        <ShareEncryptDialog
+          me={keyName}
+          known={knownKeys}
+          identity={identity}
+          loadKey={loadKey}
+          saveKey={saveMyKey}
+          onIdentity={setIdentity}
+          noteTitle={title}
+          folder={note.path.includes("/") ? note.path.slice(0, note.path.lastIndexOf("/")) : null}
+          initialReaders={folderRule?.readers ?? []}
+          onEncrypt={async (readers, scope) => {
+            pin(readers);
+            const current = opened ?? {
+              body: note.content,
+              frontmatter: note.frontmatter,
+            };
+            if (
+              !(await encrypted.encryptFor(note.path, current.body, current.frontmatter, readers))
+            ) {
+              throw new Error("The note could not be saved.");
+            }
+            if (scope === "note") {
+              setNotice(`Encrypted for ${readers.map((reader) => reader.name).join(", ")}.`);
+              return "note";
+            }
+            const folder = note.path.slice(0, note.path.lastIndexOf("/"));
+            const rules = {
+              ...encryptedFolders,
+              [folder]: readers.map((reader) => reader.name),
+            };
+            await notebook.writeFile(ENCRYPTED_FOLDERS_PATH, formatFolderRules(rules));
+            setEncryptedFolders(rules);
+            let count = 1;
+            for (const entry of await notebook.allNotes()) {
+              if (
+                entry.path === note.path ||
+                !entry.path.startsWith(`${folder}/`) ||
+                !isMarkdown(entry.path) ||
+                isEncrypted(entry.content)
+              ) {
+                continue;
+              }
+              const { envelope } = await sealShared(
+                serializeDocument(entry.content, entry.frontmatter),
+                readers,
+              );
+              if (await notebook.writeDocument(entry.path, envelope, {})) count += 1;
+            }
+            setNotice(
+              `Encrypted ${count} ${count === 1 ? "note" : "notes"} in ${folder}/ for ${readers
+                .map((reader) => reader.name)
+                .join(", ")}. New notes there will offer the same.`,
+            );
+            return "folder";
+          }}
+          onClose={() => setDialog(null)}
         />
       )}
 

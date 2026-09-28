@@ -44,7 +44,19 @@ export interface Envelope {
   ciphertext: Uint8Array;
 }
 
+/**
+ * Any encrypted note: sealed under a passphrase (v1) or for people (v2).
+ *
+ * Every version, not only v1: a note the app did not recognise as sealed
+ * would be indexed, searched and sent to an assistant as if it were prose —
+ * and, worse, written over as plain text by something that did not know.
+ */
 export function isEncrypted(content: string): boolean {
+  return /^<!-- forkleaf:encrypted v\d+ -->/.test(content.trimStart());
+}
+
+/** Sealed under a passphrase, the kind `unlock` opens. */
+export function isPassphraseSealed(content: string): boolean {
   return content.trimStart().startsWith(ENCRYPTED_MARKER);
 }
 
@@ -99,7 +111,7 @@ export function formatEnvelope(envelope: Envelope): string {
 }
 
 export function parseEnvelope(content: string): Envelope {
-  if (!isEncrypted(content)) throw new NotEncryptedError();
+  if (!isPassphraseSealed(content)) throw new NotEncryptedError();
   const block = new RegExp("```" + FENCE + "\\n([^\\n]*)\\n([\\s\\S]*?)\\n```").exec(content);
   if (!block) throw new NotEncryptedError();
 

@@ -95,6 +95,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "encrypt-for-people",
+        title: "Encrypt for people",
+        summary:
+          "Seal a note — or a whole folder — for the people you choose, each opening it with their own key (P-256 ECDH, AES-256-GCM). A key that changes is caught before anything is sealed for it.",
+        how: "⌘K → Encrypt for people…",
+        tags: ["new"],
+      },
+      {
         id: "voice",
         title: "Voice notes",
         summary:

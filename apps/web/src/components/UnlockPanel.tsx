@@ -15,9 +15,11 @@ export interface UnlockPanelProps {
   noteTitle: string;
   /** Resolves when the note is open; rejects with a message to show. */
   onUnlock: (passphrase: string) => Promise<void>;
+  /** For a note encrypted for people: who it is for, and whose key opens it. */
+  sharedWith?: { readers: readonly string[]; keyName: string } | null;
 }
 
-export function UnlockPanel({ noteTitle, onUnlock }: UnlockPanelProps) {
+export function UnlockPanel({ noteTitle, onUnlock, sharedWith = null }: UnlockPanelProps) {
   const [passphrase, setPassphrase] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -57,12 +59,21 @@ export function UnlockPanel({ noteTitle, onUnlock }: UnlockPanelProps) {
           <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
         </svg>
         <h2 className="mt-3 text-[16px] font-semibold text-[var(--fl-text)]">
-          This note is encrypted
+          {sharedWith ? `Encrypted for ${sharedWith.readers.join(", ")}` : "This note is encrypted"}
         </h2>
-        <p className="mt-1 text-[13px] text-[var(--fl-muted)]">
-          Enter the passphrase for <span className="text-[var(--fl-text)]">{noteTitle}</span> to
-          read and edit it. It stays open until you close this tab.
-        </p>
+        {sharedWith ? (
+          <p className="mt-1 text-[13px] text-[var(--fl-muted)]">
+            Enter the passphrase for your key,{" "}
+            <span className="text-[var(--fl-text)]">{sharedWith.keyName}</span>, to read and edit{" "}
+            <span className="text-[var(--fl-text)]">{noteTitle}</span>. Your key stays open until
+            you close this tab, for every note shared with you.
+          </p>
+        ) : (
+          <p className="mt-1 text-[13px] text-[var(--fl-muted)]">
+            Enter the passphrase for <span className="text-[var(--fl-text)]">{noteTitle}</span> to
+            read and edit it. It stays open until you close this tab.
+          </p>
+        )}
 
         <input
           type="password"

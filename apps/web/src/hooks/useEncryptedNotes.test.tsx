@@ -129,3 +129,42 @@ describe("useEncryptedNotes", () => {
     expect(hook.result.current.openedFor(null)).toBeUndefined();
   });
 });
+
+describe("useEncryptedNotes — encrypted for people", () => {
+  it("seals for readers, reseals on save, and another reader opens it", async () => {
+    const { createKey, isShared, openShared } = await import("@/lib/shared-encryption");
+    const alice = await createKey("alice", "alice passphrase long", FAST);
+    const bob = await createKey("bob", "bob passphrase is long", FAST);
+    const readers = [alice, bob].map((made) => ({
+      name: made.file.name,
+      fingerprint: made.file.fingerprint,
+      publicKey: made.file.publicKey,
+    }));
+    const { hook, files } = setup();
+
+    await act(() =>
+      hook.result.current.encryptFor("team/plan.md", "# Plan\n\nv1", { tags: ["x"] }, readers),
+    );
+    const first = files.get("team/plan.md")!;
+    expect(isShared(first.content)).toBe(true);
+    expect(isEncrypted(first.content)).toBe(true);
+    expect(first.frontmatter).toEqual({});
+
+    vi.useFakeTimers();
+    act(() => hook.result.current.save("team/plan.md", "# Plan\n\nv2"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SEAL_DELAY_MS + 10);
+    });
+    vi.useRealTimers();
+    const second = files.get("team/plan.md")!.content;
+    expect(second).not.toBe(first.content);
+    expect(second).not.toContain("# Plan");
+    expect((await openShared(second, bob.identity)).plaintext).toContain("# Plan\n\nv2");
+
+    const other = setup();
+    await act(() => other.hook.result.current.openFor("team/plan.md", second, bob.identity));
+    expect(
+      other.hook.result.current.openedFor({ path: "team/plan.md", content: second })?.body.trim(),
+    ).toBe("# Plan\n\nv2");
+  });
+});

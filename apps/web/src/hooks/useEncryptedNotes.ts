@@ -11,6 +11,15 @@ import {
   unlock,
   type SealSession,
 } from "@/lib/encryption";
+import {
+  isShared,
+  openShared,
+  resealShared,
+  sealShared,
+  type Identity,
+  type Reader,
+  type SharedSession,
+} from "@/lib/shared-encryption";
 
 /**
  * Encrypted notes, opened for as long as this tab is.
@@ -26,7 +35,8 @@ import {
  */
 
 export interface OpenedNote {
-  session: SealSession;
+  /** A passphrase's key, or the note key of a note encrypted for people. */
+  session: SealSession | SharedSession;
   body: string;
   frontmatter: NoteFrontmatter;
   /** The sealed versions this tab wrote, newest last. */
@@ -94,7 +104,11 @@ export function useEncryptedNotes(
       timers.current.delete(path);
       const entry = latest.current.get(path);
       if (!entry) return false;
-      const envelope = await seal(entry.session, serializeDocument(entry.body, entry.frontmatter));
+      const text = serializeDocument(entry.body, entry.frontmatter);
+      const envelope =
+        "kind" in entry.session && entry.session.kind === "shared"
+          ? await resealShared(entry.session, text)
+          : await seal(entry.session as SealSession, text);
       const now = latest.current.get(path);
       if (now) {
         remember(path, { ...now, envelopes: [...now.envelopes, envelope].slice(-KEEP_ENVELOPES) });
@@ -130,6 +144,39 @@ export function useEncryptedNotes(
         frontmatter: parsed.frontmatter,
         envelopes: [content],
       });
+    },
+    [remember],
+  );
+
+  /** Opens a note encrypted for people, with this device's open key. */
+  const openFor = useCallback(
+    async (path: string, content: string, identity: Identity) => {
+      if (!isShared(content)) throw new Error("This note is not encrypted for people.");
+      const { plaintext, session } = await openShared(content, identity);
+      const parsed = parseDocument(plaintext);
+      remember(path, {
+        session,
+        body: parsed.content,
+        frontmatter: parsed.frontmatter,
+        envelopes: [content],
+      });
+    },
+    [remember],
+  );
+
+  /** Seals a note — plain, or already open — for a list of people, and writes it. */
+  const encryptFor = useCallback(
+    async (
+      path: string,
+      body: string,
+      frontmatter: NoteFrontmatter,
+      readers: readonly Reader[],
+    ) => {
+      const { envelope, session } = await sealShared(serializeDocument(body, frontmatter), readers);
+      remember(path, { session, body, frontmatter, envelopes: [envelope] });
+      const written = await write.current(path, envelope, {});
+      if (!written) remember(path, null);
+      return written;
     },
     [remember],
   );
@@ -186,7 +233,7 @@ export function useEncryptedNotes(
   }, [flush]);
 
   return useMemo(
-    () => ({ openedFor, save, open, lock, encrypt, decrypt, flush }),
-    [openedFor, save, open, lock, encrypt, decrypt, flush],
+    () => ({ openedFor, save, open, openFor, lock, encrypt, encryptFor, decrypt, flush }),
+    [openedFor, save, open, openFor, lock, encrypt, encryptFor, decrypt, flush],
   );
 }

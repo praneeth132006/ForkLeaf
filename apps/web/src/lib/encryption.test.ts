@@ -128,3 +128,13 @@ describe("passphraseAdvice", () => {
     expect(passphraseAdvice("river piano lantern oak")).toBeNull();
   });
 });
+
+describe("isEncrypted — every version", () => {
+  it("recognises passphrase (v1) and people (v2) notes, and nothing else", async () => {
+    const { isEncrypted, isPassphraseSealed } = await import("./encryption");
+    expect(isEncrypted("<!-- forkleaf:encrypted v1 -->\n")).toBe(true);
+    expect(isEncrypted("  <!-- forkleaf:encrypted v2 -->\n")).toBe(true);
+    expect(isEncrypted("A note about <!-- forkleaf:encrypted v1 -->")).toBe(false);
+    expect(isPassphraseSealed("<!-- forkleaf:encrypted v2 -->")).toBe(false);
+  });
+});

@@ -30,8 +30,13 @@ export const INSTRUCTIONS =
   "for quick captures. Every write is a commit in the user's repository.";
 
 /** The marker ForkLeaf writes at the top of an encrypted note. */
-const ENCRYPTED_MARKER = "<!-- forkleaf:encrypted v1 -->";
-const isEncrypted = (content: string) => content.trimStart().startsWith(ENCRYPTED_MARKER);
+/**
+ * Every version of encrypted note — under a passphrase (v1) or for people
+ * (v2). An assistant must neither read one as prose nor write over it, and a
+ * check for v1 alone would have let it do both to a v2 note.
+ */
+const isEncrypted = (content: string) =>
+  /^<!-- forkleaf:encrypted v\d+ -->/.test(content.trimStart());
 
 const MAX_NOTE_CHARS = 1_000_000;
 const MAX_LISTED = 500;
