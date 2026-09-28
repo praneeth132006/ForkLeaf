@@ -26,3 +26,26 @@ describe("maths", () => {
     expect(markdownToHtml("`$HOME and $PATH`")).not.toContain("katex");
   });
 });
+
+describe("maths cannot reach outside the formula", () => {
+  it.each([
+    ["\\htmlData{onclick=alert(1)}{x}", /data-onclick|onclick=/],
+    ["\\htmlId{evil}{x}", /id="evil"/],
+    ["\\htmlClass{fl-external}{x}", /class="[^"]*fl-external/],
+    ["\\htmlStyle{position:fixed}{x}", /position:fixed/],
+    ["\\includegraphics{https://evil.example/x.png}", /<img/],
+    ["\\url{javascript:alert(1)}", /href=/],
+  ])("renders %s inert", (tex, forbidden) => {
+    // The TeX source is kept, escaped, inside <annotation>; that is text, not markup.
+    const html = markdownToHtml(`$${tex}$`).replace(/<annotation[\s\S]*?<\/annotation>/g, "");
+    expect(html).not.toMatch(forbidden);
+  });
+
+  it("bounds macro expansion rather than hanging", () => {
+    const bomb =
+      "\\def\\a{\\b\\b}\\def\\b{\\c\\c}\\def\\c{\\d\\d}\\def\\d{xxxxxxxxxx}" + "\\a".repeat(200);
+    const started = Date.now();
+    markdownToHtml(`$$${bomb}$$`);
+    expect(Date.now() - started).toBeLessThan(3000);
+  });
+});

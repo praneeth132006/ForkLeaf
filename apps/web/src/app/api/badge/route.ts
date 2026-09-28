@@ -45,7 +45,10 @@ const BRIEFLY = "public, max-age=60, s-maxage=300";
 
 export async function GET(request: NextRequest) {
   try {
-    enforceRateLimit(request, { name: "badge", limit: 120, windowMs: 60_000 });
+    // Low on purpose: this route is open to anyone, and one request can read
+    // a tree and up to MAX_NOTES files. A badge in a README is served from the
+    // CDN cache; a client asking thirty times a minute is not rendering one.
+    enforceRateLimit(request, { name: "badge", limit: 30, windowMs: 60_000 });
 
     const params = new URL(request.url).searchParams;
     const owner = assertName((params.get("owner") ?? "").trim(), "repository owner");

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TimeTravelPanel } from "./TimeTravelPanel";
 import type { RevisionTexts } from "@/hooks/useRevisionTexts";
@@ -30,14 +30,14 @@ function commit(sha: string, day: number, extra: Partial<NoteCommitDto> = {}): N
 
 /** A stand-in cache holding text that is already there, with spies on the rest. */
 function cache(texts: Record<string, string | null>): RevisionTexts & {
-  request: ReturnType<typeof vi.fn>;
-  prefetch: ReturnType<typeof vi.fn>;
+  request: Mock<(shas: readonly string[]) => void>;
+  prefetch: Mock<(shas: readonly string[]) => void>;
 } {
   return {
     texts,
     has: (sha: string) => sha in texts,
-    request: vi.fn(),
-    prefetch: vi.fn(),
+    request: vi.fn<(shas: readonly string[]) => void>(),
+    prefetch: vi.fn<(shas: readonly string[]) => void>(),
   };
 }
 

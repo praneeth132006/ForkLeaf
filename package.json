@@ -30,7 +30,7 @@
     "react-dom": "19.2.8",
     "turbo": "^2.10.10",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.11"
   },
   "packageManager": "pnpm@9.0.0",
   "engines": {
@@ -39,7 +39,8 @@
   },
   "pnpm": {
     "overrides": {
-      "sharp": "^0.35.4"
+      "sharp": "^0.35.4",
+      "js-yaml@>=4.0.0 <4.3.2": "^4.3.2"
     }
   }
 }

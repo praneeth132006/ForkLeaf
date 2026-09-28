@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Editor } from "@tiptap/core";
 import { WysiwygEditor, markdownOf } from "./WysiwygEditor";
@@ -19,10 +19,10 @@ const DATA: CourseData = {
   ],
 };
 
-const bridge = (data = DATA): CourseBridge & { open: ReturnType<typeof vi.fn> } => ({
+const bridge = (data = DATA): CourseBridge & { open: Mock<(path: string) => void> } => ({
   folders: vi.fn(async () => ["bio", "chem"]),
   load: vi.fn(async () => data),
-  open: vi.fn(),
+  open: vi.fn<(path: string) => void>(),
   currentFolder: () => "bio",
 });
 

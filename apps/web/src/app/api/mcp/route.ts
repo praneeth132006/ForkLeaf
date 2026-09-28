@@ -26,6 +26,13 @@ export const maxDuration = 60;
 
 const MAX_BODY = 1_000_000;
 
+/**
+ * Messages in one JSON-RPC batch. The rate limit counts requests, so without
+ * this one request could carry thousands of tool calls — each several GitHub
+ * API calls on the owner's quota. Assistants send one message at a time.
+ */
+const MAX_BATCH = 20;
+
 function unauthorized(request: NextRequest, description: string) {
   const origin = appBaseUrl(request).origin;
   return NextResponse.json(
@@ -72,6 +79,13 @@ export async function POST(request: NextRequest) {
     message = JSON.parse(text);
   } catch {
     return noStoreJson(errorResponse(null, -32700, "The request body was not JSON."), 400);
+  }
+
+  if (Array.isArray(message) && (message.length === 0 || message.length > MAX_BATCH)) {
+    return noStoreJson(
+      errorResponse(null, -32600, `A batch must hold between 1 and ${MAX_BATCH} messages.`),
+      400,
+    );
   }
 
   const { target } = access;
