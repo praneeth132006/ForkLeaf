@@ -271,6 +271,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "changes-of-mind",
+        title: "Why I changed my mind",
+        summary:
+          "When an edit reverses what a note said — Postgres became SQLite, should became should not — the header asks why, and the reason goes into the note under its own heading. The part version history cannot keep.",
+        how: "Edit a note → Changed your mind? Say why",
+        tags: ["new"],
+      },
+      {
         id: "echoes",
         title: "Echoes",
         summary:

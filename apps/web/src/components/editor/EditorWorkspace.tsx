@@ -2,6 +2,7 @@
 
 import React, {
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -94,6 +95,8 @@ import { PresentMode } from "@/components/PresentMode";
 import { mapOfContents, withMapOfContents } from "@/lib/map-of-contents";
 import { SCHEDULE_FIELDS, scheduledNote } from "@/lib/scheduled-notes";
 import { recordVisit } from "@/lib/note-memory";
+import { reversals, withReason, type Reversal } from "@/lib/changes-of-mind";
+import { ChangesOfMindDialog } from "@/components/ChangesOfMindDialog";
 import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
 import { cardsInNotes, useDueCount } from "@/lib/flashcard-due";
 import { cardsRequest, readCardReply } from "@/lib/ai-cards";
@@ -549,6 +552,7 @@ export function EditorWorkspace() {
     | "borrow"
     | "then-and-now"
     | "receipts"
+    | "changes-of-mind"
     | null
   >(null);
   /**
@@ -2952,6 +2956,38 @@ export function EditorWorkspace() {
   const [explainingPath, setExplainingPath] = useState<string | null>(null);
   const explaining = note !== null && explainingPath === note.path;
 
+  /**
+   * Changes of mind: each note's text as it was when first opened this
+   * session, compared with its text now. A reversal found between the two is
+   * offered for a reason; recorded or dismissed, it is not offered again.
+   */
+  const [openedAs, setOpenedAs] = useState<ReadonlyMap<string, string>>(new Map());
+  const [settledReversals, setSettledReversals] = useState<ReadonlySet<string>>(new Set());
+  // Set while rendering, the way React stores what an earlier render saw:
+  // the first text of each note, taken once.
+  if (note && !openedAs.has(note.path)) {
+    setOpenedAs(new Map(openedAs).set(note.path, note.content));
+  }
+  const deferredContent = useDeferredValue(note?.content ?? "");
+  const openReversals = useMemo(() => {
+    if (!note || sealed) return [];
+    const baseline = openedAs.get(note.path);
+    if (baseline === undefined || baseline === deferredContent) return [];
+    return reversals(baseline, deferredContent).filter(
+      (each) => !settledReversals.has(`${note.path}\n${each.before}\n${each.after}`),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note?.path, deferredContent, sealed, settledReversals, openedAs]);
+  const settleReversal = useCallback(
+    (reversal: Reversal) => {
+      if (!note) return;
+      setSettledReversals(
+        (current) => new Set([...current, `${note.path}\n${reversal.before}\n${reversal.after}`]),
+      );
+    },
+    [note],
+  );
+
   /** Each note opened here is a visit, for the dashboard's "fading from memory". */
   useEffect(() => {
     if (!workspace || !note) return;
@@ -4421,6 +4457,19 @@ export function EditorWorkspace() {
                   point is to be able to see at a glance whether the thing you
                   are about to type into will accept it. Absent with no note
                   open, since there would be nothing to lock. */}
+                {/* Only when an edit this session reversed what the note said. */}
+                {note && openReversals.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setDialog("changes-of-mind")}
+                    title="An edit reversed what this note said — record why"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-[var(--fl-accent-soft)] px-2.5 py-1 text-[12px] font-medium text-[var(--fl-accent)] hover:bg-[var(--fl-accent)] hover:text-[var(--fl-accent-contrast)]"
+                  >
+                    Changed your mind? Say why
+                    {openReversals.length > 1 ? ` (${openReversals.length})` : ""}
+                  </button>
+                )}
+
                 {/* Only on a note that has cards: one click from reading them
                   to being asked them. */}
                 {note && noteCardCount > 0 && (
@@ -5147,6 +5196,21 @@ export function EditorWorkspace() {
       )}
 
       {prompt && <PromptDialog request={prompt} onClose={() => setPrompt(null)} />}
+
+      {openDialog === "changes-of-mind" && note && (
+        <ChangesOfMindDialog
+          reversals={openReversals}
+          onClose={() => setDialog(null)}
+          onDismiss={settleReversal}
+          onRecord={(reversal, reason) => {
+            const latest = notebook.note;
+            if (!latest || latest.path !== note.path) return;
+            settleReversal(reversal);
+            notebook.saveNote(withReason(latest.content, reversal, reason, dateStamp(new Date())));
+            setNotice("Reason recorded under “Why I changed my mind”.");
+          }}
+        />
+      )}
 
       {openDialog === "receipts" && (
         <ReceiptsDialog
