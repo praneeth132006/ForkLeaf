@@ -404,3 +404,30 @@ describe("FlashcardsDialog — the streak", () => {
     expect(screen.queryByText(/in a row/)).toBeNull();
   });
 });
+
+describe("FlashcardsDialog — Anki", () => {
+  it("imports a plain-text export into a note of its own", async () => {
+    const onImportDeck = vi.fn(async () => "flashcards/spanish.md");
+    open({ onImportDeck });
+    const file = new File(["#deck:Languages::Spanish\nperro\tdog\ngato\tcat"], "export.txt", {
+      type: "text/plain",
+    });
+    fireEvent.change(await screen.findByLabelText("Import a deck from Anki"), {
+      target: { files: [file] },
+    });
+    expect(await screen.findByText("Imported 2 cards from Anki into “Spanish”.")).toBeTruthy();
+    expect(onImportDeck).toHaveBeenCalledWith(
+      "Spanish",
+      "# Spanish\n\nperro :: dog\n\ngato :: cat\n",
+    );
+  });
+
+  it("says how to export from Anki when the file has no cards", async () => {
+    open({ onImportDeck: vi.fn(async () => "x.md") });
+    const file = new File(["nothing here"], "notes.txt", { type: "text/plain" });
+    fireEvent.change(await screen.findByLabelText("Import a deck from Anki"), {
+      target: { files: [file] },
+    });
+    expect(await screen.findByText(/Notes in Plain Text/, { selector: "p" })).toBeTruthy();
+  });
+});

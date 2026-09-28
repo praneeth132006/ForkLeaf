@@ -5211,6 +5211,12 @@ export function EditorWorkspace() {
           autoStart={flashcardsStart}
           ai={cardWriter}
           readLog={() => notebook.readNote(STUDY_LOG_PATH)}
+          onImportDeck={async (name, markdown) => {
+            const path = uniquePath(`flashcards/${slugifyFilename(name) || "anki"}.md`, takenPaths);
+            const written = await notebook.upsertNote(path, () => markdown);
+            if (written === null) throw new Error("The deck could not be saved.");
+            return path;
+          }}
           onReviewed={() =>
             void recordReview(notebook, dateStamp(new Date())).catch(() => undefined)
           }

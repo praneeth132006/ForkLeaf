@@ -24,6 +24,7 @@ import {
 import { dateStamp } from "@/lib/templates";
 import { StudyStreak } from "@/components/StudyStreak";
 import { parseLog, type StudyLog } from "@/lib/study-log";
+import { ankiExport, deckNote, parseAnkiText } from "@/lib/anki";
 
 /**
  * Flashcards: learn what is in your notes, and keep it.
@@ -71,6 +72,11 @@ export interface FlashcardsDialogProps {
   readLog?: () => Promise<string | null>;
   /** Told each time a card is graded, to add it to the study log. */
   onReviewed?: () => void;
+  /**
+   * Makes a note from an imported Anki deck, and says where it went. Absent,
+   * import is not offered.
+   */
+  onImportDeck?: (name: string, markdown: string) => Promise<string>;
   /** Opens the assistant panel, where a model is connected. */
   onConnectAi?: () => void;
   /**
@@ -139,6 +145,7 @@ export function FlashcardsDialog({
   onConnectAi,
   readLog,
   onReviewed,
+  onImportDeck,
   autoStart = null,
   now,
 }: FlashcardsDialogProps) {
@@ -375,6 +382,46 @@ export function FlashcardsDialog({
     setQueue((current) => (chosen === "again" ? [...current.slice(1), card] : current.slice(1)));
 
     save(next);
+  };
+
+  const importAnki = async (file: File) => {
+    if (!onImportDeck) return;
+    setProblem(null);
+    const deck = parseAnkiText(await file.text());
+    const count = deck.cards.length + deck.clozes.length;
+    if (count === 0) {
+      setProblem(
+        `No cards found in ${file.name}. In Anki, use File → Export → "Notes in Plain Text".`,
+      );
+      return;
+    }
+    const name = deck.deck ?? file.name.replace(/\.[^.]+$/, "");
+    setAdding(true);
+    try {
+      await onImportDeck(name, deckNote(name, deck));
+      setNotice(
+        `Imported ${plural(count, "card")} from Anki into “${name}”.` +
+          (deck.skipped > 0 ? ` ${plural(deck.skipped, "line")} could not be read.` : ""),
+      );
+      setReloads((value) => value + 1);
+    } catch (error: unknown) {
+      setProblem(error instanceof Error ? error.message : "The deck could not be saved.");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const exportAnki = (title: string, deckCards: readonly Card[]) => {
+    const text = ankiExport(
+      title,
+      deckCards.filter((each) => each.kind === "basic"),
+    );
+    const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${title.replace(/[\\/:*?"<>|]+/g, "-") || "deck"}.txt`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const add = async (path: string, newCards: NewCard[], done: string) => {
@@ -851,6 +898,25 @@ export function FlashcardsDialog({
                   Add card
                 </button>
               </div>
+              {onImportDeck && (
+                <label className="mt-2 inline-flex cursor-pointer flex-wrap items-center gap-1.5 text-[12px] text-[var(--fl-muted)] hover:text-[var(--fl-text)]">
+                  <input
+                    type="file"
+                    accept=".txt,.tsv,.csv,text/plain,text/csv"
+                    aria-label="Import a deck from Anki"
+                    className="sr-only"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (file) void importAnki(file);
+                    }}
+                  />
+                  <span className="underline decoration-dotted underline-offset-2">
+                    Import a deck from Anki
+                  </span>
+                  <span>(File → Export → Notes in Plain Text)</span>
+                </label>
+              )}
             </form>
 
             {currentNote && (
@@ -1006,6 +1072,15 @@ export function FlashcardsDialog({
                           className="rounded-lg border border-[var(--fl-border)] px-2.5 py-1 text-[12px] text-[var(--fl-text)] hover:bg-[var(--fl-elevated)]"
                         >
                           {deckDue > 0 ? "Study" : "Practise"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => exportAnki(each.title, each.cards)}
+                          aria-label={`Export ${each.title} for Anki`}
+                          title="A file Anki imports: File → Import"
+                          className="rounded-lg px-2 py-1 text-[12px] text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
+                        >
+                          Anki
                         </button>
                         <button
                           type="button"
