@@ -77,6 +77,8 @@ const GRADES: { grade: Grade; label: string; means: string; key: string }[] = [
 ];
 
 const DEFAULT_DECK = "flashcards/Flashcards.md";
+/** How far a card is dragged, in pixels, before letting go grades it. */
+const SWIPE = 80;
 /** Remembered per device: some people always type, some never do. */
 const TYPING_KEY = "forkleaf:flashcards:type-answers";
 
@@ -134,6 +136,8 @@ export function FlashcardsDialog({
   const [typing, setTypingState] = useState(readTyping);
   const [typed, setTyped] = useState("");
   const [verdict, setVerdict] = useState<Verdict | null>(null);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const [drag, setDrag] = useState(0);
   const setTyping = (on: boolean) => {
     setTypingState(on);
     try {
@@ -424,7 +428,48 @@ export function FlashcardsDialog({
                   </button>
                 </p>
 
-                <div className="rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-6 text-center">
+                {/* The whole card is the button on a phone: tap it to turn it
+                    over, then swipe right if you knew it, left if you did not. */}
+                <div
+                  data-testid="study-card"
+                  onClick={() => {
+                    if (!revealed && !typing) setRevealed(true);
+                  }}
+                  onPointerDown={(event) => {
+                    if (!revealed) return;
+                    swipe.current = { x: event.clientX, y: event.clientY };
+                  }}
+                  onPointerMove={(event) => {
+                    if (!swipe.current) return;
+                    setDrag(event.clientX - swipe.current.x);
+                  }}
+                  onPointerUp={(event) => {
+                    const start = swipe.current;
+                    swipe.current = null;
+                    setDrag(0);
+                    if (!start || !revealed) return;
+                    const dx = event.clientX - start.x;
+                    const dy = event.clientY - start.y;
+                    if (Math.abs(dx) < SWIPE || Math.abs(dy) > Math.abs(dx)) return;
+                    grade(dx > 0 ? "good" : "again");
+                  }}
+                  onPointerCancel={() => {
+                    swipe.current = null;
+                    setDrag(0);
+                  }}
+                  style={
+                    drag
+                      ? { transform: `translateX(${drag}px) rotate(${drag / 40}deg)` }
+                      : undefined
+                  }
+                  className={`touch-pan-y select-none rounded-xl border bg-[var(--fl-surface)] p-6 text-center transition-[border-color] ${
+                    drag > SWIPE
+                      ? "border-[var(--fl-accent)]"
+                      : drag < -SWIPE
+                        ? "border-[var(--fl-danger)]"
+                        : "border-[var(--fl-border)]"
+                  } ${!revealed && !typing ? "cursor-pointer" : ""}`}
+                >
                   <p className="whitespace-pre-line text-[18px] font-medium text-[var(--fl-text)]">
                     {card.question}
                   </p>
@@ -437,7 +482,9 @@ export function FlashcardsDialog({
                     </p>
                   ) : (
                     <p className="mt-4 text-[12px] text-[var(--fl-muted)]">
-                      Try to remember the answer, then show it.
+                      {typing
+                        ? "Type the answer below."
+                        : "Try to remember the answer, then tap the card or show it."}
                     </p>
                   )}
                 </div>
@@ -497,6 +544,10 @@ export function FlashcardsDialog({
                     )}
                     <p className="text-center text-[12px] text-[var(--fl-muted)]">
                       How well did you know it? It comes back sooner the less you knew it.
+                      <span className="block sm:inline">
+                        {" "}
+                        Or swipe the card: right if you knew it, left if not.
+                      </span>
                     </p>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                       {GRADES.map((entry) => (

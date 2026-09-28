@@ -281,3 +281,31 @@ describe("FlashcardsDialog — typing the answer", () => {
     );
   });
 });
+
+describe("FlashcardsDialog — on a phone", () => {
+  it("turns the card over with a tap, and grades with a swipe", async () => {
+    const props = open({ autoStart: "all" });
+    const card = await screen.findByTestId("study-card");
+    fireEvent.click(card);
+    expect(screen.getByText("Paris")).toBeTruthy();
+
+    fireEvent.pointerDown(card, { clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(card, { clientX: 260, clientY: 105 });
+    fireEvent.pointerUp(card, { clientX: 260, clientY: 105 });
+    await waitFor(() => expect(props.writeSchedule).toHaveBeenCalled());
+    const saved = parseSchedule(props.writeSchedule.mock.calls[0]![0]);
+    expect([...saved.values()][0]!.reps).toBe(1);
+    expect(await screen.findByText("Capital of Peru")).toBeTruthy();
+  });
+
+  it("does not grade a short drag, or one that was a scroll", async () => {
+    const props = open({ autoStart: "all" });
+    const card = await screen.findByTestId("study-card");
+    fireEvent.click(card);
+    fireEvent.pointerDown(card, { clientX: 100, clientY: 100 });
+    fireEvent.pointerUp(card, { clientX: 130, clientY: 100 });
+    fireEvent.pointerDown(card, { clientX: 100, clientY: 100 });
+    fireEvent.pointerUp(card, { clientX: 200, clientY: 300 });
+    expect(props.writeSchedule).not.toHaveBeenCalled();
+  });
+});
