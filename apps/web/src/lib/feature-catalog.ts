@@ -271,6 +271,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "meaning-search",
+        title: "Search by meaning",
+        summary:
+          "Finds notes about the same thing in other words, learned from how your own notes use them — built on this device, nothing downloaded or sent. Steps in by itself when no note has the words you typed.",
+        how: "Dashboard → search → By meaning",
+        tags: ["new"],
+      },
+      {
         id: "scheduled-notes",
         title: "Scheduled notes",
         summary:

@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  MeaningIndex,
   NoteRepository,
   SearchIndex,
   SyncEngine,
   openLocalDatabase,
   type LocalDatabase,
   type LocalDatabaseStatus,
+  type MeaningHit,
   type SearchDoc,
   type SearchHit,
 } from "@forkleaf/store";
@@ -524,9 +526,41 @@ export function useLibrary() {
     [],
   );
 
+  /**
+   * Ranks notes by what they are about rather than the words in them.
+   *
+   * The meaning index is built from the full-text index's notes on first use
+   * and rebuilt only when that index has moved, so a notebook nobody searches
+   * this way never pays for it.
+   */
+  const meaningRef = useRef<{ version: number; index: MeaningIndex } | null>(null);
+  const searchMeaning = useCallback(
+    (query: string, workspaceId?: string): MeaningHit[] => {
+      if (!meaningRef.current || meaningRef.current.version !== state.searchVersion) {
+        meaningRef.current = {
+          version: state.searchVersion,
+          index: new MeaningIndex(searchRef.current.documents()),
+        };
+      }
+      return meaningRef.current.index.search(query, {
+        limit: 30,
+        ...(workspaceId ? { workspaceId } : {}),
+      });
+    },
+    [state.searchVersion],
+  );
+
   return useMemo(
-    () => ({ ...state, totals, addWorkspace, removeWorkspace, createNote, searchText }),
-    [state, totals, addWorkspace, removeWorkspace, createNote, searchText],
+    () => ({
+      ...state,
+      totals,
+      addWorkspace,
+      removeWorkspace,
+      createNote,
+      searchText,
+      searchMeaning,
+    }),
+    [state, totals, addWorkspace, removeWorkspace, createNote, searchText, searchMeaning],
   );
 }
 

@@ -107,6 +107,11 @@ const STOPWORDS = new Set([
   "with",
 ]);
 
+/** True for the short function words neither index gives any weight to. */
+export function isStopword(term: string): boolean {
+  return STOPWORDS.has(term);
+}
+
 export function tokenize(text: string): string[] {
   return text.toLowerCase().match(TOKEN_RE) ?? [];
 }
@@ -149,6 +154,24 @@ export class SearchIndex {
 
   has(id: string): boolean {
     return this.docs.has(id);
+  }
+
+  /** The indexed notes' text, for indexes built on top of this one. */
+  documents(
+    workspaceId?: string,
+  ): { id: string; workspaceId: string; path: string; title: string; text: string }[] {
+    const out = [];
+    for (const doc of this.docs.values()) {
+      if (workspaceId && doc.workspaceId !== workspaceId) continue;
+      out.push({
+        id: doc.id,
+        workspaceId: doc.workspaceId,
+        path: doc.path,
+        title: doc.title,
+        text: doc.text,
+      });
+    }
+    return out;
   }
 
   /** Adds a note, replacing any earlier version of it. */

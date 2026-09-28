@@ -117,10 +117,29 @@ export function DashboardPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, active?.workspace.id, library.searchVersion, library.searchText]);
 
-  const textScores = useMemo(
-    () => new Map(textHits.map((hit) => [hit.id, hit.score] as const)),
-    [textHits],
-  );
+  /**
+   * Search by meaning: on request, or on its own when no note contains the
+   * words typed — a blank result list is the moment a reader most needs
+   * "these are about the same thing".
+   */
+  const [byMeaning, setByMeaning] = useState(false);
+  const meaningHits = useMemo(() => {
+    const needle = query.trim();
+    if (!needle || !active || (!byMeaning && textHits.length > 0)) return [];
+    return library.searchMeaning(needle, active.workspace.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, active?.workspace.id, byMeaning, textHits.length, library.searchMeaning]);
+  const meaningFallback = !byMeaning && textHits.length === 0 && meaningHits.length > 0;
+
+  const textScores = useMemo(() => {
+    const scores = new Map(textHits.map((hit) => [hit.id, hit.score] as const));
+    // Meaning ranks below a note that has the words, and among the rest by
+    // how close it is.
+    for (const hit of meaningHits) {
+      if (!scores.has(hit.id)) scores.set(hit.id, hit.score * 5);
+    }
+    return scores;
+  }, [textHits, meaningHits]);
 
   /** The matching line from each note, shown in place of its opening prose. */
   const snippets = useMemo(
@@ -538,6 +557,18 @@ export function DashboardPanel({
                 aria-label="Search notes"
                 className="fl-input w-56"
               />
+              <label
+                className="flex items-center gap-1.5 text-[12px] text-[var(--fl-muted)]"
+                title="Also find notes about the same thing in other words — learned from your own notes, on this device"
+              >
+                <input
+                  type="checkbox"
+                  checked={byMeaning}
+                  onChange={(event) => setByMeaning(event.target.checked)}
+                  className="accent-[var(--fl-accent)]"
+                />
+                By meaning
+              </label>
               <label className="sr-only" htmlFor="dashboard-sort">
                 Sort notes
               </label>
@@ -572,6 +603,13 @@ export function DashboardPanel({
             showAllTags={showAllTags}
             onToggleTags={() => setShowAllTags((value) => !value)}
           />
+
+          {meaningFallback && (
+            <p role="status" className="mb-2 text-[12.5px] text-[var(--fl-muted)]">
+              No note contains those words. These are the closest in meaning, going by how your
+              notes use them.
+            </p>
+          )}
 
           {view === "list" && (
             <NoteList

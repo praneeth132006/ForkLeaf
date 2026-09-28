@@ -32,3 +32,4 @@ export {
   type SearchOptions,
   type SearchSnippet,
 } from "./search-index";
+export { MeaningIndex, type MeaningDoc, type MeaningHit } from "./meaning-index";
