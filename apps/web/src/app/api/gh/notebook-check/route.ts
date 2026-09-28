@@ -44,7 +44,7 @@ const SHA = /^[0-9a-f]{40}$/i;
 
 export async function GET(request: NextRequest) {
   return handle(async () => {
-    enforceRateLimit(request, RATE_LIMIT);
+    await enforceRateLimit(request, RATE_LIMIT);
 
     const params = new URL(request.url).searchParams;
     const owner = assertName((params.get("owner") ?? "").trim(), "repository owner");

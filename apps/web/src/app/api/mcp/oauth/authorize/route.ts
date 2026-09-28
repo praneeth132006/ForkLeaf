@@ -21,7 +21,7 @@ const BRANCH = /^(?!.*\.\.)[\w][\w./-]{0,254}$/;
 export async function POST(request: NextRequest) {
   return handle(async () => {
     const { client, login } = await requireClient();
-    enforceRateLimit(request, { name: "mcp-authorize", limit: 10, windowMs: 60_000 });
+    await enforceRateLimit(request, { name: "mcp-authorize", limit: 10, windowMs: 60_000 });
 
     if (!githubOAuthConfigured()) {
       throw new ApiError(503, "unavailable", "This ForkLeaf is not set up for GitHub sign-in.");

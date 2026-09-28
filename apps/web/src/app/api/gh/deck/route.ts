@@ -31,7 +31,7 @@ const SHA = /^[0-9a-f]{7,40}$/i;
 
 export async function GET(request: NextRequest) {
   return handle(async () => {
-    enforceRateLimit(request, { name: "deck-read", limit: 60, windowMs: 60_000 });
+    await enforceRateLimit(request, { name: "deck-read", limit: 60, windowMs: 60_000 });
     const params = new URL(request.url).searchParams;
     const owner = assertName((params.get("owner") ?? "").trim(), "repository owner");
     const repo = assertName((params.get("repo") ?? "").trim(), "repository name");
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
   return handle(async () => {
     const { client, login } = await requireClient();
     // Creating a public repository shows on somebody's profile.
-    enforceRateLimit(request, { name: "deck-share", limit: 10, windowMs: 10 * 60_000 });
+    await enforceRateLimit(request, { name: "deck-share", limit: 10, windowMs: 10 * 60_000 });
 
     const raw = await request.text();
     if (raw.length > MAX_BODY)

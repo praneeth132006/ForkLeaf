@@ -190,7 +190,7 @@ function parseWaybackTimestamp(stamp: string | undefined): string | null {
 export async function POST(request: NextRequest) {
   return handle(async () => {
     await requireClient();
-    enforceRateLimit(request, RATE_LIMIT);
+    await enforceRateLimit(request, RATE_LIMIT);
 
     const body = (await request.json().catch(() => null)) as {
       url?: unknown;

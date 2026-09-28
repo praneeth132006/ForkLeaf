@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     // Publishing writes a commit and may change repository settings, so it is
     // rate-limited harder than an ordinary save. Nobody publishes ten notes a
     // minute on purpose.
-    enforceRateLimit(request, { name: "publish", limit: 10, windowMs: 60_000 });
+    await enforceRateLimit(request, { name: "publish", limit: 10, windowMs: 60_000 });
 
     const { client } = await requireClient();
     const body = (await request.json()) as PublishBody;
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
 /** Unpublishes: deletes the page. The note itself is untouched. */
 export async function DELETE(request: NextRequest) {
   return handle(async () => {
-    enforceRateLimit(request, { name: "publish", limit: 10, windowMs: 60_000 });
+    await enforceRateLimit(request, { name: "publish", limit: 10, windowMs: 60_000 });
 
     const { client } = await requireClient();
     const body = (await request.json()) as PublishBody;

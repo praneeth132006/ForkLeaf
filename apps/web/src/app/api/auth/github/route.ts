@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { appUrl, safeReturnPath } from "@/lib/app-url";
 import { clientKey } from "@/lib/rate-limit";
+import { sharedStore } from "@/lib/shared-store";
 import { createOAuthState, githubOAuthConfigured, setReturnPath } from "@/lib/session";
 
 /**
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
   // Starting a sign-in is cheap for the client and not free for us: each one
   // sets a cookie and sends someone to GitHub. Bounded so a script cannot use
   // the route as a redirector or a cookie firehose.
-  if (tooManySignInAttempts(request)) {
+  if (await tooManySignInAttempts(request)) {
     return NextResponse.redirect(appUrl(request, "/?error=too_many_attempts"));
   }
 
@@ -71,27 +72,11 @@ export async function GET(request: NextRequest) {
   return NextResponse.redirect(authorize);
 }
 
-/**
- * A fixed window over sign-in starts, kept local to this route.
- *
- * Not `enforceRateLimit`: that throws an `ApiError` for the JSON routes, and
- * this one answers with a redirect the browser can actually show.
- */
-const attempts = new Map<string, { count: number; resetAt: number }>();
+/** Sign-in starts per client per minute, counted across instances. */
 const ATTEMPT_LIMIT = 10;
 const ATTEMPT_WINDOW_MS = 60_000;
 
-function tooManySignInAttempts(request: NextRequest): boolean {
-  const now = Date.now();
-  const key = clientKey(request);
-  const window = attempts.get(key);
-
-  if (!window || window.resetAt <= now) {
-    if (attempts.size > 5_000) attempts.clear();
-    attempts.set(key, { count: 1, resetAt: now + ATTEMPT_WINDOW_MS });
-    return false;
-  }
-
-  window.count += 1;
-  return window.count > ATTEMPT_LIMIT;
+async function tooManySignInAttempts(request: NextRequest): Promise<boolean> {
+  const { count } = await sharedStore().hit(`sign-in:${clientKey(request)}`, ATTEMPT_WINDOW_MS);
+  return count > ATTEMPT_LIMIT;
 }

@@ -1,26 +1,20 @@
+import { createHash } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { GrantError, issueTokens, openCode, refreshTokens } from "@/lib/mcp-grants";
 import { noStoreJson, oauthError, preflight } from "@/lib/mcp-http";
 import { verifyPkce } from "@/lib/mcp-oauth";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { sharedStore } from "@/lib/shared-store";
 
 /**
- * The token endpoint: a code, or a refresh token, becomes tokens.
- *
- * A code is good for five minutes and only with the PKCE verifier its request
- * was made with. It is also remembered as spent on this instance, which is as
- * much single use as a server with no storage can promise.
+ * A code is good once. Marked in the shared store, so a code redeemed on one
+ * server instance is refused on every other; codes live five minutes, so the
+ * mark does too. Holding the PKCE verifier is still needed to redeem one.
  */
-
-const spent = new Map<string, number>();
-
-function spend(code: string): boolean {
-  const now = Date.now();
-  for (const [key, until] of spent) if (until < now) spent.delete(key);
-  if (spent.has(code)) return false;
-  spent.set(code, now + 5 * 60_000);
-  return true;
-}
+const spend = (code: string) =>
+  // Hashed: a code is a long sealed value, and the store should hold neither
+  // it nor anything that could be truncated into a collision.
+  sharedStore().once(`mcp-code:${createHash("sha256").update(code).digest("hex")}`, 5 * 60_000);
 
 async function readForm(request: NextRequest): Promise<URLSearchParams> {
   if ((request.headers.get("content-type") ?? "").includes("application/json")) {
@@ -36,7 +30,7 @@ async function readForm(request: NextRequest): Promise<URLSearchParams> {
 
 export async function POST(request: NextRequest) {
   try {
-    enforceRateLimit(request, { name: "mcp-token", limit: 60, windowMs: 60_000 });
+    await enforceRateLimit(request, { name: "mcp-token", limit: 60, windowMs: 60_000 });
   } catch {
     return oauthError("slow_down", "Too many token requests. Wait a minute.", 429);
   }
@@ -68,7 +62,8 @@ export async function POST(request: NextRequest) {
         if (!(await verifyPkce(form.get("code_verifier"), code.codeChallenge))) {
           return oauthError("invalid_grant", "The PKCE code_verifier does not match.");
         }
-        if (!spend(value)) return oauthError("invalid_grant", "That code has already been used.");
+        if (!(await spend(value)))
+          return oauthError("invalid_grant", "That code has already been used.");
         return noStoreJson(await issueTokens(code.clientId, code.grant, code.target));
       }
       case "refresh_token": {

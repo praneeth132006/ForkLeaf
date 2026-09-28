@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return handle(async () => {
     // Merging and commenting are writes on someone's behalf, limited like the rest.
-    enforceRateLimit(request, { name: "review", limit: 20, windowMs: 60_000 });
+    await enforceRateLimit(request, { name: "review", limit: 20, windowMs: 60_000 });
     const { client } = await requireClient();
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
 

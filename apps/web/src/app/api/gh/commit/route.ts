@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     // Writes are the expensive path: each one costs GitHub API calls and
     // rewrites a branch. 60 commits a minute is far above what typing produces
     // and far below what a stuck retry loop would.
-    enforceRateLimit(request, { name: "commit", limit: 60, windowMs: 60_000 });
+    await enforceRateLimit(request, { name: "commit", limit: 60, windowMs: 60_000 });
 
     const { client } = await requireClient();
     const body = (await request.json()) as CommitBody;

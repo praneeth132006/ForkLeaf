@@ -18,7 +18,7 @@ import { enforceRateLimit } from "@/lib/rate-limit";
 export async function POST(request: NextRequest) {
   return handle(async () => {
     const { client, login } = await requireClient();
-    enforceRateLimit(request, { name: "site-repo", limit: 5, windowMs: 10 * 60_000 });
+    await enforceRateLimit(request, { name: "site-repo", limit: 5, windowMs: 10 * 60_000 });
 
     const body = (await request.json().catch(() => null)) as { name?: unknown } | null;
     const name = assertName(String(body?.name ?? ""), "repository name");

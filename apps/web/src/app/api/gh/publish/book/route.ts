@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
   return handle(async () => {
     // A book is one commit however many chapters it holds, so the limit is the
     // same as a page's. Nobody publishes ten books a minute on purpose.
-    enforceRateLimit(request, { name: "publish", limit: 10, windowMs: 60_000 });
+    await enforceRateLimit(request, { name: "publish", limit: 10, windowMs: 60_000 });
 
     const { client } = await requireClient();
     const body = (await request.json()) as BookBody;
@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   return handle(async () => {
-    enforceRateLimit(request, { name: "publish", limit: 10, windowMs: 60_000 });
+    await enforceRateLimit(request, { name: "publish", limit: 10, windowMs: 60_000 });
 
     const { client } = await requireClient();
     const body = (await request.json()) as BookBody;

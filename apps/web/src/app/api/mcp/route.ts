@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    enforceRateLimit(request, { name: "mcp", limit: 120, windowMs: 60_000 });
+    await enforceRateLimit(request, { name: "mcp", limit: 120, windowMs: 60_000 });
   } catch {
     return noStoreJson(errorResponse(null, -32000, "Too many requests. Wait a minute."), 429);
   }

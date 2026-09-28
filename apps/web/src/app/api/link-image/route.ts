@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
     // image bytes, and an `<img>` that gets JSON just shows a broken image.
     if (!(await getSession())) return new Response("Sign in required", { status: 401 });
 
-    enforceRateLimit(request, RATE_LIMIT);
+    await enforceRateLimit(request, RATE_LIMIT);
 
     const asked = new URL(request.url).searchParams.get("url") ?? "";
     if (!asked) throw new ApiError(400, "validation", "An image address is required.");

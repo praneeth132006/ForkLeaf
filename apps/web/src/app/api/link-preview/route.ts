@@ -191,7 +191,7 @@ export async function GET(request: NextRequest) {
       throw new ApiError(401, "unauthorized", "Sign in to preview links.");
     }
 
-    enforceRateLimit(request, RATE_LIMIT);
+    await enforceRateLimit(request, RATE_LIMIT);
 
     const asked = new URL(request.url).searchParams.get("url") ?? "";
     if (!asked) throw new ApiError(400, "validation", "A web address is required.");

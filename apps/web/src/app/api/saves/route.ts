@@ -66,7 +66,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   return handle(async () => {
     const { client, login } = await requireClient();
-    enforceRateLimit(request, { name: "saves", limit: 30, windowMs: 60_000 });
+    await enforceRateLimit(request, { name: "saves", limit: 30, windowMs: 60_000 });
 
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     if (!body) throw new ApiError(400, "validation", "Expected a JSON body.");

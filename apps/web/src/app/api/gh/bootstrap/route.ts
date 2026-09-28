@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
   return handle(async () => {
     // This route creates a repository on the user's GitHub account. A loop here
     // is a page of junk repositories on their profile.
-    enforceRateLimit(request, { name: "bootstrap", limit: 5, windowMs: 60_000 });
+    await enforceRateLimit(request, { name: "bootstrap", limit: 5, windowMs: 60_000 });
 
     const { client, login } = await requireClient();
 

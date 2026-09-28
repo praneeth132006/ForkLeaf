@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
   return handle(async () => {
     // Signed in, because this spends real compute on somebody's behalf.
     await requireClient();
-    enforceRateLimit(request, RATE_LIMIT);
+    await enforceRateLimit(request, RATE_LIMIT);
 
     const { language, code, stdin } = readBody(await request.json().catch(() => null));
 

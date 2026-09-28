@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   return handle(async () => {
     // Forking creates a repository on someone's account; a loop here is
     // visible on their profile.
-    enforceRateLimit(request, { name: "fork", limit: 10, windowMs: 60_000 });
+    await enforceRateLimit(request, { name: "fork", limit: 10, windowMs: 60_000 });
 
     const { client, login } = await requireClient();
 

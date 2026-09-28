@@ -13,7 +13,7 @@ import { enforceRateLimit } from "@/lib/rate-limit";
  */
 export async function POST(request: NextRequest) {
   try {
-    enforceRateLimit(request, { name: "mcp-register", limit: 20, windowMs: 10 * 60_000 });
+    await enforceRateLimit(request, { name: "mcp-register", limit: 20, windowMs: 10 * 60_000 });
   } catch {
     return oauthError(
       "invalid_request",

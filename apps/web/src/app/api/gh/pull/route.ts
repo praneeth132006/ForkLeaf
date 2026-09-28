@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   return handle(async () => {
     // Pull requests are visible to other people; opening them in a loop is
     // spam on someone else's project.
-    enforceRateLimit(request, { name: "pull", limit: 10, windowMs: 60_000 });
+    await enforceRateLimit(request, { name: "pull", limit: 10, windowMs: 60_000 });
 
     const { client, login } = await requireClient();
 
