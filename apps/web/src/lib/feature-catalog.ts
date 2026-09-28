@@ -271,6 +271,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "diagram-cards",
+        title: "Cards from diagrams",
+        summary:
+          "In a note tagged flashcards, every arrow in a flowchart or state diagram and every branch of a mind map becomes a card: what comes after this step?",
+        how: "Tag the note flashcards",
+        tags: ["new"],
+      },
+      {
         id: "weekly-review",
         title: "Weekly review",
         summary:

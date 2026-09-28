@@ -38,14 +38,16 @@ export function cardsInNotes(
 ): Card[] {
   return notes
     .filter((entry) => isMarkdown(entry.path) && entry.path !== SCHEDULE_PATH && !skip(entry.path))
-    .flatMap((entry) =>
-      findCards(
+    .flatMap((entry) => {
+      // A note tagged `flashcards` is asked about its highlights and its diagrams too.
+      const tagged = wantsClozes(entry.frontmatter, entry.content);
+      return findCards(
         entry.path,
         deriveTitle(entry.content, entry.frontmatter.title, entry.path),
         entry.content,
-        { clozes: wantsClozes(entry.frontmatter, entry.content) },
-      ),
-    );
+        { clozes: tagged, diagrams: tagged },
+      );
+    });
 }
 
 const SETTLE_MS = 1500;

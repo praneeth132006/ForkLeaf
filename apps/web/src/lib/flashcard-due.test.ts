@@ -53,3 +53,12 @@ describe("studyCount", () => {
     expect(studyCount(cards, schedule, "2026-09-28")).toBe(21);
   });
 });
+
+describe("cards from diagrams", () => {
+  it("come from notes tagged flashcards, and only those", () => {
+    const diagram = "```mermaid\nflowchart TD\n  A[Plan] --> B[Build]\n```";
+    expect(cardsInNotes([note("a.md", diagram)])).toEqual([]);
+    const cards = cardsInNotes([note("b.md", diagram, { tags: ["flashcards"] })]);
+    expect(cards.map((card) => [card.kind, card.answer])).toEqual([["diagram", "Build"]]);
+  });
+});

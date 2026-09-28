@@ -556,9 +556,11 @@ export function FlashcardsDialog({
                   {schedule.has(card.id) ? "Review" : "New card"}
                   {card.kind === "cloze"
                     ? " · fill in the blank"
-                    : card.kind === "reversed"
-                      ? " · reversed"
-                      : ""}{" "}
+                    : card.kind === "diagram"
+                      ? " · from a diagram"
+                      : card.kind === "reversed"
+                        ? " · reversed"
+                        : ""}{" "}
                   · from{" "}
                   <button
                     type="button"

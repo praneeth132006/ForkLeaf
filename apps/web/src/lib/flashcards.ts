@@ -1,5 +1,6 @@
 import { parseCardLine } from "@forkleaf/markdown-engine";
 import { dateStamp } from "@/lib/templates";
+import { diagramCards } from "@/lib/diagram-cards";
 import { memoryFromSm2, nextInterval, remember, type FsrsGrade } from "@/lib/fsrs";
 
 /**
@@ -29,11 +30,13 @@ export interface Card {
   kind: CardKind;
 }
 
-export type CardKind = "basic" | "reversed" | "cloze";
+export type CardKind = "basic" | "reversed" | "cloze" | "diagram";
 
 export interface FindOptions {
   /** Read `==highlighted==` words as blanks to fill in. */
   clozes?: boolean;
+  /** Ask what follows each step of the note's flowcharts, states and mind maps. */
+  diagrams?: boolean;
 }
 
 export interface CardState {
@@ -189,6 +192,7 @@ export function wantsClozes(frontmatter: Record<string, unknown>, content: strin
  * - A question, a line holding only `?` (or `??` for both ways), then the
  *   answer, all in one paragraph — a card over several lines.
  * - With `clozes`, each `==highlight==` is a blank in its sentence.
+ * - With `diagrams`, each arrow in a flowchart, state diagram or mind map.
  *
  * The same spellings Obsidian's spaced-repetition plugin reads. Nothing in
  * code, a table or a heading is a card.
@@ -278,6 +282,12 @@ export function findCards(
           add(cloze.question, cloze.answer, entry.line, "cloze", cloze.key);
         }
       }
+    }
+  }
+
+  if (options.diagrams) {
+    for (const card of diagramCards(content, noteTitle)) {
+      add(card.question, card.answer, card.line, "diagram", card.key);
     }
   }
 
