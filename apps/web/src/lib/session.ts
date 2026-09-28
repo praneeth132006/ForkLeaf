@@ -87,8 +87,20 @@ export function githubOAuthConfigured(): boolean {
   );
 }
 
+/**
+ * What a session cookie says it is.
+ *
+ * The same key seals the session, MCP access and refresh tokens, and OAuth
+ * codes. Each of those carries its purpose and is refused for any other; the
+ * session carries one too, so nothing sealed for an assistant — scoped to one
+ * notebook — can ever be presented as a session, which reaches every
+ * repository the token can. Cookies written before this have no purpose and
+ * are still read.
+ */
+const SESSION_PURPOSE = "session";
+
 export async function encryptSession(payload: SessionPayload): Promise<string> {
-  return new EncryptJWT({ ...payload })
+  return new EncryptJWT({ ...payload, purpose: SESSION_PURPOSE })
     .setProtectedHeader({ alg: "dir", enc: "A256GCM" })
     .setIssuedAt()
     .setExpirationTime(`${MAX_AGE_SECONDS}s`)
@@ -105,6 +117,7 @@ export async function decryptSession(value: string): Promise<SessionPayload | nu
     // precisely so a "not found" could be told apart from "you did not grant
     // access to private repositories" — arrived as undefined at both of its
     // readers, and the renewal fields below would have gone the same way.
+    if (payload.purpose !== undefined && payload.purpose !== SESSION_PURPOSE) return null;
     const session = payload as unknown as SessionPayload;
     const { token, user } = session;
     if (typeof token !== "string" || !user) return null;

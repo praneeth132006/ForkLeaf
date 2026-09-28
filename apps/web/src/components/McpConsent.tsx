@@ -169,8 +169,20 @@ export function McpConsent({
         Connect an AI assistant
       </p>
       <h1 className="mt-2 text-xl font-semibold text-[var(--fl-text)]">
-        Let {clientName} use your notebook?
+        Let {clientName ? `“${clientName}”` : "this assistant"} use your notebook?
       </h1>
+      {/* The name is whatever the assistant registered itself as — anyone can
+          call themselves "Claude". Where the access goes is the fact that
+          cannot be faked, so it is shown, plainly, before anything else. */}
+      {redirectUri && (
+        <p
+          className="mt-2 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-3 py-2 text-[13px] text-[var(--fl-text)]"
+          data-testid="consent-destination"
+        >
+          Access will be sent to <strong>{destinationOf(redirectUri)}</strong>. The name above is
+          what it calls itself. Only allow this if you started connecting from that app just now.
+        </p>
+      )}
       <ul className="mt-3 list-disc space-y-1 pl-5 text-[13.5px] text-[var(--fl-muted)]">
         <li>It can search and read the notes in the repository you choose.</li>
         <li>
@@ -305,4 +317,20 @@ export function McpConsent({
       )}
     </div>
   );
+}
+
+/**
+ * Where an authorisation will be delivered, in words a person can check: a
+ * web site by its host, an app on this computer by its port, a desktop app
+ * by the link scheme it registered.
+ */
+export function destinationOf(redirectUri: string): string {
+  try {
+    const url = new URL(redirectUri);
+    if (url.protocol === "https:") return url.host;
+    if (url.protocol === "http:") return `an app on this computer (port ${url.port || "80"})`;
+    return `the app that opens ${url.protocol} links`;
+  } catch {
+    return "an address ForkLeaf cannot read";
+  }
 }

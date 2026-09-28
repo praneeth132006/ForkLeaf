@@ -43,7 +43,8 @@ vi.mock("@/lib/github-oauth", async () => {
 process.env.SESSION_SECRET = "a-test-secret-that-is-certainly-long-enough";
 
 import { TokenRefused } from "@/lib/github-oauth";
-import { decryptSession, encryptSession, getLiveSession, getSession } from "./session";
+import { decryptSession, encryptSession, getLiveSession, getSession, sealValue } from "./session";
+import { EncryptJWT } from "jose";
 
 const user = { id: 1, login: "someone", name: null, avatarUrl: "" };
 const inSeconds = (seconds: number) => Math.floor(Date.now() / 1000) + seconds;
@@ -83,6 +84,25 @@ describe("what the cookie carries", () => {
       refreshToken: "r",
       refreshExpiresAt: 1_820_000_000,
     });
+  });
+});
+
+describe("a session is only ever a session", () => {
+  it("refuses a value sealed for another purpose, even one shaped like a session", async () => {
+    const assistantToken = await sealValue({ token: "t", user }, "mcp-access", 3600);
+    expect(await decryptSession(assistantToken)).toBeNull();
+  });
+
+  it("still reads a cookie written before sessions carried a purpose", async () => {
+    const key = new Uint8Array(
+      await crypto.subtle.digest("SHA-256", new TextEncoder().encode(process.env.SESSION_SECRET!)),
+    );
+    const legacy = await new EncryptJWT({ token: "t", user })
+      .setProtectedHeader({ alg: "dir", enc: "A256GCM" })
+      .setIssuedAt()
+      .setExpirationTime("1h")
+      .encrypt(key);
+    expect(await decryptSession(legacy)).toMatchObject({ token: "t", user });
   });
 });
 
