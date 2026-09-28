@@ -7,6 +7,7 @@ import {
   nextDue,
   parseSchedule,
   review,
+  typedVerdict,
   wantsClozes,
   type Schedule,
 } from "./flashcards";
@@ -241,5 +242,26 @@ describe("the schedule file", () => {
       "| card | due |\n| 1234abcd | not-a-date | 1 | 2 | 3 |\n| zzzz | 2026-01-01 | 1 | 2 | 3 |\n| 1234abcd | 2026-01-01 | x | 2 | 3 |";
     expect(parseSchedule(text).size).toBe(0);
     expect(parseSchedule(null).size).toBe(0);
+  });
+});
+
+describe("typedVerdict", () => {
+  it("keeps a right answer right", () => {
+    expect(typedVerdict("Paris", "paris", "right")).toBe("right");
+  });
+
+  it("forgives case and punctuation", () => {
+    expect(typedVerdict("H₂O", "h₂o", "wrong")).toBe("right");
+    expect(typedVerdict("New York", "new-york", "wrong")).toBe("right");
+  });
+
+  it("calls a typo close, not wrong", () => {
+    expect(typedVerdict("Paris", "Pariss", "wrong")).toBe("close");
+    expect(typedVerdict("Mitochondria", "Mitocondrea", "wrong")).toBe("close");
+  });
+
+  it("leaves a different answer wrong", () => {
+    expect(typedVerdict("Paris", "Lyon", "wrong")).toBe("wrong");
+    expect(typedVerdict("Paris", "", "wrong")).toBe("wrong");
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { judgeAnswer, type Verdict } from "@forkleaf/editor";
 import { Dialog } from "@/components/Dialog";
 import { suggestCards } from "@/lib/flashcard-suggestions";
 import {
@@ -10,6 +11,7 @@ import {
   nextDue,
   parseSchedule,
   review,
+  typedVerdict,
   type Card,
   type Grade,
   type Schedule,
@@ -75,6 +77,19 @@ const GRADES: { grade: Grade; label: string; means: string; key: string }[] = [
 ];
 
 const DEFAULT_DECK = "flashcards/Flashcards.md";
+/** Remembered per device: some people always type, some never do. */
+const TYPING_KEY = "forkleaf:flashcards:type-answers";
+
+/** The grade a typed answer suggests. The reader still chooses. */
+const SUGGESTED: Record<Verdict, Grade> = { right: "good", close: "hard", wrong: "again" };
+
+function readTyping(): boolean {
+  try {
+    return window.localStorage.getItem(TYPING_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
@@ -110,6 +125,23 @@ export function FlashcardsDialog({
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [reloads, setReloads] = useState(0);
+
+  /**
+   * Typing the answer before seeing it. Recall you have to write down is
+   * harder to fool yourself about than recall you only think of, and the
+   * check suggests an honest grade.
+   */
+  const [typing, setTypingState] = useState(readTyping);
+  const [typed, setTyped] = useState("");
+  const [verdict, setVerdict] = useState<Verdict | null>(null);
+  const setTyping = (on: boolean) => {
+    setTypingState(on);
+    try {
+      window.localStorage.setItem(TYPING_KEY, on ? "1" : "0");
+    } catch {
+      // Private mode: it lasts this session only.
+    }
+  };
 
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
@@ -217,6 +249,8 @@ export function FlashcardsDialog({
     setSession({ deck: deckPath, practising, total: next.length });
     setReviewed(0);
     setRevealed(false);
+    setTyped("");
+    setVerdict(null);
   }
   const beginRef = useRef(begin);
   useEffect(() => {
@@ -231,6 +265,8 @@ export function FlashcardsDialog({
     setSchedule(next);
     setReviewed((count) => count + 1);
     setRevealed(false);
+    setTyped("");
+    setVerdict(null);
     // A forgotten card comes round again at the end of this session.
     setQueue((current) => (chosen === "again" ? [...current.slice(1), card] : current.slice(1)));
 
@@ -406,7 +442,30 @@ export function FlashcardsDialog({
                   )}
                 </div>
 
-                {!revealed ? (
+                {!revealed && typing ? (
+                  <form
+                    className="flex flex-col gap-2 sm:flex-row"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      setVerdict(typedVerdict(card.answer, typed, judgeAnswer(card.answer, typed)));
+                      setRevealed(true);
+                    }}
+                  >
+                    <input
+                      // A new card, a new field with the caret in it.
+                      key={card.id}
+                      autoFocus
+                      value={typed}
+                      onChange={(event) => setTyped(event.target.value)}
+                      aria-label="Your answer"
+                      placeholder="Type the answer, then press Enter"
+                      className={field}
+                    />
+                    <button type="submit" className="fl-btn fl-btn-primary shrink-0">
+                      Check
+                    </button>
+                  </form>
+                ) : !revealed ? (
                   <button
                     type="button"
                     onClick={() => setRevealed(true)}
@@ -416,6 +475,26 @@ export function FlashcardsDialog({
                   </button>
                 ) : (
                   <>
+                    {verdict && (
+                      <p
+                        role="status"
+                        className={`text-center text-[13px] font-medium ${
+                          verdict === "right"
+                            ? "text-[var(--fl-accent)]"
+                            : verdict === "close"
+                              ? "text-[var(--fl-text)]"
+                              : "text-[var(--fl-danger)]"
+                        }`}
+                      >
+                        {verdict === "right"
+                          ? "Right."
+                          : verdict === "close"
+                            ? `Nearly — you wrote “${typed.trim()}”.`
+                            : typed.trim()
+                              ? `Not quite — you wrote “${typed.trim()}”.`
+                              : "No answer given."}
+                      </p>
+                    )}
                     <p className="text-center text-[12px] text-[var(--fl-muted)]">
                       How well did you know it? It comes back sooner the less you knew it.
                     </p>
@@ -425,7 +504,16 @@ export function FlashcardsDialog({
                           key={entry.grade}
                           type="button"
                           onClick={() => grade(entry.grade)}
-                          className="rounded-lg border border-[var(--fl-border)] px-2 py-2 text-[12.5px] font-medium text-[var(--fl-text)] hover:bg-[var(--fl-elevated)]"
+                          aria-describedby={
+                            verdict && SUGGESTED[verdict] === entry.grade
+                              ? "suggested-grade"
+                              : undefined
+                          }
+                          className={`rounded-lg border px-2 py-2 text-[12.5px] font-medium text-[var(--fl-text)] hover:bg-[var(--fl-elevated)] ${
+                            verdict && SUGGESTED[verdict] === entry.grade
+                              ? "border-[var(--fl-accent)] ring-1 ring-[var(--fl-accent)]"
+                              : "border-[var(--fl-border)]"
+                          }`}
                         >
                           {entry.label}
                           <span className="block text-[11px] font-normal text-[var(--fl-muted)]">
@@ -440,6 +528,11 @@ export function FlashcardsDialog({
                         </button>
                       ))}
                     </div>
+                    {verdict && (
+                      <p id="suggested-grade" className="sr-only">
+                        Suggested from what you typed
+                      </p>
+                    )}
                   </>
                 )}
               </>
@@ -496,6 +589,15 @@ export function FlashcardsDialog({
               >
                 {studyCount > 0 ? `Study ${plural(studyCount, "card")}` : "All caught up"}
               </button>
+              <label className="flex w-full items-center gap-2 text-[12px] text-[var(--fl-muted)]">
+                <input
+                  type="checkbox"
+                  checked={typing}
+                  onChange={(event) => setTyping(event.target.checked)}
+                  className="accent-[var(--fl-accent)]"
+                />
+                Type my answers before seeing them
+              </label>
             </div>
 
             <details open={cards.length === 0} className={section}>

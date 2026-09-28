@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { FlashcardsDialog } from "./FlashcardsDialog";
 import { findCards, formatSchedule, parseSchedule } from "@/lib/flashcards";
@@ -233,5 +233,51 @@ describe("FlashcardsDialog — straight to studying", () => {
     );
     open({ autoStart: "all", readSchedule: vi.fn(async () => formatSchedule(reviewed)) });
     expect(await screen.findByText("Nothing to study today")).toBeTruthy();
+  });
+});
+
+describe("FlashcardsDialog — typing the answer", () => {
+  // jsdom's own Storage is not usable here; an in-memory one is enough to
+  // show the choice is written and read back.
+  const store = new Map<string, string>();
+  beforeAll(() => {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, String(value)),
+        removeItem: (key: string) => void store.delete(key),
+        clear: () => store.clear(),
+      },
+    });
+  });
+  afterEach(() => store.clear());
+
+  it("checks a typed answer and suggests a grade", async () => {
+    open({ autoStart: "all" });
+    await screen.findByText("Capital of France");
+    // Off by default: the ordinary Show answer button.
+    expect(screen.queryByLabelText("Your answer")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Back to flashcards/ }));
+    fireEvent.click(await screen.findByLabelText(/Type my answers/));
+    await study();
+
+    fireEvent.change(await screen.findByLabelText("Your answer"), { target: { value: "paris" } });
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+    expect(screen.getByRole("status").textContent).toBe("Right.");
+    expect(screen.getByRole("button", { name: /^Good/ }).getAttribute("aria-describedby")).toBe(
+      "suggested-grade",
+    );
+  });
+
+  it("says what was written when it is wrong, and remembers the choice", async () => {
+    window.localStorage.setItem("forkleaf:flashcards:type-answers", "1");
+    open({ autoStart: "all" });
+    fireEvent.change(await screen.findByLabelText("Your answer"), { target: { value: "Lyon" } });
+    fireEvent.submit(screen.getByLabelText("Your answer").closest("form")!);
+    expect(screen.getByRole("status").textContent).toBe("Not quite — you wrote “Lyon”.");
+    expect(screen.getByRole("button", { name: /^Again/ }).getAttribute("aria-describedby")).toBe(
+      "suggested-grade",
+    );
   });
 });

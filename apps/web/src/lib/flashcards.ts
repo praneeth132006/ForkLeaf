@@ -360,3 +360,68 @@ export function formatSchedule(schedule: Schedule): string {
     );
   return `${HEADER}${rows.join("\n")}${rows.length ? "\n" : ""}`;
 }
+
+// ── Typed answers ─────────────────────────────────────────────────────────
+
+/** Letters and digits only, lower case, accents dropped. */
+function letters(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+/** Edit distance, giving up once it is past `limit`. */
+function distance(a: string, b: string, limit: number): number {
+  if (Math.abs(a.length - b.length) > limit) return limit + 1;
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const value = Math.min(
+        previous[j]! + 1,
+        current[j - 1]! + 1,
+        previous[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+      current.push(value);
+      best = Math.min(best, value);
+    }
+    if (best > limit) return limit + 1;
+    previous = current;
+  }
+  return previous[b.length]!;
+}
+
+/**
+ * Whether a typed answer is a misspelling of the right one.
+ *
+ * Voice review's check is built for words heard, not typed, and stems them —
+ * "Paris" becomes "pari" — so a typo in a short answer read as wrong. Typed
+ * answers are also compared as spelled: one slip in every six letters is
+ * still the answer.
+ */
+function misspelt(expected: string, typed: string): boolean {
+  const want = letters(expected);
+  const got = letters(typed);
+  if (!want || !got) return false;
+  const allowed = Math.max(1, Math.floor(want.length / 6));
+  return distance(want, got, allowed) <= allowed;
+}
+
+/**
+ * What a typed answer earns: the word-by-word check voice review uses, raised
+ * to "right" when only punctuation or case differ, and to "close" for a typo.
+ */
+export function typedVerdict(
+  expected: string,
+  typed: string,
+  byWords: "right" | "close" | "wrong",
+): "right" | "close" | "wrong" {
+  if (byWords === "right") return "right";
+  const want = letters(expected);
+  if (want && want === letters(typed)) return "right";
+  if (byWords === "wrong" && misspelt(expected, typed)) return "close";
+  return byWords;
+}
