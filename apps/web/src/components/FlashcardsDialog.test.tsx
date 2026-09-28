@@ -380,3 +380,27 @@ describe("FlashcardsDialog — cards that keep slipping", () => {
     expect(await screen.findByText(/Forgotten 5 times\. A card that keeps slipping/)).toBeTruthy();
   });
 });
+
+describe("FlashcardsDialog — the streak", () => {
+  it("shows the run of days studied, and logs each grade", async () => {
+    const onReviewed = vi.fn();
+    open({
+      readLog: vi.fn(async () => "| 2026-09-11 | 3 |\n| 2026-09-12 | 5 |"),
+      onReviewed,
+    });
+    expect(await screen.findByText("2 days")).toBeTruthy();
+    expect(screen.getByText(/study today to keep it/)).toBeTruthy();
+    await study();
+    fireEvent.click(screen.getByRole("button", { name: /Show answer/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Good/ }));
+    expect(onReviewed).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: /Back to flashcards/ }));
+    expect(await screen.findByText("3 days")).toBeTruthy();
+  });
+
+  it("says nothing about streaks before anything has been studied", async () => {
+    open({ readLog: vi.fn(async () => null) });
+    await screen.findByText("2 cards to study today");
+    expect(screen.queryByText(/in a row/)).toBeNull();
+  });
+});

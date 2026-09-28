@@ -91,6 +91,7 @@ import { FlashcardsDialog } from "@/components/FlashcardsDialog";
 import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
 import { cardsInNotes, useDueCount } from "@/lib/flashcard-due";
 import { cardsRequest, readCardReply } from "@/lib/ai-cards";
+import { STUDY_LOG_PATH, recordReview } from "@/lib/study-log";
 import { useAssistantKey, useAssistantSettings } from "@/hooks/useAssistant";
 import { isReady, provider as assistantProvider, streamChat } from "@/lib/assistant";
 import {
@@ -5209,6 +5210,10 @@ export function EditorWorkspace() {
           loadCards={async () => cardsInNotes(await notebook.allNotes(), isTemplatePath)}
           autoStart={flashcardsStart}
           ai={cardWriter}
+          readLog={() => notebook.readNote(STUDY_LOG_PATH)}
+          onReviewed={() =>
+            void recordReview(notebook, dateStamp(new Date())).catch(() => undefined)
+          }
           onConnectAi={() => {
             setDialog(null);
             setAssistantOpen(true);

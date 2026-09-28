@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { cardStatus, faceId, gradePreview, useInlineFlashcards } from "./inline-flashcards";
 import { SCHEDULE_PATH, cardId, formatSchedule, parseSchedule } from "./flashcards";
+import { STUDY_LOG_PATH } from "./study-log";
 
 afterEach(cleanup);
 
@@ -43,12 +44,13 @@ describe("grading a card in the note", () => {
     const other = formatSchedule(
       new Map([["abcdef12", { due: "2026-10-01", interval: 10, ease: 2.5, reps: 3 }]]),
     );
-    let file = other;
+    const files = new Map([[SCHEDULE_PATH, other]]);
     const store = {
-      readNote: vi.fn(async () => file),
-      upsertNote: vi.fn(async (_path: string, change: (content: string) => string) => {
-        file = change(file);
-        return file;
+      readNote: vi.fn(async (path: string) => files.get(path) ?? null),
+      upsertNote: vi.fn(async (path: string, change: (content: string) => string) => {
+        const next = change(files.get(path) ?? "");
+        files.set(path, next);
+        return next;
       }),
     };
     const { result } = renderHook(() => useInlineFlashcards("notes/Chem.md", store));
@@ -59,10 +61,14 @@ describe("grading a card in the note", () => {
     act(() => result.current!.grade(face, "good"));
     expect(result.current!.status(face)).toBe("Next review tomorrow");
 
-    await waitFor(() => expect(store.upsertNote).toHaveBeenCalled());
-    const written = parseSchedule(file);
+    await waitFor(() =>
+      expect(store.upsertNote).toHaveBeenCalledWith(SCHEDULE_PATH, expect.anything()),
+    );
+    const written = parseSchedule(files.get(SCHEDULE_PATH)!);
     expect(written.get("abcdef12")).toBeTruthy();
     expect(written.get(cardId("notes/Chem.md", "H2O"))).toMatchObject({ interval: 1, reps: 1 });
+    // And the day goes in the study log.
+    await waitFor(() => expect(files.get(STUDY_LOG_PATH)).toMatch(/\| \d{4}-\d{2}-\d{2} \| 1 \|/));
   });
 
   it("says so when a grade cannot be saved", async () => {

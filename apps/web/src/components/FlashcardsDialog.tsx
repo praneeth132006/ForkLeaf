@@ -22,6 +22,8 @@ import {
   type Schedule,
 } from "@/lib/flashcards";
 import { dateStamp } from "@/lib/templates";
+import { StudyStreak } from "@/components/StudyStreak";
+import { parseLog, type StudyLog } from "@/lib/study-log";
 
 /**
  * Flashcards: learn what is in your notes, and keep it.
@@ -65,6 +67,10 @@ export interface FlashcardsDialogProps {
     name: string;
     make: (note: { title: string; content: string }, signal: AbortSignal) => Promise<NewCard[]>;
   } | null;
+  /** The study log's text (`reviews/study-log.md`), or null when there is none yet. */
+  readLog?: () => Promise<string | null>;
+  /** Told each time a card is graded, to add it to the study log. */
+  onReviewed?: () => void;
   /** Opens the assistant panel, where a model is connected. */
   onConnectAi?: () => void;
   /**
@@ -131,6 +137,8 @@ export function FlashcardsDialog({
   defaultDeck = DEFAULT_DECK,
   ai = null,
   onConnectAi,
+  readLog,
+  onReviewed,
   autoStart = null,
   now,
 }: FlashcardsDialogProps) {
@@ -176,10 +184,24 @@ export function FlashcardsDialog({
   const [adding, setAdding] = useState(false);
   const [unticked, setUnticked] = useState<ReadonlySet<string>>(new Set());
 
-  const loaders = useRef({ loadCards, readSchedule });
+  const loaders = useRef({ loadCards, readSchedule, readLog });
   useEffect(() => {
-    loaders.current = { loadCards, readSchedule };
-  }, [loadCards, readSchedule]);
+    loaders.current = { loadCards, readSchedule, readLog };
+  }, [loadCards, readSchedule, readLog]);
+
+  const [log, setLog] = useState<StudyLog>(new Map());
+  useEffect(() => {
+    let live = true;
+    loaders.current.readLog?.().then(
+      (text) => {
+        if (live) setLog(parseLog(text));
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
 
   /** Taken once, when the cards first arrive — not again after adding one. */
   const pendingStart = useRef(autoStart);
@@ -344,6 +366,8 @@ export function FlashcardsDialog({
     );
     setSchedule(next);
     setReviewed((count) => count + 1);
+    setLog((current) => new Map(current).set(today, (current.get(today) ?? 0) + 1));
+    onReviewed?.();
     setRevealed(false);
     setTyped("");
     setVerdict(null);
@@ -748,6 +772,8 @@ export function FlashcardsDialog({
                 </span>
               </label>
             </div>
+
+            {log.size > 0 && <StudyStreak log={log} today={today} className={section} />}
 
             <details open={cards.length === 0} className={section}>
               <summary className={`${heading} cursor-pointer`}>How flashcards work</summary>

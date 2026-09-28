@@ -14,6 +14,7 @@ import {
   type Schedule,
 } from "@/lib/flashcards";
 import { dateStamp } from "@/lib/templates";
+import { recordReview } from "@/lib/study-log";
 
 /**
  * Flashcards studied where they are written.
@@ -124,6 +125,7 @@ export function useInlineFlashcards(
         const next = reviewWith(readScheduler(), schedule.current.get(id), grade, today());
         schedule.current = new Map(schedule.current).set(id, next);
         notify();
+        void recordReview(storeRef.current, today()).catch(() => undefined);
         void storeRef.current
           .upsertNote(SCHEDULE_PATH, (content) =>
             formatSchedule(parseSchedule(content).set(id, next)),
