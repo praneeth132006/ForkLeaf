@@ -520,7 +520,8 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
       {
         id: "blame",
         title: "Where did this paragraph come from?",
-        summary: "When each paragraph last changed, and what it said before.",
+        summary:
+          "When each paragraph last changed, what it said before, and — shaded by times rewritten — which parts you have never been sure of.",
         how: "⌘K → See when each paragraph was written",
         tags: ["github"],
       },

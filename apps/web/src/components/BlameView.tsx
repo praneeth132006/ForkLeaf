@@ -9,6 +9,7 @@ import {
   type BlameRevision,
   type PriorWording,
 } from "@forkleaf/markdown-engine";
+import { rewritesOf } from "@/lib/churn";
 import type { RepoRef } from "@forkleaf/types";
 import type { NoteCommitDto, CommitFileDto } from "@/lib/gateway";
 import { readCommitFiles } from "@/lib/gateway";
@@ -43,6 +44,12 @@ export interface BlameViewProps {
  */
 export function BlameView({ commits, revisions, repo, path }: BlameViewProps) {
   const [active, setActive] = useState<string | null>(null);
+  /**
+   * What the margin shows: when each paragraph last changed, or how many
+   * times it has been rewritten — where the note is settled, and where you
+   * have never been sure.
+   */
+  const [shade, setShade] = useState<"age" | "rewrites">("age");
   const { texts, has, prefetch } = revisions;
 
   const shas = useMemo(() => commits.map((commit) => commit.sha), [commits]);
@@ -65,6 +72,18 @@ export function BlameView({ commits, revisions, repo, path }: BlameViewProps) {
   );
 
   const blame = useMemo(() => buildBlame(input), [input]);
+
+  /** Rewrites per paragraph, only worked out when asked for. */
+  const rewrites = useMemo(() => {
+    if (shade !== "rewrites") return null;
+    const texts = input.map((revision) => revision.text);
+    const newest = texts.findIndex((text) => text !== null);
+    const older = newest === -1 ? [] : texts.slice(newest + 1);
+    const counts = new Map(
+      blame.blocks.map((block) => [key(block), rewritesOf(block.text, older)]),
+    );
+    return { counts, most: Math.max(0, ...counts.values()) };
+  }, [shade, input, blame.blocks]);
 
   const loadedCount = shas.filter((sha) => sha in texts).length;
   const loading = loadedCount < shas.length;
@@ -134,10 +153,42 @@ export function BlameView({ commits, revisions, repo, path }: BlameViewProps) {
         </span>
 
         <span
-          className="ml-auto flex items-center gap-1.5 text-[11px] text-[var(--fl-muted)]"
-          title="Paragraphs are shaded by when they last changed"
+          role="radiogroup"
+          aria-label="Shade paragraphs by"
+          className="ml-auto flex items-center gap-1 text-[11px]"
         >
-          <span>older</span>
+          {(
+            [
+              ["age", "Last changed"],
+              ["rewrites", "Times rewritten"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={shade === value}
+              onClick={() => setShade(value)}
+              className={`rounded px-1.5 py-0.5 ${
+                shade === value
+                  ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
+                  : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </span>
+
+        <span
+          className="flex items-center gap-1.5 text-[11px] text-[var(--fl-muted)]"
+          title={
+            shade === "age"
+              ? "Paragraphs are shaded by when they last changed"
+              : "Paragraphs are shaded by how often they have been rewritten"
+          }
+        >
+          <span>{shade === "age" ? "older" : "settled"}</span>
           <span
             aria-hidden="true"
             className="h-1.5 w-16 rounded-full"
@@ -146,7 +197,7 @@ export function BlameView({ commits, revisions, repo, path }: BlameViewProps) {
                 "linear-gradient(to right, color-mix(in srgb, var(--fl-accent) 18%, transparent), var(--fl-accent))",
             }}
           />
-          <span>newer</span>
+          <span>{shade === "age" ? "newer" : "rewritten most"}</span>
         </span>
 
         {loading && (
@@ -172,6 +223,9 @@ export function BlameView({ commits, revisions, repo, path }: BlameViewProps) {
             newest={newest}
             active={key(block) === active}
             onActivate={() => setActive(key(block))}
+            {...(rewrites
+              ? { rewrites: rewrites.counts.get(key(block)) ?? 0, mostRewrites: rewrites.most }
+              : {})}
           />
         ))}
       </div>
@@ -203,14 +257,24 @@ function BlockRow({
   newest,
   active,
   onActivate,
+  rewrites,
+  mostRewrites = 0,
 }: {
   block: BlameBlock;
   oldest: string;
   newest: string;
   active: boolean;
   onActivate: () => void;
+  /** Times rewritten, when the margin is shading by that. */
+  rewrites?: number;
+  mostRewrites?: number;
 }) {
-  const ratio = ageRatio(block.newest.date, oldest, newest);
+  const ratio =
+    rewrites === undefined
+      ? ageRatio(block.newest.date, oldest, newest)
+      : mostRewrites > 0
+        ? rewrites / mostRewrites
+        : 0;
   // Floored well above zero: the oldest paragraph on the page should read as
   // old, not as absent.
   const strength = Math.round((0.18 + ratio * 0.82) * 100);
@@ -263,13 +327,27 @@ function BlockRow({
 
       {/* A paragraph assembled over several sittings is a different kind of
           thing from one written in a single pass, and only the count says so. */}
-      {block.commitCount > 1 && (
+      {rewrites !== undefined ? (
         <span
-          title={`${block.commitCount} commits went into this paragraph`}
+          data-testid="rewrites"
+          title={
+            rewrites === 0
+              ? "Never rewritten since it was written"
+              : `Rewritten ${rewrites} ${rewrites === 1 ? "time" : "times"}`
+          }
           className="shrink-0 self-start rounded bg-[var(--fl-border)] px-1.5 py-0.5 text-[10px] text-[var(--fl-muted)]"
         >
-          {block.commitCount}×
+          {rewrites === 0 ? "settled" : `rewritten ${rewrites}×`}
         </span>
+      ) : (
+        block.commitCount > 1 && (
+          <span
+            title={`${block.commitCount} commits went into this paragraph`}
+            className="shrink-0 self-start rounded bg-[var(--fl-border)] px-1.5 py-0.5 text-[10px] text-[var(--fl-muted)]"
+          >
+            {block.commitCount}×
+          </span>
+        )
       )}
     </button>
   );

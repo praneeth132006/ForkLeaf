@@ -250,3 +250,21 @@ describe("BlameView — what a paragraph used to say", () => {
     expect(screen.queryByText(/it said/)).toBeNull();
   });
 });
+
+describe("BlameView — times rewritten", () => {
+  it("shades by how often each paragraph was rewritten, when asked", () => {
+    const texts = {
+      aaa: "# Plan\n\nWe will use Postgres for the store.",
+      bbb: "# Plan\n\nWe will use SQLite for the store.",
+      ccc: "# Plan\n\nWe will use SQLite for the store, with backups.",
+    };
+    view({ revisions: cache(texts) });
+    expect(screen.queryAllByTestId("rewrites")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("radio", { name: "Times rewritten" }));
+    const labels = screen.getAllByTestId("rewrites").map((node) => node.textContent);
+    expect(labels).toContain("rewritten 2×");
+    expect(labels).toContain("settled");
+    fireEvent.click(screen.getByRole("radio", { name: "Last changed" }));
+    expect(screen.queryAllByTestId("rewrites")).toHaveLength(0);
+  });
+});
