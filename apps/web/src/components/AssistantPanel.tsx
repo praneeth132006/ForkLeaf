@@ -37,7 +37,7 @@ import { useAssistantKey, useAssistantSettings } from "@/hooks/useAssistant";
 
 export interface AssistantPanelProps {
   /** The open note, or null when no note is open. */
-  note: { title: string; content: string } | null;
+  note: { title: string; content: string; path?: string } | null;
   /** Adds an answer to the end of the open note. */
   onInsert?: (markdown: string) => void;
   /**
@@ -57,6 +57,8 @@ export interface AssistantPanelProps {
    * all. An absence explains nothing; this sentence does.
    */
   cannotWrite?: string;
+  /** Opens the record of what has been sent to models from this browser. */
+  onShowReceipts?: () => void;
   onClose: () => void;
 }
 
@@ -83,6 +85,7 @@ export function AssistantPanel({
   onReplace,
   cannotWrite,
   onClose,
+  onShowReceipts,
 }: AssistantPanelProps) {
   const [settings, update] = useAssistantSettings();
   const [key, setKey] = useAssistantKey(settings.provider);
@@ -260,6 +263,7 @@ export function AssistantPanel({
           key,
           note,
           messages: history,
+          receipt: { purpose: "Assistant", path: note?.path ?? null },
           signal: controller.signal,
           onDelta: (delta) =>
             setMessages((current) => {
@@ -385,6 +389,17 @@ export function AssistantPanel({
             >
               <path d="M8 3.5v9M3.5 8h9" />
             </svg>
+          </button>
+        )}
+
+        {onShowReceipts && (
+          <button
+            type="button"
+            onClick={onShowReceipts}
+            title="What the AI has read: every send from this browser"
+            className="rounded px-1.5 py-0.5 text-[11.5px] text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]"
+          >
+            Receipts
           </button>
         )}
 

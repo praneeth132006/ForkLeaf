@@ -200,6 +200,7 @@ import {
   signOut,
 } from "@/lib/gateway";
 import { ThenAndNowDialog } from "@/components/ThenAndNowDialog";
+import { ReceiptsDialog } from "@/components/ReceiptsDialog";
 import { postHogReset } from "@/lib/posthog";
 import {
   assetPathFor,
@@ -546,6 +547,7 @@ export function EditorWorkspace() {
     | "experiment-compare"
     | "borrow"
     | "then-and-now"
+    | "receipts"
     | null
   >(null);
   /**
@@ -1570,6 +1572,7 @@ export function EditorWorkspace() {
           key: assistantKey,
           note: source,
           messages: [{ role: "user", text: cardsRequest(source.title) }],
+          receipt: { purpose: "Flashcards", path: notebook.note?.path ?? null },
           signal,
           onDelta: (delta) => {
             reply += delta;
@@ -1579,7 +1582,7 @@ export function EditorWorkspace() {
         return readCardReply(reply, have);
       },
     };
-  }, [assistantSettings, assistantKey]);
+  }, [assistantSettings, assistantKey, notebook]);
 
   /** Cards in the open note, for its "Study" button. */
   const noteCardCount = useMemo(
@@ -3459,6 +3462,14 @@ export function EditorWorkspace() {
         keywords: "flashcards cards spaced repetition review study learn quiz anki memorise",
         run: () => openFlashcards(),
       });
+      list.push({
+        id: "ai-receipts",
+        label: "See what the AI has read",
+        group: "Notes",
+        hint: "Every note and question this browser sent to a model, and where it went",
+        keywords: "ai receipts privacy log audit sent model assistant claude openai gemini data",
+        run: () => setDialog("receipts"),
+      });
       if (note && !sealed && workspace && !workspace.isLocal) {
         list.push({
           id: "then-and-now",
@@ -4918,7 +4929,8 @@ export function EditorWorkspace() {
             style={{ "--fl-col": `${assistantWidth}px` } as React.CSSProperties}
           >
             <AssistantPanel
-              note={note ? { title, content: note.content } : null}
+              note={note ? { title, content: note.content, path: note.path } : null}
+              onShowReceipts={() => setDialog("receipts")}
               onClose={() => {
                 setDrawer(null);
                 setAssistantOpen(false);
@@ -5115,6 +5127,16 @@ export function EditorWorkspace() {
       )}
 
       {prompt && <PromptDialog request={prompt} onClose={() => setPrompt(null)} />}
+
+      {openDialog === "receipts" && (
+        <ReceiptsDialog
+          onClose={() => setDialog(null)}
+          onOpenNote={(path) => {
+            setDialog(null);
+            notebook.openNote(path);
+          }}
+        />
+      )}
 
       {openDialog === "then-and-now" && note && workspace && !workspace.isLocal && (
         <ThenAndNowDialog

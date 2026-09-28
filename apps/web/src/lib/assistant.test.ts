@@ -426,6 +426,46 @@ describe("streamChat", () => {
     expect(body.system).not.toContain("a private thing");
   });
 
+  it("leaves a receipt for every send: where, which model, which note, how much", async () => {
+    const record = vi.fn();
+    await streamChat({
+      settings: settingsFor("anthropic"),
+      key: "sk-ant-x",
+      note: { title: "Bread", content: "# Bread\n\nFlour and water." },
+      messages: [{ role: "user", text: "How long   should it rise?" }],
+      onDelta: () => undefined,
+      signal: new AbortController().signal,
+      fetchImpl: vi.fn<typeof fetch>(async () => sseResponse([])),
+      receipt: { purpose: "Assistant", path: "food/bread.md" },
+      record,
+    });
+    expect(record).toHaveBeenCalledOnce();
+    expect(record.mock.calls[0]![0]).toMatchObject({
+      provider: "Claude",
+      host: "api.anthropic.com",
+      purpose: "Assistant",
+      note: { title: "Bread", path: "food/bread.md", characters: 25 },
+      question: "How long should it rise?",
+    });
+  });
+
+  it("records no note on a receipt when the note was held back, and records a failed send", async () => {
+    const record = vi.fn();
+    await expect(
+      streamChat({
+        settings: { ...settingsFor("anthropic"), sendNote: false },
+        key: "sk-ant-x",
+        note: { title: "Diary", content: "private" },
+        messages: [{ role: "user", text: "hi" }],
+        onDelta: () => undefined,
+        signal: new AbortController().signal,
+        fetchImpl: vi.fn<typeof fetch>(async () => new Response("nope", { status: 500 })),
+        record,
+      }),
+    ).rejects.toThrow();
+    expect(record.mock.calls[0]![0].note).toBeNull();
+  });
+
   it("explains a refusal rather than throwing the status code", async () => {
     const fetchImpl = vi.fn(
       async () =>

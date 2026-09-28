@@ -1,3 +1,5 @@
+import { recordReceipt, shortQuestion, type Receipt } from "@/lib/ai-receipts";
+
 /**
  * The model behind the assistant panel.
  *
@@ -704,6 +706,13 @@ export interface StreamOptions {
   signal: AbortSignal;
   /** Swappable so the tests need no network. */
   fetchImpl?: typeof fetch;
+  /**
+   * What is asking, and the note's path, for the receipt this send leaves.
+   * Every send leaves one; see `ai-receipts`.
+   */
+  receipt?: { purpose: string; path?: string | null };
+  /** Where the receipt goes; swappable for tests. */
+  record?: (receipt: Receipt) => void;
 }
 
 /**
@@ -717,7 +726,27 @@ export interface StreamOptions {
 export async function streamChat(options: StreamOptions): Promise<void> {
   const { settings, key, note, messages, onDelta, signal } = options;
   const call = options.fetchImpl ?? fetch;
-  const plan = buildRequest(settings, key, systemPrompt(settings.sendNote ? note : null), messages);
+  const sentNote = settings.sendNote ? note : null;
+  const plan = buildRequest(settings, key, systemPrompt(sentNote), messages);
+
+  // Written before the request goes, not after it answers: a send that fails
+  // halfway has still carried the note off this device.
+  const last = [...messages].reverse().find((message) => message.role === "user");
+  (options.record ?? recordReceipt)({
+    at: new Date().toISOString(),
+    provider: provider(settings.provider).label,
+    model: settings.model.trim(),
+    host: new URL(plan.url).host,
+    purpose: options.receipt?.purpose ?? "Assistant",
+    note: sentNote
+      ? {
+          title: sentNote.title,
+          path: options.receipt?.path ?? null,
+          characters: Math.min(sentNote.content.length, CONTEXT_LIMIT),
+        }
+      : null,
+    question: shortQuestion(last?.text ?? ""),
+  });
 
   let response: Response;
   try {

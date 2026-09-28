@@ -271,6 +271,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "ai-receipts",
+        title: "What the AI has read",
+        summary:
+          "A receipt for every send from this browser to a model: when, which provider and model, which note and how much of it, and what was asked. Kept on this device; the note's text is never stored in it.",
+        how: "⌘K → See what the AI has read, or Receipts in the assistant",
+        tags: ["new"],
+      },
+      {
         id: "meaning-search",
         title: "Search by meaning",
         summary:
