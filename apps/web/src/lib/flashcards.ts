@@ -297,6 +297,21 @@ export function dueCards(
   return [...due, ...fresh];
 }
 
+/** New cards a study session takes on, beside everything that is due. */
+export const NEW_PER_SESSION = 20;
+
+/** How many cards a session started today would show: every review due, and some new ones. */
+export function studyCount(cards: readonly Card[], schedule: Schedule, today: string): number {
+  let due = 0;
+  let fresh = 0;
+  for (const card of cards) {
+    const state = schedule.get(card.id);
+    if (!state) fresh += 1;
+    else if (state.due <= today) due += 1;
+  }
+  return due + Math.min(fresh, NEW_PER_SESSION);
+}
+
 /** The soonest date anything comes back, for "nothing due — next on …". */
 export function nextDue(cards: readonly Card[], schedule: Schedule, today: string): string | null {
   let soonest: string | null = null;

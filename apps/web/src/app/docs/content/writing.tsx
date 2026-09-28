@@ -556,6 +556,7 @@ export function Shortcuts() {
           [<Code key="b">⌘S</Code>, "Push pending changes to GitHub now, instead of waiting"],
           [<Code key="c">⌘⇧N</Code>, "New note"],
           [<Code key="d">⌘⇧E</Code>, "Export the current note"],
+          [<Code key="y">⌘⇧Y</Code>, "Study the flashcards that are due"],
           [<Code key="e">⌘⇧?</Code>, "Open help"],
           [<Code key="f">Esc</Code>, "Close a dialog, the diagram studio, or the insert menu"],
         ]}

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog } from "@/components/Dialog";
 import { suggestCards } from "@/lib/flashcard-suggestions";
 import {
+  NEW_PER_SESSION,
   dueCards,
   formatSchedule,
   nextDue,
@@ -49,6 +50,14 @@ export interface FlashcardsDialogProps {
   currentNote?: { path: string; title: string; content: string } | null;
   /** Where cards go when there is no deck to put them in yet. */
   defaultDeck?: string;
+  /**
+   * Go straight to the first card instead of the overview: `"all"` for
+   * everything due, or a note's path for that note's cards.
+   *
+   * The one-click way in. With nothing to study it opens on the overview,
+   * which says why.
+   */
+  autoStart?: "all" | string | null;
   /** For tests; defaults to the clock. */
   now?: Date;
 }
@@ -66,7 +75,6 @@ const GRADES: { grade: Grade; label: string; means: string; key: string }[] = [
 ];
 
 const DEFAULT_DECK = "flashcards/Flashcards.md";
-const NEW_PER_SESSION = 20;
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
@@ -89,6 +97,7 @@ export function FlashcardsDialog({
   onAddCards,
   currentNote = null,
   defaultDeck = DEFAULT_DECK,
+  autoStart = null,
   now,
 }: FlashcardsDialogProps) {
   const today = dateStamp(now ?? new Date());
@@ -113,6 +122,9 @@ export function FlashcardsDialog({
     loaders.current = { loadCards, readSchedule };
   }, [loadCards, readSchedule]);
 
+  /** Taken once, when the cards first arrive — not again after adding one. */
+  const pendingStart = useRef(autoStart);
+
   /** Writes queued one after another, so an older schedule never lands last. */
   const writing = useRef<Promise<void>>(Promise.resolve());
 
@@ -121,8 +133,16 @@ export function FlashcardsDialog({
     Promise.all([loaders.current.loadCards(), loaders.current.readSchedule()]).then(
       ([cards, text]) => {
         if (!live) return;
-        setSchedule(parseSchedule(text));
+        const parsed = parseSchedule(text);
+        setSchedule(parsed);
         setLoad({ kind: "ready", cards });
+        const wanted = pendingStart.current;
+        pendingStart.current = null;
+        // Everything, only when something is waiting: practising the whole
+        // notebook ahead of schedule is not what "study" asked for. One note's
+        // cards can always be practised.
+        if (wanted === "all") beginRef.current(cards, parsed, null, { onlyWaiting: true });
+        else if (wanted) beginRef.current(cards, parsed, wanted);
       },
       (error: unknown) => {
         if (!live) return;
@@ -178,18 +198,30 @@ export function FlashcardsDialog({
       ? currentNote.path
       : (decks[0]?.path ?? defaultDeck));
 
-  const start = (deckPath: string | null) => {
-    const pool = deckPath ? cards.filter((card) => card.path === deckPath) : cards;
-    const waiting = dueCards(pool, schedule, today, NEW_PER_SESSION);
+  const start = (deckPath: string | null) => begin(cards, schedule, deckPath);
+
+  function begin(
+    all: readonly Card[],
+    current: Schedule,
+    deckPath: string | null,
+    { onlyWaiting = false } = {},
+  ) {
+    const pool = deckPath ? all.filter((card) => card.path === deckPath) : [...all];
+    const waiting = dueCards(pool, current, today, NEW_PER_SESSION);
     // A deck with nothing due can still be practised: every card, once.
     const practising = waiting.length === 0;
+    if (practising && onlyWaiting) return;
     const next = practising ? pool : waiting;
     if (next.length === 0) return;
     setQueue(next);
     setSession({ deck: deckPath, practising, total: next.length });
     setReviewed(0);
     setRevealed(false);
-  };
+  }
+  const beginRef = useRef(begin);
+  useEffect(() => {
+    beginRef.current = begin;
+  });
 
   const card = session ? (queue[0] ?? null) : null;
 

@@ -88,7 +88,8 @@ import { DeletedNotesDialog } from "@/components/DeletedNotesDialog";
 import { GraphDialog } from "@/components/GraphDialog";
 import { FolderViewsDialog, type FolderView } from "@/components/FolderViewsDialog";
 import { FlashcardsDialog } from "@/components/FlashcardsDialog";
-import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
+import { SCHEDULE_PATH, findCards } from "@/lib/flashcards";
+import { cardsInNotes, useDueCount } from "@/lib/flashcard-due";
 import {
   formatWeeklyReview,
   isoWeek,
@@ -1457,6 +1458,31 @@ export function EditorWorkspace() {
     workspace && note && !sealed ? note.path : null,
     notebook,
     setNotice,
+  );
+
+  /**
+   * Where the Flashcards dialog opens: the overview, or straight onto a card.
+   * Every quick way in — the status bar count, the header button, ⌘⇧Y — skips
+   * the overview, because the person pressing it already knows what they want.
+   */
+  const [flashcardsStart, setFlashcardsStart] = useState<"all" | string | null>(null);
+  const openFlashcards = useCallback((start: "all" | string | null = null) => {
+    setFlashcardsStart(start);
+    setDialog("flashcards");
+  }, []);
+  /** Cards in the open note, for its "Study" button. */
+  const noteCardCount = useMemo(
+    () => (note && !sealed ? findCards(note.path, "", note.content).length : 0),
+    [note, sealed],
+  );
+  /**
+   * Cards waiting today, across the notebook. Re-counted when a dialog closes,
+   * the tree changes, or a card is written or removed in the open note.
+   */
+  const dueCount = useDueCount(
+    workspace ? notebook : null,
+    [notebook.tree, dialog === null, notebook.activePath, noteCardCount],
+    isTemplatePath,
   );
 
   /** A canvas drawn in a note can place the notebook's notes, and open them. */
@@ -3244,8 +3270,26 @@ export function EditorWorkspace() {
         group: "Notes",
         hint: "Study what is due, add cards, or make them from this note",
         keywords: "flashcards cards spaced repetition review study learn quiz anki memorise",
-        run: () => setDialog("flashcards"),
+        run: () => openFlashcards(),
       });
+      list.push({
+        id: "flashcards-study",
+        label: "Study flashcards now",
+        group: "Notes",
+        hint: "Straight to the first card that is due (⌘⇧Y)",
+        keywords: "study review due cards flashcards now quiz revise practise",
+        run: () => openFlashcards("all"),
+      });
+      if (note && noteCardCount > 0) {
+        list.push({
+          id: "flashcards-note",
+          label: "Study this note's cards",
+          group: "Notes",
+          hint: `The ${noteCardCount === 1 ? "card" : `${noteCardCount} cards`} in this note, one at a time`,
+          keywords: "study practise quiz this note deck cards flashcards",
+          run: () => openFlashcards(note.path),
+        });
+      }
       list.push(
         {
           id: "tools",
@@ -3528,6 +3572,8 @@ export function EditorWorkspace() {
     opened,
     encrypted,
     removeEncryption,
+    openFlashcards,
+    noteCardCount,
   ]);
 
   /**
@@ -3794,6 +3840,14 @@ export function EditorWorkspace() {
           }
           break;
 
+        case "y":
+          // ⌘⇧Y: study. Not ⌘⇧R, which is the browser's hard reload.
+          if (event.shiftKey && workspace) {
+            event.preventDefault();
+            openFlashcards("all");
+          }
+          break;
+
         case "\\":
           event.preventDefault();
           setSidebarCollapsed((value) => !value);
@@ -3816,7 +3870,18 @@ export function EditorWorkspace() {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [note, notebook, handleCreate, currentFolder, router, localFiles, saveEverything, title]);
+  }, [
+    note,
+    notebook,
+    handleCreate,
+    currentFolder,
+    router,
+    localFiles,
+    saveEverything,
+    title,
+    workspace,
+    openFlashcards,
+  ]);
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -4093,6 +4158,30 @@ export function EditorWorkspace() {
                   point is to be able to see at a glance whether the thing you
                   are about to type into will accept it. Absent with no note
                   open, since there would be nothing to lock. */}
+                {/* Only on a note that has cards: one click from reading them
+                  to being asked them. */}
+                {note && noteCardCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => openFlashcards(note.path)}
+                    title={`Study the ${noteCardCount === 1 ? "card" : `${noteCardCount} cards`} in this note`}
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      aria-hidden="true"
+                    >
+                      <path d={TOOL_ICONS.cards} />
+                    </svg>
+                    <span className="hidden @3xl:inline">Study {noteCardCount}</span>
+                    <span className="sr-only @3xl:hidden">Study this note&apos;s cards</span>
+                  </button>
+                )}
+
                 {note && (
                   <IconButton
                     onClick={() => notebook.toggleLocked(note.path)}
@@ -4648,6 +4737,8 @@ export function EditorWorkspace() {
       {!focusMode && (
         <EditorStatusBar
           locked={noteLocked}
+          dueCards={dueCount}
+          onStudy={() => openFlashcards("all")}
           onSwitchBranch={notebook.switchBranch}
           onPropose={() => setDialog("propose")}
           sync={notebook.sync}
@@ -5057,23 +5148,8 @@ export function EditorWorkspace() {
       {openDialog === "flashcards" && workspace && (
         <FlashcardsDialog
           onClose={() => setDialog(null)}
-          loadCards={async () =>
-            (await notebook.allNotes())
-              .filter(
-                (entry) =>
-                  isMarkdown(entry.path) &&
-                  !isTemplatePath(entry.path) &&
-                  entry.path !== SCHEDULE_PATH,
-              )
-              .flatMap((entry) =>
-                findCards(
-                  entry.path,
-                  deriveTitle(entry.content, entry.frontmatter.title, entry.path),
-                  entry.content,
-                  { clozes: wantsClozes(entry.frontmatter, entry.content) },
-                ),
-              )
-          }
+          loadCards={async () => cardsInNotes(await notebook.allNotes(), isTemplatePath)}
+          autoStart={flashcardsStart}
           onAddCards={async (path, cards) => {
             const written = await notebook.upsertNote(path, (content) => withCards(content, cards));
             if (written === null) throw new Error("The cards could not be saved.");

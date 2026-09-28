@@ -683,6 +683,7 @@ export function HelpDialog({
             ["⌘⇧N", "New note"],
             ["⌘⇧D", "Go to the dashboard"],
             ["⌘⇧E", "Export the current note"],
+            ["⌘⇧Y", "Study the flashcards that are due"],
             ["⌘1 / ⌘2 / ⌘3", "Rich, split and source views"],
             ["⌘\\", "Show or hide the sidebar"],
             ["⌘⇧F", "Focus mode — just the note"],

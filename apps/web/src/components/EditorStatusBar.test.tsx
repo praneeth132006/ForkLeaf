@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { EditorStatusBar, type EditorStatusBarProps } from "./EditorStatusBar";
 
 afterEach(cleanup);
@@ -65,5 +65,22 @@ describe("the status bar", () => {
 
     expect(path.className).toContain("fl-marquee");
     expect(path.className).toMatch(/max-w-\[/);
+  });
+});
+
+describe("the flashcards count", () => {
+  it("says how many cards are waiting, and starts studying when clicked", () => {
+    const onStudy = vi.fn();
+    renderBar({ dueCards: 12, onStudy });
+    fireEvent.click(screen.getByRole("button", { name: /12 cards to study/ }));
+    expect(onStudy).toHaveBeenCalledOnce();
+  });
+
+  it("says nothing when nothing is due, or while still counting", () => {
+    renderBar({ dueCards: 0, onStudy: vi.fn() });
+    expect(screen.queryByRole("button", { name: /to study/ })).toBeNull();
+    cleanup();
+    renderBar({ dueCards: null, onStudy: vi.fn() });
+    expect(screen.queryByRole("button", { name: /to study/ })).toBeNull();
   });
 });

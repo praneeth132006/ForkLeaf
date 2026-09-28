@@ -68,6 +68,15 @@ export interface EditorStatusBarProps {
   ) => Promise<{ before: number; after: number; width: number; height: number }>;
   /** Opens the note an unsynced file lives in, so it can be dealt with. */
   onLocateChange: (path: string) => void;
+  /**
+   * Flashcards waiting to be studied today, or null while still counting.
+   *
+   * Spaced repetition only works if you come back, and nothing used to say
+   * there was anything to come back to. Shown only when it is more than none.
+   */
+  dueCards?: number | null;
+  /** Starts studying, straight onto the first card. */
+  onStudy?: () => void;
 }
 
 /**
@@ -96,6 +105,8 @@ export function EditorStatusBar({
   onShrinkChange,
   onLocateChange,
   sessionExpired = false,
+  dueCards = null,
+  onStudy,
 }: EditorStatusBarProps) {
   /**
    * An expired sign-in is the one failure retrying cannot fix, so it takes
@@ -162,6 +173,27 @@ export function EditorStatusBar({
           className="shrink-0 rounded bg-[var(--fl-accent)] px-2 py-0.5 text-[0.7rem] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
         >
           Sign in again
+        </button>
+      )}
+
+      {dueCards !== null && dueCards > 0 && onStudy && (
+        <button
+          type="button"
+          onClick={onStudy}
+          title="Study your flashcards (⌘⇧Y)"
+          className="flex shrink-0 items-center gap-1 rounded-full bg-[var(--fl-accent-soft)] px-2 py-0.5 font-medium text-[var(--fl-accent)] transition-colors hover:bg-[var(--fl-accent)] hover:text-[var(--fl-accent-contrast)]"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            className="h-3 w-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            aria-hidden="true"
+          >
+            <path d="M2.75 5.25h8.5v8h-8.5zM5 2.75h8.25v8" />
+          </svg>
+          {dueCards} {dueCards === 1 ? "card" : "cards"} to study
         </button>
       )}
 

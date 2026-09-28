@@ -213,3 +213,25 @@ describe("FlashcardsDialog — studying", () => {
     expect(screen.getByText("Capital of Peru")).toBeTruthy();
   });
 });
+
+describe("FlashcardsDialog — straight to studying", () => {
+  it("opens on the first card when asked to study everything", async () => {
+    open({ autoStart: "all" });
+    expect(await screen.findByText("Capital of France")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Show answer/ })).toBeTruthy();
+  });
+
+  it("opens on one note's cards when asked to study that note", async () => {
+    open({ autoStart: "bio.md", loadCards: vi.fn(async () => [...CARDS, ...MORE]) });
+    expect(await screen.findByText("Mitochondria")).toBeTruthy();
+    expect(screen.getByText(/1 left/)).toBeTruthy();
+  });
+
+  it("stays on the overview when nothing is due", async () => {
+    const reviewed = new Map(
+      CARDS.map((card) => [card.id, { due: "2026-12-01", interval: 60, ease: 2.5, reps: 4 }]),
+    );
+    open({ autoStart: "all", readSchedule: vi.fn(async () => formatSchedule(reviewed)) });
+    expect(await screen.findByText("Nothing to study today")).toBeTruthy();
+  });
+});

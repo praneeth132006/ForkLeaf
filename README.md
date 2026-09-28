@@ -270,6 +270,7 @@ Export one note, or the whole workspace at once.
 | `⌘⇧N`    | New note                                             |
 | `⌘⇧E`    | Export                                               |
 | `⌘⇧L`    | Lock or unlock the note against editing              |
+| `⌘⇧Y`    | Study the flashcards that are due                    |
 | `⌘⇧?`    | Help and the full shortcut list                      |
 
 The complete table, including the rich-text and source-mode bindings, is on the
