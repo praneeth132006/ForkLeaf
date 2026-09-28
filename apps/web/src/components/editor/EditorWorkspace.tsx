@@ -31,6 +31,7 @@ import type { EditorViewMode, Note, Workspace } from "@forkleaf/types";
 import {
   deriveTitle,
   extractTags,
+  parseDocument,
   dirname,
   documentStats,
   joinPath,
@@ -91,6 +92,7 @@ import { FolderViewsDialog, type FolderView } from "@/components/FolderViewsDial
 import { FlashcardsDialog } from "@/components/FlashcardsDialog";
 import { PresentMode } from "@/components/PresentMode";
 import { mapOfContents, withMapOfContents } from "@/lib/map-of-contents";
+import { SCHEDULE_FIELDS, scheduledNote } from "@/lib/scheduled-notes";
 import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
 import { cardsInNotes, useDueCount } from "@/lib/flashcard-due";
 import { cardsRequest, readCardReply } from "@/lib/ai-cards";
@@ -2557,6 +2559,52 @@ export function EditorWorkspace() {
   }, [workspace, user]);
 
   const templates = useMemo(() => templatesIn(takenPaths), [takenPaths]);
+
+  /**
+   * Scheduled templates: once a day, per notebook, make the note each template
+   * with a `schedule` is due to make, if it is not there already. Made in the
+   * background — the note being read stays the note being read — and said in
+   * one line.
+   */
+  const scheduledRun = useRef<string | null>(null);
+  const scheduledInputs = useRef({ templates, takenPaths, notebook });
+  useEffect(() => {
+    scheduledInputs.current = { templates, takenPaths, notebook };
+  });
+  useEffect(() => {
+    if (!notebook.ready || !workspace) return;
+    const now = new Date();
+    const key = `${workspace.id}:${dateStamp(now)}`;
+    // Wait for the tree: a notebook still loading has no templates yet, and
+    // would look as if every scheduled note were missing.
+    if (scheduledRun.current === key || takenPaths.length === 0) return;
+    scheduledRun.current = key;
+
+    void (async () => {
+      const { templates: all, takenPaths: taken, notebook: book } = scheduledInputs.current;
+      const made: string[] = [];
+      for (const template of all) {
+        const raw = await book.readDocument(template.path);
+        if (raw === null) continue;
+        const due = scheduledNote(
+          { name: template.name, frontmatter: parseDocument(raw).frontmatter },
+          now,
+        );
+        if (!due || taken.includes(due.path)) continue;
+        const { content, frontmatter } = noteFromTemplate(raw, { title: due.title, now });
+        const own = Object.fromEntries(
+          Object.entries(frontmatter).filter(([field]) => !SCHEDULE_FIELDS.includes(field)),
+        );
+        const written = await book.upsertNote(due.path, () => content);
+        if (written === null) continue;
+        if (Object.keys(own).length > 0) await book.setNoteProperties(due.path, own);
+        made.push(due.path);
+      }
+      if (made.length === 1) setNotice(`Made today's scheduled note, ${made[0]}`);
+      else if (made.length > 1)
+        setNotice(`Made ${made.length} scheduled notes: ${made.join(", ")}`);
+    })();
+  }, [notebook.ready, workspace, takenPaths.length]);
 
   /** Opens today's journal note, making it first when there is not one yet. */
   const openToday = useCallback(async () => {

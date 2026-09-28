@@ -271,6 +271,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "scheduled-notes",
+        title: "Scheduled notes",
+        summary:
+          "Give a template a schedule property — daily, weekdays, weekly, monthly or a day like friday — and its note is made the first time you open ForkLeaf in that period. Only ever for the current one.",
+        how: "templates/ → add property schedule",
+        tags: ["new"],
+      },
+      {
         id: "then-and-now",
         title: "Then and now",
         summary:
