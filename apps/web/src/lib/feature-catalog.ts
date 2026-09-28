@@ -250,7 +250,7 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         id: "explain-back",
         title: "Explain it back",
         summary:
-          "Hide a note, write down what you remember, and see it side by side with the original — every sentence marked by what you forgot.",
+          "Hide a note, write down — or say out loud — what you remember, and see it side by side with the original, every sentence marked by what you forgot.",
         how: "⌘K → Explain it back",
         tags: ["new"],
       },

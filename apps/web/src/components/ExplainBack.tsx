@@ -2,6 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { compareRecall, type RecallReport } from "@/lib/explain-back";
+import {
+  appendPhrase,
+  browserRecognition,
+  createDictation,
+  type Dictation,
+  type RecognitionConstructor,
+} from "@/lib/dictation";
 
 /**
  * Explain it back, in the note's own place.
@@ -17,6 +24,11 @@ export interface ExplainBackProps {
   /** The note's markdown, without its properties. */
   content: string;
   onClose: () => void;
+  /**
+   * Speech recognition for "Say it instead". The browser's own by default;
+   * null to leave it out, a double in tests.
+   */
+  recognition?: RecognitionConstructor | null;
 }
 
 const MIN_WORDS = 3;
@@ -33,10 +45,44 @@ const LABEL: Record<RecallReport["sentences"][number]["status"], string> = {
   missed: "Missed",
 };
 
-export function ExplainBack({ title, content, onClose }: ExplainBackProps) {
+export function ExplainBack({
+  title,
+  content,
+  onClose,
+  recognition = browserRecognition(),
+}: ExplainBackProps) {
   const [attempt, setAttempt] = useState("");
   const [stage, setStage] = useState<"write" | "compare">("write");
   const area = useRef<HTMLTextAreaElement>(null);
+
+  /**
+   * Saying it out loud instead of typing it. Each finished phrase lands at the
+   * end of the text, where it can still be corrected by hand.
+   */
+  const [listening, setListening] = useState(false);
+  const [micProblem, setMicProblem] = useState<string | null>(null);
+  const dictation = useRef<Dictation | null>(null);
+  const toggleListening = () => {
+    if (!recognition) return;
+    if (listening) {
+      dictation.current?.stop();
+      return;
+    }
+    setMicProblem(null);
+    dictation.current = createDictation(recognition, {
+      onText: (text) => setAttempt((current) => appendPhrase(current, text)),
+      onEnd: () => setListening(false),
+      onError: (reason) =>
+        setMicProblem(
+          reason === "not-allowed" || reason === "service-not-allowed"
+            ? "The microphone is blocked for this page. Allow it in the browser's site settings, or type instead."
+            : "Listening stopped. Try again, or type instead.",
+        ),
+    });
+    setListening(true);
+    dictation.current.start();
+  };
+  useEffect(() => () => dictation.current?.stop(), []);
 
   useEffect(() => {
     if (stage === "write") area.current?.focus();
@@ -90,14 +136,42 @@ export function ExplainBack({ title, content, onClose }: ExplainBackProps) {
             placeholder="Start with the main idea, then the details…"
             className="min-h-[320px] flex-1 resize-y rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-4 text-[15px] leading-relaxed text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]"
           />
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="text-[12px] text-[var(--fl-muted)]">
               {words} {words === 1 ? "word" : "words"}
             </span>
+            {recognition && (
+              <button
+                type="button"
+                onClick={toggleListening}
+                aria-pressed={listening}
+                title="Explain it out loud; the browser writes down what you say"
+                className={
+                  listening
+                    ? "rounded-lg bg-[var(--fl-danger)] px-3 py-1.5 text-[13px] font-semibold text-white"
+                    : button
+                }
+              >
+                {listening ? "● Listening — stop" : "🎙 Say it instead"}
+              </button>
+            )}
+            {listening && (
+              <span className="text-[12px] text-[var(--fl-muted)]">
+                Speech is turned into text by your browser, which may send it to its maker.
+              </span>
+            )}
+            {micProblem && (
+              <span role="alert" className="text-[12px] text-[var(--fl-danger)]">
+                {micProblem}
+              </span>
+            )}
             <button
               type="button"
               disabled={words < MIN_WORDS}
-              onClick={() => setStage("compare")}
+              onClick={() => {
+                dictation.current?.stop();
+                setStage("compare");
+              }}
               className={`${primary} ml-auto`}
             >
               Compare with the note <span className="opacity-60">(⌘↵)</span>
