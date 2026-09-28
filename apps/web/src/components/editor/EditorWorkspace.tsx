@@ -93,6 +93,7 @@ import { FlashcardsDialog } from "@/components/FlashcardsDialog";
 import { PresentMode } from "@/components/PresentMode";
 import { mapOfContents, withMapOfContents } from "@/lib/map-of-contents";
 import { SCHEDULE_FIELDS, scheduledNote } from "@/lib/scheduled-notes";
+import { recordVisit } from "@/lib/note-memory";
 import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
 import { cardsInNotes, useDueCount } from "@/lib/flashcard-due";
 import { cardsRequest, readCardReply } from "@/lib/ai-cards";
@@ -2950,6 +2951,25 @@ export function EditorWorkspace() {
    */
   const [explainingPath, setExplainingPath] = useState<string | null>(null);
   const explaining = note !== null && explainingPath === note.path;
+
+  /** Each note opened here is a visit, for the dashboard's "fading from memory". */
+  useEffect(() => {
+    if (!workspace || !note) return;
+    recordVisit(`${workspace.id}::${note.path}`, dateStamp(new Date()));
+  }, [workspace, note?.path]);
+
+  /**
+   * `?then=explain` from the dashboard: open the note straight into Explain it
+   * back, once, for the note the address named.
+   */
+  const explainOnOpen = useRef(
+    searchParams.get("then") === "explain" ? searchParams.get("note") : null,
+  );
+  useEffect(() => {
+    if (!note || explainOnOpen.current !== note.path) return;
+    explainOnOpen.current = null;
+    setExplainingPath(note.path);
+  }, [note]);
   const [canvasNotes, setCanvasNotes] = useState<CanvasNoteChoice[]>([]);
   useEffect(() => {
     if (!canvasPath) return;

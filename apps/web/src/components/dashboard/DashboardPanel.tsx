@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { SessionUser, Workspace } from "@forkleaf/types";
@@ -24,6 +31,8 @@ import { NoteTree } from "./NoteTree";
 import { NoteGrid } from "./NoteGrid";
 import { PublishedPages } from "./PublishedPages";
 import { usePublishedPages } from "@/hooks/usePublishedPages";
+import { MEMORY_KEY, fading, parseVisits } from "@/lib/note-memory";
+import { dateStamp } from "@/lib/templates";
 
 /**
  * The dashboard.
@@ -161,6 +170,17 @@ export function DashboardPanel({
 
   // Only the visible slice is rendered; every change to the filters resets it.
   const page = useMemo(() => results.slice(0, visible), [results, visible]);
+
+  /**
+   * Notes fading from memory, from this device's record of visits. The server
+   * has no localStorage, so it renders none and the browser fills them in.
+   */
+  const visitsRaw = useSyncExternalStore(subscribeToStorage, readVisitsRaw, noVisits);
+  const visits = useMemo(() => parseVisits(visitsRaw), [visitsRaw]);
+  const slipping = useMemo(
+    () => fading(entries, (entry) => entry.id, visits, dateStamp(new Date())),
+    [entries, visits],
+  );
 
   const recent = useMemo(
     () =>
@@ -510,6 +530,57 @@ export function DashboardPanel({
           </section>
         )}
 
+        {/* ── Fading ───────────────────────────────────────────────────── */}
+        {slipping.length > 0 && (
+          <section className="mb-8" aria-label="Fading from memory">
+            <SectionLabel>Fading from memory</SectionLabel>
+            <p className="-mt-1 mb-3 text-[12.5px] text-[var(--fl-muted)]">
+              Notes you came back to before and have not read in a while. An estimate from when you
+              last opened them on this device.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {slipping.map(({ item: entry, recall: left, since }) => (
+                <div
+                  key={entry.id}
+                  className="rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-4"
+                  data-testid="fading-note"
+                >
+                  <span className="block truncate font-medium text-[var(--fl-text)]">
+                    {entry.title}
+                  </span>
+                  <span className="mt-1 flex items-center gap-2 text-[12px] text-[var(--fl-muted)]">
+                    <span
+                      className="h-1.5 w-16 overflow-hidden rounded-full bg-[var(--fl-elevated)]"
+                      aria-hidden="true"
+                    >
+                      <span
+                        className="block h-full bg-[var(--fl-accent)]"
+                        style={{ width: `${Math.round(left * 100)}%` }}
+                      />
+                    </span>
+                    {left < 0.05 ? "Mostly forgotten" : `About ${Math.round(left * 100)}% left`} ·
+                    read {since} days ago
+                  </span>
+                  <span className="mt-3 flex gap-2 text-[12.5px]">
+                    <Link
+                      href={editorHref(entry)}
+                      className="rounded-lg border border-[var(--fl-border)] px-2.5 py-1 text-[var(--fl-text)] hover:bg-[var(--fl-elevated)]"
+                    >
+                      Reread
+                    </Link>
+                    <Link
+                      href={`${editorHref(entry)}&then=explain`}
+                      className="rounded-lg px-2.5 py-1 text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
+                    >
+                      Test myself
+                    </Link>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ── The index ────────────────────────────────────────────────── */}
         <section ref={indexRef} className="scroll-mt-20">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -834,3 +905,18 @@ function describeLibrary(notes: number, repositories: number): string {
     repositories === 1 ? "workspace" : "workspaces"
   }.`;
 }
+
+function subscribeToStorage(onChange: () => void): () => void {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
+
+function readVisitsRaw(): string | null {
+  try {
+    return window.localStorage.getItem(MEMORY_KEY);
+  } catch {
+    return null;
+  }
+}
+
+const noVisits = () => null;

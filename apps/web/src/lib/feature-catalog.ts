@@ -271,6 +271,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "fading",
+        title: "Fading from memory",
+        summary:
+          "Every note gets a forgetting curve from when you last opened it. The dashboard shows the notes you came back to before and are now losing, with Reread and Test myself.",
+        how: "Dashboard → Fading from memory",
+        tags: ["new"],
+      },
+      {
         id: "ai-receipts",
         title: "What the AI has read",
         summary:
