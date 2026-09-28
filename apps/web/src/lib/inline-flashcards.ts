@@ -76,15 +76,19 @@ export function useInlineFlashcards(
   path: string | null,
   store: ScheduleStore,
   onProblem?: (message: string) => void,
+  /** Told when a blank is made from the selection toolbar. */
+  onAllowBlanks?: () => void,
 ): FlashcardBridge | undefined {
   const schedule = useRef<Schedule>(new Map());
   const version = useRef(0);
   const listeners = useRef(new Set<() => void>());
   const storeRef = useRef(store);
   const problemRef = useRef(onProblem);
+  const blanksRef = useRef(onAllowBlanks);
   useEffect(() => {
     storeRef.current = store;
     problemRef.current = onProblem;
+    blanksRef.current = onAllowBlanks;
   });
 
   const notify = () => {
@@ -135,6 +139,7 @@ export function useInlineFlashcards(
         return () => listeners.current.delete(listener);
       },
       version: () => version.current,
+      allowBlanks: () => blanksRef.current?.(),
     };
   }, [path]);
 }

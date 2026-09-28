@@ -184,3 +184,45 @@ describe("flashcards drawn in the note", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 });
+
+describe("a card from the selection", () => {
+  const select = (editor: Editor, text: string) => {
+    let from = -1;
+    editor.state.doc.descendants((node, pos) => {
+      if (from === -1 && node.isText && node.text!.includes(text)) {
+        from = pos + node.text!.indexOf(text);
+      }
+    });
+    editor.commands.setTextSelection({ from, to: from + text.length });
+  };
+
+  it("makes the selection the answer and the heading above it the question", async () => {
+    const { editor } = await mount("# Osmosis\n\nWater moving across a membrane.\n\nMore text.");
+    select(editor, "Water moving across a membrane");
+    act(() => {
+      editor.commands.flashcardFromSelection();
+    });
+    expect(types(editor)).toEqual(["heading", "paragraph", "flashcard", "paragraph"]);
+    expect(editor.state.doc.child(2).attrs).toMatchObject({
+      question: "Osmosis",
+      answer: "Water moving across a membrane",
+    });
+    // Opened for the question to be written.
+    await waitFor(() => expect(screen.getByLabelText("Question")).toBeTruthy());
+    expect(markdownOf(editor)).toContain("Osmosis :: Water moving across a membrane");
+  });
+
+  it("does nothing with no selection", async () => {
+    const { editor } = await mount("Just text.");
+    expect(editor.commands.flashcardFromSelection()).toBe(false);
+  });
+
+  it("writes a blank as a highlight, the spelling a cloze card is read from", async () => {
+    const { editor } = await mount("Water boils at 100 degrees.");
+    select(editor, "100");
+    act(() => {
+      editor.commands.setHighlight();
+    });
+    expect(markdownOf(editor)).toContain("==100==");
+  });
+});

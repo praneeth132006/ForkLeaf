@@ -702,6 +702,12 @@ export function WysiwygEditor({
           className="font-mono text-xs"
         />
         <HighlightPicker editor={editor} />
+        {editor.schema.nodes.flashcard && editor.isEditable && (
+          <FlashcardButtons
+            editor={editor}
+            onBlank={() => flashcardsRef.current?.allowBlanks?.()}
+          />
+        )}
       </BubbleMenu>
 
       <EditorContent editor={editor} />
@@ -797,6 +803,48 @@ function FormatButton({
     >
       {glyph}
     </button>
+  );
+}
+
+// ─── Flashcards from a selection ────────────────────────────────────────────
+
+/**
+ * Two ways to turn what is already written into something to remember,
+ * without knowing any syntax.
+ *
+ * **Card** makes a flashcard whose answer is the selection and whose question
+ * starts as the heading above it. **Blank** highlights the words, which makes
+ * the sentence a fill-in-the-blank card with them hidden.
+ */
+function FlashcardButtons({ editor, onBlank }: { editor: Editor; onBlank: () => void }) {
+  const button =
+    "h-7 rounded px-1.5 text-[12px] font-medium text-[var(--fl-inverse-text)] transition hover:bg-[var(--fl-inverse-text)]/15";
+  return (
+    <span className="flex items-center gap-0.5">
+      <span className="mx-0.5 h-4 w-px bg-[var(--fl-inverse-text)]/20" aria-hidden="true" />
+      <button
+        type="button"
+        title="Make a flashcard with this as the answer"
+        aria-label="Make a flashcard"
+        onClick={() => editor.chain().focus().flashcardFromSelection().run()}
+        className={button}
+      >
+        + Card
+      </button>
+      <button
+        type="button"
+        title="Hide these words: the sentence becomes a fill-in-the-blank card"
+        aria-label="Make a blank to fill in"
+        onClick={() => {
+          if (editor.isActive("highlight")) return;
+          editor.chain().focus().setHighlight().run();
+          onBlank();
+        }}
+        className={button}
+      >
+        Blank
+      </button>
+    </span>
   );
 }
 

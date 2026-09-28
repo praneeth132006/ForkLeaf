@@ -88,7 +88,7 @@ import { DeletedNotesDialog } from "@/components/DeletedNotesDialog";
 import { GraphDialog } from "@/components/GraphDialog";
 import { FolderViewsDialog, type FolderView } from "@/components/FolderViewsDialog";
 import { FlashcardsDialog } from "@/components/FlashcardsDialog";
-import { SCHEDULE_PATH, findCards } from "@/lib/flashcards";
+import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
 import { cardsInNotes, useDueCount } from "@/lib/flashcard-due";
 import {
   formatWeeklyReview,
@@ -1454,10 +1454,36 @@ export function EditorWorkspace() {
   );
 
   /** Flashcards in the open note are graded where they are written. */
+
+  /**
+   * A blank made from the selection toolbar only counts once the note is
+   * tagged `flashcards`, so the first one tags it. Read through a ref and a
+   * moment later: the highlight's own edit has to reach the note first, or
+   * saving the tag would write the note as it was before the highlight.
+   */
+  const latestForBlanks = useRef({ note, update: notebook.updateFrontmatter });
+  useEffect(() => {
+    latestForBlanks.current = { note, update: notebook.updateFrontmatter };
+  });
+  const allowBlanks = useCallback(() => {
+    window.setTimeout(() => {
+      const { note: current, update } = latestForBlanks.current;
+      if (!current || wantsClozes(current.frontmatter, current.content)) return;
+      const tags: unknown = current.frontmatter.tags;
+      const list = Array.isArray(tags)
+        ? tags.map(String)
+        : typeof tags === "string" && tags.trim()
+          ? tags.split(/[,\s]+/)
+          : [];
+      void update({ ...current.frontmatter, tags: [...list, "flashcards"] });
+      setNotice("Highlighted words in this note are now blanks to fill in, in Flashcards.");
+    }, 400);
+  }, []);
   const flashcardBridge = useInlineFlashcards(
     workspace && note && !sealed ? note.path : null,
     notebook,
     setNotice,
+    allowBlanks,
   );
 
   /**

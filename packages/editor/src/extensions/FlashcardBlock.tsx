@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Node, mergeAttributes, type Editor } from "@tiptap/core";
 import type { Node as ProseMirrorNode, NodeType } from "@tiptap/pm/model";
-import { TextSelection } from "@tiptap/pm/state";
+import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { parseCardLine } from "@forkleaf/markdown-engine";
 import { caretBelow } from "../caret";
@@ -42,6 +42,11 @@ export interface FlashcardBridge {
   subscribe?: (listener: () => void) => () => void;
   /** A value that changes whenever the schedule does. */
   version?: () => number;
+  /**
+   * Makes highlighted words in this note count as blanks to fill in — by
+   * tagging it `flashcards` — after one was made from the selection toolbar.
+   */
+  allowBlanks?: () => void;
 }
 
 export interface FlashcardBlockOptions {
@@ -54,6 +59,12 @@ declare module "@tiptap/core" {
     flashcardBlock: {
       /** Inserts a card with its fields open. */
       insertFlashcard: (card?: Partial<FlashcardFace>) => ReturnType;
+      /**
+       * A card whose answer is the selected text, placed under the block the
+       * selection is in, with its fields open. The question starts as the
+       * heading the text sits under, to be edited.
+       */
+      flashcardFromSelection: () => ReturnType;
     };
   }
 }
@@ -82,7 +93,8 @@ function FlashcardNodeView({
   const reversed = Boolean(node.attrs.reversed);
   const bridge = (extension.options as FlashcardBlockOptions).bridge();
 
-  const [editing, setEditing] = useState(!question.trim() && !answer.trim());
+  const fresh = Boolean(node.attrs.fresh);
+  const [editing, setEditing] = useState(fresh || (!question.trim() && !answer.trim()));
   const [revealed, setRevealed] = useState(false);
   const [graded, setGraded] = useState<string | null>(null);
   const questionRef = useRef<HTMLInputElement>(null);
@@ -96,6 +108,13 @@ function FlashcardNodeView({
     // After the editor has finished placing its own selection, or it takes the
     // focus straight back from the field.
     const timer = window.setTimeout(() => {
+      // A card made from a selection has its answer; what it needs is a
+      // question, so that field is focused with its guess selected to type over.
+      if (fresh) {
+        questionRef.current?.focus();
+        questionRef.current?.select();
+        return;
+      }
       (question.trim() ? answerRef.current : questionRef.current)?.focus();
     }, 0);
     return () => window.clearTimeout(timer);
@@ -108,6 +127,7 @@ function FlashcardNodeView({
 
   const finish = () => {
     setEditing(false);
+    if (fresh) updateAttributes({ fresh: false });
     const position = typeof getPos === "function" ? getPos() : undefined;
     if (!question.trim() && !answer.trim()) {
       deleteNode();
@@ -448,6 +468,12 @@ export const FlashcardBlock = Node.create<FlashcardBlockOptions>({
         parseHTML: (element) => element.getAttribute("data-reversed") === "true",
         renderHTML: (attributes) => (attributes.reversed ? { "data-reversed": "true" } : {}),
       },
+      /** Just made from a selection: open with the question focused. Never written out. */
+      fresh: {
+        default: false,
+        parseHTML: () => false,
+        renderHTML: () => ({}),
+      },
       joinedAbove: {
         default: false,
         parseHTML: (element) => element.getAttribute("data-joined-above") === "true",
@@ -490,6 +516,43 @@ export const FlashcardBlock = Node.create<FlashcardBlockOptions>({
               reversed: card.reversed ?? false,
             },
           }),
+      flashcardFromSelection:
+        () =>
+        ({ state, dispatch }) => {
+          const { from, to, empty } = state.selection;
+          if (empty) return false;
+          const answer = state.doc.textBetween(from, to, " ", " ").replace(/\s+/g, " ").trim();
+          if (!answer) return false;
+
+          // The top-level block the selection ends in, and the heading above it.
+          const $to = state.doc.resolve(to);
+          const index = $to.index(0);
+          let question = "";
+          for (let i = Math.min(index, state.doc.childCount - 1); i >= 0; i -= 1) {
+            const block = state.doc.child(i);
+            if (block.type.name === "heading") {
+              question = block.textContent.trim();
+              break;
+            }
+          }
+          if (question.toLowerCase() === answer.toLowerCase()) question = "";
+
+          let after = 0;
+          for (let i = 0; i <= index && i < state.doc.childCount; i += 1) {
+            after += state.doc.child(i).nodeSize;
+          }
+          if (dispatch) {
+            const tr = state.tr.insert(
+              after,
+              this.type.create({ question, answer, reversed: false, fresh: true }),
+            );
+            // The card itself selected: the formatting bar is for text, and it
+            // stayed floating over the new card's fields.
+            tr.setSelection(NodeSelection.create(tr.doc, after));
+            dispatch(tr.scrollIntoView());
+          }
+          return true;
+        },
     };
   },
 
