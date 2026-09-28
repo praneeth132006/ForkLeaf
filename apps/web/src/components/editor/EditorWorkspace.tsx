@@ -98,6 +98,7 @@ import { recordVisit } from "@/lib/note-memory";
 import { reversals, withReason, type Reversal } from "@/lib/changes-of-mind";
 import { ChangesOfMindDialog } from "@/components/ChangesOfMindDialog";
 import { LineageDialog } from "@/components/LineageDialog";
+import { SwitchDialog } from "@/components/SwitchDialog";
 import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
 import { cardsInNotes, useDueCount } from "@/lib/flashcard-due";
 import { cardsRequest, readCardReply } from "@/lib/ai-cards";
@@ -555,6 +556,7 @@ export function EditorWorkspace() {
     | "receipts"
     | "changes-of-mind"
     | "lineage"
+    | "switch"
     | null
   >(null);
   /**
@@ -3537,6 +3539,17 @@ export function EditorWorkspace() {
           run: () => setDialog("lineage"),
         });
       }
+      if (workspace && !workspace.isLocal) {
+        list.push({
+          id: "if-i-stop-writing",
+          label: "If I stop writing…",
+          group: "Notes",
+          hint: "A GitHub Action that publishes a folder or tells someone when the notebook goes quiet",
+          keywords:
+            "dead mans switch legacy inactive quiet publish trusted person will github action",
+          run: () => setDialog("switch"),
+        });
+      }
       list.push({
         id: "ai-receipts",
         label: "See what the AI has read",
@@ -5229,6 +5242,14 @@ export function EditorWorkspace() {
             notebook.saveNote(withReason(latest.content, reversal, reason, dateStamp(new Date())));
             setNotice("Reason recorded under “Why I changed my mind”.");
           }}
+        />
+      )}
+
+      {openDialog === "switch" && workspace && !workspace.isLocal && (
+        <SwitchDialog
+          repo={workspace.repo}
+          folders={collectFolders(notebook.tree).filter((path) => !isTemplatePath(`${path}/`))}
+          onClose={() => setDialog(null)}
         />
       )}
 

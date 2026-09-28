@@ -271,6 +271,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "if-i-stop-writing",
+        title: "If I stop writing",
+        summary:
+          "A GitHub Action in your own repository: when nothing has been written for months, it publishes a folder you chose and tells someone you trust — after reminding you two weeks before. It never deletes anything.",
+        how: "⌘K → If I stop writing…",
+        tags: ["new", "github"],
+      },
+      {
         id: "lineage",
         title: "This note's family",
         summary:
