@@ -30,8 +30,9 @@ describe("searchFeatures", () => {
   });
 
   it("matches every word, across title, summary, how and category", () => {
-    const found = allFeatures(searchFeatures("flashcards review"));
-    expect(found.map((feature) => feature.id)).toEqual(["flashcards"]);
+    const found = allFeatures(searchFeatures("flashcards review")).map((feature) => feature.id);
+    expect(found).toContain("flashcards");
+    expect(found).not.toContain("quote");
     expect(allFeatures(searchFeatures("PAPERS quote")).map((feature) => feature.id)).toContain(
       "quote",
     );

@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
       `# ${title}\n\n` +
       `A deck of ${cards.length} ${cards.length === 1 ? "flashcard" : "flashcards"}, shared from ForkLeaf. ` +
       `The cards are in [${DECK_FILE}](${DECK_FILE}), one \`Question :: Answer\` per line.\n\n` +
-      `To study it, type **/ → Shared deck** in any ForkLeaf note and paste ` +
+      `To study it, type **/ → Flashcards: shared deck** in any ForkLeaf note and paste ` +
       `\`https://github.com/${login}/${name}\`. Your progress stays in your own notebook, ` +
       `and new versions of the deck can be pulled in later.\n`;
 

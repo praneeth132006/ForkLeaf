@@ -213,3 +213,10 @@ describe("source definitions", () => {
     }
   });
 });
+
+describe("every flashcard option under one word", () => {
+  it("offers the card, the shared deck and voice review for /cards", () => {
+    const ids = filterInsertActions("cards").map((action) => action.id);
+    expect(ids.slice(0, 3).sort()).toEqual(["deck", "flashcard", "hands-free"]);
+  });
+});

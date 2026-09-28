@@ -219,7 +219,7 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         title: "Hands-free review",
         summary:
           "A note's cards read aloud and answered by voice, each graded on its schedule — for studying while walking.",
-        how: "/ → Hands-free review",
+        how: "/ → Flashcards: review by voice",
         tags: ["new"],
       },
       {
@@ -227,7 +227,7 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         title: "Decks you can fork",
         summary:
           "Share a note's flashcards as a public GitHub repository; others copy it, keep their progress private, and pull in your updates.",
-        how: "/ → Shared deck",
+        how: "/ → Flashcards: shared deck",
         tags: ["new", "github"],
       },
       {
@@ -260,6 +260,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         summary:
           "Type Question :: Answer and press Enter: it becomes a card in the note that you turn over and grade in place, or review them all at once, on a spaced-repetition schedule that syncs with the notebook.",
         how: "Type Question :: Answer, or / → Flashcard",
+        tags: ["new"],
+      },
+      {
+        id: "flashcards-quick",
+        title: "Cards from what you wrote",
+        summary:
+          "Select text and press + Card to make it an answer, or Blank to hide those words in the sentence. The status bar says how many cards are due; one click starts studying.",
+        how: "Select text → + Card or Blank · ⌘⇧Y to study",
         tags: ["new"],
       },
       {
