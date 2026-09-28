@@ -97,6 +97,7 @@ import { SCHEDULE_FIELDS, scheduledNote } from "@/lib/scheduled-notes";
 import { recordVisit } from "@/lib/note-memory";
 import { reversals, withReason, type Reversal } from "@/lib/changes-of-mind";
 import { ChangesOfMindDialog } from "@/components/ChangesOfMindDialog";
+import { LineageDialog } from "@/components/LineageDialog";
 import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
 import { cardsInNotes, useDueCount } from "@/lib/flashcard-due";
 import { cardsRequest, readCardReply } from "@/lib/ai-cards";
@@ -553,6 +554,7 @@ export function EditorWorkspace() {
     | "then-and-now"
     | "receipts"
     | "changes-of-mind"
+    | "lineage"
     | null
   >(null);
   /**
@@ -2644,6 +2646,13 @@ export function EditorWorkspace() {
   }, [notebook, takenPaths]);
 
   /** Writes this week's review into the journal, or opens it when it exists. */
+  /** Paths as the lineage dialog lists them: once each, with their titles. */
+  const uniqueLinks = (paths: readonly string[]) =>
+    [...new Set(paths)].map((path) => ({
+      path,
+      title: stripExtension(path.split("/").pop() ?? path),
+    }));
+
   /** Writes (or refreshes) the open note's map of contents from the link graph and its tags. */
   const writeMapOfContents = useCallback(async () => {
     if (!note || !links.ready) return;
@@ -3518,6 +3527,16 @@ export function EditorWorkspace() {
         keywords: "flashcards cards spaced repetition review study learn quiz anki memorise",
         run: () => openFlashcards(),
       });
+      if (note && !sealed) {
+        list.push({
+          id: "lineage",
+          label: "This note's family",
+          group: "Notes",
+          hint: "The notes it shares passages with — copied in or out — and its links",
+          keywords: "lineage family ancestry copied split merged quoted related origin passages",
+          run: () => setDialog("lineage"),
+        });
+      }
       list.push({
         id: "ai-receipts",
         label: "See what the AI has read",
@@ -3943,6 +3962,7 @@ export function EditorWorkspace() {
 
     return [
       ...tool("present", "See", TOOL_ICONS.graph, "The note as slides, full screen"),
+      ...tool("lineage", "See", TOOL_ICONS.graph, "Notes it shares passages with, and its links"),
       ...tool(
         "then-and-now",
         "See",
@@ -5209,6 +5229,39 @@ export function EditorWorkspace() {
             notebook.saveNote(withReason(latest.content, reversal, reason, dateStamp(new Date())));
             setNotice("Reason recorded under “Why I changed my mind”.");
           }}
+        />
+      )}
+
+      {openDialog === "lineage" && note && (
+        <LineageDialog
+          note={{
+            path: note.path,
+            title,
+            content: note.content,
+            created: typeof note.frontmatter.created === "string" ? note.frontmatter.created : null,
+          }}
+          loadNotes={async () =>
+            (await notebook.allNotes())
+              .filter((entry) => isMarkdown(entry.path) && !isTemplatePath(entry.path))
+              .map((entry) => ({
+                path: entry.path,
+                title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+                content: entry.content,
+                created:
+                  typeof entry.frontmatter.created === "string" ? entry.frontmatter.created : null,
+              }))
+          }
+          linksTo={uniqueLinks(
+            (links.graph.outgoing.get(note.path) ?? []).flatMap((ref) => (ref.to ? [ref.to] : [])),
+          )}
+          linkedFrom={uniqueLinks(
+            (links.graph.backlinks.get(note.path) ?? []).map((ref) => ref.from),
+          )}
+          onOpenNote={(path) => {
+            setDialog(null);
+            notebook.openNote(path);
+          }}
+          onClose={() => setDialog(null)}
         />
       )}
 

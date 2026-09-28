@@ -271,6 +271,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "lineage",
+        title: "This note's family",
+        summary:
+          "The notes a note shares whole passages with — split from, pasted into, quoted — found from the text itself, beside its links in and out.",
+        how: "⌘K → This note's family",
+        tags: ["new"],
+      },
+      {
         id: "changes-of-mind",
         title: "Why I changed my mind",
         summary:
