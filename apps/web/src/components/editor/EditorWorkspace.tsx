@@ -68,7 +68,7 @@ import {
   acceptSuggestion,
 } from "@/lib/gateway";
 import { readDroppedPdf } from "@/lib/local-files";
-import { insertionFor, quoteMarkdown } from "@/lib/pdf-quote";
+import { insertionFor, quoteMarkdown, referenceMarkdown } from "@/lib/pdf-quote";
 import { mentionsOfPdf, type PdfMention } from "@/lib/pdf-mentions";
 import { pagesOf, readDocumentText } from "@/lib/pdf-index";
 import { withCorrectedPage, type CitationCheck } from "@/lib/citation-audit";
@@ -111,7 +111,7 @@ import { VoiceNoteDialog } from "@/components/VoiceNoteDialog";
 import { ImportDialog } from "@/components/ImportDialog";
 import { ToolsDialog } from "@/components/ToolsDialog";
 import { resurface, type Resurfaced } from "@/lib/resurface";
-import { withCards } from "@/lib/flashcard-suggestions";
+import { formatCard, withCards } from "@/lib/flashcard-suggestions";
 import { AskDialog } from "@/components/AskDialog";
 import { MEETING_FOLDER, extractMeeting, meetingNote, withMeetingSummary } from "@/lib/meeting";
 import { plainText } from "@/lib/mind";
@@ -1417,6 +1417,43 @@ export function EditorWorkspace() {
       // ago. The end of the note is where a passage being read into it goes.
       const { text } = insertionFor(note.content, note.content.length, markdown);
       notebook.saveNote(text);
+    },
+    [note, readerPath, reader.info, reader.source, notebook],
+  );
+
+  /**
+   * A flashcard whose answer is a passage from the PDF, with the page it came
+   * from under it. The question is asked for, since only the reader knows what
+   * the passage is the answer to.
+   */
+  const cardFromPdf = useCallback(
+    (citation: PdfCitation) => {
+      if (!note) return;
+      const passage = citation.quote.replace(/\s+/g, " ").trim();
+      if (!passage) return;
+      const source = referenceMarkdown({
+        target: readerPath ? relativeSrc(note.path, readerPath) : null,
+        title: reader.info
+          ? displayTitle(reader.info.metadata, reader.source?.name ?? "")
+          : (reader.source?.name ?? "PDF"),
+        citation,
+      });
+      setPrompt({
+        title: "Make a flashcard",
+        label: "What question does this passage answer?",
+        body: passage.length > 280 ? `${passage.slice(0, 280)}…` : passage,
+        confirmLabel: "Add card",
+        onConfirm: (question) => {
+          const asked = question.trim();
+          if (!asked) return;
+          const latest = notebook.note;
+          if (!latest || latest.path !== note.path) return;
+          const card = formatCard(asked, `${passage}\n— ${source}`);
+          const { text } = insertionFor(latest.content, latest.content.length, card);
+          notebook.saveNote(text);
+          setNotice("Card added at the end of the note.");
+        },
+      });
     },
     [note, readerPath, reader.info, reader.source, notebook],
   );
@@ -3971,7 +4008,7 @@ export function EditorWorkspace() {
       layout={layout}
       reader={reader}
       initialCitation={readerCitation}
-      {...(note ? { onCite: citeIntoNote } : {})}
+      {...(note ? { onCite: citeIntoNote, onMakeCard: cardFromPdf } : {})}
       onOpenInTab={
         readerPath
           ? () => {

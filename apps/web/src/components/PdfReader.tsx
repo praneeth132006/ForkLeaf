@@ -48,6 +48,11 @@ export interface PdfReaderProps {
    */
   onCite?: (citation: PdfCitation, quote: boolean) => void;
   /**
+   * Makes a flashcard whose answer is the selected passage. Absent when there
+   * is no note to put it in.
+   */
+  onMakeCard?: (citation: PdfCitation) => void;
+  /**
    * What the two citing actions are called.
    *
    * The panel beside a note puts the passage *into* the note; the standalone
@@ -194,6 +199,7 @@ export function PdfReader({
   initialCitation,
   onCite,
   citeLabels = { quote: "Quote into note", reference: "Reference only" },
+  onMakeCard,
   noCiteReason = "Open a note to cite into it",
   onClose,
   onOpenInTab,
@@ -819,6 +825,17 @@ export function PdfReader({
               reason={noCiteReason}
               copied={copied}
               onCite={cite}
+              onMakeCard={
+                onMakeCard
+                  ? () => {
+                      const citation = citationFor();
+                      if (!citation) return;
+                      onMakeCard(citation);
+                      setSelection(null);
+                      window.getSelection()?.removeAllRanges();
+                    }
+                  : null
+              }
               onHighlight={
                 onHighlight
                   ? () => {
@@ -955,6 +972,7 @@ function CiteBar({
   reason,
   copied,
   onCite,
+  onMakeCard,
   onHighlight,
   highlightLabel,
   onCopyLink,
@@ -966,6 +984,8 @@ function CiteBar({
   reason: string | null;
   copied: boolean;
   onCite: (withQuote: boolean) => void;
+  /** Makes the passage the answer to a flashcard. */
+  onMakeCard: (() => void) | null;
   /** Marks the passage, in a text file beside the document. */
   onHighlight: (() => void) | null;
   highlightLabel: string;
@@ -981,6 +1001,11 @@ function CiteBar({
           <>
             <BarButton onClick={() => onCite(true)}>{labels.quote}</BarButton>
             <BarButton onClick={() => onCite(false)}>{labels.reference}</BarButton>
+            {onMakeCard ? (
+              <BarButton onClick={onMakeCard} title="A flashcard with this passage as its answer">
+                Make a card
+              </BarButton>
+            ) : null}
           </>
         ) : reason ? (
           <span className="px-2 text-xs text-[var(--fl-muted)]">{reason}</span>

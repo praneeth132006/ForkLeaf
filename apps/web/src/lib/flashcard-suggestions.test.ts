@@ -80,3 +80,17 @@ describe("adding cards to a note", () => {
     expect(withCards("", [{ question: "One", answer: "1" }])).toBe("## Flashcards\n\nOne :: 1\n");
   });
 });
+
+describe("a card made from a PDF passage", () => {
+  it("keeps the passage and its page link as the answer, readable on the card", () => {
+    const card = formatCard(
+      "What limits attention's cost?",
+      "Attention is quadratic in sequence length.\n— [On Attention, p. 4](papers/a.pdf#page=4)",
+    );
+    const [found] = findCards("n.md", "N", card);
+    expect(found).toMatchObject({
+      question: "What limits attention's cost?",
+      answer: "Attention is quadratic in sequence length.\n— On Attention, p. 4",
+    });
+  });
+});
