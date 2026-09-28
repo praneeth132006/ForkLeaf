@@ -5,6 +5,7 @@ import { pairDiagrams, diffDiagrams, summarizeDiff } from "@forkleaf/diagrams";
 import type { RepoRef } from "@forkleaf/types";
 import { ApiError, assertName, handle, withRateLimitAdvice } from "@/lib/api-helpers";
 import { getLiveSession } from "@/lib/session";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * The diagrams a pull request changes.
@@ -30,6 +31,9 @@ const MAX_SOURCE_CHARS = 20_000;
 
 export async function GET(request: NextRequest) {
   return handle(async () => {
+    // Open signed out, and one request reads up to FILE_LIMIT files twice —
+    // on the server's shared anonymous GitHub quota when nobody is signed in.
+    enforceRateLimit(request, { name: "pr-diagrams", limit: 20, windowMs: 60_000 });
     const params = new URL(request.url).searchParams;
 
     const owner = assertName((params.get("owner") ?? "").trim(), "repository owner");

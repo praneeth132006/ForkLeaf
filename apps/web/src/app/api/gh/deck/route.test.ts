@@ -152,6 +152,7 @@ describe("sharing a deck", () => {
 
   it("publishes changes into a deck already shared", async () => {
     state.github.getRepo.mockResolvedValue(REPO);
+    state.github.readFile.mockResolvedValue({ content: "# Bio\n\nOld :: card\n" });
     state.github.commitChanges.mockResolvedValue({ sha: "fff0001" });
     const { body } = await share({ title: "Bio", cards: "Cell :: life", repo: "bio-deck" });
     expect(body.sha).toBe("fff0001");
@@ -162,6 +163,17 @@ describe("sharing a deck", () => {
     state.github.getRepo.mockResolvedValue({ ...REPO, private: true });
     expect((await share({ title: "Bio", cards: "Cell :: life" })).status).toBe(409);
     expect((await share({ title: "Bio", cards: "no cards here" })).status).toBe(400);
+    expect(state.github.commitChanges).not.toHaveBeenCalled();
+  });
+
+  it("will not write into an existing repository that is not a deck", async () => {
+    // A note's deck block names the repository; a note that names the owner's
+    // main project must not be able to overwrite its README.
+    state.github.getRepo.mockResolvedValue({ ...REPO, name: "main-project" });
+    state.github.readFile.mockResolvedValue(null);
+    const result = await share({ title: "Bio", cards: "Cell :: life", repo: "main-project" });
+    expect(result.status).toBe(409);
+    expect(JSON.stringify(result.body)).toContain("is not a ForkLeaf deck");
     expect(state.github.commitChanges).not.toHaveBeenCalled();
   });
 

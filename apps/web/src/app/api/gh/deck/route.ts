@@ -119,6 +119,24 @@ export async function POST(request: NextRequest) {
     if (summary && !summary.canPush) {
       throw new ApiError(409, "conflict", `${login}/${name} exists and cannot be written to.`);
     }
+    // Publishing writes README.md and deck.md, so it goes only where a deck
+    // already is. The repository name arrives from the deck block in a note —
+    // text that may have been imported, or edited by someone else — and
+    // without this, a note naming the owner's main project would overwrite
+    // that project's README the moment "Publish changes" was pressed.
+    if (summary) {
+      const existing = await client.readFile(
+        { owner: login, repo: name, branch: summary.defaultBranch, directory: "" },
+        DECK_FILE,
+      );
+      if (!existing) {
+        throw new ApiError(
+          409,
+          "conflict",
+          `${login}/${name} already exists and is not a ForkLeaf deck — it has no ${DECK_FILE}. Nothing was changed. Give the note another title to share it as a new deck.`,
+        );
+      }
+    }
     summary ??= await client.createRepo({
       name,
       description: `Flashcards: ${title}`,

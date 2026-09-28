@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { handle, requireClient, ApiError, assertName } from "@/lib/api-helpers";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 /**
  * The review on a note's pull request: what was said, and merging when it is
@@ -69,6 +70,8 @@ export async function GET(request: NextRequest) {
 /** Replying to a comment, adding to the conversation, or merging. */
 export async function POST(request: NextRequest) {
   return handle(async () => {
+    // Merging and commenting are writes on someone's behalf, limited like the rest.
+    enforceRateLimit(request, { name: "review", limit: 20, windowMs: 60_000 });
     const { client } = await requireClient();
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
 
