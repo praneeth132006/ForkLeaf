@@ -293,7 +293,7 @@ describe("FlashcardsDialog — on a phone", () => {
     fireEvent.pointerMove(card, { clientX: 260, clientY: 105 });
     fireEvent.pointerUp(card, { clientX: 260, clientY: 105 });
     await waitFor(() => expect(props.writeSchedule).toHaveBeenCalled());
-    const saved = parseSchedule(props.writeSchedule.mock.calls[0]![0]);
+    const saved = parseSchedule(vi.mocked(props.writeSchedule).mock.calls[0]![0]);
     expect([...saved.values()][0]!.reps).toBe(1);
     expect(await screen.findByText("Capital of Peru")).toBeTruthy();
   });
