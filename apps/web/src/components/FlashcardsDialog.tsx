@@ -12,8 +12,11 @@ import {
   LEECH_LAPSES,
   nextDue,
   parseSchedule,
-  review,
+  readScheduler,
+  reviewWith,
   typedVerdict,
+  writeScheduler,
+  type Scheduler,
   type Card,
   type Grade,
   type Schedule,
@@ -151,6 +154,12 @@ export function FlashcardsDialog({
   const [typed, setTyped] = useState("");
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const swipe = useRef<{ x: number; y: number } | null>(null);
+  /** SM-2, or FSRS for fewer reviews. Per device, like the typing choice. */
+  const [scheduler, setSchedulerState] = useState<Scheduler>(readScheduler);
+  const setScheduler = (next: Scheduler) => {
+    setSchedulerState(next);
+    writeScheduler(next);
+  };
   const [drag, setDrag] = useState(0);
   const setTyping = (on: boolean) => {
     setTypingState(on);
@@ -329,7 +338,10 @@ export function FlashcardsDialog({
 
   const grade = (chosen: Grade) => {
     if (!card || !revealed) return;
-    const next = new Map(schedule).set(card.id, review(schedule.get(card.id), chosen, today));
+    const next = new Map(schedule).set(
+      card.id,
+      reviewWith(scheduler, schedule.get(card.id), chosen, today),
+    );
     setSchedule(next);
     setReviewed((count) => count + 1);
     setRevealed(false);
@@ -645,7 +657,8 @@ export function FlashcardsDialog({
                             {entry.grade === "again"
                               ? "this session"
                               : gap(
-                                  review(schedule.get(card.id), entry.grade, today).interval,
+                                  reviewWith(scheduler, schedule.get(card.id), entry.grade, today)
+                                    .interval,
                                 )}{" "}
                             · {entry.key}
                           </span>
@@ -721,6 +734,18 @@ export function FlashcardsDialog({
                   className="accent-[var(--fl-accent)]"
                 />
                 Type my answers before seeing them
+              </label>
+              <label className="flex w-full items-center gap-2 text-[12px] text-[var(--fl-muted)]">
+                <input
+                  type="checkbox"
+                  checked={scheduler === "fsrs"}
+                  onChange={(event) => setScheduler(event.target.checked ? "fsrs" : "sm2")}
+                  className="accent-[var(--fl-accent)]"
+                />
+                <span>
+                  Schedule with FSRS — the newer algorithm Anki uses, usually fewer reviews for the
+                  same memory. Cards keep their history either way.
+                </span>
               </label>
             </div>
 

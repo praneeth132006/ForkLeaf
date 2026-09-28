@@ -270,6 +270,18 @@ describe("FlashcardsDialog — typing the answer", () => {
     );
   });
 
+  it("schedules with FSRS once it is chosen", async () => {
+    const props = open();
+    fireEvent.click(await screen.findByLabelText(/Schedule with FSRS/));
+    expect(store.get("forkleaf:flashcards:scheduler")).toBe("fsrs");
+    await study();
+    fireEvent.click(screen.getByRole("button", { name: /Show answer/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Good/ }));
+    await waitFor(() => expect(props.writeSchedule).toHaveBeenCalled());
+    const saved = [...parseSchedule(vi.mocked(props.writeSchedule).mock.calls[0]![0]).values()];
+    expect(saved[0]!.stability).toBeGreaterThan(0);
+  });
+
   it("says what was written when it is wrong, and remembers the choice", async () => {
     window.localStorage.setItem("forkleaf:flashcards:type-answers", "1");
     open({ autoStart: "all" });

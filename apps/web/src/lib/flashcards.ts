@@ -1,5 +1,6 @@
 import { parseCardLine } from "@forkleaf/markdown-engine";
 import { dateStamp } from "@/lib/templates";
+import { memoryFromSm2, nextInterval, remember, type FsrsGrade } from "@/lib/fsrs";
 
 /**
  * Flashcards written in notes, and when to see each one again.
@@ -49,6 +50,32 @@ export interface CardState {
    * never forgotten, and a row with nothing to say should read like one.
    */
   lapses?: number;
+  /** FSRS: days until recall falls to 90%. Only on cards FSRS has scheduled. */
+  stability?: number;
+  /** FSRS: 1 (easy) to 10 (hard). */
+  difficulty?: number;
+}
+
+/** Which algorithm decides when a card comes back. */
+export type Scheduler = "sm2" | "fsrs";
+
+const SCHEDULER_KEY = "forkleaf:flashcards:scheduler";
+
+/** The scheduler chosen on this device; SM-2 unless FSRS was picked. */
+export function readScheduler(): Scheduler {
+  try {
+    return window.localStorage.getItem(SCHEDULER_KEY) === "fsrs" ? "fsrs" : "sm2";
+  } catch {
+    return "sm2";
+  }
+}
+
+export function writeScheduler(scheduler: Scheduler): void {
+  try {
+    window.localStorage.setItem(SCHEDULER_KEY, scheduler);
+  } catch {
+    // Private mode: the choice lasts until the page closes.
+  }
 }
 
 /** Forgotten this many times, a card is a leech: it costs more reviews than it is worth as written. */
@@ -296,6 +323,54 @@ export function review(state: CardState | undefined, grade: Grade, today: string
   return { due: addDays(today, interval), interval, ease, reps, ...kept };
 }
 
+function daysBetween(from: string, to: string): number {
+  const [y1, m1, d1] = from.split("-").map(Number) as [number, number, number];
+  const [y2, m2, d2] = to.split("-").map(Number) as [number, number, number];
+  return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86_400_000);
+}
+
+const FSRS_GRADE: Record<Grade, FsrsGrade> = { again: 1, hard: 2, good: 3, easy: 4 };
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * The next state of a card under FSRS.
+ *
+ * A card SM-2 scheduled is given a memory from its last gap and ease, so
+ * switching schedulers loses no history. **Again** still brings a card back
+ * tomorrow, as it does under SM-2, and counts a lapse the same way.
+ */
+export function reviewFsrs(state: CardState | undefined, grade: Grade, today: string): CardState {
+  const memory =
+    state?.stability !== undefined && state.difficulty !== undefined
+      ? { stability: state.stability, difficulty: state.difficulty }
+      : state
+        ? memoryFromSm2(state.interval, state.ease)
+        : null;
+  const lastSeen = state ? addDays(state.due, -state.interval) : today;
+  const next = remember(memory, FSRS_GRADE[grade], daysBetween(lastSeen, today));
+  const lapses = (state?.lapses ?? 0) + (grade === "again" && (state?.reps ?? 0) > 0 ? 1 : 0);
+  const interval = grade === "again" ? 1 : nextInterval(next.stability);
+  return {
+    due: addDays(today, interval),
+    interval,
+    ease: state?.ease ?? 2.5,
+    reps: grade === "again" ? 0 : (state?.reps ?? 0) + 1,
+    ...(lapses > 0 ? { lapses } : {}),
+    stability: round2(next.stability),
+    difficulty: round2(next.difficulty),
+  };
+}
+
+/** A review under whichever scheduler is chosen. */
+export function reviewWith(
+  scheduler: Scheduler,
+  state: CardState | undefined,
+  grade: Grade,
+  today: string,
+): CardState {
+  return scheduler === "fsrs" ? reviewFsrs(state, grade, today) : review(state, grade, today);
+}
+
 /** Cards due today or earlier first (most overdue first), then new ones. */
 export function dueCards(
   cards: readonly Card[],
@@ -345,9 +420,10 @@ const HEADER =
   "Kept by ForkLeaf. One row per card: when it is next due, the gap in days, how\n" +
   "easy it has been, and how many times in a row it has been remembered. Delete a\n" +
   "row to start that card over; lapses counts the times it was forgotten after\n" +
-  "being learned.\n\n" +
-  "| card | due | interval | ease | reps | lapses |\n" +
-  "| ---- | --- | -------- | ---- | ---- | ------ |\n";
+  "being learned. Stability and difficulty are filled in for cards scheduled by\n" +
+  "FSRS.\n\n" +
+  "| card | due | interval | ease | reps | lapses | stability | difficulty |\n" +
+  "| ---- | --- | -------- | ---- | ---- | ------ | --------- | ---------- |\n";
 
 export function parseSchedule(content: string | null): Schedule {
   const schedule: Schedule = new Map();
@@ -371,6 +447,13 @@ export function parseSchedule(content: string | null): Schedule {
     // Written before lapses were counted, a row has five cells.
     const lapses = Number(cells[5] ?? 0);
     if (Number.isFinite(lapses) && lapses > 0) parsed.lapses = Math.round(lapses);
+    // Stability and difficulty only on cards FSRS has scheduled.
+    const stability = Number(cells[6] || NaN);
+    const difficulty = Number(cells[7] || NaN);
+    if (Number.isFinite(stability) && Number.isFinite(difficulty)) {
+      parsed.stability = stability;
+      parsed.difficulty = difficulty;
+    }
     schedule.set(id, parsed);
   }
   return schedule;
@@ -381,7 +464,10 @@ export function formatSchedule(schedule: Schedule): string {
     .sort(([a, stateA], [b, stateB]) => stateA.due.localeCompare(stateB.due) || a.localeCompare(b))
     .map(
       ([id, state]) =>
-        `| ${id} | ${state.due} | ${state.interval} | ${state.ease} | ${state.reps} | ${state.lapses ?? 0} |`,
+        `| ${id} | ${state.due} | ${state.interval} | ${state.ease} | ${state.reps} | ${state.lapses ?? 0} |` +
+        (state.stability !== undefined && state.difficulty !== undefined
+          ? ` ${state.stability} | ${state.difficulty} |`
+          : "  |  |"),
     );
   return `${HEADER}${rows.join("\n")}${rows.length ? "\n" : ""}`;
 }

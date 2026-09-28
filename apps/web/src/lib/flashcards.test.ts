@@ -8,6 +8,8 @@ import {
   nextDue,
   parseSchedule,
   review,
+  reviewFsrs,
+  reviewWith,
   typedVerdict,
   wantsClozes,
   type Schedule,
@@ -234,7 +236,7 @@ describe("the schedule file", () => {
       ["0000000a", { due: "2026-09-14", interval: 1, ease: 2.5, reps: 1 }],
     ]);
     const text = formatSchedule(schedule);
-    expect(text).toContain("| 0000000a | 2026-09-14 | 1 | 2.5 | 1 | 0 |\n| 0000000b |");
+    expect(text).toContain("| 0000000a | 2026-09-14 | 1 | 2.5 | 1 | 0 |  |  |\n| 0000000b |");
     expect(parseSchedule(text)).toEqual(schedule);
   });
 
@@ -275,6 +277,41 @@ describe("lapses and leeches", () => {
     expect(isLeech({ due: today, interval: 1, ease: 1.3, reps: 0, lapses: 3 })).toBe(false);
     expect(isLeech({ due: today, interval: 1, ease: 1.3, reps: 0, lapses: 4 })).toBe(true);
     expect(isLeech(undefined)).toBe(false);
+  });
+});
+
+describe("reviewFsrs", () => {
+  const today = "2026-09-13";
+
+  it("schedules a new card and records its memory", () => {
+    const state = reviewFsrs(undefined, "good", today);
+    expect(state.reps).toBe(1);
+    expect(state.stability).toBeGreaterThan(0);
+    expect(state.difficulty).toBeGreaterThan(0);
+    expect(state.due > today).toBe(true);
+  });
+
+  it("brings a forgotten card back tomorrow and counts the lapse", () => {
+    const learned = reviewFsrs(reviewFsrs(undefined, "good", today), "good", "2026-09-17");
+    const forgotten = reviewFsrs(learned, "again", "2026-10-30");
+    expect(forgotten).toMatchObject({ due: "2026-10-31", interval: 1, reps: 0, lapses: 1 });
+  });
+
+  it("takes over a card SM-2 scheduled, at about the same gap", () => {
+    const sm2 = { due: today, interval: 20, ease: 2.5, reps: 4 };
+    const next = reviewFsrs(sm2, "good", today);
+    expect(next.interval).toBeGreaterThan(20);
+    expect(next.ease).toBe(2.5);
+  });
+
+  it("round-trips through the schedule file", () => {
+    const schedule: Schedule = new Map([["0000000e", reviewFsrs(undefined, "easy", today)]]);
+    expect(parseSchedule(formatSchedule(schedule))).toEqual(schedule);
+  });
+
+  it("is chosen by reviewWith", () => {
+    expect(reviewWith("sm2", undefined, "good", today).stability).toBeUndefined();
+    expect(reviewWith("fsrs", undefined, "good", today).stability).toBeDefined();
   });
 });
 

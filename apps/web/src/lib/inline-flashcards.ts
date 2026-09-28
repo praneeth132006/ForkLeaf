@@ -7,8 +7,9 @@ import {
   cardId,
   formatSchedule,
   parseSchedule,
+  readScheduler,
   readable,
-  review,
+  reviewWith,
   type CardState,
   type Schedule,
 } from "@/lib/flashcards";
@@ -52,7 +53,7 @@ export function gradePreview(
   today: string,
 ): Record<FlashcardGrade, string> {
   const when = (grade: FlashcardGrade) => {
-    const days = review(state, grade, today).interval;
+    const days = reviewWith(readScheduler(), state, grade, today).interval;
     return days === 1 ? "tomorrow" : `in ${gap(days)}`;
   };
   return { again: when("again"), hard: when("hard"), good: when("good"), easy: when("easy") };
@@ -120,7 +121,7 @@ export function useInlineFlashcards(
       preview: (face) => gradePreview(schedule.current.get(faceId(path, face)), today()),
       grade: (face, grade) => {
         const id = faceId(path, face);
-        const next = review(schedule.current.get(id), grade, today());
+        const next = reviewWith(readScheduler(), schedule.current.get(id), grade, today());
         schedule.current = new Map(schedule.current).set(id, next);
         notify();
         void storeRef.current
