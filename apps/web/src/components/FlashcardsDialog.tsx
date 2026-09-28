@@ -53,6 +53,16 @@ export interface FlashcardsDialogProps {
   /** Where cards go when there is no deck to put them in yet. */
   defaultDeck?: string;
   /**
+   * The reader's own model, when one is connected: it reads the open note and
+   * writes cards from it. `name` is what to call it — "Claude", "OpenAI".
+   */
+  ai?: {
+    name: string;
+    make: (note: { title: string; content: string }, signal: AbortSignal) => Promise<NewCard[]>;
+  } | null;
+  /** Opens the assistant panel, where a model is connected. */
+  onConnectAi?: () => void;
+  /**
    * Go straight to the first card instead of the overview: `"all"` for
    * everything due, or a note's path for that note's cards.
    *
@@ -114,6 +124,8 @@ export function FlashcardsDialog({
   onAddCards,
   currentNote = null,
   defaultDeck = DEFAULT_DECK,
+  ai = null,
+  onConnectAi,
   autoStart = null,
   now,
 }: FlashcardsDialogProps) {
@@ -210,10 +222,37 @@ export function FlashcardsDialog({
     return [...byPath.values()].sort((a, b) => a.title.localeCompare(b.title));
   }, [cards]);
 
-  const suggestions = useMemo(
-    () => (currentNote ? suggestCards(currentNote.content) : []),
-    [currentNote],
-  );
+  const [written, setWritten] = useState<NewCard[]>([]);
+  const [aiRun, setAiRun] = useState<AbortController | null>(null);
+  useEffect(() => () => aiRun?.abort(), [aiRun]);
+
+  const suggestions = useMemo(() => {
+    const found = currentNote ? suggestCards(currentNote.content) : [];
+    const have = new Set(found.map((card) => card.question.trim().toLowerCase()));
+    return [...found, ...written.filter((card) => !have.has(card.question.trim().toLowerCase()))];
+  }, [currentNote, written]);
+
+  const writeWithAi = async () => {
+    if (!ai || !currentNote) return;
+    const controller = new AbortController();
+    setAiRun(controller);
+    setProblem(null);
+    try {
+      const cards = await ai.make(
+        { title: currentNote.title, content: currentNote.content },
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+      setWritten(cards);
+      if (cards.length === 0) setNotice(`${ai.name} did not find anything to make cards from.`);
+    } catch (error: unknown) {
+      if (!controller.signal.aborted) {
+        setProblem(error instanceof Error ? error.message : `${ai.name} could not be reached.`);
+      }
+    } finally {
+      setAiRun((current) => (current === controller ? null : current));
+    }
+  };
   const ticked = suggestions.filter((suggestion) => !unticked.has(suggestion.question));
 
   // Where a new card goes: the chosen deck, else the open note if it already
@@ -732,8 +771,38 @@ export function FlashcardsDialog({
             {currentNote && (
               <div className={section}>
                 <p className={heading}>Cards from “{currentNote.title}”</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {ai ? (
+                    <button
+                      type="button"
+                      disabled={aiRun !== null || !currentNote.content.trim()}
+                      onClick={() => void writeWithAi()}
+                      title={`Sends this note to ${ai.name}, from this browser`}
+                      className="fl-btn fl-btn-primary disabled:opacity-50"
+                    >
+                      {aiRun ? `${ai.name} is writing cards…` : `✦ Write cards with ${ai.name}`}
+                    </button>
+                  ) : onConnectAi ? (
+                    <button
+                      type="button"
+                      onClick={onConnectAi}
+                      className="rounded-lg border border-[var(--fl-border)] px-2.5 py-1 text-[12px] text-[var(--fl-text)] hover:bg-[var(--fl-elevated)]"
+                    >
+                      ✦ Connect a model to write cards for you
+                    </button>
+                  ) : null}
+                  {aiRun && (
+                    <button
+                      type="button"
+                      onClick={() => aiRun.abort()}
+                      className="text-[12px] text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
+                    >
+                      Stop
+                    </button>
+                  )}
+                </div>
                 {suggestions.length === 0 ? (
-                  <p className="mt-1 leading-relaxed text-[var(--fl-muted)]">
+                  <p className="mt-2 leading-relaxed text-[var(--fl-muted)]">
                     No definitions found in this note. Write a term in bold with its meaning —{" "}
                     <code>**Osmosis**: water moving across a membrane</code> — or a heading that
                     asks a question, and cards will be suggested here.

@@ -309,3 +309,42 @@ describe("FlashcardsDialog — on a phone", () => {
     expect(props.writeSchedule).not.toHaveBeenCalled();
   });
 });
+
+describe("FlashcardsDialog — cards written by a model", () => {
+  const note = { path: "cells.md", title: "Cells", content: "Mitochondria make energy." };
+
+  it("offers the model's cards to tick and add", async () => {
+    const make = vi.fn(async () => [
+      { question: "What makes energy in a cell?", answer: "Mitochondria" },
+    ]);
+    const props = open({ currentNote: note, ai: { name: "Claude", make } });
+    fireEvent.click(await screen.findByRole("button", { name: "✦ Write cards with Claude" }));
+    expect(await screen.findByText("What makes energy in a cell?")).toBeTruthy();
+    expect(make).toHaveBeenCalledWith(
+      { title: "Cells", content: "Mitochondria make energy." },
+      expect.any(AbortSignal),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add 1 card to this note" }));
+    await waitFor(() =>
+      expect(props.onAddCards).toHaveBeenCalledWith("cells.md", [
+        { question: "What makes energy in a cell?", answer: "Mitochondria" },
+      ]),
+    );
+  });
+
+  it("says what went wrong", async () => {
+    const make = vi.fn(async () => {
+      throw new Error("The key was refused.");
+    });
+    open({ currentNote: note, ai: { name: "Claude", make } });
+    fireEvent.click(await screen.findByRole("button", { name: "✦ Write cards with Claude" }));
+    expect(await screen.findByText("The key was refused.")).toBeTruthy();
+  });
+
+  it("points to connecting a model when there is none", async () => {
+    const onConnectAi = vi.fn();
+    open({ currentNote: note, onConnectAi });
+    fireEvent.click(await screen.findByRole("button", { name: /Connect a model/ }));
+    expect(onConnectAi).toHaveBeenCalled();
+  });
+});

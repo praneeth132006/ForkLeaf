@@ -90,6 +90,9 @@ import { FolderViewsDialog, type FolderView } from "@/components/FolderViewsDial
 import { FlashcardsDialog } from "@/components/FlashcardsDialog";
 import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
 import { cardsInNotes, useDueCount } from "@/lib/flashcard-due";
+import { cardsRequest, readCardReply } from "@/lib/ai-cards";
+import { useAssistantKey, useAssistantSettings } from "@/hooks/useAssistant";
+import { isReady, provider as assistantProvider, streamChat } from "@/lib/assistant";
 import {
   formatWeeklyReview,
   isoWeek,
@@ -1496,6 +1499,35 @@ export function EditorWorkspace() {
     setFlashcardsStart(start);
     setDialog("flashcards");
   }, []);
+  /**
+   * The assistant's model, lent to the Flashcards dialog to write cards from
+   * the open note. Asking for cards is asking to send the note, so it goes
+   * even when the assistant panel is set not to send notes with questions.
+   */
+  const [assistantSettings] = useAssistantSettings();
+  const [assistantKey] = useAssistantKey(assistantSettings.provider);
+  const cardWriter = useMemo(() => {
+    if (!isReady(assistantSettings, assistantKey)) return null;
+    return {
+      name: assistantProvider(assistantSettings.provider).label,
+      make: async (source: { title: string; content: string }, signal: AbortSignal) => {
+        let reply = "";
+        await streamChat({
+          settings: { ...assistantSettings, sendNote: true },
+          key: assistantKey,
+          note: source,
+          messages: [{ role: "user", text: cardsRequest(source.title) }],
+          signal,
+          onDelta: (delta) => {
+            reply += delta;
+          },
+        });
+        const have = findCards("", "", source.content).map((card) => card.question);
+        return readCardReply(reply, have);
+      },
+    };
+  }, [assistantSettings, assistantKey]);
+
   /** Cards in the open note, for its "Study" button. */
   const noteCardCount = useMemo(
     () => (note && !sealed ? findCards(note.path, "", note.content).length : 0),
@@ -5176,6 +5208,11 @@ export function EditorWorkspace() {
           onClose={() => setDialog(null)}
           loadCards={async () => cardsInNotes(await notebook.allNotes(), isTemplatePath)}
           autoStart={flashcardsStart}
+          ai={cardWriter}
+          onConnectAi={() => {
+            setDialog(null);
+            setAssistantOpen(true);
+          }}
           onAddCards={async (path, cards) => {
             const written = await notebook.upsertNote(path, (content) => withCards(content, cards));
             if (written === null) throw new Error("The cards could not be saved.");
