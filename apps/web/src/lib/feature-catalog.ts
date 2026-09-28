@@ -271,6 +271,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "echoes",
+        title: "Echoes",
+        summary:
+          "A sentence you wrote yesterday, a week, a month and a year ago, from the notes named after those days — and one question: is it still true?",
+        how: "Dashboard → Echoes",
+        tags: ["new"],
+      },
+      {
         id: "fading",
         title: "Fading from memory",
         summary:

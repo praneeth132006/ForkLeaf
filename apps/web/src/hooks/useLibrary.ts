@@ -550,17 +550,33 @@ export function useLibrary() {
     [state.searchVersion],
   );
 
+  /** The indexed notes' text, for features that read notes rather than rank them. */
+  const documents = useCallback(
+    (workspaceId?: string) => searchRef.current.documents(workspaceId),
+    [],
+  );
+
   return useMemo(
     () => ({
       ...state,
       totals,
+      documents,
       addWorkspace,
       removeWorkspace,
       createNote,
       searchText,
       searchMeaning,
     }),
-    [state, totals, addWorkspace, removeWorkspace, createNote, searchText, searchMeaning],
+    [
+      state,
+      totals,
+      documents,
+      addWorkspace,
+      removeWorkspace,
+      createNote,
+      searchText,
+      searchMeaning,
+    ],
   );
 }
 

@@ -25,6 +25,7 @@ import { explainAccessFailure } from "@/lib/github-help";
 import type { SessionResponse } from "@/lib/gateway";
 import { PromptDialog, type PromptRequest } from "@/components/PromptDialog";
 import { RepoChooser } from "./RepoChooser";
+import { EchoesSection } from "./EchoesSection";
 import { FolderNav } from "./FolderNav";
 import { NoteList, formatWhen } from "./NoteList";
 import { NoteTree } from "./NoteTree";
@@ -180,6 +181,13 @@ export function DashboardPanel({
   const slipping = useMemo(
     () => fading(entries, (entry) => entry.id, visits, dateStamp(new Date())),
     [entries, visits],
+  );
+
+  /** The active notebook's notes as text, for Echoes. Re-read as the index fills. */
+  const echoSources = useMemo(
+    () => (active ? library.documents(active.workspace.id) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [active?.workspace.id, library.searchVersion, library.documents],
   );
 
   const recent = useMemo(
@@ -529,6 +537,15 @@ export function DashboardPanel({
             </div>
           </section>
         )}
+
+        {/* ── Echoes ───────────────────────────────────────────────────── */}
+        <EchoesSection
+          sources={echoSources}
+          today={dateStamp(new Date())}
+          hrefFor={(source) =>
+            `/editor?ws=${encodeURIComponent(active?.workspace.id ?? "")}&note=${encodeURIComponent(source.path)}`
+          }
+        />
 
         {/* ── Fading ───────────────────────────────────────────────────── */}
         {slipping.length > 0 && (
