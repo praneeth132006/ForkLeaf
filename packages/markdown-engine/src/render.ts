@@ -2,6 +2,8 @@ import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import remarkRehype from "remark-rehype";
 import rehypeHighlight from "rehype-highlight";
 import { all as allLanguages } from "lowlight";
@@ -50,7 +52,12 @@ const schema: SanitizeSchema = {
     ...defaultSchema.attributes,
     // `hljs` sits alongside `language-*` on the <code> the highlighter wraps;
     // without it the stylesheet has nothing to hook onto.
-    code: [...(defaultSchema.attributes?.code ?? []), ["className", /^language-./, "hljs"]],
+    // `math-inline` / `math-display` mark TeX for KaTeX, which runs after the
+    // sanitiser on exactly these elements.
+    code: [
+      ...(defaultSchema.attributes?.code ?? []),
+      ["className", /^language-./, "hljs", "math-inline", "math-display"],
+    ],
     pre: [...(defaultSchema.attributes?.pre ?? []), ["className", "hljs"]],
     span: [...(defaultSchema.attributes?.span ?? []), ["className", /^hljs-/]],
     input: [
@@ -137,6 +144,33 @@ const schema: SanitizeSchema = {
 /** Data URLs allowed through: raster images only, never a document format. */
 const SAFE_DATA_IMAGE =
   /^data:image\/(png|jpeg|jpg|gif|webp|avif|bmp|x-icon|vnd\.microsoft\.icon);base64,/i;
+
+/**
+ * Dollars that are money, not maths.
+ *
+ * remark-math reads any pair of single dollars as TeX, so "it costs $5 and $10"
+ * became a formula reading "5 and ". Notes mention prices far more often than
+ * they typeset equations, so a single-dollar span only counts as maths under
+ * Pandoc's rule: no space just inside either dollar, and no digit straight
+ * after the closing one. `$E=mc^2$` still is; `$5 and $10` is text again.
+ * `$$…$$` is always maths.
+ */
+export function remarkDollarsAreMoney() {
+  return (tree: MdastRoot, file: { value?: unknown }) => {
+    const source = typeof file.value === "string" ? file.value : String(file.value ?? "");
+    visit(tree, (node, index, parent) => {
+      if (node.type !== "inlineMath" || !parent || index === undefined) return;
+      const start = node.position?.start.offset;
+      const end = node.position?.end.offset;
+      if (start === undefined || end === undefined) return;
+      const raw = source.slice(start, end);
+      if (raw.startsWith("$$")) return;
+      const inner = raw.slice(1, -1);
+      if (/^\S/.test(inner) && /\S$/.test(inner) && !/^\d/.test(source.slice(end))) return;
+      (parent as Parent).children.splice(index, 1, { type: "text", value: raw });
+    });
+  };
+}
 
 /**
  * `==text==` → `<mark>text</mark>`.
@@ -503,6 +537,9 @@ const buildHtmlPipeline = (options: RenderOptions) =>
   unified()
     .use(remarkParse)
     .use(remarkGfm)
+    // `$…$` and `$$…$$` TeX, in the Obsidian and GitHub spelling.
+    .use(remarkMath)
+    .use(remarkDollarsAreMoney)
     /**
      * A newline in a note is a newline.
      *
@@ -537,7 +574,7 @@ const buildHtmlPipeline = (options: RenderOptions) =>
     // documentation for an unusual project runs into. `detect` stays off, since
     // guessing the language of an unlabelled three-line snippet is usually wrong
     // and colours it misleadingly.
-    .use(rehypeHighlight, { detect: false, languages: allLanguages })
+    .use(rehypeHighlight, { detect: false, languages: allLanguages, plainText: ["math"] })
     .use(rehypeImages, options)
     .use(rehypeYoutube)
     .use(rehypeFlashcards)
@@ -545,6 +582,14 @@ const buildHtmlPipeline = (options: RenderOptions) =>
     // the rest as links — those are the ones that need a tab of their own.
     .use(rehypeExternalLinks)
     .use(rehypeSanitize, schema)
+    /**
+     * TeX, after the sanitiser: KaTeX's output is positioned spans with inline
+     * styles the schema would rightly strip from note content. What it renders
+     * is only ever the TeX source, with `trust` off — no `\href`, nothing a
+     * note can use to reach outside the formula — and a formula that does not
+     * parse shows as its source in red rather than breaking the preview.
+     */
+    .use(rehypeKatex, { trust: false, strict: "ignore" })
     .use(rehypeAudio, options)
     .use(rehypeStringify);
 

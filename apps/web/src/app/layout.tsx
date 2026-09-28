@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Instrument_Sans, Instrument_Serif, JetBrains_Mono, Newsreader } from "next/font/google";
 import { THEME_INIT_SCRIPT } from "@/hooks/useTheme";
 import { Analytics } from "@/components/Analytics";
+// KaTeX before our own styles, so the notebook's type and colours win where both speak.
+import "katex/dist/katex.min.css";
 import "./globals.css";
 
 /**

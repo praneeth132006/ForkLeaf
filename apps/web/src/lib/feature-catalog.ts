@@ -271,6 +271,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "math",
+        title: "Maths",
+        summary:
+          '$E=mc^2$ inline and $$…$$ blocks, typeset with KaTeX in the preview. Prices stay prices: "$5 and $10" is not a formula.',
+        how: "Type $…$ or $$…$$",
+        tags: ["new"],
+      },
+      {
         id: "diagram-cards",
         title: "Cards from diagrams",
         summary:
