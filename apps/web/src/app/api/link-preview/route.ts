@@ -2,7 +2,7 @@ import { type NextRequest } from "next/server";
 import { handle, ApiError } from "@/lib/api-helpers";
 import { getSession } from "@/lib/session";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { assertPublicUrl, UnsafeUrlError } from "@/lib/safe-fetch";
+import { assertPublicUrl, UnsafeUrlError, fetchPublic } from "@/lib/safe-fetch";
 
 /**
  * What is on the other end of a link, in one line, for a hover card.
@@ -56,7 +56,7 @@ async function fetchChecked(start: URL, signal: AbortSignal): Promise<Response |
   let url = start;
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    const response = await fetch(url, {
+    const response = await fetchPublic(url, {
       signal,
       redirect: "manual",
       headers: {

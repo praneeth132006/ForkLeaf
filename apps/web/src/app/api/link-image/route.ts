@@ -2,7 +2,7 @@ import { type NextRequest } from "next/server";
 import { getSession } from "@/lib/session";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { ApiError } from "@/lib/api-helpers";
-import { assertPublicUrl } from "@/lib/safe-fetch";
+import { assertPublicUrl, fetchPublic } from "@/lib/safe-fetch";
 
 /**
  * The picture a linked page offers of itself, served from our own origin.
@@ -48,7 +48,7 @@ async function fetchChecked(start: URL, signal: AbortSignal): Promise<Response |
   let url = start;
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    const response = await fetch(url, {
+    const response = await fetchPublic(url, {
       signal,
       redirect: "manual",
       headers: {
