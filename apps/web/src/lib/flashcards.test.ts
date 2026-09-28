@@ -4,6 +4,7 @@ import {
   dueCards,
   findCards,
   formatSchedule,
+  isLeech,
   nextDue,
   parseSchedule,
   review,
@@ -233,8 +234,21 @@ describe("the schedule file", () => {
       ["0000000a", { due: "2026-09-14", interval: 1, ease: 2.5, reps: 1 }],
     ]);
     const text = formatSchedule(schedule);
-    expect(text).toContain("| 0000000a | 2026-09-14 | 1 | 2.5 | 1 |\n| 0000000b |");
+    expect(text).toContain("| 0000000a | 2026-09-14 | 1 | 2.5 | 1 | 0 |\n| 0000000b |");
     expect(parseSchedule(text)).toEqual(schedule);
+  });
+
+  it("keeps lapses, and reads rows written before lapses were counted", () => {
+    const schedule: Schedule = new Map([
+      ["0000000c", { due: "2026-09-20", interval: 1, ease: 1.7, reps: 0, lapses: 5 }],
+    ]);
+    expect(parseSchedule(formatSchedule(schedule))).toEqual(schedule);
+    expect(parseSchedule("| 0000000d | 2026-09-14 | 1 | 2.5 | 1 |").get("0000000d")).toEqual({
+      due: "2026-09-14",
+      interval: 1,
+      ease: 2.5,
+      reps: 1,
+    });
   });
 
   it("skips rows it cannot read rather than failing", () => {
@@ -242,6 +256,25 @@ describe("the schedule file", () => {
       "| card | due |\n| 1234abcd | not-a-date | 1 | 2 | 3 |\n| zzzz | 2026-01-01 | 1 | 2 | 3 |\n| 1234abcd | 2026-01-01 | x | 2 | 3 |";
     expect(parseSchedule(text).size).toBe(0);
     expect(parseSchedule(null).size).toBe(0);
+  });
+});
+
+describe("lapses and leeches", () => {
+  const today = "2026-09-13";
+
+  it("counts forgetting a learned card, not failing a new one", () => {
+    const failedNew = review(undefined, "again", today);
+    expect(failedNew.lapses).toBeUndefined();
+    const learned = review(review(undefined, "good", today), "good", today);
+    const forgotten = review(learned, "again", today);
+    expect(forgotten.lapses).toBe(1);
+    expect(review(forgotten, "good", today).lapses).toBe(1);
+  });
+
+  it("calls a card forgotten four times a leech", () => {
+    expect(isLeech({ due: today, interval: 1, ease: 1.3, reps: 0, lapses: 3 })).toBe(false);
+    expect(isLeech({ due: today, interval: 1, ease: 1.3, reps: 0, lapses: 4 })).toBe(true);
+    expect(isLeech(undefined)).toBe(false);
   });
 });
 

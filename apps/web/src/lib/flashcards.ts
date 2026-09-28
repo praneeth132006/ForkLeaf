@@ -44,6 +44,18 @@ export interface CardState {
   ease: number;
   /** Successful reviews in a row. */
   reps: number;
+  /**
+   * Times forgotten after having been learned. Absent is none: most cards are
+   * never forgotten, and a row with nothing to say should read like one.
+   */
+  lapses?: number;
+}
+
+/** Forgotten this many times, a card is a leech: it costs more reviews than it is worth as written. */
+export const LEECH_LAPSES = 4;
+
+export function isLeech(state: CardState | undefined): boolean {
+  return (state?.lapses ?? 0) >= LEECH_LAPSES;
 }
 
 export type Schedule = Map<string, CardState>;
@@ -265,8 +277,12 @@ export function review(state: CardState | undefined, grade: Grade, today: string
     Math.round((previous.ease + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))) * 100) / 100,
   );
 
+  // Forgetting a card that had been learned is a lapse; failing a new one is not.
+  const lapses = (previous.lapses ?? 0) + (grade === "again" && previous.reps > 0 ? 1 : 0);
+  const kept = lapses > 0 ? { lapses } : {};
+
   if (grade === "again") {
-    return { due: addDays(today, 1), interval: 1, ease, reps: 0 };
+    return { due: addDays(today, 1), interval: 1, ease, reps: 0, ...kept };
   }
 
   const reps = previous.reps + 1;
@@ -277,7 +293,7 @@ export function review(state: CardState | undefined, grade: Grade, today: string
   if (grade === "easy" && reps > 1) interval = Math.round(interval * 1.3);
   interval = Math.max(1, interval);
 
-  return { due: addDays(today, interval), interval, ease, reps };
+  return { due: addDays(today, interval), interval, ease, reps, ...kept };
 }
 
 /** Cards due today or earlier first (most overdue first), then new ones. */
@@ -328,9 +344,10 @@ const HEADER =
   "# Flashcard reviews\n\n" +
   "Kept by ForkLeaf. One row per card: when it is next due, the gap in days, how\n" +
   "easy it has been, and how many times in a row it has been remembered. Delete a\n" +
-  "row to start that card over.\n\n" +
-  "| card | due | interval | ease | reps |\n" +
-  "| ---- | --- | -------- | ---- | ---- |\n";
+  "row to start that card over; lapses counts the times it was forgotten after\n" +
+  "being learned.\n\n" +
+  "| card | due | interval | ease | reps | lapses |\n" +
+  "| ---- | --- | -------- | ---- | ---- | ------ |\n";
 
 export function parseSchedule(content: string | null): Schedule {
   const schedule: Schedule = new Map();
@@ -344,8 +361,16 @@ export function parseSchedule(content: string | null): Schedule {
     if (cells.length < 5) continue;
     const [id, due, interval, ease, reps] = cells as [string, string, string, string, string];
     if (!/^[0-9a-f]{8}$/.test(id) || !/^\d{4}-\d{2}-\d{2}$/.test(due)) continue;
-    const parsed = { due, interval: Number(interval), ease: Number(ease), reps: Number(reps) };
+    const parsed: CardState = {
+      due,
+      interval: Number(interval),
+      ease: Number(ease),
+      reps: Number(reps),
+    };
     if ([parsed.interval, parsed.ease, parsed.reps].some((n) => !Number.isFinite(n))) continue;
+    // Written before lapses were counted, a row has five cells.
+    const lapses = Number(cells[5] ?? 0);
+    if (Number.isFinite(lapses) && lapses > 0) parsed.lapses = Math.round(lapses);
     schedule.set(id, parsed);
   }
   return schedule;
@@ -356,7 +381,7 @@ export function formatSchedule(schedule: Schedule): string {
     .sort(([a, stateA], [b, stateB]) => stateA.due.localeCompare(stateB.due) || a.localeCompare(b))
     .map(
       ([id, state]) =>
-        `| ${id} | ${state.due} | ${state.interval} | ${state.ease} | ${state.reps} |`,
+        `| ${id} | ${state.due} | ${state.interval} | ${state.ease} | ${state.reps} | ${state.lapses ?? 0} |`,
     );
   return `${HEADER}${rows.join("\n")}${rows.length ? "\n" : ""}`;
 }

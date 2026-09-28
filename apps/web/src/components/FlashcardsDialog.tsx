@@ -8,6 +8,8 @@ import {
   NEW_PER_SESSION,
   dueCards,
   formatSchedule,
+  isLeech,
+  LEECH_LAPSES,
   nextDue,
   parseSchedule,
   review,
@@ -302,6 +304,29 @@ export function FlashcardsDialog({
 
   const card = session ? (queue[0] ?? null) : null;
 
+  const leeches = useMemo(
+    () => cards.filter((each) => isLeech(schedule.get(each.id))),
+    [cards, schedule],
+  );
+
+  const save = (next: Schedule) => {
+    const text = formatSchedule(next);
+    writing.current = writing.current
+      .then(() => writeSchedule(text))
+      .then(
+        () => setProblem(null),
+        () => setProblem("The schedule could not be saved. Your grades so far are kept here."),
+      );
+  };
+
+  /** Forgets a card's history: it comes back as new. */
+  const startOver = (id: string) => {
+    const next = new Map(schedule);
+    next.delete(id);
+    setSchedule(next);
+    save(next);
+  };
+
   const grade = (chosen: Grade) => {
     if (!card || !revealed) return;
     const next = new Map(schedule).set(card.id, review(schedule.get(card.id), chosen, today));
@@ -313,13 +338,7 @@ export function FlashcardsDialog({
     // A forgotten card comes round again at the end of this session.
     setQueue((current) => (chosen === "again" ? [...current.slice(1), card] : current.slice(1)));
 
-    const text = formatSchedule(next);
-    writing.current = writing.current
-      .then(() => writeSchedule(text))
-      .then(
-        () => setProblem(null),
-        () => setProblem("The schedule could not be saved. Your grades so far are kept here."),
-      );
+    save(next);
   };
 
   const add = async (path: string, newCards: NewCard[], done: string) => {
@@ -466,6 +485,21 @@ export function FlashcardsDialog({
                     {card.noteTitle}
                   </button>
                 </p>
+                {isLeech(schedule.get(card.id)) && (
+                  <p className="rounded-lg bg-[var(--fl-accent-soft)] px-3 py-2 text-[12px] text-[var(--fl-text)]">
+                    Forgotten {schedule.get(card.id)!.lapses} times. A card that keeps slipping is
+                    usually asking two things at once, or is missing a clue — it may be worth
+                    rewriting in{" "}
+                    <button
+                      type="button"
+                      onClick={() => onOpenNote(card.path)}
+                      className="font-medium underline underline-offset-2"
+                    >
+                      {card.noteTitle}
+                    </button>
+                    .
+                  </p>
+                )}
 
                 {/* The whole card is the button on a phone: tap it to turn it
                     over, then swipe right if you knew it, left if you did not. */}
@@ -852,6 +886,45 @@ export function FlashcardsDialog({
                     </button>
                   </>
                 )}
+              </div>
+            )}
+
+            {leeches.length > 0 && (
+              <div className={section}>
+                <p className={heading}>Cards that keep slipping</p>
+                <p className="mt-0.5 text-[12px] text-[var(--fl-muted)]">
+                  Each forgotten {LEECH_LAPSES} times or more. Rewriting one — shorter, one fact,
+                  with a clue — usually fixes it; starting over clears its history.
+                </p>
+                <ul className="mt-2 divide-y divide-[var(--fl-border)]">
+                  {leeches.map((each) => (
+                    <li key={each.id} className="flex items-center gap-2 py-2">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-[var(--fl-text)]">
+                          {each.question}
+                        </span>
+                        <span className="text-[11.5px] text-[var(--fl-muted)]">
+                          Forgotten {schedule.get(each.id)?.lapses} times · {each.noteTitle}
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onOpenNote(each.path)}
+                        className="rounded-lg border border-[var(--fl-border)] px-2.5 py-1 text-[12px] text-[var(--fl-text)] hover:bg-[var(--fl-elevated)]"
+                      >
+                        Rewrite
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => startOver(each.id)}
+                        aria-label={`Start over: ${each.question}`}
+                        className="rounded-lg px-2 py-1 text-[12px] text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
+                      >
+                        Start over
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 

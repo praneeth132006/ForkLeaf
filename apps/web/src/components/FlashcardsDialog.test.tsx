@@ -348,3 +348,23 @@ describe("FlashcardsDialog — cards written by a model", () => {
     expect(onConnectAi).toHaveBeenCalled();
   });
 });
+
+describe("FlashcardsDialog — cards that keep slipping", () => {
+  const slipping = () =>
+    new Map([[CARDS[0]!.id, { due: "2026-09-13", interval: 1, ease: 1.3, reps: 0, lapses: 5 }]]);
+
+  it("lists them, and starts one over", async () => {
+    const props = open({ readSchedule: vi.fn(async () => formatSchedule(slipping())) });
+    expect(await screen.findByText("Cards that keep slipping")).toBeTruthy();
+    expect(screen.getByText(/Forgotten 5 times · Geography/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Start over: Capital of France" }));
+    await waitFor(() => expect(props.writeSchedule).toHaveBeenCalled());
+    expect(parseSchedule(vi.mocked(props.writeSchedule).mock.calls[0]![0]).size).toBe(0);
+    expect(screen.queryByText("Cards that keep slipping")).toBeNull();
+  });
+
+  it("says so while it is being studied", async () => {
+    open({ autoStart: "all", readSchedule: vi.fn(async () => formatSchedule(slipping())) });
+    expect(await screen.findByText(/Forgotten 5 times\. A card that keeps slipping/)).toBeTruthy();
+  });
+});
