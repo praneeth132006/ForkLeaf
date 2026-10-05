@@ -260,7 +260,6 @@ export class SearchIndex {
 
     const averageLength = this.docs.size === 0 ? 1 : this.totalLength / this.docs.size;
     const scores = new Map<string, number>();
-    const matched = new Map<string, Set<string>>();
 
     // Every term must appear, so the per-term hit sets are intersected at the
     // end. Kept as a list rather than narrowed as we go, so a rare term still

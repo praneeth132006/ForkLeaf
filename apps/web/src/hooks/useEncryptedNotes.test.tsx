@@ -156,8 +156,10 @@ describe("useEncryptedNotes — encrypted for people", () => {
       await vi.advanceTimersByTimeAsync(SEAL_DELAY_MS + 10);
     });
     vi.useRealTimers();
+    // The timer only starts the reseal; the WebCrypto work behind it is real,
+    // and on a loaded machine it can still be running at this point.
+    await waitFor(() => expect(files.get("team/plan.md")!.content).not.toBe(first.content));
     const second = files.get("team/plan.md")!.content;
-    expect(second).not.toBe(first.content);
     expect(second).not.toContain("# Plan");
     expect((await openShared(second, bob.identity)).plaintext).toContain("# Plan\n\nv2");
 

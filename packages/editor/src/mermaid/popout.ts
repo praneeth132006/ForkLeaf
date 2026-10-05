@@ -556,6 +556,7 @@ export function useDiagramPopoutSession(sessionId: string | null): DiagramPopout
     const stored = readSession(sessionId);
 
     if (stored) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- state restored from sessionStorage.
       setLocalCode(stored.code);
       setTitle(stored.title);
       mirrored.current = stored.code;

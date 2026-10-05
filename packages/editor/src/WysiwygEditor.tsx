@@ -582,7 +582,6 @@ export function WysiwygEditor({
     applyingExternal.current = false;
     // Mount only. Re-running as the document changes would drag the caret back
     // to the top every time the note synced.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
   // The claim checker was switched, or has a newer notebook to check against:
@@ -990,6 +989,7 @@ function SlashMenu({ editor, actions }: { editor: Editor; actions: ActionContext
   }, [editor]);
 
   // Reset the highlight whenever the result set changes.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- a reset keyed on the query.
   useEffect(() => setSelectedIndex(0), [state.query]);
 
   // Keep the highlighted row in view as the arrow keys move through a long list.

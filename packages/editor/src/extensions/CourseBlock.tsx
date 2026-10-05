@@ -94,6 +94,7 @@ function CourseNodeView({ node, updateAttributes, extension, editor, selected }:
   useEffect(() => {
     if (!bridge || !folder) return;
     let live = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the loading state for the fetch below.
     setLoad({ kind: "loading" });
     setQuiz(null);
     bridge.load(folder).then(

@@ -190,6 +190,7 @@ export function MarkdownEditor({
   useEffect(() => {
     if (isRich) {
       onCursorChange?.(null);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- dropping a reading the mode switch made stale.
       setSourceCursor(null);
     }
   }, [isRich, onCursorChange]);
@@ -381,6 +382,9 @@ export function MarkdownEditor({
     }
     // Reading the handle needs a re-render trigger, which the cursor provides.
     return sourceSurface(sourceHandle, sourceCursor);
+    // `richTick` is the re-render trigger for rich text: a new tick means the
+    // TipTap selection moved, so the surface has to be rebuilt to read it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRich, tiptap, sourceCursor, richTick]);
 
   // Rich text and raw Markdown can hold different things, so the toolbar shows
