@@ -510,6 +510,14 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
     // drag begun before a selection change committed against the stale set.
   }, [drag, graph, onChange, toWorld, zoom, selection, commit]);
 
+  /**
+   * Whether the reader has taken control of the view by panning or zooming.
+   *
+   * Once they have, the canvas must never move on its own again — nothing is
+   * more disorienting than a view that re-centres itself while being used.
+   */
+  const touched = useRef(false);
+
   // ── Zoom ────────────────────────────────────────────────────────────────
   // Anchored at the cursor, so the point under the pointer stays put — the
   // thing that makes zooming feel like a map rather than a slider.
@@ -584,13 +592,6 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
     });
   }, [graph.nodes, viewport]);
 
-  /**
-   * Whether the reader has taken control of the view by panning or zooming.
-   *
-   * Once they have, the canvas must never move on its own again — nothing is
-   * more disorienting than a view that re-centres itself while being used.
-   */
-  const touched = useRef(false);
   const markTouched = useCallback(() => {
     touched.current = true;
   }, []);
@@ -663,7 +664,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
       if (!isMarker(shape)) setEditingLabel(id);
       return id;
     },
-    [graph, onChange, view],
+    [graph, commit, selectOne, view],
   );
 
   /** Adds a node already wired to the current selection, for keyboard flow. */

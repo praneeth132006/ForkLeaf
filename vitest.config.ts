@@ -23,6 +23,11 @@ export default defineConfig({
     include: ["packages/**/*.test.{ts,tsx}", "apps/**/*.test.{ts,tsx}"],
     exclude: ["**/node_modules/**", "**/dist/**", "**/.next/**"],
     globals: true,
+    // Node 25 ships its own `localStorage`, and touching it without a backing
+    // file prints a warning from every worker. The DOM tests get jsdom's
+    // storage instead, so Node's is switched off. Gated because older Nodes
+    // reject the flag outright.
+    execArgv: Number(process.versions.node.split(".")[0]) >= 25 ? ["--no-webstorage"] : [],
   },
   resolve: {
     alias: {

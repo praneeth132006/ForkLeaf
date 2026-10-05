@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import type { Note, PendingChange, SyncMode, TreeNode } from "@forkleaf/types";
 import { SyncEngine } from "./sync-engine";
 import { MemoryDatabase } from "./memory-db";
