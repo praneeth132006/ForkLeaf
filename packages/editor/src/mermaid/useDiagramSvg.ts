@@ -31,6 +31,7 @@ export function useDiagramSvg(
 
   useEffect(() => {
     if (!code.trim()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clearing the last render for empty code.
       setSvg(null);
       setError(null);
       return;
