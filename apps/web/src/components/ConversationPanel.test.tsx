@@ -1,0 +1,279 @@
+// @vitest-environment jsdom
+import React from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type {
+  DiscussionCommentDto,
+  DiscussionRepoDto,
+  NoteDiscussionDto,
+} from "@forkleaf/github-client";
+import type { ConversationState } from "@/hooks/useNoteConversation";
+import { ConversationPanel, type ConversationPanelProps } from "./ConversationPanel";
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
+
+const repo: DiscussionRepoDto = {
+  id: "R_1",
+  url: "https://github.com/me/notes",
+  private: true,
+  enabled: true,
+  canComment: true,
+  categories: [],
+};
+
+function message(id: string, extra: Partial<DiscussionCommentDto> = {}): DiscussionCommentDto {
+  return {
+    id,
+    author: {
+      login: `user-${id}`,
+      avatarUrl: "https://avatars/x",
+      url: `https://github.com/${id}`,
+    },
+    body: `message ${id}`,
+    createdAt: new Date(Date.now() - 60_000).toISOString(),
+    url: `https://github.com/me/notes/discussions/4#${id}`,
+    isAnswer: false,
+    isMinimized: false,
+    viewerDidAuthor: false,
+    replies: [],
+    replyCount: 0,
+    ...extra,
+  };
+}
+
+function discussion(comments: DiscussionCommentDto[], extra: Partial<NoteDiscussionDto> = {}) {
+  return {
+    id: "D_4",
+    number: 4,
+    title: "A",
+    url: "https://github.com/me/notes/discussions/4",
+    locked: false,
+    category: "General",
+    comments,
+    commentCount: comments.length,
+    ...extra,
+  };
+}
+
+function ready(d: NoteDiscussionDto | null, r: DiscussionRepoDto = repo): ConversationState {
+  return { status: "ready", conversation: { repo: r, discussion: d }, error: null };
+}
+
+function setup(props: Partial<ConversationPanelProps> = {}) {
+  const send = vi.fn().mockResolvedValue(null);
+  const refresh = vi.fn();
+  const onClose = vi.fn();
+  render(
+    <ConversationPanel
+      repoName="me/notes"
+      state={ready(discussion([]))}
+      sending={false}
+      send={send}
+      refresh={refresh}
+      onClose={onClose}
+      {...props}
+    />,
+  );
+  return { send, refresh, onClose };
+}
+
+describe("ConversationPanel — what it shows", () => {
+  it("says why there is no conversation, and offers nothing to type into", () => {
+    setup({ unavailable: "Connect a GitHub repository to talk about notes." });
+    expect(screen.getByText("Connect a GitHub repository to talk about notes.")).toBeTruthy();
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("shows loading before the first read", () => {
+    setup({ state: { status: "loading", conversation: null, error: null } });
+    expect(screen.getByText("Loading the conversation…")).toBeTruthy();
+  });
+
+  it("shows a failed first read with a way to try again", () => {
+    const { refresh } = setup({
+      state: {
+        status: "error",
+        conversation: null,
+        error: { code: "discussions-forbidden", message: "GitHub did not let ForkLeaf." },
+      },
+    });
+    expect(screen.getByText("GitHub did not let ForkLeaf.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("explains how to turn Discussions on when it is off", () => {
+    setup({ state: ready(null, { ...repo, enabled: false, canComment: false }) });
+    expect(screen.getByText(/switched off for me\/notes/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Open settings/ }).getAttribute("href")).toBe(
+      "https://github.com/me/notes/settings",
+    );
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("invites the first message when nobody has started a conversation", () => {
+    setup({ state: ready(null) });
+    expect(screen.getByText("No messages about this note yet.")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Message" })).toBeTruthy();
+  });
+
+  it("warns that a public repository's conversation is public", () => {
+    setup({ state: ready(null, { ...repo, private: false }) });
+    expect(screen.getByText(/anyone can read this conversation/)).toBeTruthy();
+  });
+
+  it("renders messages and their replies, with a link to the discussion", () => {
+    setup({
+      state: ready(
+        discussion([
+          message("a", { replies: [message("a1")], replyCount: 1, isAnswer: true }),
+          message("b"),
+        ]),
+      ),
+    });
+    expect(screen.getByText("message a")).toBeTruthy();
+    expect(screen.getByText("message a1")).toBeTruthy();
+    expect(screen.getByText("Answer")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "#4 ↗" }).getAttribute("href")).toBe(
+      "https://github.com/me/notes/discussions/4",
+    );
+  });
+
+  it("points at GitHub for messages too old to have been read", () => {
+    setup({
+      state: ready(
+        discussion([message("a", { replies: [message("a9")], replyCount: 5 })], {
+          commentCount: 60,
+        }),
+      ),
+    });
+    expect(screen.getByText(/59 earlier messages on GitHub/)).toBeTruthy();
+    expect(screen.getByText(/4 earlier replies on GitHub/)).toBeTruthy();
+  });
+
+  it("renders a message as sanitised Markdown — somebody else's text cannot run script", () => {
+    setup({
+      state: ready(
+        discussion([
+          message("x", {
+            body: '**bold** <img src=x onerror="window.pwned=1"> <script>window.pwned=1</script>',
+          }),
+        ]),
+      ),
+    });
+    const article = screen.getByText("bold").closest("article")!;
+    expect(article.querySelector("strong")).toBeTruthy();
+    expect(article.querySelector("script")).toBeNull();
+    expect(article.innerHTML).not.toContain("onerror");
+  });
+
+  it("keeps a hidden message folded until asked", () => {
+    setup({ state: ready(discussion([message("h", { isMinimized: true })])) });
+    expect(screen.queryByText("message h")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Hidden by a maintainer/ }));
+    expect(screen.getByText("message h")).toBeTruthy();
+  });
+
+  it("does not offer to write in a locked conversation", () => {
+    setup({ state: ready(discussion([message("a")], { locked: true })) });
+    expect(screen.getByText("This conversation has been locked on GitHub.")).toBeTruthy();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reply" })).toBeNull();
+  });
+
+  it("does not offer to write to a repository the reader is not part of", () => {
+    setup({ state: ready(discussion([message("a")]), { ...repo, canComment: false }) });
+    expect(screen.getByText(/Only this repository's collaborators/)).toBeTruthy();
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("keeps the conversation on screen when a later check fails", () => {
+    setup({
+      state: {
+        status: "error",
+        conversation: { repo, discussion: discussion([message("a")]) },
+        error: { code: "network", message: "No connection to the server." },
+      },
+    });
+    expect(screen.getByText("message a")).toBeTruthy();
+    expect(screen.getByText(/Could not check for new messages/)).toBeTruthy();
+  });
+});
+
+describe("ConversationPanel — writing", () => {
+  it("sends with ⌘↵ and clears the box", async () => {
+    const { send } = setup();
+    const box = screen.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement;
+
+    fireEvent.change(box, { target: { value: "  Is step 3 right?  " } });
+    await act(async () => {
+      fireEvent.keyDown(box, { key: "Enter", metaKey: true });
+    });
+
+    expect(send).toHaveBeenCalledWith("Is step 3 right?", undefined);
+    expect(box.value).toBe("");
+  });
+
+  it("treats a plain Enter as a new line", () => {
+    const { send } = setup();
+    const box = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(box, { target: { value: "line" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("will not send an empty message, or one while another is sending", () => {
+    setup();
+    expect((screen.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(true);
+    cleanup();
+
+    setup({ sending: true });
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "x" } });
+    expect((screen.getByRole("button", { name: "Sending…" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  it("keeps the draft and says why when a message does not send", async () => {
+    const { send } = setup();
+    send.mockResolvedValue({ code: "locked", message: "This conversation has been locked." });
+    const box = screen.getByRole("textbox") as HTMLTextAreaElement;
+
+    fireEvent.change(box, { target: { value: "hello" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    });
+
+    expect(screen.getByRole("alert").textContent).toBe("This conversation has been locked.");
+    expect(box.value).toBe("hello");
+  });
+
+  it("replies to a message, and can be talked out of it", async () => {
+    const { send } = setup({ state: ready(discussion([message("a")])) });
+
+    fireEvent.click(screen.getByRole("button", { name: "Reply" }));
+    expect(screen.getByText("Replying to @user-a")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel the reply" }));
+    expect(screen.queryByText("Replying to @user-a")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reply" }));
+    const box = screen.getByRole("textbox", { name: "Reply" });
+    fireEvent.change(box, { target: { value: "yes" } });
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole("button", { name: "Reply" }).at(-1)!);
+    });
+
+    expect(send).toHaveBeenCalledWith("yes", "a");
+    expect(screen.queryByText("Replying to @user-a")).toBeNull();
+  });
+
+  it("hides the panel", () => {
+    const { onClose } = setup();
+    fireEvent.click(screen.getByRole("button", { name: "Hide panel" }));
+    expect(onClose).toHaveBeenCalled();
+  });
+});
