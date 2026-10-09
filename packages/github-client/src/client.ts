@@ -2,6 +2,15 @@ import { compareTreeEntries, type RepoRef, type TreeNode } from "@forkleaf/types
 import { Transport, type RateLimit, type TransportConfig } from "./http";
 import { GitHubError } from "./errors";
 import { encodeBase64, decodeBase64 } from "./base64";
+import {
+  addDiscussionComment,
+  codeForGraphQLType,
+  createNoteDiscussion,
+  findNoteConversation,
+  type DiscussionCommentDto,
+  type GraphQLErrorEntry,
+  type NoteConversationDto,
+} from "./discussions";
 
 /** A repository's GitHub Pages site, as the publish flow needs it. */
 /** One file in a directory listing — name and size, never the bytes. */
@@ -376,6 +385,70 @@ export class GitHubClient {
 
   get rateLimit(): RateLimit | null {
     return this.transport.rateLimit;
+  }
+
+  // ─── GraphQL ──────────────────────────────────────────────────────────────
+
+  /**
+   * Runs one GraphQL document.
+   *
+   * GraphQL reports most failures with a 200 and an `errors` array, so those
+   * are turned into the same `GitHubError` a REST failure would be, and the
+   * UI needs to know nothing about which API was behind a call. With
+   * `allowPartial`, errors beside usable data are left for the caller to
+   * judge; with no data at all, the first error is always thrown.
+   */
+  graphql = async <T>(
+    query: string,
+    variables: Record<string, unknown>,
+    options: { write?: boolean; allowPartial?: boolean } = {},
+  ): Promise<T> => {
+    const { data } = await this.transport.request<{
+      data?: T | null;
+      errors?: GraphQLErrorEntry[];
+    }>("/graphql", {
+      method: "POST",
+      body: { query, variables },
+      retry: !options.write,
+    });
+
+    const errors = data?.errors ?? [];
+    if (data?.data && (errors.length === 0 || options.allowPartial)) return data.data;
+
+    const first = errors[0];
+    throw new GitHubError(
+      codeForGraphQLType(first?.type),
+      first?.message ?? "GitHub returned an empty response.",
+    );
+  };
+
+  // ─── Discussions ──────────────────────────────────────────────────────────
+
+  /** The conversation about a note. See `discussions.ts`. */
+  findNoteConversation(options: {
+    owner: string;
+    repo: string;
+    path: string;
+    knownNumber?: number;
+  }): Promise<NoteConversationDto> {
+    return findNoteConversation(this.graphql, options);
+  }
+
+  createNoteDiscussion(input: {
+    repositoryId: string;
+    categoryId: string;
+    title: string;
+    body: string;
+  }): Promise<{ id: string; number: number }> {
+    return createNoteDiscussion(this.graphql, input);
+  }
+
+  addDiscussionComment(input: {
+    discussionId: string;
+    body: string;
+    replyToId?: string;
+  }): Promise<DiscussionCommentDto> {
+    return addDiscussionComment(this.graphql, input);
   }
 
   // ─── Identity ─────────────────────────────────────────────────────────────
