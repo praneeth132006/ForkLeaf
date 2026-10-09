@@ -27,6 +27,15 @@ const nextConfig: NextConfig = {
   ],
 
   /**
+   * `/changelog` renders the repository's own CHANGELOG.md, which lives at the
+   * monorepo root — outside this app, so the tracer would not otherwise ship
+   * it with the page's server bundle.
+   */
+  outputFileTracingIncludes: {
+    "/changelog": ["../../CHANGELOG.md"],
+  },
+
+  /**
    * Baseline headers for every response, including the static assets that
    * `src/proxy.ts` deliberately skips. The policy work that needs a per-request
    * value — Content-Security-Policy with its nonce, HSTS, the cross-origin

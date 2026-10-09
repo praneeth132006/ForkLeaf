@@ -1,9 +1,173 @@
 # Changelog
 
-Notable changes to ForkLeaf. Dates are the release date; the git history is the
-full record.
+Notable changes to ForkLeaf, newest first, one dated section per day that
+something shipped. The same timeline is on the site at `/changelog`, linked from
+every page's footer; the git history is the full record.
+
+New entries go under **Unreleased** as `### Title` followed by a short
+description, and the heading becomes the day's date when they ship.
 
 ## Unreleased
+
+## 2026-09-29
+
+### Encrypted for the people who should read it
+
+A note or a folder can now be sealed for a list of people, each opening it with
+their own key, instead of for one shared passphrase that can never be taken
+back. Each person's key pair is made in the browser and the private half is
+only ever stored sealed with their passphrase. Fingerprints are checked, and a
+reader whose key changes blocks sealing until the change is confirmed.
+
+### If I stop writing…
+
+Builds a GitHub Action for the notebook's own repository that counts the days
+since anything was written. Two weeks before the limit it opens an issue as a
+reminder; at the limit it does what was chosen, once — publishes a folder to
+GitHub Pages, and/or opens an issue naming someone trusted. It never deletes a
+note, and deleting the workflow file turns it off.
+
+### Explain it back, out loud
+
+**Say it instead** listens and writes each finished phrase into the answer,
+still editable by hand, and the comparison works as it does for typed answers.
+Where the browser has no speech recognition, there is no button.
+
+### A note's family
+
+⌘K → **This note's family** finds the notes that share passages with this one —
+a meeting note split in three, a draft pasted into the final version — with how
+many words each shares and the passages themselves.
+
+### How often a paragraph was rewritten
+
+**Where did this paragraph come from?** has a second shading, **Times
+rewritten**, marking each paragraph "settled" or "rewritten N×" from the note's
+own history.
+
+### Changed your mind? Say why
+
+When an edit reverses what a note said — one thing named for another, a
+negation put in or taken out — the note's header offers to record why, as one
+dated line in the note itself. Typo fixes and rewrites from scratch are left
+alone.
+
+### Security and privacy, tightened
+
+- The assistant consent screen says where access will be delivered, not only
+  the name a client gave itself.
+- Server-side fetches are pinned to the address that was checked.
+- Rate limits and one-time codes hold across server instances.
+- MCP batches and the public badge are bounded; decks publish only into decks.
+- Note names are kept out of analytics: addresses are reduced to origin and
+  path before they reach any analytics service.
+- CI runs with a read-only token.
+
+## 2026-09-28
+
+### Echoes
+
+One sentence from what you wrote a day, a week, a month and a year ago, on the
+dashboard, with one question: is it still true?
+
+### Notes fading from memory
+
+Every note gets a forgetting curve from the days you open it, and the dashboard
+lists the notes you came back to that are fading now. Visits are kept on this
+device only.
+
+### A receipt for everything the AI has read
+
+Every time a note is sent to an assistant or the flashcard writer, a receipt
+records when, to which provider and model, and how much of which note. ⌘K →
+**See what the AI has read** lists them. Kept in this browser only.
+
+### Search by meaning
+
+Search learns which words keep company across your notes, so "customers
+leaving" finds the note about churn. Built in the browser from your own notes —
+nothing downloaded, nothing sent.
+
+### Templates on a schedule
+
+A template with a `schedule` — daily, weekdays, weekly, monthly, or a day such
+as `friday` — makes its note the first time ForkLeaf is open in that period.
+Never back-filled, so a month away does not leave thirty empty stand-ups.
+
+### This note, then and now
+
+⌘K → **This note, then and now** shows the note as it was a month, six months
+or a year ago beside today's, with what was added and let go.
+
+### A note's map of contents
+
+⌘K → **Write this note's map of contents** writes a `## Map of contents` section
+of ordinary `[[wikilinks]]`: what the note links to, what links here, and what
+shares its tags. Running it again replaces only that section.
+
+### Present a note as slides
+
+⌘K → **Present this note** shows it full screen, one slide at a time, split at
+`---` lines or, without them, at its `##` sections.
+
+### Maths, typeset
+
+`$…$` inline and `$$…$$` block maths render with KaTeX in the preview, the split
+view and published pages. Prices such as "$5 and $10" stay prices.
+
+### Flashcards, all the way through
+
+- Study in one click, and every card option under `/cards`.
+- Make a card from selected text, from a passage in a PDF, or from the
+  diagrams in a note — or have your own model write them from the note.
+- Type the answer before seeing it; tap to turn a card over and swipe to grade.
+- Schedule with FSRS if you choose it; find the cards that keep slipping.
+- A study streak, and a grid of the days you studied.
+- Import decks from Anki, and export them back.
+
+## 2026-09-20
+
+### Fixed — a critical Next.js vulnerability
+
+Next.js and other vulnerable dependencies were patched, and the key the rate
+limiter counts by was hardened.
+
+## 2026-09-17
+
+### Fixed — a stuck change says why when clicked
+
+Clicking "1 change stopped trying — click to see why" opened nothing, because
+the status bar clipped the panel that opens out of it. The panel opens, wraps
+and scrolls again.
+
+## 2026-09-16
+
+### An assistant beside the note
+
+A model in a column beside the note you are writing — Claude, OpenAI, Gemini,
+or one on your own machine, with your own key. Open it with ⌥⌘A, the sparkle in
+the header, or ⌘K. The open note travels with the question unless you hold it
+back, and any answer is one button from being part of the page.
+
+- A plan limit is told apart from a busy queue, and failed questions no longer
+  stack up.
+- The model picker offers the model that works rather than a list to guess in.
+- The assistant can write into the note.
+
+### Fixed — the status bar, and pictures copied between notes
+
+The status bar fits on one line, help explains setting up Claude, and pictures
+survive being copied from one note to another.
+
+## 2026-09-14
+
+### Fixed — pasted lists no longer turn into code
+
+A bulleted list copied from a web page became one "Plain text" code block,
+because indentation counted as a sign of code. Lines that read as sentences no
+longer do, and pasted HTML with lists or headings is kept as written.
+
+## 2026-09-13
 
 ### Connect an AI assistant, from the bottom bar
 
@@ -509,7 +673,7 @@ from the notes' front matter each time they open, so they cannot disagree with
 the files, and every change is an ordinary edit to one note. A note locked on
 this device is not changed, and the view says so.
 
-### Fixed
+### Fixed — focus mode, and a new day's note
 
 - ⌘⇧F in the source view entered focus mode _and_ opened the editor's
   find-and-replace bar underneath it. The shortcut is now taken before the
@@ -561,6 +725,8 @@ ForkLeaf.
 - **Focus mode.** ⌘⇧F puts away the file tree, the tabs, the document panel and
   the status bar, and brings back exactly the layout you had when pressed again.
 
+## 2026-09-06
+
 ### Comparing two things, side by side
 
 Three places in ForkLeaf could tell you that something had changed and then
@@ -589,58 +755,7 @@ leave you to work out _how_ on your own. All three can now show you.
   note before and after is now in the list itself. **Discuss on GitHub** stays,
   for the half that genuinely belongs there: replying to whoever sent it.
 
-### Fixed — another account could read this browser's notebook
-
-Signing out and signing in as a different GitHub account on the same browser
-left the previous account's workspaces and notes in place: their repository
-names, their folder structure, the full text of every note they had opened,
-and an editor willing to let the new arrival type into them.
-
-GitHub itself was never exposed — every request is authorised server-side by
-the session cookie, which is why a repository the new account could not read
-reported "Not Found" rather than handing over its contents. What leaked was the
-local cache, which is where the words are.
-
-A repository workspace now records the account that connected it and is listed
-for nobody else, across the editor, the dashboard and the profile page. Nothing
-is deleted: a notebook is hidden from other accounts and comes back intact when
-its own account signs in. Being offline is treated as "could not ask" rather
-than "signed out", so a notebook still opens without a network.
-
-### Reading PDFs
-
-ForkLeaf opens PDFs, beside the note you are writing from them.
-
-- A reader in its own pane: page rendering, the document's own table of
-  contents, and find-across-the-document that matches through line breaks,
-  hyphenation and ligatures — so searching for "find" matches a page that
-  really contains "ﬁnd"
-- Open one by dragging it onto the window, from the command palette, from a
-  `.pdf` in the repository file tree, from an ordinary markdown link in a note,
-  or from the operating system's "Open with" list
-- **Quote into note** turns a selected passage into a blockquote and a link.
-  Nothing bespoke lands in the file: `[On Attention, p. 12](paper.pdf#page=12…)`
-  renders on github.com and opens the right page in every other PDF reader
-- Citations record the sentence, not the page. Clicking one finds those words
-  in the document as it is now — so a citation still points at the right
-  paragraph after the author adds a figure to page 4, and says so plainly when
-  the passage has genuinely gone
-- Nothing is ever written back to the PDF. The file in your repository stays
-  exactly as it was committed
-
-### Reading PDFs — in the window you are already in
-
-- Clicking a PDF in the file tree now opens it **here**, in the middle of the
-  editor, with the document's contents pinned open on the right. It used to
-  throw you into a second browser tab, which is a strange thing for a notes
-  app to do with a file that lives in the notebook you are looking at
-- The contents column is a real column: **Contents** and **Find** as two tabs
-  of it, and a seam you can drag. Documents with no table of contents of their
-  own say so rather than showing an empty list
-- Where PDFs open is now a choice of three rather than a toggle — in this
-  window, beside the note, or in a browser tab — and the command palette shows
-  all three with the current one marked, so it answers "where do they open
-  now?" as well as changing it
+## 2026-09-02
 
 ### A document's text, kept beside it
 
@@ -833,6 +948,8 @@ the exact words to press, and what happens when you do. Two new topics —
 resizable columns, the search that weighs what you are working on, diagram boxes
 that are notes, and what to do about an image too big to send.
 
+## 2026-08-31
+
 ### Your notebook, on a day you choose
 
 **Show me my notebook as it was on…** in the palette takes the whole notebook
@@ -929,6 +1046,61 @@ find-in-document work through hyphenation and ligatures — and then threw it
 away when the document closed. It is now kept beside the notebook, so ⌘K
 searches the papers as well as the notes and jumps straight to the page. A
 document is indexed the first time it is opened, and by the citation check.
+
+## 2026-08-30
+
+### Fixed — another account could read this browser's notebook
+
+Signing out and signing in as a different GitHub account on the same browser
+left the previous account's workspaces and notes in place: their repository
+names, their folder structure, the full text of every note they had opened,
+and an editor willing to let the new arrival type into them.
+
+GitHub itself was never exposed — every request is authorised server-side by
+the session cookie, which is why a repository the new account could not read
+reported "Not Found" rather than handing over its contents. What leaked was the
+local cache, which is where the words are.
+
+A repository workspace now records the account that connected it and is listed
+for nobody else, across the editor, the dashboard and the profile page. Nothing
+is deleted: a notebook is hidden from other accounts and comes back intact when
+its own account signs in. Being offline is treated as "could not ask" rather
+than "signed out", so a notebook still opens without a network.
+
+### Reading PDFs
+
+ForkLeaf opens PDFs, beside the note you are writing from them.
+
+- A reader in its own pane: page rendering, the document's own table of
+  contents, and find-across-the-document that matches through line breaks,
+  hyphenation and ligatures — so searching for "find" matches a page that
+  really contains "ﬁnd"
+- Open one by dragging it onto the window, from the command palette, from a
+  `.pdf` in the repository file tree, from an ordinary markdown link in a note,
+  or from the operating system's "Open with" list
+- **Quote into note** turns a selected passage into a blockquote and a link.
+  Nothing bespoke lands in the file: `[On Attention, p. 12](paper.pdf#page=12…)`
+  renders on github.com and opens the right page in every other PDF reader
+- Citations record the sentence, not the page. Clicking one finds those words
+  in the document as it is now — so a citation still points at the right
+  paragraph after the author adds a figure to page 4, and says so plainly when
+  the passage has genuinely gone
+- Nothing is ever written back to the PDF. The file in your repository stays
+  exactly as it was committed
+
+### Reading PDFs — in the window you are already in
+
+- Clicking a PDF in the file tree now opens it **here**, in the middle of the
+  editor, with the document's contents pinned open on the right. It used to
+  throw you into a second browser tab, which is a strange thing for a notes
+  app to do with a file that lives in the notebook you are looking at
+- The contents column is a real column: **Contents** and **Find** as two tabs
+  of it, and a seam you can drag. Documents with no table of contents of their
+  own say so rather than showing an empty list
+- Where PDFs open is now a choice of three rather than a toggle — in this
+  window, beside the note, or in a browser tab — and the command palette shows
+  all three with the current one marked, so it answers "where do they open
+  now?" as well as changing it
 
 ### A picture too big to send can be resized instead of deleted
 
