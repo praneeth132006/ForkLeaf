@@ -5,34 +5,8 @@ export function SigningIn() {
     <>
       <Lead>
         Signing in is what turns ForkLeaf from a browser scratchpad into a notes app with a backup.
-        This page covers exactly what the flow does, what it asks for, and what it can see.
+        This page covers what it asks GitHub for, what it uses that for, and how to take it back.
       </Lead>
-
-      <H2 id="flow">What happens when you press the button</H2>
-      <OL>
-        <li>
-          ForkLeaf generates a random <Code>state</Code> value, stores it in a short-lived cookie,
-          and redirects you to github.com.
-        </li>
-        <li>GitHub shows you its consent screen listing the permissions being requested.</li>
-        <li>
-          You approve, and GitHub redirects back to <Code>/api/auth/callback</Code> with a one-time
-          code.
-        </li>
-        <li>
-          The server checks the <Code>state</Code> matches, exchanges the code for an access token,
-          and confirms the token works by fetching your profile.
-        </li>
-        <li>
-          The token is encrypted — JWE, A256GCM — into an <Code>httpOnly</Code> cookie, and you land
-          in the editor.
-        </li>
-      </OL>
-      <Note>
-        The <Code>state</Code> check is not ceremony. Without it, someone can complete the OAuth
-        flow inside your browser and quietly bind your session to <em>their</em> GitHub account — a
-        login-CSRF that ends with your notes being committed to a stranger&rsquo;s repository.
-      </Note>
 
       <H2 id="scopes">The permissions it asks for</H2>
       <P>
@@ -120,46 +94,6 @@ export function SigningIn() {
         not approved ForkLeaf under <em>Settings → Third-party Access</em>. The dashboard says
         which, and what to do about it, rather than repeating GitHub&rsquo;s &ldquo;Not
         Found&rdquo;.
-      </P>
-
-      <H2 id="token">Where the token lives</H2>
-      <P>
-        In an encrypted <Code>httpOnly</Code> cookie that only the server can open. Specifically:
-      </P>
-      <UL>
-        <LI>
-          It is <strong>never</strong> sent to the browser as readable JavaScript. No script on the
-          page — including a compromised dependency — can read it.
-        </LI>
-        <LI>
-          It is <strong>never</strong> put in a URL, a query string, or a redirect, so it cannot end
-          up in a server log or a referrer header.
-        </LI>
-        <LI>
-          Every GitHub call goes through ForkLeaf&rsquo;s own <Code>/api/gh/*</Code> routes, which
-          attach the token server-side.
-        </LI>
-        <LI>
-          <Code>SameSite=Lax</Code>, and <Code>Secure</Code> in production.
-        </LI>
-        <LI>
-          The cookie lasts 30 days. The GitHub token inside it lasts eight hours — ForkLeaf is a
-          GitHub App, and that is how long a GitHub App&rsquo;s user token is valid for — so it is
-          renewed for you in the background, using the refresh token GitHub issues alongside it. You
-          sign in again when the cookie ends, when you have been away for six months, or when you
-          revoke access.
-        </LI>
-      </UL>
-      <P>
-        The usual shortcut — a token in <Code>localStorage</Code> — would be readable by any script
-        that ever runs on the page. More in <A href="/docs/security">the security model</A>.
-      </P>
-
-      <H2 id="google">Google sign-in</H2>
-      <P>
-        Google is enabled as an identity provider on the Firebase project, but it does not grant
-        repository access — only GitHub can do that. GitHub is the sign-in that matters for
-        ForkLeaf, which is why it is the only button offered.
       </P>
 
       <H2 id="signing-out">Signing out</H2>
