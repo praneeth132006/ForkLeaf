@@ -85,7 +85,10 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             {githubAvailable ? (
               <>
-                <a href={GITHUB_SIGN_IN_URL} className="fl-btn fl-btn-primary !rounded-full !px-6 !py-3.5">
+                <a
+                  href={GITHUB_SIGN_IN_URL}
+                  className="fl-btn fl-btn-primary !rounded-full !px-6 !py-3.5"
+                >
                   <GitHubGlyph />
                   Continue with GitHub
                 </a>

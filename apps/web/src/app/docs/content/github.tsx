@@ -106,11 +106,11 @@ export function SigningIn() {
       </Note>
       <P>
         You are not made to take the wide one. Under the <strong>Continue with GitHub</strong>{" "}
-        button, <A href="/sign-in">the sign-in page</A> offers <strong>Public repositories only</strong>,
-        which asks for <Code>public_repo</Code> instead — with it, ForkLeaf cannot open a private
-        repository at all, because GitHub refuses the token rather than because we decline to try.
-        Pick it if your notes are going to be public; you can sign in again with the wider
-        permission whenever that changes, and nothing has to be redone.
+        button, <A href="/sign-in">the sign-in page</A> offers{" "}
+        <strong>Public repositories only</strong>, which asks for <Code>public_repo</Code> instead —
+        with it, ForkLeaf cannot open a private repository at all, because GitHub refuses the token
+        rather than because we decline to try. Pick it if your notes are going to be public; you can
+        sign in again with the wider permission whenever that changes, and nothing has to be redone.
       </P>
       <P>
         Whichever you choose, ForkLeaf reads and writes exactly one repository — the one you connect

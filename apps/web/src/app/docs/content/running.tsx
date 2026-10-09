@@ -127,8 +127,7 @@ export function Faq() {
         repository; GitHub has no per-repository classic scope. It is also the only scope asked for
         — nothing about your profile, email, organisations or gists is requested alongside it. If
         you only keep public notes, <Code>public_repo</Code> is offered on the sign-in page as{" "}
-        <strong>Public repositories only</strong>.{" "}
-        <A href="/docs/signing-in">Signing in</A>.
+        <strong>Public repositories only</strong>. <A href="/docs/signing-in">Signing in</A>.
       </Def>
       <Def term="Can I use a repository I already have?">
         Yes — any repository you can write to, on any branch, and optionally scoped to a single

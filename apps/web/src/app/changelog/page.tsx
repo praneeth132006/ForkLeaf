@@ -70,8 +70,8 @@ export default async function ChangelogPage() {
             What changed, and when
           </h1>
           <p className="mt-5 max-w-2xl text-[16px] leading-relaxed text-[var(--fl-muted)]">
-            Every notable change to ForkLeaf, newest first. {total} changes across{" "}
-            {releases.length} releases. The same record lives in{" "}
+            Every notable change to ForkLeaf, newest first. {total} changes across {releases.length}{" "}
+            releases. The same record lives in{" "}
             <a
               href={`${REPO_URL}/blob/main/CHANGELOG.md`}
               target="_blank"
