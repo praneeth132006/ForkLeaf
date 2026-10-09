@@ -40,38 +40,49 @@ let started = false;
 export function startPostHog(): void {
   if (started || typeof window === "undefined") return;
 
-  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+  const key =
+    process.env.NEXT_PUBLIC_POSTHOG_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN?.trim();
   if (!key) return;
 
-  started = true;
-
-  posthog.init(key, {
-    api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || DEFAULT_HOST,
-    autocapture: false,
-    capture_pageview: false,
-    capture_pageleave: true,
-    disable_session_recording: true,
-    // Masks anything that does get captured by a future default we did not
-    // anticipate. Belt and braces, deliberately.
-    mask_all_text: true,
-    mask_all_element_attributes: true,
-    persistence: "localStorage+cookie",
-    // Every address PostHog attaches by itself — the current page, the
-    // referrer, the landing page — reduced to origin, path and campaign tags,
-    // so the notes named in ForkLeaf's own query strings never leave.
-    before_send: (event) => scrubEvent(event),
-  });
+  try {
+    posthog.init(key, {
+      api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || DEFAULT_HOST,
+      autocapture: false,
+      capture_pageview: false,
+      capture_pageleave: true,
+      disable_session_recording: true,
+      // Masks anything that does get captured by a future default we did not
+      // anticipate. Belt and braces, deliberately.
+      mask_all_text: true,
+      mask_all_element_attributes: true,
+      persistence: "localStorage+cookie",
+      // Every address PostHog attaches by itself — the current page, the
+      // referrer, the landing page — reduced to origin, path and campaign tags,
+      // so the notes named in ForkLeaf's own query strings never leave.
+      before_send: (event) => scrubEvent(event),
+    });
+    started = true;
+  } catch {
+    // A blocked SDK must not break the editor, and a later call may retry.
+  }
 }
 
-/** True when events will actually go somewhere. */
+/** True after SDK initialization; network delivery and consent are independent. */
 export function postHogReady(): boolean {
   return started;
 }
 
 /** Sends one event, if PostHog is configured. */
 export function postHogCapture(event: string, properties?: Record<string, unknown>): void {
+  startPostHog();
   if (!started) return;
-  posthog.capture(event, properties);
+  try {
+    // Firebase and PostHog use different reserved names for page views.
+    posthog.capture(event === "page_view" ? "$pageview" : event, properties);
+  } catch {
+    // Tracking must never fail the action being measured.
+  }
 }
 
 /**
@@ -81,12 +92,21 @@ export function postHogCapture(event: string, properties?: Record<string, unknow
  * repository names, nothing about what is in the notes.
  */
 export function postHogIdentify(login: string): void {
+  startPostHog();
   if (!started || !login) return;
-  posthog.identify(login);
+  try {
+    posthog.identify(login);
+  } catch {
+    // Identity is best-effort, just like event capture.
+  }
 }
 
 /** Forgets the person on sign-out, so the next session is not attributed to them. */
 export function postHogReset(): void {
   if (!started) return;
-  posthog.reset();
+  try {
+    posthog.reset();
+  } catch {
+    // Analytics must not interrupt sign-out.
+  }
 }

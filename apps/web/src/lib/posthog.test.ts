@@ -148,3 +148,48 @@ describe("PostHog — events and identity", () => {
     expect(reset).toHaveBeenCalled();
   });
 });
+
+describe("PostHog — delivery regressions", () => {
+  it("maps Firebase page views to PostHog's web analytics event", async () => {
+    const ph = await load("phc_test");
+    ph.postHogCapture("page_view", { page_path: "/editor" });
+    expect(init).toHaveBeenCalledTimes(1);
+    expect(capture).toHaveBeenCalledWith("$pageview", { page_path: "/editor" });
+  });
+
+  it("accepts the project token variable from the installation guide", async () => {
+    const ph = await load();
+    vi.stubEnv("NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN", "phc_guide");
+    try {
+      ph.startPostHog();
+      expect(init).toHaveBeenCalledWith("phc_guide", expect.anything());
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("retries failed initialization without throwing into user actions", async () => {
+    const ph = await load("phc_test");
+    init.mockImplementationOnce(() => {
+      throw new Error("blocked");
+    });
+    expect(() => ph.postHogCapture("note_created")).not.toThrow();
+    expect(ph.postHogReady()).toBe(false);
+    ph.postHogCapture("note_created");
+    expect(ph.postHogReady()).toBe(true);
+    expect(capture).toHaveBeenCalledTimes(1);
+  });
+
+  it("isolates SDK failures from capture, sign-in and sign-out", async () => {
+    const ph = await load("phc_test");
+    const fail = () => {
+      throw new Error("storage unavailable");
+    };
+    capture.mockImplementationOnce(fail);
+    identify.mockImplementationOnce(fail);
+    reset.mockImplementationOnce(fail);
+    expect(() => ph.postHogCapture("note_created")).not.toThrow();
+    expect(() => ph.postHogIdentify("octocat")).not.toThrow();
+    expect(() => ph.postHogReset()).not.toThrow();
+  });
+});

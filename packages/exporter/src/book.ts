@@ -1,10 +1,11 @@
 import {
-  resolveWikilink,
+  createLinkResolver,
   type LinkCandidate,
   type WikilinkResolver,
 } from "@forkleaf/markdown-engine";
 import type { ExportOptions } from "@forkleaf/types";
 import { toBodyHtml, pageStyles, escapeHtml, type ImageResolver } from "./html";
+import { GARDEN_STYLES, gardenLinks, gardenMapSvg, type GardenLinks } from "./garden";
 
 /**
  * A folder of notes, published as a book.
@@ -63,6 +64,11 @@ export interface BuildBookOptions {
   suggestUrl?: (note: BookNote) => string | null;
   /** Turns a note-relative image path into something a page can show. */
   resolveImage?: ImageResolver;
+  /**
+   * Publish as a garden: every page lists the notes that link to it, and the
+   * contents page carries a map of how they all connect.
+   */
+  garden?: boolean;
 }
 
 export interface Book {
@@ -199,7 +205,7 @@ export function assignSlugs(notes: readonly BookNote[]): BookChapter[] {
 /**
  * Turns `[[a link]]` into a link to the chapter it means.
  *
- * The resolution itself is the app's own — the same `resolveWikilink` the
+ * The resolution itself is the app's own — the same link resolver the
  * editor uses, against the same candidates — so a link that opens the right
  * note in the app opens the right chapter in the book. Anything it cannot
  * place, or that resolves to a note outside this book, is reported as missing
@@ -213,9 +219,10 @@ function bookWikilinks(chapters: readonly BookChapter[]): WikilinkResolver {
     title: chapter.title,
   }));
   const bySource = new Map(chapters.map((chapter) => [chapter.source, chapter]));
+  const resolve = createLinkResolver(candidates);
 
   return (link) => {
-    const found = resolveWikilink(link.target, candidates);
+    const found = resolve(link.target);
     const chapter = found ? bySource.get(found.path) : undefined;
 
     if (!chapter) return { href: "", exists: false };
@@ -246,6 +253,7 @@ export async function buildBook(
   // From the markdown rather than the rendered HTML: it is the words the
   // author wrote, before a diagram became four kilobytes of SVG.
   const minutes = notes.map((note) => readMinutes(note.markdown));
+  const links = options.garden ? gardenLinks(notes) : null;
 
   const pages = await Promise.all(
     notes.map(async (note, index) => {
@@ -279,6 +287,7 @@ export async function buildBook(
           body,
           theme: options.theme,
           suggestUrl: options.suggestUrl?.(note) ?? null,
+          backlinks: links ? links.backlinks[index]!.map((from) => chapters[from]!) : null,
         }),
       };
     }),
@@ -289,7 +298,7 @@ export async function buildBook(
     files: [
       {
         path: `${INDEX}.html`,
-        content: coverPage(options.title, chapters, minutes, options.theme),
+        content: coverPage(options.title, chapters, minutes, options.theme, links),
       },
       ...pages,
       { path: BOOK_STYLESHEET, content: stylesheet(options.theme) },
@@ -313,7 +322,7 @@ export async function buildBook(
  * and it overrides the export's own layout rather than replacing it.
  */
 export function stylesheet(theme: "light" | "dark"): string {
-  return `${pageStyles(theme)}
+  return `${pageStyles(theme)}${GARDEN_STYLES}
 /* ── Book chrome ──────────────────────────────────────────────────────────
    A published note is a document: one column, centred, nothing around it.
    A book is a place, and a reader who has just arrived in the middle of one
@@ -586,6 +595,8 @@ function chapterPage(input: {
   body: string;
   theme: "light" | "dark";
   suggestUrl: string | null;
+  /** The chapters that link here, in a garden; null in a plain book. */
+  backlinks?: readonly BookChapter[] | null;
 }): string {
   const chapter = input.chapters[input.index]!;
   const previous = input.chapters[input.index - 1];
@@ -611,6 +622,7 @@ ${sidebar(input.book, input.chapters, input.index)}
   <p class="doc-meta">${where} · ${readingTime(input.minutes)}</p>
 </header>
 ${input.body}
+${backlinkList(input.backlinks ?? null)}
 ${suggest}
   </main>
   <nav class="book-foot" aria-label="Chapters either side">
@@ -632,12 +644,36 @@ ${
 `;
 }
 
+/**
+ * "Linked from", under a garden's page.
+ *
+ * Absent from a plain book, and absent from a page nothing links to: an empty
+ * box headed "Linked from" reads as something that failed to load.
+ */
+function backlinkList(backlinks: readonly BookChapter[] | null): string {
+  if (!backlinks || backlinks.length === 0) return "";
+
+  const items = backlinks
+    .map(
+      (chapter) => `    <li><a href="${chapter.slug}.html">${escapeHtml(chapter.title)}</a></li>`,
+    )
+    .join("\n");
+
+  return `<aside class="garden-backlinks" aria-label="Pages that link here">
+  <h2>Linked from</h2>
+  <ul>
+${items}
+  </ul>
+</aside>`;
+}
+
 /** The contents page, which is also what the book's own URL serves. */
 function coverPage(
   title: string,
   chapters: readonly BookChapter[],
   minutes: readonly number[],
   theme: "light" | "dark",
+  links: GardenLinks | null = null,
 ): string {
   const count = chapters.length === 1 ? "1 chapter" : `${chapters.length} chapters`;
   const total = minutes.reduce((sum, one) => sum + one, 0);
@@ -661,6 +697,17 @@ function coverPage(
   <ol class="book-toc">
 ${items}
   </ol>
+${
+  links && chapters.length > 1
+    ? `<section class="garden" aria-labelledby="garden-map">
+  <h2 id="garden-map">How the notes connect</h2>
+${gardenMapSvg(
+  chapters.map((chapter) => ({ title: chapter.title, href: `${chapter.slug}.html` })),
+  links,
+)}
+</section>`
+    : ""
+}
 </main>
 </body>
 </html>

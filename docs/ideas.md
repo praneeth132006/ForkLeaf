@@ -21,7 +21,7 @@ Ticked entries link to nothing; the git history is the record.
 - [x] **Every open to-do in one list** — Small. Tick from the list; overdue
       first when a line carries `📅 YYYY-MM-DD`
 - [x] **Focus mode** — Small. ⌘⇧F, and everything but the note steps away
-- [ ] **Bring back a deleted note** — Medium. Git already has it; the app needs
+- [x] **Bring back a deleted note** — Medium. Git already has it; the app needs
       a list of notes deleted in recent commits and a button to restore one
 
 ## The whole app

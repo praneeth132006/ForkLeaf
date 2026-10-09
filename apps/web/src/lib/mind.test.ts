@@ -121,6 +121,13 @@ describe("filterMind and countByKind", () => {
   });
 
   it("counts each kind", () => {
-    expect(countByKind(items)).toEqual({ all: 4, page: 1, quote: 1, image: 1, link: 1 });
+    expect(countByKind(items)).toEqual({
+      all: 4,
+      page: 1,
+      quote: 1,
+      image: 1,
+      link: 1,
+      highlight: 0,
+    });
   });
 });

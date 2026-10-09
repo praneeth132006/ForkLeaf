@@ -40,6 +40,7 @@ export {
   extractWikilinks,
   wikilinkTargets,
   resolveWikilink,
+  createLinkResolver,
   wikilinkToPath,
   buildLinkGraph,
   neighbourhood,

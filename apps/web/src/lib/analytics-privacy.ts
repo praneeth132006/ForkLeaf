@@ -71,8 +71,17 @@ export function scrubEvent<
   } | null,
 >(event: T): T {
   if (!event) return event;
-  for (const bag of [event.properties, event.$set, event.$set_once]) {
+  for (const bag of [
+    event.properties,
+    event.$set,
+    event.$set_once,
+    event.properties?.$set as Record<string, unknown> | undefined,
+    event.properties?.$set_once as Record<string, unknown> | undefined,
+  ]) {
     if (!bag) continue;
+    // The editor's document title can contain a private note title.
+    delete bag.$title;
+    delete bag.title;
     for (const key of URL_PROPERTIES) {
       // "$direct" is PostHog's word for "no referrer", not an address.
       if (typeof bag[key] === "string" && bag[key] !== "$direct") {

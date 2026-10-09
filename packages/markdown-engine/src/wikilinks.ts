@@ -150,33 +150,74 @@ export function resolveWikilink(
   target: string,
   candidates: readonly LinkCandidate[],
 ): LinkCandidate | null {
-  const wanted = target.replace(/^\.?\//, "");
-  const foldedTarget = fold(stripExtension(wanted));
+  return createLinkResolver(candidates)(target);
+}
 
-  const rules: ((candidate: LinkCandidate) => boolean)[] = [
-    (c) => c.path === wanted || stripExtension(c.path) === stripExtension(wanted),
-    (c) => fold(stripExtension(c.path)) === foldedTarget,
-    (c) => fold(stripExtension(basename(c.path))) === foldedTarget,
-    (c) => fold(c.title) === foldedTarget,
-  ];
+/**
+ * `resolveWikilink`, with the candidates indexed once up front.
+ *
+ * Resolving against a list means folding every candidate's path and title for
+ * every link, which is quadratic over a notebook: two thousand notes with a
+ * handful of links each took close to a minute to graph. Folding each
+ * candidate once into four lookup tables — one per rule — makes each link a
+ * few map reads, and the answers are identical.
+ *
+ * Use this whenever more than one link is resolved against the same notes.
+ */
+export function createLinkResolver(
+  candidates: readonly LinkCandidate[],
+): (target: string) => LinkCandidate | null {
+  const byPath = new Map<string, LinkCandidate[]>();
+  const byFoldedPath = new Map<string, LinkCandidate[]>();
+  const byFilename = new Map<string, LinkCandidate[]>();
+  const byTitle = new Map<string, LinkCandidate[]>();
+  const foldedTitles = new Map<LinkCandidate, string>();
 
-  for (const matches of rules) {
-    const hits = candidates.filter(matches);
-    if (hits.length === 0) continue;
-    if (hits.length === 1) return hits[0]!;
+  const add = (table: Map<string, LinkCandidate[]>, key: string, candidate: LinkCandidate) => {
+    const list = table.get(key);
+    if (list) list.push(candidate);
+    else table.set(key, [candidate]);
+  };
 
-    // Two notes can share a filename. Prefer the one whose title matches too,
-    // so `[[q3-roadmap]]` and `[[Q3 roadmap]]` land on the same note instead
-    // of on whichever happens to sit nearer the repository root.
-    const byTitle = hits.filter((candidate) => fold(candidate.title) === foldedTarget);
-    const shortlist = byTitle.length > 0 ? byTitle : hits;
+  for (const candidate of candidates) {
+    const stripped = stripExtension(candidate.path);
+    const foldedTitle = fold(candidate.title);
+    foldedTitles.set(candidate, foldedTitle);
 
-    return [...shortlist].sort(
-      (a, b) => a.path.length - b.path.length || a.path.localeCompare(b.path),
-    )[0]!;
+    add(byPath, stripped, candidate);
+    add(byFoldedPath, fold(stripped), candidate);
+    add(byFilename, fold(stripExtension(basename(candidate.path))), candidate);
+    add(byTitle, foldedTitle, candidate);
   }
 
-  return null;
+  return (target) => {
+    const wanted = target.replace(/^\.?\//, "");
+    const foldedTarget = fold(stripExtension(wanted));
+
+    const tiers = [
+      byPath.get(stripExtension(wanted)),
+      byFoldedPath.get(foldedTarget),
+      byFilename.get(foldedTarget),
+      byTitle.get(foldedTarget),
+    ];
+
+    for (const hits of tiers) {
+      if (!hits || hits.length === 0) continue;
+      if (hits.length === 1) return hits[0]!;
+
+      // Two notes can share a filename. Prefer the one whose title matches too,
+      // so `[[q3-roadmap]]` and `[[Q3 roadmap]]` land on the same note instead
+      // of on whichever happens to sit nearer the repository root.
+      const titled = hits.filter((candidate) => foldedTitles.get(candidate) === foldedTarget);
+      const shortlist = titled.length > 0 ? titled : hits;
+
+      return [...shortlist].sort(
+        (a, b) => a.path.length - b.path.length || a.path.localeCompare(b.path),
+      )[0]!;
+    }
+
+    return null;
+  };
 }
 
 /**
@@ -317,6 +358,7 @@ export function buildLinkGraph(sources: readonly LinkSource[]): LinkGraph {
   const outgoing = new Map<string, LinkRef[]>();
   const backlinks = new Map<string, LinkRef[]>();
   const wanted = new Map<string, Set<string>>();
+  const resolve = createLinkResolver(sources);
 
   for (const source of sources) {
     const refs: LinkRef[] = [];
@@ -324,7 +366,7 @@ export function buildLinkGraph(sources: readonly LinkSource[]): LinkGraph {
     for (const link of extractWikilinks(source.content)) {
       if (link.embed) continue;
 
-      const match = resolveWikilink(link.target, sources);
+      const match = resolve(link.target);
       const ref: LinkRef = {
         from: source.path,
         to: match?.path ?? null,

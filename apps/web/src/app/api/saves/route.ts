@@ -2,7 +2,7 @@ import { type NextRequest } from "next/server";
 import type { FileChange, GitHubClient } from "@forkleaf/github-client";
 import type { RepoRef } from "@forkleaf/types";
 import { ApiError, handle, requireClient } from "@/lib/api-helpers";
-import { parseSaveRequest } from "@/lib/inbox";
+import { appendHighlight, parseSaveRequest } from "@/lib/inbox";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import {
   INDEX_JSON,
@@ -10,6 +10,8 @@ import {
   SAVES_REPO,
   entryFor,
   findDuplicate,
+  findHighlights,
+  grownEntry,
   indexJson,
   indexMarkdown,
   parseIndex,
@@ -23,7 +25,9 @@ import {
  * Saves from the web, into a repository kept for them.
  *
  * `POST` files one page, quote, link or image into `forkleaf-saves` — created,
- * private, on the first save — and rewrites the index in the same commit.
+ * private, on the first save — and rewrites the index in the same commit. A
+ * highlight is added to the note that page's highlights are kept in, which the
+ * first highlight on a page creates.
  * `GET` lists everything saved, for the grid in the editor.
  *
  * The request is validated by the same parser the save address uses, so an
@@ -105,6 +109,34 @@ export async function POST(request: NextRequest) {
       }
 
       const now = new Date();
+
+      const collected = findHighlights(entries, saveRequest);
+      const collectedFile = collected ? await client.readFile(ref, collected.path) : null;
+      if (collected && collectedFile) {
+        const markdown = appendHighlight(collectedFile.content, saveRequest.text);
+        const entry = grownEntry(collected, markdown, now);
+        if (markdown === collectedFile.content) {
+          return { saved: true, appended: true, entry, repo: linksFor(ref), private: repo.private };
+        }
+
+        const next = withEntry(entries, entry);
+        try {
+          await client.commitChanges(
+            ref,
+            [
+              { op: "upsert", path: collected.path, content: markdown },
+              { op: "upsert", path: INDEX_JSON, content: indexJson(next) },
+              { op: "upsert", path: INDEX_MD, content: indexMarkdown(next) },
+            ],
+            { message: `forkleaf: highlight — ${collected.title}` },
+          );
+          return { saved: true, appended: true, entry, repo: linksFor(ref), private: repo.private };
+        } catch (error) {
+          if (attempt >= ATTEMPTS) throw error;
+          continue;
+        }
+      }
+
       const document = saveDocument(saveRequest, now);
       const taken = new Set(entries.map((entry) => entry.path));
       let path = savePath({ ...saveRequest, title: document.title }, now, taken);

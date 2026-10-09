@@ -12,6 +12,7 @@ import {
 import { deriveTitle } from "@forkleaf/markdown-engine";
 import { Dialog } from "./Dialog";
 import { exportImageResolver } from "@/lib/export-images";
+import { track } from "@/lib/firebase/analytics";
 
 export interface ExportDialogProps {
   note: Note;
@@ -68,12 +69,16 @@ export function ExportDialog({
             exportImageResolver(workspace, each.path, assetUrls),
           ),
         );
+        track("note_exported", { format: bulkFormat, scope, count: notes.length });
       } else if (format === "pdf") {
         // Goes through the browser's print pipeline so the PDF has real,
         // selectable text rather than a rasterised page.
         await printToPdf(note, options, images);
+        // The browser owns the print dialog; completion cannot be observed.
+        track("note_print_opened", { format, scope });
       } else {
         downloadResult(await exportNote(note, options, images));
+        track("note_exported", { format, scope, count: 1 });
       }
 
       if (format !== "pdf" || scope === "workspace") onClose();

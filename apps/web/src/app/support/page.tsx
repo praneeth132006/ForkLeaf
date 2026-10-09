@@ -50,7 +50,8 @@ export default function SupportPage() {
             <Link href="/privacy" className="fl-link">
               Privacy Policy
             </Link>{" "}
-            gives for data requests.
+            gives for data requests. Replies come from this address, and new addresses sometimes
+            land in spam, so check your spam or junk folder if you have not heard back.
           </P>
           <P>
             One person reads it, so a reply usually takes a day or two rather than an hour. There is

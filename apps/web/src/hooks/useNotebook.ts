@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { track } from "@/lib/firebase/analytics";
 import {
   SyncEngine,
   NoteRepository,
@@ -393,7 +394,17 @@ export function useNotebook(request: NotebookRequest = {}) {
         syncRef.current = sync;
         repoRef.current = notes;
 
+        let lastTrackedSync: string | null = null;
         sync.subscribe((syncState) => {
+          if (
+            !cancelled &&
+            sessionRef.current?.mode === "github" &&
+            syncState.lastSyncedAt &&
+            syncState.lastSyncedAt !== lastTrackedSync
+          ) {
+            lastTrackedSync = syncState.lastSyncedAt;
+            track("sync_completed");
+          }
           if (!cancelled) setState((current) => ({ ...current, sync: syncState }));
         });
         await sync.start();

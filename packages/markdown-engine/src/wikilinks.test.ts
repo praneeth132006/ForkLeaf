@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildLinkGraph,
+  createLinkResolver,
   neighbourhood,
   extractWikilinks,
   resolveWikilink,
@@ -207,5 +208,54 @@ describe("neighbourhood", () => {
 
   it("says nothing about a note with no links at all", () => {
     expect(neighbourhood(graph(), "elsewhere.md").size).toBe(0);
+  });
+});
+
+describe("createLinkResolver", () => {
+  const candidates = [
+    { path: "projects/q3-roadmap.md", title: "Q3 roadmap" },
+    { path: "archive/q3-roadmap.md", title: "Old plans" },
+    { path: "Daily Notes/2024-01-01.md", title: "New year" },
+    { path: "ideas.md", title: "Ideas" },
+    { path: "people/ada.md", title: "Ada Lovelace" },
+  ];
+
+  it("answers exactly what resolveWikilink answers", () => {
+    const resolve = createLinkResolver(candidates);
+    const targets = [
+      "Q3 Roadmap",
+      "q3-roadmap",
+      "archive/q3-roadmap",
+      "./ideas.md",
+      "daily notes/2024-01-01",
+      "Ada Lovelace",
+      "ada",
+      "nothing here",
+    ];
+
+    for (const target of targets) {
+      expect(resolve(target)).toBe(resolveWikilink(target, candidates));
+    }
+  });
+
+  it("graphs a large notebook quickly", () => {
+    // Resolution used to fold every candidate for every link, which took close
+    // to a minute for a notebook this size.
+    const n = 2000;
+    const sources = Array.from({ length: n }, (_, i) => ({
+      path: `folder${i % 20}/note-${i}.md`,
+      title: `Note ${i}`,
+      content: Array.from(
+        { length: 5 },
+        (_, j) => `[[Note ${(i * 7 + j) % n}]] [[missing ${j}]]`,
+      ).join("\n"),
+    }));
+
+    const started = performance.now();
+    const graph = buildLinkGraph(sources);
+
+    expect(performance.now() - started).toBeLessThan(3000);
+    expect(graph.backlinks.get("folder0/note-0.md")?.length).toBeGreaterThan(0);
+    expect(graph.unresolved).toHaveLength(5);
   });
 });

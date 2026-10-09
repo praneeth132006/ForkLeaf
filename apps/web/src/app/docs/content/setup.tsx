@@ -90,8 +90,19 @@ export function BrowserExtension() {
           ],
           [<strong key="l">A link</strong>, "Right-click it → Save link to ForkLeaf"],
           [<strong key="i">A picture</strong>, "Right-click it → Save image to ForkLeaf"],
+          [
+            <strong key="h">A highlight</strong>,
+            "Select the text, right-click → Highlight and save to ForkLeaf",
+          ],
         ]}
       />
+      <P>
+        A highlight is marked on the page and kept in one note for that page — every highlight you
+        make there is added to the same note, as <Code>==marked==</Code> lines that come back in
+        spaced reading. To see them again on a later visit, right-click the page →{" "}
+        <strong>Show my ForkLeaf highlights here</strong>. The extension has no access to pages on
+        its own, so it waits to be asked.
+      </P>
       <P>
         Where it goes, and how it is filed, is in <A href="/docs/saving">Saving from the web</A>.
       </P>
@@ -106,7 +117,10 @@ export function BrowserExtension() {
           ],
           [<Code key="s">scripting</Code>, "Run that one read inside the page."],
           [<Code key="c">contextMenus</Code>, "The right-click items."],
-          [<Code key="t">storage</Code>, "Remember the ForkLeaf address from Options."],
+          [
+            <Code key="t">storage</Code>,
+            "Remember the ForkLeaf address from Options, and your highlights on each page.",
+          ],
         ]}
       />
       <P>

@@ -716,7 +716,8 @@ export function HelpDialog({
         <a href={SUPPORT_MAILTO} className="text-[var(--fl-accent)] underline underline-offset-2">
           {SUPPORT_EMAIL}
         </a>{" "}
-        with what happened and what you expected.
+        with what happened and what you expected. If the reply does not arrive, check your spam
+        folder.
       </p>
     </Dialog>
   );

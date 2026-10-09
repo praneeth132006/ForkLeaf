@@ -19,7 +19,7 @@ import { dateStamp } from "@/lib/templates";
 
 export const INBOX_FOLDER = "inbox";
 
-export type SaveKind = "page" | "quote" | "image" | "link";
+export type SaveKind = "page" | "quote" | "image" | "link" | "highlight";
 
 export interface SaveRequest {
   kind: SaveKind;
@@ -29,7 +29,7 @@ export interface SaveRequest {
 }
 
 const LIMITS = { url: 2048, title: 300, text: 20_000 };
-const KINDS: readonly SaveKind[] = ["page", "quote", "image", "link"];
+const KINDS: readonly SaveKind[] = ["page", "quote", "image", "link", "highlight"];
 
 /** An http or https address, or null for anything else — `javascript:` included. */
 export function safeUrl(value: string | null | undefined): string | null {
@@ -101,8 +101,11 @@ export function parseSaveRequest(params: URLSearchParams): SaveRequest | null {
   const kind: SaveKind =
     asked && KINDS.includes(asked) ? asked : text && url ? "quote" : url && !text ? "link" : "page";
 
-  // An image with no address to show is nothing at all.
-  if (kind === "image" && !url) return null;
+  // An image with no address to show is nothing at all, and a highlight is
+  // kept with the page it was made on — without the page, there is nowhere to
+  // keep it and nothing to show it on again.
+  if ((kind === "image" || kind === "highlight") && !url) return null;
+  if (kind === "highlight" && !text) return null;
 
   return { kind, url, title, text };
 }
@@ -154,6 +157,10 @@ export function inboxNote(
       lines.push(...request.text.split("\n").map((line) => (line ? `> ${line}` : ">")));
       if (source) lines.push("", `— ${source}`);
       break;
+    case "highlight":
+      if (source) lines.push(source, "");
+      lines.push(highlightLine(request.text));
+      break;
     case "image":
       lines.push(`![${linkText(title)}](${linkTarget(request.url!)})`);
       if (request.text) lines.push("", request.text);
@@ -173,6 +180,37 @@ export function inboxNote(
       saved: dateStamp(now),
     },
   };
+}
+
+/**
+ * One highlight, as a line of its page's note.
+ *
+ * Written as `==marked==` text, which is how a highlight is spelled everywhere
+ * else in ForkLeaf — so the passage comes back in spaced reading like any
+ * other, with no separate list to keep. On one line, because a mark cannot
+ * span a line break, and with any `==` inside it broken up so it cannot close
+ * the mark early.
+ */
+export function highlightLine(text: string): string {
+  const flat = text.replace(/\s+/g, " ").trim().replace(/==/g, "= =");
+  return `- ==${flat}==`;
+}
+
+/**
+ * A page's highlights note with one more highlight on the end.
+ *
+ * The same words highlighted twice are kept once: going back to a page and
+ * marking a passage that is already marked is not a second highlight.
+ */
+export function appendHighlight(markdown: string, text: string): string {
+  const line = highlightLine(text);
+  if (markdown.split("\n").some((existing) => existing.trim() === line)) return markdown;
+  return `${markdown.replace(/\s*$/, "")}\n${line}\n`;
+}
+
+/** Every highlight in a page's highlights note, as plain words. */
+export function highlightsIn(markdown: string): string[] {
+  return [...markdown.matchAll(/^- ==(.+)==\s*$/gm)].map((match) => match[1]!.trim());
 }
 
 /** A note already saved from the same address as the same kind of thing. */

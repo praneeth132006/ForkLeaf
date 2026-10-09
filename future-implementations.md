@@ -66,8 +66,10 @@ When something on this list ships, tick it, add the date, and describe it in
 
 ### Capturing
 
-- [ ] **Highlights on any web page.** Highlight text with the extension; it is
-      kept in a note for that page, and shown again when you come back to it.
+- [x] **Highlights on any web page.** _(done 2026-10-06)_ Highlight text with the
+      extension; it is kept in a note for that page, and shown again when you
+      come back to it (right-click → Show my ForkLeaf highlights here — the
+      extension still has no host permissions, so it waits to be asked).
 - [x] **Meeting mode.** _(done 2026-09-13)_ Record, transcribe, and pull the decisions and to-dos out
       of the transcript into the note.
 - [ ] **Email to notebook.** Forward an email to a personal address and it arrives
@@ -75,10 +77,12 @@ When something on this list ships, tick it, add the date, and describe it in
 
 ### Seeing and sharing
 
-- [ ] **Timeline replay for the whole notebook.** Drag back through the history
-      and watch notes appear, grow and link up.
-- [ ] **Digital garden.** Publish a folder as a website with backlinks and a
-      graph, from your own repository.
+- [~] **Timeline replay for the whole notebook.** _(appear and grow done
+  2026-10-06)_ Drag back through the history and watch notes appear, grow
+  and link up. Links are not replayed yet: they need every note's content
+  at every step, where appearing and growing need only the file list.
+- [x] **Digital garden.** _(done 2026-10-06)_ Publish a folder as a website with
+      backlinks and a graph, from your own repository.
 - [ ] **Shared notebooks with review.** A friend's edit arrives as a suggestion
       you accept, like a pull request, instead of overwriting the note.
 - [x] **Canvas.** _(done 2026-09-13)_ Place notes, pictures and PDFs freely on a board, saved as a
@@ -91,5 +95,7 @@ When something on this list ships, tick it, add the date, and describe it in
       and a store review.
 - [x] **Firefox** version of the extension _(done 2026-09-13)_.
 - [ ] **Safari** version of the extension (needs Xcode to convert and sign).
-- [ ] **`npx @forkleaf/mcp`** on npm, for people who want the local server
-      without cloning the repository.
+- [~] **`npx @forkleaf/mcp`** on npm, for people who want the local server
+  without cloning the repository. The package builds and is ready
+  (`pnpm --filter @forkleaf/mcp publish`); it needs publishing to npm from an
+  account that owns the `@forkleaf` scope.

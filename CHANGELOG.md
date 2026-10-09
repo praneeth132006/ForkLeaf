@@ -9,6 +9,43 @@ description, and the heading becomes the day's date when they ship.
 
 ## Unreleased
 
+### Highlights on any web page
+
+Select text and right-click → **Highlight and save to ForkLeaf**. The words are
+marked on the page, remembered by the extension, and added to one note per page
+in `forkleaf-saves/highlights/` as `==marked==` lines, so they come back in
+spaced reading. **Show my ForkLeaf highlights here** marks them again on a later
+visit. Still no host permissions.
+
+### Publish a folder as a digital garden
+
+**Publish as book…** has a **Publish as a digital garden** option: every page
+lists the notes that link to it, and the contents page carries a map of how the
+notes connect, drawn ahead of time as a plain SVG so it works without scripts.
+
+### Replay how the notebook grew
+
+⌘K → **Replay how my notebook grew** steps through a month, a quarter, a year
+or three years of history and shows every note as a dot that appears, grows and
+shrinks. It reads only the repository's file lists, so a replay is about a dozen
+requests however large the notebook.
+
+### `npx @forkleaf/mcp`
+
+The MCP server builds to a single dependency-free file with a `forkleaf-mcp`
+command, ready to publish to npm so it can run without cloning the repository.
+
+### Fixes
+
+- Building the link graph was quadratic: about a minute for a 2,000-note
+  notebook, re-run after every pause in typing. Links now resolve through an
+  index built once per rebuild (about 75 ms for the same notebook), in the
+  editor, courses, books and the MCP server.
+- The properties panel counted `[[wikilinks]]` as zero links, and counted
+  checklists inside code blocks as tasks.
+- A note made in a notebook kept only on this device was said to be saved "at
+  the top of the repository", which it does not have.
+
 ### An assistant's notes, where you can find them — in any of your repositories
 
 - **Other repositories.** Connecting an assistant used to tie it to one
