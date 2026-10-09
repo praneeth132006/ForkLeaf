@@ -376,7 +376,7 @@ describe("conflicts under adversarial conditions", () => {
 describe("differences that are only bookkeeping", () => {
   const body = "# Plan\n\nSame words on both sides.\n";
   const withStamp = (updated: string, editedBy: string) =>
-    `---\ntitle: Plan\nupdated: ${updated}\neditedBy: ${editedBy}\ngenerator: https://forkleaf.vercel.app\n---\n\n${body}`;
+    `---\ntitle: Plan\nupdated: ${updated}\neditedBy: ${editedBy}\ngenerator: https://www.forkleaf.in\n---\n\n${body}`;
 
   it("resolves itself instead of asking", async () => {
     const ctx = setup();

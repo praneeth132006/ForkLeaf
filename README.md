@@ -1,292 +1,124 @@
-# ForkLeaf
+<div align="center">
 
-**Notes that outlive the app that made them.**
+<a href="https://www.forkleaf.in">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/brand/forkleaf-logo.svg">
+    <img alt="ForkLeaf" src="apps/web/public/brand/forkleaf-logo-light-bg.svg" width="260">
+  </picture>
+</a>
 
-A local-first Markdown workspace — linked notes, full-text search, a visual
-Mermaid studio, exports — whose storage is a GitHub repository you already own.
+### Notes that outlive the app that made them.
+
+A full Markdown workspace whose database is a **GitHub repository you already own**.<br>
+Linked notes, offline search, a visual diagram studio and real version history,<br>
+with nothing stored on our servers and nothing to be locked out of.
 
 [![CI](https://github.com/praneeth132006/ForkLeaf/actions/workflows/ci.yml/badge.svg)](https://github.com/praneeth132006/ForkLeaf/actions/workflows/ci.yml)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/praneeth132006/ForkLeaf?style=flat&logo=github)](https://github.com/praneeth132006/ForkLeaf/stargazers)
+[![Discussions](https://img.shields.io/github/discussions/praneeth132006/ForkLeaf?logo=github)](https://github.com/praneeth132006/ForkLeaf/discussions)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Every note is a plain `.md` file in a repository you own. That means real version
-history, effectively unlimited storage, access from anywhere, and the ability to
-walk away at any time — clone the repo and every note is still there. There is no
-ForkLeaf database to be locked out of.
+**[Open ForkLeaf](https://www.forkleaf.in)** ·
+[Try it without an account](https://www.forkleaf.in/editor) ·
+[Documentation](https://www.forkleaf.in/docs) ·
+[Discussions](https://github.com/praneeth132006/ForkLeaf/discussions) ·
+[Wiki](https://github.com/praneeth132006/ForkLeaf/wiki) ·
+[Changelog](CHANGELOG.md)
 
-Free, all of it, with no tiers. The expensive part of a notes app is storage, and
-ForkLeaf has none.
+<br>
 
----
+<a href="https://www.forkleaf.in"><img src="docs/assets/hero.png" alt="The ForkLeaf home page" width="900"></a>
 
-## Contents
-
-- [Why this exists](#why-this-exists)
-- [Features](#features)
-  - [Writing](#writing) · [Links](#links-between-notes) · [Reading](#reading) ·
-    [Search](#search) ·
-    [Diagrams](#diagrams) · [Sync](#sync) · [History and review](#history-and-review) ·
-    [Dashboard](#dashboard) · [Workspaces](#workspaces) ·
-    [On your desktop](#on-your-desktop) · [Publishing](#publishing) ·
-    [Exporting](#exporting) · [Keyboard](#keyboard)
-- [Quick start](#quick-start)
-- [How it works](#how-it-works)
-- [Documentation](#documentation)
-- [Development](#development)
-- [Contributing](#contributing)
+</div>
 
 ---
 
-## Why this exists
+## Why ForkLeaf?
 
-Most note apps ask you to trust them with your writing. ForkLeaf doesn't hold
-your notes at all:
+Most note apps ask you to trust them with your writing. ForkLeaf doesn't hold your
+notes at all. Every note is a plain `.md` file in a GitHub repository you own.
 
-|             |                                                                   |
-| ----------- | ----------------------------------------------------------------- |
-| **Storage** | Your GitHub repo. Nothing is stored on our servers.               |
-| **History** | Ordinary git commits. `git log` your notes.                       |
-| **Offline** | Everything is written to IndexedDB first, then pushed.            |
-| **Export**  | PDF, HTML, Word, Markdown, plain text, JSON — all in the browser. |
-| **Sharing** | A public page committed to your repo and served by GitHub Pages.  |
-| **Lock-in** | None. They're markdown files in a git repo.                       |
+|                   |                                                                     |
+| ----------------- | ------------------------------------------------------------------- |
+| 🗂 **Storage**     | Your GitHub repository. Nothing is stored on our servers.           |
+| 🕰 **History**     | Ordinary git commits. `git log` your notes, blame a paragraph.      |
+| ✈️ **Offline**    | Everything is written to IndexedDB first, then pushed.              |
+| 📤 **Export**     | PDF, HTML, Word, Markdown, plain text and JSON, all in the browser. |
+| 🌐 **Publishing** | Public pages, books and digital gardens served by GitHub Pages.     |
+| 🔓 **Lock-in**    | None. Clone the repository and every note is still there.           |
+
+**Free, all of it, with no tiers.** The expensive part of a notes app is storage,
+and ForkLeaf has none.
 
 ## Features
 
-### Writing
+<table>
+<tr>
+<td width="50%" valign="top">
 
-- **Three editing modes**, switchable per document: Notion-style rich text, a
-  split source/preview view, and raw markdown.
-- **Slash commands** (`/`) for headings, lists, tables, to-dos, code and diagrams.
-- **Properties panel** that edits the note's YAML frontmatter directly, so notes
-  stay compatible with Obsidian, Jekyll, Hugo and friends.
-- **Command palette** (`⌘K`) — jump to any note by title, or run any editor
-  command, without leaving the keyboard.
-- Document outline, word count, reading time and task progress.
+### ✍️ Write the way you like
 
-### Reading PDFs
+Rich text, split source and preview, or raw Markdown, switchable per note.
+Slash commands, a `⌘K` command palette, a properties panel that edits YAML
+frontmatter, and live stats and outline for every note.
 
-- **A PDF opens beside the note you're writing from it** — its own pane, its own
-  table of contents, and find-across-the-document that matches through line
-  breaks, hyphenation and ligatures. Drag one onto the window, pick one from the
-  palette, or click a `.pdf` in your repository's file tree.
-- **Select a passage and quote it into the note.** What lands in the file is a
-  blockquote and an ordinary markdown link — it renders on github.com and opens
-  the right page in Acrobat, Preview and your browser's own viewer.
-- **Citations record the sentence, not the page number.** Add a figure to page 4
-  of a paper and every "page 12" reference in every other tool now quietly
-  points at page 13. ForkLeaf searches the document for the words you quoted,
-  uses the text either side to tell repeated phrases apart, and tells you
-  plainly when a passage has genuinely gone.
-- **Nothing is written back to the PDF.** The file in your repository stays
-  exactly as it was committed; your annotations live in markdown next to it.
+</td>
+<td width="50%"><img src="docs/assets/editor.png" alt="Split view: Markdown source beside the rendered preview"></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/assets/links.png" alt="Hovering a wikilink shows a preview card; backlinks in the side panel"></td>
+<td width="50%" valign="top">
 
-### Links between notes
+### 🔗 Notes that link to each other
 
-- **`[[Wikilinks]]`**, in the Obsidian dialect — `[[target]]`,
-  `[[target|call it this]]`, `[[target#a heading]]`. Plain text in the file, so
-  Obsidian, github.com and anything else that reads markdown see them too.
-- **Backlinks.** The document panel shows every note that links to the one
-  you're reading, each quoting the line it was written on — so a backlink tells
-  you _what_ was said about the note, not just that something was.
-- **Links resolve loosely on purpose**: by path, by filename, or by title, so
-  `[[q3-roadmap]]` and `[[Q3 roadmap]]` reach the same note.
-- **Linking ahead of yourself is normal.** A link to a note you haven't written
-  is drawn muted rather than broken, and clicking it writes the note.
+`[[Wikilinks]]` in the Obsidian dialect, with hover previews, backlinks quoted at
+the line they were written on, and links to notes you haven't written yet.
+Full-text search ranks every word of every note, offline.
 
-### Reading
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
-A notebook is read far more often than it is written, and reading has its own
-set of problems.
+### 📊 A real diagram studio
 
-- **Links open, in a new tab.** One click, from the rendered preview and from
-  rich text alike — following a link never navigates away from a note holding
-  writing that hasn't reached GitHub yet. In rich text, `Alt`-click puts the
-  cursor in the link text instead, because that is the rarer of the two things
-  you do to a link.
-- **Hover a link and a card says where it goes**: the host, the page's own
-  title, its own one-line description, the picture it offers of itself, and the
-  full address. Enough to decide without opening it.
-- **The card doesn't tell the site you looked.** The page is read by ForkLeaf's
-  server, and even the picture is fetched server-side and served back from this
-  origin — no request from your browser, no referrer, no address. Addresses that
-  resolve inside a private network are refused outright.
-- **`[[repo:path/to/file]]` opens the file, in place.** Markdown renders,
-  anything else is shown as highlighted source, images as images — at the
-  revision the link pinned, not at whatever the branch has moved on to. That is
-  what lets a note that reports itself stale still show you what it was written
-  about.
-- **Lock a note against editing.** The padlock in the header, or `⌘⇧L`. A note
-  you read constantly is a note whose text is one stray keystroke from being
-  quietly edited and committed; locking stops typing, the formatting bar, the
-  `/` menu, pasted images, undo, and the properties panel — while leaving
-  reading, copying, links and incoming changes from GitHub exactly as they were.
-  Locks are per device, survive a reload, and carry across a rename.
+Mermaid diagrams drawn on a canvas or typed with autocomplete. A gallery of
+14 templates, and node positions that survive the round trip between the
+visual builder and the source.
 
-### Search
+</td>
+<td width="50%"><img src="docs/assets/diagrams.png" alt="Mermaid flowchart source beside its rendered diagram"></td>
+</tr>
+</table>
 
-- **Full text.** Every word of every note, ranked with BM25 — not just titles,
-  tags and filenames. Results quote the line that matched, with the matching
-  words marked.
-- Titles and tags are weighted above body text, so the note _about_ a thing
-  beats the note that mentions it once.
-- **`"Quoted phrases"`** must appear verbatim. Everything else is an AND search,
-  because "300 of your notes contain one of your words" answers nothing.
-- Runs entirely in the browser against the notes already on your machine. No
-  server, no index to rebuild, works offline.
+**And much more:**
 
-### Diagrams
+- 📄 **Read PDFs beside your notes.** Quote a passage and the citation records the sentence, not the page number.
+- 🔄 **Local-first sync.** Rapid edits coalesce into one clean commit. Offline changes queue up, and conflicts are shown, never silently merged.
+- 🕵️ **History and review.** Every version of every note, blame for prose, a timeline replay of how your notebook grew, and spaced reading.
+- 🌿 **Branches and pull requests.** Write on any branch, or propose changes to a repository you can't push to.
+- 🌍 **Publish** a note, a book or a digital garden to GitHub Pages, with backlinks and a link map.
+- 🧩 **Browser extension.** Save pages, selections and highlights from anywhere on the web to your inbox.
+- 🤖 **AI assistants.** A built-in [MCP server](packages/mcp) lets Claude and other assistants search, read and write your notes as ordinary commits.
+- 🎨 **Themes**, keyboard shortcuts for everything, and installable as an app on desktop.
 
-Mermaid is powerful and hard to remember, so there are three ways in:
+See the full list on the [features page](https://www.forkleaf.in/features) or in [features.md](features.md).
 
-- **Pick what you are drawing** — a new diagram asks first, then hands over a
-  blank canvas carrying that type's own shapes, arrows and syntax.
-- **Visual builder** — drag shapes onto a canvas, pull arrows between them, and
-  the Mermaid source is generated for you. Six types can be drawn rather than
-  typed: flowchart, sequence, class, state machine, ERD and mindmap. Rubber-band
-  selection, multi-node drag, undo/redo, keyboard nudge and a "tidy up" that
-  lays the graph out in layers taken from its own arrows. It parses existing
-  diagrams too, so you can switch between visual and source freely.
-- **Template gallery** — 14 ready-made diagrams (flowchart, sequence, ERD, gantt,
-  state machine, mind map, class, pie, journey, timeline, git graph, quadrant).
-- **Smart source editor** — autocomplete that knows which diagram type you're
-  writing, plus inline errors that point at the broken line and explain it in
-  plain language instead of dumping parser output.
+## Getting started
 
-- **Open in tab** — optional, for the diagrams that outgrow a dialog. The same
-  studio opens in a browser tab of its own, for a second screen or a full-height
-  canvas, and every edit is saved into the note as you make it. The note stays
-  the one writer: the block shows "Editing in another tab" with a link that
-  takes editing back, and clicking a diagram still opens it in the note.
+### Use it online
 
-Diagrams are drawn in the app's own palette and follow the light/dark theme,
-including in that separate tab. They are stored as normal ` ```mermaid ` fenced
-blocks, so they render on github.com and anywhere else Mermaid is supported.
+1. Go to **[www.forkleaf.in](https://www.forkleaf.in)** and click **Continue with GitHub**.
+2. Pick an existing repository or let ForkLeaf create a private one for you.
+3. Start writing. Every change is saved to your repository as a commit.
 
-### Sync
+You can also **[try it without an account](https://www.forkleaf.in/editor)**:
+notes stay in your browser until you connect GitHub.
 
-- **Local-first.** Edits land in IndexedDB immediately; the network is never in
-  the way of typing.
-- **Clean git history.** Rapid edits to one note coalesce into a single pending
-  change, and a commit made within the last few minutes is amended rather than
-  stacked — so autosave doesn't produce a thousand "update note.md" commits.
-- **Offline-safe.** Changes queue while you're offline and drain when you
-  reconnect. Closing the tab loses nothing.
-- **Conflict handling.** If a note changed both here and on GitHub, you're asked
-  what to keep — nothing is silently overwritten.
-- **Tabs cooperate.** A second ForkLeaf tab used to be able to hold local
-  storage hostage across an upgrade, leaving the other one on a loading screen
-  for eight seconds before telling you to go and close it. They talk to each
-  other now: the blocked tab asks, the others let go, and it clears in
-  milliseconds.
+### Run it locally
 
-### History and review
-
-- **Every version of every note**, read from the repository's own commit log and
-  shown in the app with a diff — no separate "version history" feature, because
-  git already is one.
-- **Branches.** Switch the branch you are writing on from the status bar; notes
-  are read from and committed to that branch.
-- **Propose changes.** For a repository you cannot push to, ForkLeaf forks it,
-  commits to a branch and opens a pull request — so contributing a documentation
-  fix is the same gesture as editing a note.
-- **Capture a web page as a source.** A citation that records the address, the
-  moment you read it, and a link to an archived copy — asking the Wayback
-  Machine to make one if none exists. Written into the note as an ordinary
-  blockquote, so it stays readable anywhere markdown is.
-
-### Dashboard
-
-- Signing in lands on a **dashboard**, not an empty editor: every note across
-  every connected repository, indexed by title, tag and folder rather than
-  filename, and searchable — text and all — from one box.
-- Recently edited notes, per-repository statistics, and one click into any note.
-
-### Workspaces
-
-- **You choose where your notes live.** On first sign-in ForkLeaf asks: connect a
-  repository you already have, optionally scoped to a subfolder like `docs/`, or
-  create a new one. Nothing is created on your account without you asking.
-- Connect as many repositories as you like and switch between them.
-
-### On your desktop
-
-ForkLeaf installs as an app and registers itself with your operating system as
-a Markdown editor — like gedit, TextEdit or any other installed editor:
-
-- **`xdg-open note.md` opens it**, and so does double-clicking a `.md` file or
-  picking ForkLeaf from "Open with".
-- **⌘S writes that file.** A file opened from your machine becomes a normal
-  note — synced, searchable, in the sidebar — that also saves back to where it
-  came from. Not to a copy in `~/Downloads`.
-- **⇧⌘S is Save as**, and `⌘K → "Open a file from this computer"` is the
-  in-app route to the same thing.
-
-Install it from your browser's address bar (the install icon), then on Linux:
-
-```bash
-./desktop/install-linux.sh
-xdg-mime default forkleaf.desktop text/markdown
-```
-
-That puts a launcher, an icon and a `.desktop` entry under `~/.local` — no root,
-and `./desktop/install-linux.sh --uninstall` removes them. Editing files on your
-machine uses the File System Access API, which today means a Chromium-based
-browser; everything else in ForkLeaf works everywhere.
-
-### Publishing
-
-**Share this note** renders it to one self-contained page — diagrams included —
-commits it to `docs/` in the repository the note already lives in, and switches
-on GitHub Pages. You get a public link.
-
-Nothing is stored on our servers, hosting costs nothing, and unpublishing is a
-commit that deletes a file. A published note keeps working if ForkLeaf goes
-away, which is the only kind of sharing worth having in an app that promises no
-lock-in.
-
-### Exporting
-
-Six formats, all rendered in the browser — the note never leaves your machine in
-order to become a file:
-
-| Format         | What you get                                     |
-| -------------- | ------------------------------------------------ |
-| **PDF**        | Typeset for printing, diagrams included          |
-| **Word**       | Editable `.docx` with real headings and lists    |
-| **HTML**       | One self-contained file, nothing to host         |
-| **Markdown**   | The original source, with or without frontmatter |
-| **Plain text** | Formatting stripped away                         |
-| **JSON**       | Content, properties and statistics               |
-
-Export one note, or the whole workspace at once.
-
-### Keyboard
-
-| Shortcut | Does                                                 |
-| -------- | ---------------------------------------------------- |
-| `⌘K`     | Search every note, or run any command                |
-| `/`      | Insert a block — heading, list, table, code, diagram |
-| `⌘S`     | Save now rather than waiting for autosave            |
-| `⌘⇧N`    | New note                                             |
-| `⌘⇧E`    | Export                                               |
-| `⌘⇧L`    | Lock or unlock the note against editing              |
-| `⌘⇧Y`    | Study the flashcards that are due                    |
-| `⌘⇧?`    | Help and the full shortcut list                      |
-
-The complete table, including the rich-text and source-mode bindings, is on the
-`/docs/shortcuts` page of the app itself, and behind `⌘⇧?` while you are writing.
-
-### Themes
-
-Light and dark, following the system by default, with a choice of accent colour.
-Every surface in the app reads from the same set of semantic tokens, so the
-choice applies everywhere at once.
-
----
-
-## Quick start
-
-### Try it without any setup
+**Requirements:** Node.js 20.9+ and pnpm 9+.
 
 ```bash
 git clone https://github.com/praneeth132006/ForkLeaf.git
@@ -299,110 +131,75 @@ Open <http://localhost:3000/editor>. With no configuration, ForkLeaf runs in
 **local mode**: fully functional, with notes stored in your browser. This is also
 how the test suite and CI exercise the app.
 
-**Requirements:** Node.js 20.9+ and pnpm 9+.
+<details>
+<summary><b>Connect GitHub while developing</b></summary>
 
-### Connect GitHub (for local development)
+<br>
 
-To exercise repository sync while working on ForkLeaf, register your own GitHub
-OAuth app and add three environment variables. These are the credentials of
-_your_ development app, never of any deployment you do not run.
+1. Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth App** and set:
+   - **Homepage URL:** `http://localhost:3000`
+   - **Authorization callback URL:** `http://localhost:3000/api/auth/callback`
+2. Copy the example environment file and fill in your app's values:
 
-1. Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth App**.
-2. Set:
-   - **Homepage URL**: `http://localhost:3000`
-   - **Authorization callback URL**: `http://localhost:3000/api/auth/callback`
-3. Copy `.env.example` to `apps/web/.env.local` and fill it in:
+   ```bash
+   cp .env.example apps/web/.env.local
+   ```
 
-```bash
-cp .env.example apps/web/.env.local
-```
+   ```ini
+   GITHUB_OAUTH_CLIENT_ID=your_client_id
+   GITHUB_OAUTH_CLIENT_SECRET=your_client_secret
+   SESSION_SECRET=generate_with_openssl_rand_base64_32
+   NEXT_PUBLIC_APP_URL=http://localhost:3000
+   ```
 
-```ini
-GITHUB_OAUTH_CLIENT_ID=your_client_id
-GITHUB_OAUTH_CLIENT_SECRET=your_client_secret
-SESSION_SECRET=generate_with_openssl_rand_base64_32
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
+3. Generate the session secret with `openssl rand -base64 32`, then restart `pnpm dev`.
 
-Generate the session secret with:
+ForkLeaf requests the `repo` scope because it writes to private repositories;
+`public_repo` is offered on the sign-in page for anyone keeping notes in public
+repositories only.
 
-```bash
-openssl rand -base64 32
-```
-
-Restart `pnpm dev` and "Continue with GitHub" will appear.
-
-> **On the `repo` scope:** ForkLeaf requests `repo` because it writes notes to
-> your private repositories, and that is the narrowest classic OAuth scope that
-> permits private-repo writes. `public_repo` is offered on the sign-in page as an
-> equal choice for anyone keeping notes in public repositories only.
-
----
+</details>
 
 ## How it works
 
 ```mermaid
-flowchart TD
-    User([You type]) --> Editor[Editor]
+flowchart LR
+    You([You type]) --> Editor
     Editor --> Store[(IndexedDB)]
     Store --> Queue[Change queue]
-    Queue --> Coalesce{Coalesce + debounce}
-    Coalesce --> API[Next.js API route]
+    Queue --> API[Next.js API route]
     API --> GH[(Your GitHub repo)]
 
     subgraph Browser
         Editor
         Store
         Queue
-        Coalesce
-    end
-
-    subgraph Server
-        API
     end
 ```
 
-The access token lives only on the server, encrypted into an httpOnly cookie.
-The browser talks to `/api/gh/*`, never to GitHub directly — so no script on the
-page can read your token.
+Your GitHub token lives only on the server, encrypted into an httpOnly cookie. The
+browser talks to `/api/gh/*`, never to GitHub directly, so no script on the page
+can read your token. More in [docs/architecture.md](docs/architecture.md).
 
-### Packages
+### Repository layout
 
-| Package                     | Responsibility                                                         |
-| --------------------------- | ---------------------------------------------------------------------- |
-| `@forkleaf/types`           | Shared domain model                                                    |
-| `@forkleaf/markdown-engine` | Frontmatter, parsing, sanitised rendering, wikilinks, path helpers     |
-| `@forkleaf/github-client`   | GitHub REST client: trees, files, atomic multi-file commits, squashing |
-| `@forkleaf/store`           | IndexedDB storage, change queue, sync engine, conflicts, search index  |
-| `@forkleaf/diagrams`        | Mermaid rendering, templates, autocomplete, visual-builder graph model |
-| `@forkleaf/exporter`        | Client-side PDF / HTML / DOCX / Markdown / ZIP export                  |
-| `@forkleaf/pdf`             | PDF reading: text extraction, in-document search, durable citations    |
-| `@forkleaf/editor`          | React editing surfaces (rich text, source, split, diagram studio)      |
-| `@forkleaf/web`             | Next.js app: auth, API routes, publishing, application shell           |
+This is a pnpm + Turborepo monorepo.
 
-More detail in [docs/architecture.md](docs/architecture.md).
+| Package                     | Responsibility                                                          |
+| --------------------------- | ----------------------------------------------------------------------- |
+| `apps/web`                  | Next.js app: auth, API routes, publishing, the editor shell and docs    |
+| `apps/extension`            | The "Save to ForkLeaf" browser extension                                |
+| `@forkleaf/editor`          | React editing surfaces: rich text, source, split and the diagram studio |
+| `@forkleaf/store`           | IndexedDB storage, change queue, sync engine, conflicts, search index   |
+| `@forkleaf/github-client`   | GitHub REST client: trees, files, atomic multi-file commits             |
+| `@forkleaf/markdown-engine` | Frontmatter, parsing, sanitised rendering, wikilinks                    |
+| `@forkleaf/diagrams`        | Mermaid rendering, templates, autocomplete, visual-builder graph model  |
+| `@forkleaf/exporter`        | Client-side PDF, HTML, DOCX, Markdown and ZIP export                    |
+| `@forkleaf/pdf`             | PDF text extraction, in-document search, durable citations              |
+| `@forkleaf/mcp`             | MCP server for AI assistants                                            |
+| `@forkleaf/types`           | Shared domain model                                                     |
 
----
-
-## Documentation
-
-The app ships its own documentation site at `/docs`, covering every page below.
-Run `pnpm dev` and open <http://localhost:3000/docs>, or read it on the hosted
-instance.
-
-| Section    | Pages                                                                       |
-| ---------- | --------------------------------------------------------------------------- |
-| Start here | Getting started · How ForkLeaf works                                        |
-| Writing    | The editor · Diagrams · Properties · Reading a note · Exporting · Shortcuts |
-| GitHub     | Signing in · Repositories · Syncing · Conflicts                             |
-| Account    | What it costs · Your data · Security model                                  |
-| Help       | Troubleshooting · FAQ                                                       |
-
-Architecture notes live in [docs/architecture.md](docs/architecture.md).
-
----
-
-## Development
+### Development
 
 ```bash
 pnpm dev          # start the web app
@@ -410,23 +207,26 @@ pnpm test         # run the test suite
 pnpm typecheck    # typecheck every package
 pnpm lint         # lint
 pnpm build        # production build
-pnpm check        # everything above, in order
+pnpm check        # everything above, in order (run this before a pull request)
 ```
 
-Workspace packages ship TypeScript source and are compiled by Next via
-`transpilePackages`. There is no build step between packages, so edits hot-reload
-across the monorepo.
+## Community
 
----
+- 💬 **[Discussions](https://github.com/praneeth132006/ForkLeaf/discussions):** questions, ideas and showing what you've built.
+- 🐛 **[Issues](https://github.com/praneeth132006/ForkLeaf/issues/new/choose):** bug reports and feature requests.
+- 📚 **[Wiki](https://github.com/praneeth132006/ForkLeaf/wiki):** guides, FAQ and recipes from the community.
+- ✉️ **Email:** [support@forkleaf.in](mailto:support@forkleaf.in) for anything private. Replies sometimes land in spam, so check there if you haven't heard back.
 
 ## Contributing
 
-Contributions are very welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the
-setup, conventions and a list of good first issues.
+Contributions of every size are welcome, from a typo fix to a new feature. Read
+[CONTRIBUTING.md](CONTRIBUTING.md) for setup, conventions and good first issues,
+and please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-Found a security issue? Please read [SECURITY.md](SECURITY.md) rather than
-opening a public issue.
+Found a security issue? Please don't open a public issue. See [SECURITY.md](SECURITY.md).
+
+If ForkLeaf is useful to you, a ⭐ on the repository helps other people find it.
 
 ## License
 
-[Apache License 2.0](LICENSE).
+[Apache License 2.0](LICENSE) © ForkLeaf contributors.

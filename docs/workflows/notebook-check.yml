@@ -44,7 +44,7 @@ jobs:
     steps:
       - name: Ask ForkLeaf to check the notebook
         env:
-          FORKLEAF_URL: ${{ vars.FORKLEAF_URL || 'https://forkleaf.vercel.app' }}
+          FORKLEAF_URL: ${{ vars.FORKLEAF_URL || 'https://www.forkleaf.in' }}
           REPOSITORY: ${{ github.repository }}
           REF: ${{ github.event.pull_request.head.sha || github.sha }}
           TOKEN: ${{ vars.FORKLEAF_SEND_TOKEN == 'true' && github.token || '' }}

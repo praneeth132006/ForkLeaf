@@ -10,7 +10,7 @@
  * anything the person has not seen.
  */
 
-export const DEFAULT_ORIGIN = "https://forkleaf.vercel.app";
+export const DEFAULT_ORIGIN = "https://www.forkleaf.in";
 
 /**
  * Longest address the extension will open.

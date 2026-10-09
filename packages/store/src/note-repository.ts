@@ -47,7 +47,7 @@ export interface NoteRepositoryOptions {
  * rather than a piece of text somebody has to retype: GitHub linkifies a URL
  * in that table and does nothing at all with a bare domain.
  */
-const GENERATOR = "https://forkleaf.vercel.app";
+const GENERATOR = "https://www.forkleaf.in";
 
 /**
  * The API the UI actually talks to.

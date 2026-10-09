@@ -19,7 +19,7 @@ text you had selected. Nothing else is read.
 1. Open `chrome://extensions` and switch on **Developer mode**.
 2. Press **Load unpacked** and choose this `apps/extension` folder.
 3. Open the extension's **Options** and set the address you use ForkLeaf at.
-   It defaults to `https://forkleaf.vercel.app`; for a local copy use
+   It defaults to `https://www.forkleaf.in`; for a local copy use
    `http://localhost:3000`.
 
 ## Install (Firefox)
@@ -28,7 +28,7 @@ text you had selected. Nothing else is read.
    Add-on…**.
 2. Choose `apps/extension/manifest.json`.
 3. Set your ForkLeaf address in the extension's **Preferences** if it is not
-   `https://forkleaf.vercel.app`.
+   `https://www.forkleaf.in`.
 
 Firefox removes temporary add-ons when it restarts; load it again, or install a
 signed copy once one is published. The same folder works in both browsers:
