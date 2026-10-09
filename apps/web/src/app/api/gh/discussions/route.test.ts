@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const findNoteConversation = vi.fn();
 const createNoteDiscussion = vi.fn();
 const addDiscussionComment = vi.fn();
+const findPassageThreads = vi.fn();
 
 vi.mock("@/lib/session", () => ({
   getSession: () => Promise.resolve({ token: "t", user: { login: "me" } }),
@@ -19,12 +20,14 @@ vi.mock("@forkleaf/github-client", async () => {
       findNoteConversation = findNoteConversation;
       createNoteDiscussion = createNoteDiscussion;
       addDiscussionComment = addDiscussionComment;
+      findPassageThreads = findPassageThreads;
     },
   };
 });
 
 const { GET, POST } = await import("./route");
-const { GitHubError, isNoteDiscussion } = await import("@forkleaf/github-client");
+const { GitHubError, isNoteDiscussion, pageHash, passageOf } =
+  await import("@forkleaf/github-client");
 
 afterEach(() => vi.clearAllMocks());
 
@@ -236,5 +239,79 @@ describe("POST /api/gh/discussions", () => {
     findNoteConversation.mockResolvedValue({ repo, discussion: null });
     expect((await post({ ...message, replyTo: "DC_x" })).status).toBe(409);
     expect(createNoteDiscussion).not.toHaveBeenCalled();
+  });
+});
+
+describe("v3 — passages and published pages", () => {
+  it("lists passage threads beside the conversation when asked", async () => {
+    findNoteConversation.mockResolvedValue({ repo, discussion });
+    findPassageThreads.mockResolvedValue([{ number: 8, quote: "Rotate keys" }]);
+
+    const { body } = await get("?owner=me&repo=notes&path=ops/runbook.md&passages=1");
+
+    expect(body.discussion.number).toBe(4);
+    expect(body.passages).toEqual([{ number: 8, quote: "Rotate keys" }]);
+    expect(findPassageThreads).toHaveBeenCalledWith({
+      owner: "me",
+      repo: "notes",
+      path: "ops/runbook.md",
+    });
+  });
+
+  it("still answers with the conversation when the passage search fails", async () => {
+    findNoteConversation.mockResolvedValue({ repo, discussion });
+    findPassageThreads.mockRejectedValue(new GitHubError("unknown", "search is down", 502));
+
+    const { status, body } = await get("?owner=me&repo=notes&path=a.md&passages=1");
+
+    expect(status).toBe(200);
+    expect(body.passages).toBeNull();
+  });
+
+  it("does not look for passages unless asked", async () => {
+    findNoteConversation.mockResolvedValue({ repo, discussion });
+    const { body } = await get("?owner=me&repo=notes&path=a.md");
+    expect(body).not.toHaveProperty("passages");
+    expect(findPassageThreads).not.toHaveBeenCalled();
+  });
+
+  it("opens a new thread for a passage, quoting it", async () => {
+    findNoteConversation.mockResolvedValue({ repo, discussion });
+    createNoteDiscussion.mockResolvedValue({ id: "D_20", number: 20 });
+    addDiscussionComment.mockResolvedValue({ id: "c1" });
+
+    const { status, body } = await post({ ...message, passage: "  Rotate keys monthly.  " });
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ number: 20, comment: { id: "c1" }, passage: true });
+    const created = createNoteDiscussion.mock.calls[0]?.[0];
+    expect(created.title).toBe("“Rotate keys monthly.” — Runbook");
+    expect(created.body).toContain("> Rotate keys monthly.");
+    expect(passageOf(created.body)).toEqual({
+      path: "ops/runbook.md",
+      quote: "Rotate keys monthly.",
+    });
+    expect(addDiscussionComment).toHaveBeenCalledWith({
+      discussionId: "D_20",
+      body: "Is step 3 still right?",
+    });
+  });
+
+  it("refuses an empty or overlong passage", async () => {
+    expect((await post({ ...message, passage: "   " })).status).toBe(400);
+    expect((await post({ ...message, passage: "x".repeat(501) })).status).toBe(400);
+    expect((await post({ ...message, passage: 42 })).status).toBe(400);
+    expect(createNoteDiscussion).not.toHaveBeenCalled();
+  });
+
+  it("writes the published page's hash into a new conversation", async () => {
+    findNoteConversation.mockResolvedValue({ repo, discussion: null });
+    createNoteDiscussion.mockResolvedValue({ id: "D_9", number: 9 });
+    addDiscussionComment.mockResolvedValue({ id: "c1" });
+
+    await post(message);
+
+    const body = createNoteDiscussion.mock.calls[0]?.[0].body as string;
+    expect(body).toContain(`<!-- sha1: ${await pageHash("ops/runbook.md")} -->`);
   });
 });

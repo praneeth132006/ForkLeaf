@@ -1,5 +1,13 @@
 import { type NextRequest } from "next/server";
-import { discussionBody, pickCategory } from "@forkleaf/github-client";
+import {
+  MAX_PASSAGE,
+  discussionBody,
+  pageHash,
+  passageBody,
+  passageTitle,
+  pickCategory,
+  type ThreadSummaryDto,
+} from "@forkleaf/github-client";
 import {
   ApiError,
   assertName,
@@ -16,6 +24,10 @@ import { explained, isNodeId, readBody, readNumber } from "@/lib/discussions-api
  * GET reads it — or says nobody has started one, or that Discussions is off.
  * POST adds a message, opening the discussion first if this is the first one.
  * Every message lives on GitHub; nothing is stored here.
+ *
+ * With `passages=1`, GET also lists the threads opened on passages of the
+ * note; POST with a `passage` opens a new one of those instead of writing in
+ * the note's own conversation.
  *
  * The browser polls GET while a note is open, so it passes back the number of
  * the discussion it found last time and the read is usually one request.
@@ -39,8 +51,21 @@ export async function GET(request: NextRequest) {
     const repo = assertName(params.get("repo") ?? "", "repository");
     const path = readPath(params.get("path"));
     const knownNumber = readNumber(params.get("number"));
+    const withPassages = params.get("passages") === "1";
 
-    return explained(() => client.findNoteConversation({ owner, repo, path, knownNumber }));
+    return explained(async () => {
+      // Side by side, and the passages allowed to fail on their own: a search
+      // that is having a bad minute is no reason to hide the conversation.
+      const [conversation, passages] = await Promise.all([
+        client.findNoteConversation({ owner, repo, path, knownNumber }),
+        withPassages
+          ? client
+              .findPassageThreads({ owner, repo, path })
+              .catch((): ThreadSummaryDto[] | null => null)
+          : Promise.resolve(undefined),
+      ]);
+      return passages === undefined ? conversation : { ...conversation, passages };
+    });
   });
 }
 
@@ -57,6 +82,16 @@ export async function POST(request: NextRequest) {
     const knownNumber = readNumber(input.number);
 
     const body = readBody(input.body);
+
+    const passage =
+      input.passage === undefined || input.passage === null
+        ? null
+        : typeof input.passage === "string"
+          ? input.passage.trim()
+          : "";
+    if (passage !== null && (passage === "" || passage.length > MAX_PASSAGE)) {
+      throw new ApiError(400, "validation", "Choose a passage of up to 500 characters.");
+    }
 
     const replyTo = input.replyTo;
     if (replyTo !== undefined && replyTo !== null && !isNodeId(replyTo)) {
@@ -88,6 +123,28 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      if (passage !== null) {
+        // A passage gets a thread of its own, every time: two people asking
+        // about two sentences are two conversations, and a reply belongs to
+        // a thread, not to a passage.
+        const category = pickCategory(found.repo.categories);
+        if (!category) {
+          throw new ApiError(
+            409,
+            "no-category",
+            "This repository has no Discussions category ForkLeaf can post in. Add one — General is the usual choice — on GitHub.",
+          );
+        }
+        const opened = await client.createNoteDiscussion({
+          repositoryId: found.repo.id,
+          categoryId: category.id,
+          title: passageTitle(passage, title),
+          body: passageBody({ owner, repo, branch, path, quote: passage }),
+        });
+        const comment = await client.addDiscussionComment({ discussionId: opened.id, body });
+        return { number: opened.number, comment, passage: true };
+      }
+
       let discussion = found.discussion
         ? { id: found.discussion.id, number: found.discussion.number }
         : null;
@@ -112,7 +169,7 @@ export async function POST(request: NextRequest) {
           repositoryId: found.repo.id,
           categoryId: category.id,
           title,
-          body: discussionBody({ owner, repo, branch, path }),
+          body: discussionBody({ owner, repo, branch, path, hash: await pageHash(path) }),
         });
       }
 
