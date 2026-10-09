@@ -21,7 +21,7 @@ describe("explaining a GitHub refusal", () => {
     );
 
     expect(problem.summary).toContain("public repositories only");
-    expect(problem.steps.join(" ")).toContain("Private and public repositories");
+    expect(problem.steps.join(" ")).toContain("Continue with GitHub");
     expect(problem.action?.href).toBe("/sign-in");
   });
 

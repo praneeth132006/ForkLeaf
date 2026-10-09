@@ -88,7 +88,7 @@ export function explainAccessFailure(
         "You signed in with access to public repositories only, so a private repository is invisible to ForkLeaf — GitHub reports it as missing rather than as private.",
       steps: [
         "If the repository is public, check the owner and name for a typo.",
-        "If it is private, sign in again and choose “Private and public repositories”.",
+        "If it is private, sign in again with “Continue with GitHub”, which includes private repositories.",
         "Your notes and anything queued stay exactly where they are while you do.",
       ],
       action: { label: "Change what ForkLeaf can access", href: "/sign-in" },

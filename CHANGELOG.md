@@ -9,6 +9,14 @@ description, and the heading becomes the day's date when they ship.
 
 ## Unreleased
 
+### Sign in with one click
+
+**Sign in** and **Continue with GitHub** go straight to GitHub now. The sign-in
+page that used to sit in between — two permission cards, each with what it
+covers, what it never does and a caveat — is one card with one button. Keeping
+to public repositories only is still a link under it, and the documentation
+still explains both.
+
 ### Borders you can see
 
 Panel, card, field and dialog edges were drawn in a grey barely different from

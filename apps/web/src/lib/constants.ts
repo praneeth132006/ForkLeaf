@@ -23,3 +23,11 @@ export const SUPPORT_EMAIL = "praneeth2006.dev@gmail.com";
 export const SUPPORT_MAILTO = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(
   "ForkLeaf support",
 )}`;
+
+/**
+ * Where a "Sign in" or "Continue with GitHub" button goes: straight to GitHub,
+ * asking for the private-and-public repository grant most people want. The
+ * `/sign-in` page is still there for the cases that need a word of
+ * explanation — an expired sign-in, a return path, the public-only option.
+ */
+export const GITHUB_SIGN_IN_URL = "/api/auth/github";
