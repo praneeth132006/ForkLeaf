@@ -29,7 +29,7 @@
     "remark-stringify": "^11.0.0",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.0.0",
-    "yaml": "^2.8.1"
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/hast": "^3",
