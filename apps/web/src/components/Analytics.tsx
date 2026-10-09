@@ -1,13 +1,13 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { track } from "@/lib/firebase/analytics";
 import { postHogIdentify, startPostHog } from "@/lib/posthog";
 import { publicQuery } from "@/lib/analytics-privacy";
 
 /**
- * Reports page views to Firebase Analytics.
+ * Reports page views to Firebase Analytics and PostHog.
  *
  * The App Router does a client-side navigation between routes, so Firebase's
  * automatic `page_view` collection only ever sees the first URL of a session.
@@ -17,6 +17,8 @@ import { publicQuery } from "@/lib/analytics-privacy";
 function PageViews() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const query = publicQuery(searchParams.toString());
+  const lastPage = useRef<string | null>(null);
 
   // Started here rather than in the layout: this component is already the one
   // client boundary analytics lives behind, and starting it twice is a no-op.
@@ -37,13 +39,16 @@ function PageViews() {
   }, []);
 
   useEffect(() => {
+    const page = `${pathname}?${query ?? ""}`;
+    if (lastPage.current === page) return;
+    lastPage.current = page;
     track("page_view", {
       page_path: pathname,
       // Campaign tags only. ForkLeaf's own query strings name notes — the
       // editor is ?note=<path> — and those must not reach analytics.
-      page_query: publicQuery(searchParams.toString()),
+      page_query: query,
     });
-  }, [pathname, searchParams]);
+  }, [pathname, query]);
 
   return null;
 }

@@ -376,7 +376,7 @@ importers:
         version: 5.9.3
 
   packages/mcp:
-    dependencies:
+    devDependencies:
       '@forkleaf/github-client':
         specifier: workspace:*
         version: link:../github-client
@@ -389,10 +389,12 @@ importers:
       '@forkleaf/types':
         specifier: workspace:*
         version: link:../types
-    devDependencies:
       '@types/node':
         specifier: ^24
         version: 24.13.3
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       tsx:
         specifier: ^4.23.12
         version: 4.23.12

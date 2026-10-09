@@ -55,3 +55,16 @@ describe("PostHog events", () => {
     expect(scrubEvent(null)).toBeNull();
   });
 });
+
+it("scrubs nested person URLs and private document titles", () => {
+  const event = scrubEvent({
+    properties: {
+      $title: "Private diagnosis",
+      $set: { $current_url: EDITOR },
+      $set_once: { $initial_current_url: EDITOR },
+    },
+  });
+  expect(event.properties).not.toHaveProperty("$title");
+  expect(event.properties.$set.$current_url).toBe("https://forkleaf.app/editor");
+  expect(event.properties.$set_once.$initial_current_url).toBe("https://forkleaf.app/editor");
+});

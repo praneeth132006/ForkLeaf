@@ -34,6 +34,7 @@ type Load =
 
 const FILTERS: { value: MindFilter; label: string }[] = [
   { value: "all", label: "Everything" },
+  { value: "highlight", label: "Highlights" },
   { value: "quote", label: "Quotes" },
   { value: "link", label: "Links" },
   { value: "page", label: "Notes" },

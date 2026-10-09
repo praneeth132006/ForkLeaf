@@ -375,7 +375,9 @@ export function EditorSidebar(props: EditorSidebarProps) {
           title={
             props.currentFolder
               ? `New note in ${props.currentFolder} (⌘⇧N)`
-              : "New note at the top of the repository (⌘⇧N)"
+              : props.activeWorkspace?.isLocal
+                ? "New note at the top of this notebook (⌘⇧N)"
+                : "New note at the top of the repository (⌘⇧N)"
           }
           className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--fl-accent)] px-3 py-2 text-[13px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
         >

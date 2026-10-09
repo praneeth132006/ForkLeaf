@@ -7,6 +7,27 @@
       "runtimeArgs": ["--filter", "@forkleaf/web", "dev"],
       "port": 3000,
       "autoPort": false
+    },
+    {
+      "name": "forkleaf-web-3001",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@forkleaf/web", "dev", "-p", "3001"],
+      "port": 3001,
+      "autoPort": false
+    },
+    {
+      "name": "forkleaf-web-ux-worktree",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "../MarkDown-ux", "--filter", "@forkleaf/web", "dev", "-p", "3005"],
+      "port": 3005,
+      "autoPort": false
+    },
+    {
+      "name": "forkleaf-web-ux-prod",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "../MarkDown-ux", "--filter", "@forkleaf/web", "start", "-p", "3006"],
+      "port": 3006,
+      "autoPort": false
     }
   ]
 }

@@ -85,3 +85,30 @@ describe("requestForMenu", () => {
     expect(requestForMenu({ menuItemId: "page" }, TAB, PAGE)).toEqual(requestForPage(PAGE, TAB));
   });
 });
+
+describe("highlight", () => {
+  const tab = { url: "https://example.com/a", title: "Tab" };
+
+  it("prefers the words the page marked", () => {
+    expect(
+      requestForMenu(
+        { menuItemId: "highlight", selectionText: "menu copy" },
+        tab,
+        null,
+        "marked words",
+      ),
+    ).toEqual({
+      kind: "highlight",
+      url: "https://example.com/a",
+      title: "Tab",
+      text: "marked words",
+    });
+  });
+
+  it("falls back to the selection, and needs some words", () => {
+    expect(
+      requestForMenu({ menuItemId: "highlight", selectionText: "menu copy" }, tab, null)?.text,
+    ).toBe("menu copy");
+    expect(requestForMenu({ menuItemId: "highlight" }, tab, null)).toBeNull();
+  });
+});

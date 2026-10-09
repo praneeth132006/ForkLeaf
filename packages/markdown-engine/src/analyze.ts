@@ -4,7 +4,8 @@ import remarkGfm from "remark-gfm";
 import { visit } from "unist-util-visit";
 import { toString as mdastToString } from "mdast-util-to-string";
 import GithubSlugger from "github-slugger";
-import type { Root, Code, Heading } from "mdast";
+import type { Root, Code, Heading, ListItem } from "mdast";
+import { extractWikilinks } from "./wikilinks";
 
 /** Reusable parser — building the unified pipeline per call is measurably slower. */
 const parser = unified().use(remarkParse).use(remarkGfm);
@@ -74,7 +75,10 @@ export interface DocumentStats {
   codeBlocks: number;
   /** The mermaid subset of `codeBlocks`. */
   diagrams: number;
-  /** Inline and reference links. An image inside a link counts as both. */
+  /**
+   * Inline and reference links, and `[[wikilinks]]` (embeds are not links).
+   * An image inside a link counts as both.
+   */
   links: number;
   images: number;
   tasks: { total: number; done: number };
@@ -83,7 +87,6 @@ export interface DocumentStats {
 }
 
 const WORD_RE = /[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu;
-const TASK_RE = /^[ \t]*[-*+] \[( |x|X)\]/gm;
 /**
  * The markup a coloured highlight is written as.
  *
@@ -112,10 +115,6 @@ export function documentStats(markdown: string): DocumentStats {
 
   let total = 0;
   let done = 0;
-  for (const match of markdown.matchAll(TASK_RE)) {
-    total += 1;
-    if (match[1] !== " ") done += 1;
-  }
 
   // One parse and one walk. This used to call extractOutline and
   // extractMermaidBlocks, which parsed the whole document again each — three
@@ -124,7 +123,10 @@ export function documentStats(markdown: string): DocumentStats {
   let headings = 0;
   let codeBlocks = 0;
   let diagrams = 0;
-  let links = 0;
+  // A `[[wikilink]]` is not a link to the markdown parser, but it is the
+  // link people write most in a notebook; leaving it out showed "Links 0"
+  // beside a Links panel full of them.
+  let links = extractWikilinks(markdown).filter((link) => !link.embed).length;
   let images = 0;
 
   visit(parseToAst(markdown), (node) => {
@@ -145,6 +147,16 @@ export function documentStats(markdown: string): DocumentStats {
       case "imageReference":
         images += 1;
         break;
+      // Read from the tree rather than matched line by line, so a checklist
+      // shown inside a code block is not counted as work to do.
+      case "listItem": {
+        const { checked } = node as ListItem;
+        if (typeof checked === "boolean") {
+          total += 1;
+          if (checked) done += 1;
+        }
+        break;
+      }
     }
   });
 

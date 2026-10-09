@@ -149,6 +149,18 @@ describe("analysis", () => {
     expect(stats.images).toBe(1);
   });
 
+  it("counts wikilinks as links, but not embeds", () => {
+    const stats = documentStats("See [[Roadmap]], [[a|b]] and [x](y).\n\n![[diagram]]\n");
+
+    expect(stats.links).toBe(3);
+  });
+
+  it("does not count a checklist inside a code block as tasks", () => {
+    const md = "- [ ] real\n- [x] done\n\n```md\n- [ ] example\n```\n";
+
+    expect(documentStats(md).tasks).toEqual({ total: 2, done: 1 });
+  });
+
   it("leaves empty headings out of the count, as the outline does", () => {
     const md = "# Real\n\n##\n\n### Also real\n";
 

@@ -165,6 +165,7 @@ import { useEncryptedNotes } from "@/hooks/useEncryptedNotes";
 import {
   INBOX_FOLDER,
   bookmarklet,
+  appendHighlight,
   findSaved,
   inboxNote,
   isSaveRequest,
@@ -184,6 +185,7 @@ import {
   type Template,
 } from "@/lib/templates";
 import { TimeMachineDialog } from "@/components/TimeMachineDialog";
+import { NotebookReplayDialog } from "@/components/NotebookReplayDialog";
 import { SuggestionsDialog } from "@/components/SuggestionsDialog";
 import { DocumentVersionsDialog } from "@/components/DocumentVersionsDialog";
 import { ExperimentCompareDialog } from "@/components/ExperimentCompareDialog";
@@ -437,6 +439,9 @@ export function EditorWorkspace() {
   useEffect(() => {
     if (!incomingSave || !notebook.ready) return;
     let live = true;
+    // A highlight is added to its page's note, so an earlier one is where it
+    // goes rather than something to warn about.
+    if (incomingSave.kind === "highlight") return;
     void loadNotesForSave().then((all) => {
       const found = findSaved(all, incomingSave);
       if (live && found) {
@@ -567,6 +572,7 @@ export function EditorWorkspace() {
     | "tools"
     | "connect-assistant"
     | "time-machine"
+    | "notebook-replay"
     | "suggestions"
     | "document-versions"
     | "experiment-compare"
@@ -2179,6 +2185,13 @@ export function EditorWorkspace() {
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
+  /**
+   * What "the top" is, in words. A notebook kept only on this device has no
+   * repository yet, and telling someone their note went into one is how they
+   * come to believe it is backed up.
+   */
+  const topLevelName = workspace?.isLocal ? "this notebook" : "your repository";
+
   const handleCreate = useCallback(
     (folder: string) => {
       setPrompt({
@@ -2191,7 +2204,7 @@ export function EditorWorkspace() {
         // the time anybody notices.
         body: folder
           ? `Saved as a file inside “${folder}”.`
-          : "Saved at the top of your repository. Open a note first to create alongside it.",
+          : `Saved at the top of ${topLevelName}. Open a note first to create alongside it.`,
         onConfirm: async (value) => {
           const created = await notebook.createNote(value || "Untitled note", folder);
           track("note_created");
@@ -2210,12 +2223,12 @@ export function EditorWorkspace() {
           setNotice(
             dirname(created.path)
               ? `Created ${created.path}`
-              : `Created ${created.path}, at the top of the repository`,
+              : `Created ${created.path}, at the top of ${topLevelName}`,
           );
         },
       });
     },
-    [notebook],
+    [notebook, topLevelName],
   );
 
   const handleRename = useCallback(
@@ -2912,7 +2925,7 @@ export function EditorWorkspace() {
         confirmLabel: "Create",
         body: folder
           ? `Made from ${template.path}, saved inside “${folder}”.`
-          : `Made from ${template.path}, saved at the top of your repository.`,
+          : `Made from ${template.path}, saved at the top of ${topLevelName}.`,
         onConfirm: async (value) => {
           const title = value || "Untitled note";
           const raw = await notebook.readDocument(template.path);
@@ -2929,7 +2942,7 @@ export function EditorWorkspace() {
         },
       });
     },
-    [notebook, currentFolder],
+    [notebook, currentFolder, topLevelName],
   );
 
   /** Copies the open note into `templates/`, leaving the note itself alone. */
@@ -3469,6 +3482,15 @@ export function EditorWorkspace() {
         keywords:
           "time travel machine history date day past was previous version snapshot notebook whole rewind back then",
         run: () => setDialog("time-machine"),
+      });
+      list.push({
+        id: "notebook-replay",
+        label: "Replay how my notebook grew",
+        group: "View",
+        hint: "Notes appearing and growing, step by step through the history",
+        keywords:
+          "replay timeline whole notebook history grow growth animation watch evolve past months year",
+        run: () => setDialog("notebook-replay"),
       });
       list.push({
         id: "deleted",
@@ -4174,6 +4196,7 @@ export function EditorWorkspace() {
       ...tool("blame", "History", TOOL_ICONS.clock),
       ...tool("deleted", "History", TOOL_ICONS.clock),
       ...tool("time-machine", "History", TOOL_ICONS.clock),
+      ...tool("notebook-replay", "History", TOOL_ICONS.clock),
       ...tool("tools", "Help", TOOL_ICONS.grid, "Every tool in the editor, as buttons"),
       ...tool("mcp-docs", "Help", TOOL_ICONS.help, "Claude, Cursor or VS Code, in one step"),
       ...tool("extension-docs", "Help", TOOL_ICONS.help),
@@ -5602,6 +5625,17 @@ export function EditorWorkspace() {
         />
       )}
 
+      {openDialog === "notebook-replay" && workspace && !workspace.isLocal && (
+        <NotebookReplayDialog
+          onClose={() => setDialog(null)}
+          repo={workspace.repo}
+          onOpenNote={(path) => {
+            setDialog(null);
+            notebook.openNote(path);
+          }}
+        />
+      )}
+
       {openDialog === "time-machine" && workspace && !workspace.isLocal && (
         <TimeMachineDialog onClose={() => setDialog(null)} repo={workspace.repo} />
       )}
@@ -5741,6 +5775,18 @@ export function EditorWorkspace() {
           request={incomingSave}
           existing={earlierSave?.key === saveKey ? earlierSave : null}
           onSave={async (request) => {
+            if (request.kind === "highlight") {
+              const earlier = findSaved(await notebook.allNotes(), request);
+              if (earlier) {
+                const written = await notebook.upsertNote(earlier.path, (content) =>
+                  appendHighlight(content ?? "", request.text),
+                );
+                if (written === null) throw new Error("The highlight could not be saved.");
+                setNotice(`Added to ${earlier.path}`);
+                answerSave();
+                return;
+              }
+            }
             const made = inboxNote(request, new Date());
             const created = await notebook.createNote(
               made.title,

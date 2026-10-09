@@ -422,6 +422,15 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "web-highlights",
+        title: "Highlights on any web page",
+        summary:
+          "Highlight text with the extension: it is marked on the page, kept in one note for that page, and comes back in spaced reading.",
+        how: "Select text → right-click → Highlight and save to ForkLeaf",
+        docs: "/docs/browser-extension",
+        tags: ["new"],
+      },
+      {
         id: "everything-saved",
         title: "Everything you saved",
         summary:
@@ -557,6 +566,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["github"],
       },
       {
+        id: "notebook-replay",
+        title: "Replay how the notebook grew",
+        summary:
+          "Step through a month, a quarter or years of history and watch notes appear, grow and shrink.",
+        how: "⌘K → Replay how my notebook grew",
+        tags: ["new", "github"],
+      },
+      {
         id: "deleted",
         title: "Bring back a deleted note",
         summary:
@@ -624,6 +641,14 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
           "Pages committed to your own repository and served by GitHub Pages, with links between notes intact.",
         how: "⌘K → Publish this note as a page",
         tags: ["github"],
+      },
+      {
+        id: "garden",
+        title: "Publish a folder as a digital garden",
+        summary:
+          "A book where every page lists the notes that link to it, and the contents page maps how they all connect.",
+        how: "Right-click a folder → Publish as book… → Publish as a digital garden",
+        tags: ["new", "github"],
       },
       {
         id: "suggestions",

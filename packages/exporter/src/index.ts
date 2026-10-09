@@ -24,6 +24,7 @@ export {
   type BuildBookOptions,
 } from "./book";
 export { toDocx } from "./docx";
+export { gardenLinks, gardenLayout, gardenMapSvg, type GardenLinks } from "./garden";
 
 /**
  * Client-side export.

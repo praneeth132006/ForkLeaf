@@ -53,8 +53,8 @@ where you will find them.
 1. Create a **fine-grained personal access token** on GitHub, limited to your
    notes repository, with **Contents: Read and write** (or **Read-only** if you
    will use read-only mode).
-2. From the ForkLeaf checkout, install once: `pnpm install`.
-3. Add the server to your assistant.
+2. Add the server to your assistant. `npx` downloads and runs it; there is
+   nothing else to install, and it needs Node 20 or newer.
 
 ### Claude Code
 
@@ -62,7 +62,7 @@ where you will find them.
 claude mcp add forkleaf \
   --env FORKLEAF_GITHUB_TOKEN=github_pat_... \
   --env FORKLEAF_REPO=you/notes \
-  -- pnpm --silent --dir /path/to/ForkLeaf/packages/mcp start
+  -- npx -y @forkleaf/mcp
 ```
 
 ### Claude Desktop
@@ -73,8 +73,8 @@ In `claude_desktop_config.json`:
 {
   "mcpServers": {
     "forkleaf": {
-      "command": "pnpm",
-      "args": ["--silent", "--dir", "/path/to/ForkLeaf/packages/mcp", "start"],
+      "command": "npx",
+      "args": ["-y", "@forkleaf/mcp"],
       "env": {
         "FORKLEAF_GITHUB_TOKEN": "github_pat_...",
         "FORKLEAF_REPO": "you/notes"
@@ -83,6 +83,19 @@ In `claude_desktop_config.json`:
   }
 }
 ```
+
+### From a checkout of ForkLeaf
+
+Run `pnpm install` once, then use
+`pnpm --silent --dir /path/to/ForkLeaf/packages/mcp start` as the command in
+place of `npx -y @forkleaf/mcp`. `pnpm --filter @forkleaf/mcp build` produces
+the same single-file server the npm package ships, at `dist/forkleaf-mcp.js`.
+
+### Publishing (maintainers)
+
+`pnpm --filter @forkleaf/mcp publish` builds the bundle and publishes it. Use
+pnpm rather than npm: it swaps the `main` and `exports` fields for the bundle,
+as `publishConfig` asks.
 
 ## Settings
 

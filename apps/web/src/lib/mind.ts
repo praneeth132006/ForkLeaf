@@ -32,7 +32,7 @@ export interface MindSource {
   frontmatter: Record<string, unknown>;
 }
 
-const KINDS: readonly SaveKind[] = ["page", "quote", "image", "link"];
+const KINDS: readonly SaveKind[] = ["page", "quote", "image", "link", "highlight"];
 const EXCERPT_LENGTH = 280;
 
 const isWeb = (value: unknown): value is string => {
@@ -140,6 +140,7 @@ export function countByKind(items: readonly MindItem[]): Record<MindFilter, numb
     quote: 0,
     image: 0,
     link: 0,
+    highlight: 0,
   };
   for (const item of items) counts[item.kind] += 1;
   return counts;

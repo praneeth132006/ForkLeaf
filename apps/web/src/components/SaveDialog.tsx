@@ -28,6 +28,7 @@ const KIND_LABEL: Record<SaveRequest["kind"], string> = {
   quote: "Quote",
   image: "Image",
   link: "Link",
+  highlight: "Highlight",
 };
 
 export function SaveDialog({

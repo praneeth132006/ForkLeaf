@@ -48,6 +48,7 @@ export type ForkLeafEvent =
   | "page_view"
   | "note_created"
   | "note_exported"
+  | "note_print_opened"
   | "repo_connected"
   | "github_sign_in_started"
   | "sync_completed"

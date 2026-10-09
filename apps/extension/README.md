@@ -41,6 +41,13 @@ Chrome runs `background.service_worker`, Firefox (121 and later) runs
   selected, the selection is saved as a quote instead.
 - **Right-click** a page, a selection, a link or an image and choose **Save … to
   ForkLeaf**.
+- **Highlight:** select text, right-click → **Highlight and save to ForkLeaf**.
+  The words are marked on the page, remembered by the extension, and added to
+  one note for that page in `highlights/` — every highlight on a page goes into
+  the same note, as `==marked==` lines that come back in spaced reading.
+- **See them again:** on a page you highlighted before, right-click → **Show my
+  ForkLeaf highlights here**. The extension cannot see pages on its own, so it
+  waits to be asked rather than watching every page you open.
 
 Signed in, saves go to a private `forkleaf-saves` repository on your GitHub
 account, filed automatically as `pages/`, `quotes/`, `links/` and `images/` by
@@ -55,7 +62,7 @@ In ForkLeaf, ⌘K → **Show everything I saved** shows them as a grid.
 | `activeTab`    | Read the current page's title and selection, only when you ask to save it. |
 | `scripting`    | Run that one read in the page.                                             |
 | `contextMenus` | The right-click items.                                                     |
-| `storage`      | Remember where your ForkLeaf is.                                           |
+| `storage`      | Remember where your ForkLeaf is, and your highlights on each page.         |
 
 No host permissions: the extension cannot see any page you have not asked it to
 save.

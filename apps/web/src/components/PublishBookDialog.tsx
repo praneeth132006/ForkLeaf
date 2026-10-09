@@ -78,6 +78,30 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
   const [status, setStatus] = useState<string | null>(null);
   const [removed, setRemoved] = useState(0);
   const [copied, setCopied] = useState(false);
+  /**
+   * A garden is the same book with each page saying what links to it, and a
+   * map of the whole folder on the contents page. Remembered per folder, so
+   * "Update book" republishes it the way it was published.
+   */
+  const gardenKey = `forkleaf:garden:${workspace.repo.owner}/${workspace.repo.repo}:${book}`;
+  const [garden, setGarden] = useState(() => {
+    try {
+      return window.localStorage.getItem(gardenKey) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const chooseGarden = useCallback(
+    (next: boolean) => {
+      setGarden(next);
+      try {
+        window.localStorage.setItem(gardenKey, next ? "1" : "0");
+      } catch {
+        // Not remembered is fine; the checkbox still says what will happen.
+      }
+    },
+    [gardenKey],
+  );
 
   /**
    * What this folder already is, asked once on open.
@@ -136,6 +160,7 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
         // Points at the note in the repository it came from, never at the
         // published copy.
         suggestUrl: (note) => suggestEditUrl(workspace.repo, note.path),
+        garden,
       });
 
       setStep("Committing the book to your repository…");
@@ -163,7 +188,7 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
       setError(messageFor(problem));
       setStage("idle");
     }
-  }, [chapters, title, book, target, workspace.repo]);
+  }, [chapters, title, book, target, workspace.repo, garden]);
 
   const unpublish = useCallback(async () => {
     setStage("working");
@@ -199,6 +224,27 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
         <span className="text-[var(--fl-muted)]"> · docs/{book}/</span>
       </p>
     </div>
+  );
+
+  const gardenChoice = (
+    <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[var(--fl-border)] px-3 py-2.5">
+      <input
+        type="checkbox"
+        checked={garden}
+        onChange={(event) => chooseGarden(event.target.checked)}
+        disabled={stage === "working"}
+        className="mt-0.5"
+      />
+      <span className="space-y-0.5">
+        <span className="block text-[13px] font-medium text-[var(--fl-text)]">
+          Publish as a digital garden
+        </span>
+        <span className="block text-[12px] leading-relaxed text-[var(--fl-muted)]">
+          Every page lists the notes that link to it, and the contents page shows a map of how they
+          connect.
+        </span>
+      </span>
+    </label>
   );
 
   const problem = error && (
@@ -286,6 +332,7 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
             </p>
           )}
 
+          {gardenChoice}
           {where}
           {problem}
 
@@ -356,6 +403,7 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
           </ol>
         </div>
 
+        {gardenChoice}
         {where}
         {problem}
 

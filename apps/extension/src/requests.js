@@ -42,9 +42,10 @@ export function requestForPage(page, tab) {
  * @param {MenuInfo} info
  * @param {TabLike | undefined} tab
  * @param {Page | null} page
+ * @param {string} [marked] The words the page highlighted, for "highlight".
  * @returns {SaveRequest | null}
  */
-export function requestForMenu(info, tab, page) {
+export function requestForMenu(info, tab, page, marked = "") {
   switch (info.menuItemId) {
     case "quote": {
       // The page's own reading of the selection keeps its line breaks, which
@@ -53,6 +54,14 @@ export function requestForMenu(info, tab, page) {
       const url = page?.url ?? info.pageUrl ?? tab?.url ?? "";
       if (!text || !isSavableUrl(url)) return null;
       return { kind: "quote", url, title: page?.title || tab?.title || "", text };
+    }
+    case "highlight": {
+      // The words as the page marked them, which is what will be found again
+      // on the next visit; the menu's own copy of the selection otherwise.
+      const text = marked || page?.selection || info.selectionText || "";
+      const url = page?.url ?? info.pageUrl ?? tab?.url ?? "";
+      if (!text || !isSavableUrl(url)) return null;
+      return { kind: "highlight", url, title: page?.title || tab?.title || "", text };
     }
     case "link":
       return isSavableUrl(info.linkUrl)

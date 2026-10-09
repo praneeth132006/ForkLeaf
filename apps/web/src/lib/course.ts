@@ -1,8 +1,8 @@
 import {
   basename,
   extractWikilinks,
+  createLinkResolver,
   resolveFromNote,
-  resolveWikilink,
 } from "@forkleaf/markdown-engine";
 import { cardId, findCards, type Card } from "@/lib/flashcards";
 
@@ -41,12 +41,16 @@ const INTRO = /^(index|readme|overview|introduction|intro|start[ -_]here|content
 const MARKDOWN_LINK = /\[[^\]]*\]\(([^)\s]+\.md)(?:#[^)]*)?\)/gi;
 
 /** The notes a note links to, in the order the links are written. */
-function linksIn(source: LessonSource, all: readonly LessonSource[]): string[] {
+function linksIn(
+  source: LessonSource,
+  all: readonly LessonSource[],
+  resolve: (target: string) => { path: string } | null,
+): string[] {
   const found: { at: number; path: string }[] = [];
   const paths = new Set(all.map((each) => each.path));
 
   for (const link of extractWikilinks(source.content)) {
-    const match = resolveWikilink(link.target, all);
+    const match = resolve(link.target);
     if (match && match.path !== source.path) found.push({ at: link.start, path: match.path });
   }
   for (const match of source.content.matchAll(MARKDOWN_LINK)) {
@@ -66,7 +70,8 @@ function linksIn(source: LessonSource, all: readonly LessonSource[]): string[] {
 export function orderLessons(sources: readonly LessonSource[]): Lesson[] {
   const notes = [...sources].sort((a, b) => a.path.localeCompare(b.path));
   const intro = notes.find((note) => INTRO.test(basename(note.path))) ?? null;
-  const links = new Map(notes.map((note) => [note.path, linksIn(note, notes)]));
+  const resolve = createLinkResolver(notes);
+  const links = new Map(notes.map((note) => [note.path, linksIn(note, notes, resolve)]));
 
   // Where the index lists a note, when it does.
   const listed = new Map((intro ? links.get(intro.path)! : []).map((path, index) => [path, index]));

@@ -14,7 +14,7 @@ export const SPONSOR_URL = `https://github.com/sponsors/praneeth132006`;
  * for the whole project is easier to trust than three that each answer for a
  * corner of it, and a support address nobody watches is worse than none.
  */
-export const SUPPORT_EMAIL = "praneeth2006.dev@gmail.com";
+export const SUPPORT_EMAIL = "support@forkleaf.in";
 
 /**
  * A pre-addressed message, so writing in is one click rather than a copy, a

@@ -56,7 +56,7 @@ export function normaliseOrigin(input) {
 }
 
 /**
- * @typedef {{ kind: "page" | "quote" | "link" | "image", url?: string | null, title?: string, text?: string }} SaveRequest
+ * @typedef {{ kind: "page" | "quote" | "link" | "image" | "highlight", url?: string | null, title?: string, text?: string }} SaveRequest
  */
 
 /**

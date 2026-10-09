@@ -1,8 +1,23 @@
 {
   "name": "@forkleaf/mcp",
   "version": "1.0.0",
-  "private": true,
   "description": "An MCP server that lets AI assistants search, read and write a ForkLeaf notebook in your own GitHub repository.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/praneeth132006/ForkLeaf.git",
+    "directory": "packages/mcp"
+  },
+  "bin": {
+    "forkleaf-mcp": "./dist/forkleaf-mcp.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -11,18 +26,26 @@
   },
   "scripts": {
     "start": "tsx src/main.ts",
+    "build": "node build.mjs",
+    "prepublishOnly": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
-  "dependencies": {
+  "devDependencies": {
     "@forkleaf/github-client": "workspace:*",
     "@forkleaf/markdown-engine": "workspace:*",
     "@forkleaf/store": "workspace:*",
-    "@forkleaf/types": "workspace:*"
-  },
-  "devDependencies": {
+    "@forkleaf/types": "workspace:*",
     "@types/node": "^24",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.12",
     "typescript": "^5.9.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/forkleaf-mcp.js",
+    "exports": {
+      ".": "./dist/forkleaf-mcp.js"
+    }
   }
 }

@@ -38,7 +38,7 @@ interface RepoLinks {
 type Stage =
   | { kind: "ready" }
   | { kind: "saving" }
-  | { kind: "saved"; entry: SavedEntry; repo: RepoLinks; isPrivate: boolean }
+  | { kind: "saved"; entry: SavedEntry; repo: RepoLinks; isPrivate: boolean; appended: boolean }
   | { kind: "duplicate"; existing: SavedEntry; repo: RepoLinks };
 
 const KIND_LABEL: Record<SaveRequest["kind"], string> = {
@@ -46,6 +46,7 @@ const KIND_LABEL: Record<SaveRequest["kind"], string> = {
   quote: "Quote",
   image: "Image",
   link: "Link",
+  highlight: "Highlight",
 };
 
 const readStash = () => {
@@ -141,7 +142,13 @@ export function SaveFromWeb() {
       }
       setStage(
         body.saved
-          ? { kind: "saved", entry: body.entry, repo: body.repo, isPrivate: body.private }
+          ? {
+              kind: "saved",
+              entry: body.entry,
+              repo: body.repo,
+              isPrivate: body.private,
+              appended: body.appended === true,
+            }
           : { kind: "duplicate", existing: body.existing, repo: body.repo },
       );
     } catch {
@@ -172,11 +179,13 @@ export function SaveFromWeb() {
         </p>
         <h1 className="mt-2 text-lg font-semibold text-[var(--fl-text)]">{stage.entry.title}</h1>
         <p className="mt-2 text-[14px] text-[var(--fl-muted)]">
-          Filed in{" "}
+          {stage.appended ? "Added to this page's highlights in " : "Filed in "}
           <code className="text-[var(--fl-text)]">
             {stage.repo.name}/{stage.entry.path}
           </code>
-          , and added to the top of the index.
+          {stage.appended
+            ? ". It comes back in spaced reading with the rest."
+            : ", and added to the top of the index."}
         </p>
         {!stage.isPrivate && (
           <p role="alert" className="mt-3 text-[13px] text-[var(--fl-danger)]">
@@ -272,6 +281,8 @@ export function SaveFromWeb() {
         Goes to your private <code className="text-[var(--fl-text)]">{SAVES_REPO}</code> repository
         as <code className="break-all text-[var(--fl-text)]">{filedAs}</code> — kept apart from your
         notebooks, and filed by kind and month automatically.
+        {request.kind === "highlight" &&
+          " If you have highlighted this page before, it is added to that note instead."}
       </p>
 
       {problem && (

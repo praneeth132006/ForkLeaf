@@ -207,7 +207,8 @@ export function Support() {
       <P>
         Email <A href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</A> for anything specific to your account,
         your repository, or something you would rather not post in public. A reply usually takes a
-        day or two. For bugs and feature requests that other people would hit too,{" "}
+        day or two, and it can land in your spam or junk folder, so look there before writing again.
+        For bugs and feature requests that other people would hit too,{" "}
         <A href={ISSUES_URL}>GitHub Issues</A> is better: it is searchable, and the fix is visible
         when it lands.
       </P>

@@ -31,6 +31,7 @@ export const KIND_FOLDERS: Record<SaveKind, string> = {
   quote: "quotes",
   link: "links",
   image: "images",
+  highlight: "highlights",
 };
 
 const KIND_TITLES: Record<SaveKind, string> = {
@@ -38,9 +39,10 @@ const KIND_TITLES: Record<SaveKind, string> = {
   quote: "Quotes",
   link: "Links",
   image: "Images",
+  highlight: "Highlights",
 };
 
-const KIND_ORDER: readonly SaveKind[] = ["page", "quote", "link", "image"];
+const KIND_ORDER: readonly SaveKind[] = ["page", "highlight", "quote", "link", "image"];
 const EXCERPT_LENGTH = 280;
 
 export interface SavedEntry {
@@ -161,12 +163,40 @@ export function withEntry(entries: readonly SavedEntry[], entry: SavedEntry): Sa
   );
 }
 
-/** The same address saved as the same kind of thing before. Quotes can repeat. */
+/**
+ * The note a page's highlights are being collected in, if it has one.
+ *
+ * Every highlight made on a page goes into the same note, so the first one
+ * creates it and each after that is added to the end.
+ */
+export function findHighlights(
+  entries: readonly SavedEntry[],
+  request: SaveRequest,
+): SavedEntry | null {
+  if (request.kind !== "highlight" || !request.url) return null;
+  return entries.find((entry) => entry.kind === "highlight" && entry.url === request.url) ?? null;
+}
+
+/** The index entry for a highlights note that has just grown by one. */
+export function grownEntry(entry: SavedEntry, markdown: string, now: Date): SavedEntry {
+  const body = markdown.replace(/^---\n[\s\S]*?\n---\n/, "").replace(/^\s*# .*\n/, "");
+  const text = plainText(body);
+  return {
+    ...entry,
+    savedAt: now.toISOString(),
+    excerpt: text.length > EXCERPT_LENGTH ? `${text.slice(0, EXCERPT_LENGTH - 1)}…` : text,
+  };
+}
+
+/**
+ * The same address saved as the same kind of thing before. Quotes can repeat,
+ * and highlights are added to their page's note rather than refused.
+ */
 export function findDuplicate(
   entries: readonly SavedEntry[],
   request: SaveRequest,
 ): SavedEntry | null {
-  if (!request.url || request.kind === "quote") return null;
+  if (!request.url || request.kind === "quote" || request.kind === "highlight") return null;
   return entries.find((entry) => entry.url === request.url && entry.kind === request.kind) ?? null;
 }
 
@@ -223,8 +253,9 @@ export function savesReadme(): string {
     "Pages, quotes, links and images saved from the web with the Save to ForkLeaf",
     "extension, the bookmarklet or the share sheet.",
     "",
-    "Everything is filed automatically — `pages/`, `quotes/`, `links/` and `images/`,",
-    "each by year and month — and listed newest first in [INDEX.md](INDEX.md).",
+    "Everything is filed automatically — `pages/`, `highlights/`, `quotes/`, `links/`",
+    "and `images/`, each by year and month — and listed newest first in [INDEX.md](INDEX.md).",
+    "Every highlight made on one page is kept in that page's note in `highlights/`.",
     "",
   ].join("\n");
 }

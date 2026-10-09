@@ -72,10 +72,10 @@ export default function PrivacyPage() {
         </P>
 
         <P>
-          <strong>Usage analytics.</strong> Through Google Firebase Analytics we record which
-          screens are opened and which features are used — for example that a note was created, a
-          diagram was inserted, or an export was run. These events contain <em>no</em> note content,
-          note titles, filenames or repository names.
+          <strong>Usage analytics.</strong> Through Google Firebase Analytics and PostHog we record
+          which screens are opened and which features are used — for example that a note was
+          created, a diagram was inserted, or an export was run. These events contain <em>no</em>{" "}
+          note content, note titles, filenames or repository names.
         </P>
 
         <P>
@@ -138,6 +138,11 @@ export default function PrivacyPage() {
               <strong key="b">Google (Firebase)</strong>,
               "Product analytics and the account record",
               "Anonymous usage events and the account record in section 3",
+            ],
+            [
+              <strong key="posthog">PostHog</strong>,
+              "Product and website analytics",
+              "Usage events and your public GitHub login when signed in; no note content or session recordings",
             ],
             [
               <strong key="c">Our hosting provider</strong>,

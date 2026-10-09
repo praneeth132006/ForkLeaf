@@ -299,6 +299,10 @@ ForkLeaf address in its **Options**.
 - Toolbar button or **Alt+Shift+S** saves the page — or the selected text as a
   quote.
 - Right-click a page, selection, link or image → **Save … to ForkLeaf**.
+- Select text → right-click → **Highlight and save to ForkLeaf**: the words are
+  marked on the page and added to one note for that page in `highlights/`, as
+  `==marked==` lines that come back in spaced reading. On a later visit,
+  right-click → **Show my ForkLeaf highlights here** marks them again.
 
 It opens ForkLeaf's save address, so ForkLeaf still asks before saving. It needs
 no account and no host permissions. Step-by-step install: [/docs/browser-extension](https://forkleaf.vercel.app/docs/browser-extension), or `apps/extension/README.md`.
@@ -566,6 +570,7 @@ on this device is not changed.
 | **Replay how a note was written**   | ⌘K → **Replay how this note was written**.                                                                                                                                                                |
 | **When each paragraph was written** | ⌘K → **See when each paragraph was written**; point at a paragraph to see what it used to say.                                                                                                            |
 | **The notebook on a past date**     | ⌘K → **Show me my notebook as it was on…**. Read-only.                                                                                                                                                    |
+| **Replay how the notebook grew**    | ⌘K → **Replay how my notebook grew**: pick a span, then play or scrub; every note is a dot that appears, grows and shrinks.                                                                               |
 | **Bring back a deleted note**       | ⌘K → **Bring back a deleted note**, pick how far back, preview, then **Bring it back**. Restored at its old path with its properties; a note that was only moved is marked. Needs a connected repository. |
 | **Stale notes**                     | ⌘K → **Check which of my notes have gone stale**: missing files, dead links, aged claims.                                                                                                                 |
 | **Citation check**                  | ⌘K → **Check my citations against their documents**, with one-press page-number fixes.                                                                                                                    |
@@ -663,6 +668,7 @@ folder, check what will come across, then **Import**.
 | ------------------------------ | ---------------------------------------------------------------------------------------------- |
 | **Publish a note**             | ⌘K → **Publish this note as a page…**. Commits a page to `docs/` and switches on GitHub Pages. |
 | **Publish a folder as a book** | Right-click a folder → **Publish as book…**. Contents page, one page per note, working links.  |
+| **Digital garden**             | In **Publish as book…**, tick **Publish as a digital garden**: backlinks on every page, a map. |
 | **Suggestions from readers**   | Published pages carry **Suggest an edit**; ⌘K → **See what other people have suggested**.      |
 | **Export**                     | **⌘⇧E**: PDF, Word, HTML, Markdown, plain text or JSON, made in your browser.                  |
 

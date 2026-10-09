@@ -27,7 +27,7 @@ const ROUTES = [
   },
   {
     title: "Email support",
-    body: "Anything else: a bug, a note that will not sync, a question about your data, or a feature you wish existed. A real inbox, read by the person who builds this.",
+    body: "Anything else: a bug, a note that will not sync, a question about your data, or a feature you wish existed. A real inbox, read by the person who builds this. If a reply seems late, check your spam folder.",
     action: SUPPORT_EMAIL,
     href: SUPPORT_MAILTO,
     external: false,
