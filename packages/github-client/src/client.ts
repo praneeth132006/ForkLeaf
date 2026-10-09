@@ -7,11 +7,13 @@ import {
   codeForGraphQLType,
   createNoteDiscussion,
   findNoteConversation,
+  findPassageThreads,
   listDiscussions,
   readDiscussion,
   setDiscussionAnswer,
   type DiscussionCommentDto,
   type LoungeDto,
+  type ThreadSummaryDto,
   type GraphQLErrorEntry,
   type NoteConversationDto,
 } from "./discussions";
@@ -476,6 +478,15 @@ export class GitHubClient {
 
   setDiscussionAnswer(input: { commentId: string; answer: boolean }): Promise<void> {
     return setDiscussionAnswer(this.graphql, input);
+  }
+
+  /** Every thread opened on a passage of one note. */
+  findPassageThreads(options: {
+    owner: string;
+    repo: string;
+    path: string;
+  }): Promise<ThreadSummaryDto[]> {
+    return findPassageThreads(this.graphql, options);
   }
 
   // ─── Identity ─────────────────────────────────────────────────────────────

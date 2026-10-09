@@ -74,6 +74,8 @@ export interface NoteDiscussionDto {
   viewerDidAuthor: boolean;
   /** The note this discussion is about, when ForkLeaf opened it for one. */
   notePath: string | null;
+  /** The passage of that note it is about, for a thread opened on a selection. */
+  quote?: string | null;
   /** The most recent comments, oldest first. */
   comments: DiscussionCommentDto[];
   /** Every top-level comment, including any too old to be in `comments`. */
@@ -110,6 +112,8 @@ export interface ThreadSummaryDto {
   answered: boolean;
   locked: boolean;
   notePath: string | null;
+  /** The passage the thread is about, when it was opened on a selection. */
+  quote?: string | null;
 }
 
 export interface LoungeDto {
@@ -161,11 +165,37 @@ export function isNoteDiscussion(body: string, path: string): boolean {
   return body.includes(noteMarker(path));
 }
 
+/** The longest passage a thread is opened on. Enough for a paragraph. */
+export const MAX_PASSAGE = 500;
+
 /**
- * The note a discussion is about, read back out of its marker. Null for a
- * discussion somebody started on github.com, or a marker that does not decode.
+ * The line in a discussion's body that says which passage of which note it
+ * is about. Both halves percent-encoded, for the same reason as the note
+ * marker: no text — not even one containing `-->` — can end it early.
+ */
+export function passageMarker(path: string, quote: string): string {
+  return `<!-- forkleaf:passage ${encodeURIComponent(path)} ${encodeURIComponent(quote)} -->`;
+}
+
+/** The passage a discussion is about, read back out of its marker. */
+export function passageOf(body: string): { path: string; quote: string } | null {
+  const match = /<!-- forkleaf:passage (\S+) (\S+) -->/.exec(body);
+  if (!match) return null;
+  try {
+    return { path: decodeURIComponent(match[1]!), quote: decodeURIComponent(match[2]!) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The note a discussion is about, read back out of its marker — the note's own
+ * or a passage's. Null for a discussion somebody started on github.com, or a
+ * marker that does not decode.
  */
 export function notePathOf(body: string): string | null {
+  const passage = passageOf(body);
+  if (passage) return passage.path;
   const match = /<!-- forkleaf:note (\S+) -->/.exec(body);
   if (!match) return null;
   try {
@@ -173,6 +203,34 @@ export function notePathOf(body: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The hash a published page's comments are found by.
+ *
+ * Published pages carry comments through giscus, which finds the discussion
+ * for a page by the SHA-1 of a term — here, the note's path — written into
+ * the discussion's body as `<!-- sha1: … -->`. ForkLeaf writes the same line
+ * into every conversation it opens, so the comments under a published page
+ * and the Chat tab beside the note are one conversation, whichever side
+ * starts it.
+ */
+export async function pageHash(path: string): Promise<string> {
+  const bytes = new TextEncoder().encode(path);
+  const digest = await globalThis.crypto.subtle.digest("SHA-1", bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export function pageHashMarker(hash: string): string {
+  return `<!-- sha1: ${hash} -->`;
+}
+
+/**
+ * Whether a discussion is a note's conversation: ForkLeaf's marker, or the
+ * hash giscus writes into one it opened for the note's published page.
+ */
+export function isConversationFor(body: string, path: string, hash: string): boolean {
+  return isNoteDiscussion(body, path) || body.includes(pageHashMarker(hash));
 }
 
 /** GitHub sends a category's emoji as markup around the character. */
@@ -198,22 +256,57 @@ export function pickCategory(categories: DiscussionCategoryDto[]): DiscussionCat
 }
 
 /** The opening post: a sentence for github.com, and the marker. */
-export function discussionBody(options: {
-  owner: string;
-  repo: string;
-  branch: string;
-  path: string;
-}): string {
+function fileLink(options: { owner: string; repo: string; branch: string; path: string }) {
   const file = `https://github.com/${options.owner}/${options.repo}/blob/${encodeURIComponent(
     options.branch,
   )}/${options.path.split("/").map(encodeURIComponent).join("/")}`;
   // Backticks in a file name would close the code span early.
   const shown = options.path.replace(/`/g, "'");
+  return `[\`${shown}\`](${file})`;
+}
+
+export function discussionBody(options: {
+  owner: string;
+  repo: string;
+  branch: string;
+  path: string;
+  /** `pageHash(path)`, so the published page's comments land here too. */
+  hash?: string;
+}): string {
   return [
-    `Conversation about the note [\`${shown}\`](${file}), started in [ForkLeaf](https://www.forkleaf.in).`,
+    `Conversation about the note ${fileLink(options)}, started in [ForkLeaf](https://www.forkleaf.in).`,
     "",
     noteMarker(options.path),
+    ...(options.hash ? [pageHashMarker(options.hash)] : []),
   ].join("\n");
+}
+
+/** The opening post of a thread about one passage: the passage, quoted. */
+export function passageBody(options: {
+  owner: string;
+  repo: string;
+  branch: string;
+  path: string;
+  quote: string;
+}): string {
+  const quoted = options.quote
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+  return [
+    `About this passage in ${fileLink(options)}, discussed in [ForkLeaf](https://www.forkleaf.in):`,
+    "",
+    quoted,
+    "",
+    passageMarker(options.path, options.quote),
+  ].join("\n");
+}
+
+/** A passage thread's title: the start of the passage, then the note. */
+export function passageTitle(quote: string, noteTitle: string): string {
+  const flat = quote.replace(/\s+/g, " ").trim();
+  const start = flat.length > 60 ? `${flat.slice(0, 57).trimEnd()}…` : flat;
+  return `“${start}” — ${noteTitle}`.slice(0, MAX_DISCUSSION_TITLE);
 }
 
 // ─── GraphQL ───────────────────────────────────────────────────────────────
@@ -263,7 +356,7 @@ const THREAD_QUERY = `
  * is behind is not a reason to show nothing.
  */
 const LOOKUP_QUERY = `
-  query ForkLeafNoteLookup($owner: String!, $repo: String!, $search: String!) {
+  query ForkLeafNoteLookup($owner: String!, $repo: String!, $search: String!, $pageSearch: String!) {
     repository(owner: $owner, name: $repo) {
       ${REPO_FIELDS}
       discussions(first: 50, orderBy: { field: UPDATED_AT, direction: DESC }) {
@@ -271,6 +364,9 @@ const LOOKUP_QUERY = `
       }
     }
     search(type: DISCUSSION, query: $search, first: 10) {
+      nodes { ... on Discussion { number body repository { nameWithOwner } } }
+    }
+    pages: search(type: DISCUSSION, query: $pageSearch, first: 10) {
       nodes { ... on Discussion { number body repository { nameWithOwner } } }
     }
   }
@@ -284,6 +380,17 @@ const CREATE_MUTATION = `
   }
 `;
 
+/** What a thread in a list needs: enough to show it and to tell if it is unread. */
+const SUMMARY_FIELDS = `
+  id number title url body createdAt locked isAnswered viewerDidAuthor
+  author { login avatarUrl url }
+  category { ${CATEGORY_FIELDS} }
+  comments(last: 1) {
+    totalCount
+    nodes { createdAt viewerDidAuthor replies(last: 1) { nodes { createdAt viewerDidAuthor } } }
+  }
+`;
+
 /** Every discussion, newest activity first, optionally in one category. */
 const LOUNGE_QUERY = `
   query ForkLeafLounge($owner: String!, $repo: String!, $categoryId: ID, $after: String) {
@@ -291,15 +398,7 @@ const LOUNGE_QUERY = `
       ${REPO_FIELDS}
       discussions(first: 40, after: $after, categoryId: $categoryId, orderBy: { field: UPDATED_AT, direction: DESC }) {
         pageInfo { hasNextPage endCursor }
-        nodes {
-          id number title url body createdAt locked isAnswered viewerDidAuthor
-          author { login avatarUrl url }
-          category { ${CATEGORY_FIELDS} }
-          comments(last: 1) {
-            totalCount
-            nodes { createdAt viewerDidAuthor replies(last: 1) { nodes { createdAt viewerDidAuthor } } }
-          }
-        }
+        nodes { ${SUMMARY_FIELDS} }
       }
     }
   }
@@ -420,6 +519,9 @@ interface LookupResponse {
   search: {
     nodes: ({ number?: number; body?: string; repository?: { nameWithOwner: string } } | null)[];
   } | null;
+  pages?: {
+    nodes: ({ number?: number; body?: string; repository?: { nameWithOwner: string } } | null)[];
+  } | null;
 }
 
 /** Maps GraphQL's error `type` onto the codes the rest of the app branches on. */
@@ -503,6 +605,7 @@ function toThread(thread: ApiThread): NoteDiscussionDto {
     createdAt: thread.createdAt ?? "",
     viewerDidAuthor: thread.viewerDidAuthor ?? false,
     notePath: notePathOf(thread.body),
+    quote: passageOf(thread.body)?.quote ?? null,
     comments: thread.comments.nodes.filter((c): c is ApiComment => c !== null).map(toComment),
     commentCount: thread.comments.totalCount,
   };
@@ -545,18 +648,20 @@ export async function findNoteConversation(
   options: { owner: string; repo: string; path: string; knownNumber?: number },
 ): Promise<NoteConversationDto> {
   const { owner, repo, path, knownNumber } = options;
+  const hash = await pageHash(path);
 
   if (knownNumber !== undefined) {
     const known = await readThread(gql, owner, repo, knownNumber);
-    if (known.thread && isNoteDiscussion(known.thread.body, path)) {
+    if (known.thread && isConversationFor(known.thread.body, path, hash)) {
       return { repo: known.repo, discussion: toThread(known.thread) };
     }
   }
 
   const search = `repo:${owner}/${repo} in:body "forkleaf:note ${encodeURIComponent(path)}"`;
+  const pageSearch = `repo:${owner}/${repo} in:body "${hash}"`;
   const data = await gql<LookupResponse>(
     LOOKUP_QUERY,
-    { owner, repo, search },
+    { owner, repo, search, pageSearch },
     { allowPartial: true },
   );
   if (!data.repository) throw missingRepository(owner, repo);
@@ -564,7 +669,7 @@ export async function findNoteConversation(
   const fullName = `${owner}/${repo}`.toLowerCase();
   const candidates = [
     ...data.repository.discussions.nodes,
-    ...(data.search?.nodes ?? []).filter(
+    ...[...(data.search?.nodes ?? []), ...(data.pages?.nodes ?? [])].filter(
       (n) => n?.repository?.nameWithOwner.toLowerCase() === fullName,
     ),
   ];
@@ -575,7 +680,7 @@ export async function findNoteConversation(
     .filter((n): n is { number: number; body: string } =>
       Boolean(n && typeof n.number === "number" && typeof n.body === "string"),
     )
-    .filter((n) => isNoteDiscussion(n.body, path))
+    .filter((n) => isConversationFor(n.body, path, hash))
     .map((n) => n.number)
     .sort((a, b) => a - b);
 
@@ -650,6 +755,7 @@ function toSummary(thread: ApiThreadSummary): ThreadSummaryDto {
     answered: thread.isAnswered ?? false,
     locked: thread.locked,
     notePath: notePathOf(thread.body),
+    quote: passageOf(thread.body)?.quote ?? null,
   };
 }
 
@@ -702,4 +808,61 @@ export async function setDiscussionAnswer(
     { id: input.commentId },
     { write: true },
   );
+}
+
+// ─── Threads about passages ─────────────────────────────────────────────────
+
+/**
+ * Finding the threads opened on passages of one note, the same two ways a
+ * note's own conversation is found: the most recently active discussions,
+ * and search for the marker.
+ */
+const PASSAGES_QUERY = `
+  query ForkLeafPassages($owner: String!, $repo: String!, $search: String!) {
+    repository(owner: $owner, name: $repo) {
+      discussions(first: 50, orderBy: { field: UPDATED_AT, direction: DESC }) {
+        nodes { ${SUMMARY_FIELDS} }
+      }
+    }
+    search(type: DISCUSSION, query: $search, first: 20) {
+      nodes { ... on Discussion { ${SUMMARY_FIELDS} repository { nameWithOwner } } }
+    }
+  }
+`;
+
+interface PassagesResponse {
+  repository: { discussions: { nodes: (ApiThreadSummary | null)[] } } | null;
+  search: {
+    nodes: ((ApiThreadSummary & { repository?: { nameWithOwner: string } }) | null)[];
+  } | null;
+}
+
+/** Every thread about a passage of `path`, newest activity first. */
+export async function findPassageThreads(
+  gql: GraphQLRunner,
+  options: { owner: string; repo: string; path: string },
+): Promise<ThreadSummaryDto[]> {
+  const { owner, repo, path } = options;
+  const search = `repo:${owner}/${repo} in:body "forkleaf:passage ${encodeURIComponent(path)}"`;
+  const data = await gql<PassagesResponse>(
+    PASSAGES_QUERY,
+    { owner, repo, search },
+    { allowPartial: true },
+  );
+  if (!data.repository) throw missingRepository(owner, repo);
+
+  const fullName = `${owner}/${repo}`.toLowerCase();
+  const byNumber = new Map<number, ThreadSummaryDto>();
+  const candidates = [
+    ...data.repository.discussions.nodes,
+    ...(data.search?.nodes ?? []).filter(
+      (n) => n?.repository?.nameWithOwner?.toLowerCase() === fullName,
+    ),
+  ];
+  for (const node of candidates) {
+    if (!node || typeof node.number !== "number" || typeof node.body !== "string") continue;
+    if (passageOf(node.body)?.path !== path) continue;
+    byNumber.set(node.number, toSummary(node));
+  }
+  return [...byNumber.values()].sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt));
 }

@@ -5,8 +5,14 @@ import {
   codeForGraphQLType,
   discussionBody,
   emojiFromHtml,
+  isConversationFor,
   isNoteDiscussion,
   notePathOf,
+  pageHash,
+  passageBody,
+  passageMarker,
+  passageOf,
+  passageTitle,
   noteMarker,
   pickCategory,
   type DiscussionCategoryDto,
@@ -629,5 +635,123 @@ describe("setDiscussionAnswer", () => {
       client.setDiscussionAnswer({ commentId: "DC_1", answer: true }),
     ).rejects.toBeInstanceOf(GitHubError);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── v3: passages and published pages ───────────────────────────────────────
+
+describe("passage markers", () => {
+  it("round-trips the note and the passage", () => {
+    const body = `x\n${passageMarker("ops/run book.md", "Rotate keys\nmonthly.")}`;
+    expect(passageOf(body)).toEqual({ path: "ops/run book.md", quote: "Rotate keys\nmonthly." });
+    expect(notePathOf(body)).toBe("ops/run book.md");
+  });
+
+  it("cannot be closed early by the passage", () => {
+    expect(passageMarker("a.md", "evil --> <script>").match(/-->/g)).toHaveLength(1);
+  });
+
+  it("is not mistaken for the note's own conversation", () => {
+    expect(isNoteDiscussion(passageMarker("a.md", "q"), "a.md")).toBe(false);
+  });
+
+  it("opens with the passage quoted, and titles the thread by it", () => {
+    const body = passageBody({
+      owner: "o",
+      repo: "r",
+      branch: "main",
+      path: "a.md",
+      quote: "one\ntwo",
+    });
+    expect(body).toContain("> one\n> two");
+    expect(passageOf(body)).toEqual({ path: "a.md", quote: "one\ntwo" });
+    expect(passageTitle("short", "Runbook")).toBe("“short” — Runbook");
+    expect(passageTitle("x".repeat(100), "Runbook")).toBe(`“${"x".repeat(57)}…” — Runbook`);
+  });
+});
+
+describe("the published page's hash", () => {
+  it("is the SHA-1 giscus uses — checked against a discussion giscus made on github.com", async () => {
+    expect(await pageHash("posts/3rd-post/")).toBe("3ee9a1e53a03c03759a931fc46963d56e74fcabd");
+  });
+
+  it("goes into a new conversation's opening post", async () => {
+    const hash = await pageHash("a.md");
+    const body = discussionBody({ owner: "o", repo: "r", branch: "main", path: "a.md", hash });
+    expect(body).toContain(`<!-- sha1: ${hash} -->`);
+    expect(isConversationFor(body, "a.md", hash)).toBe(true);
+  });
+
+  it("lets a note adopt the discussion giscus opened for its page", async () => {
+    const hash = await pageHash("a.md");
+    const giscusBody = `# a.md\n\nhttps://me.github.io/notes/a.html\n\n<!-- sha1: ${hash} -->`;
+    const { client, calls } = fakeGraphQL({
+      ForkLeafNoteLookup: () =>
+        ok({
+          repository: { ...repoFields, discussions: { nodes: [] } },
+          search: { nodes: [] },
+          pages: {
+            nodes: [{ number: 31, body: giscusBody, repository: { nameWithOwner: "octo/notes" } }],
+          },
+        }),
+      ForkLeafNoteThread: () =>
+        ok({
+          repository: { ...repoFields, discussion: { ...thread(31, "a.md"), body: giscusBody } },
+        }),
+    });
+
+    const found = await client.findNoteConversation({ owner: "octo", repo: "notes", path: "a.md" });
+
+    expect(calls[0]?.variables.pageSearch).toBe(`repo:octo/notes in:body "${hash}"`);
+    expect(found.discussion?.number).toBe(31);
+  });
+});
+
+describe("findPassageThreads", () => {
+  it("finds the threads about passages of one note, newest first", async () => {
+    const { client } = fakeGraphQL({
+      ForkLeafPassages: () =>
+        ok({
+          repository: {
+            discussions: {
+              nodes: [
+                summary(1, { body: passageMarker("a.md", "first") }),
+                summary(2, { body: passageMarker("b.md", "other note") }),
+                summary(3, { body: noteMarker("a.md") }),
+              ],
+            },
+          },
+          search: {
+            nodes: [
+              {
+                ...summary(4, {
+                  body: passageMarker("a.md", "older"),
+                  comments: {
+                    totalCount: 1,
+                    nodes: [{ createdAt: "2026-10-05T00:00:00Z", viewerDidAuthor: false }],
+                  },
+                }),
+                repository: { nameWithOwner: "octo/notes" },
+              },
+              {
+                ...summary(1, { body: passageMarker("a.md", "first") }),
+                repository: { nameWithOwner: "octo/notes" },
+              },
+              {
+                ...summary(9, { body: passageMarker("a.md", "fork") }),
+                repository: { nameWithOwner: "evil/fork" },
+              },
+            ],
+          },
+        }),
+    });
+
+    const found = await client.findPassageThreads({ owner: "octo", repo: "notes", path: "a.md" });
+
+    expect(found.map((t) => [t.number, t.quote])).toEqual([
+      [4, "older"],
+      [1, "first"],
+    ]);
+    expect(found[1]?.notePath).toBe("a.md");
   });
 });
