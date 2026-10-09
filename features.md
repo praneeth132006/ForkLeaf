@@ -47,6 +47,7 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] Connect an AI assistant in one step
 - [x] A documentation page for every feature
 - [x] Talk about a note with collaborators, in GitHub Discussions
+- [x] The Lounge: every conversation as channels, answers, and threads saved as notes
 
 What comes next is tracked in [future-implementations.md](future-implementations.md).
 
@@ -680,6 +681,26 @@ messages are checked every 15 seconds while Chat is open and every minute
 otherwise, never while the tab is in the background. Discussions must be
 switched on in the repository's settings, and the Chat tab links there when it
 is off. Encrypted notes never get a conversation.
+
+### The Lounge
+
+⌘K → **Open the Lounge**, or the Lounge button in the Chat tab, shows every
+conversation in the notebook: the ones about notes and the ones people started
+on github.com.
+
+- **Channels** are the repository's Discussions categories, each with an unread
+  count. **Unanswered** lists questions nobody has answered yet.
+- **Threads** show unread ones in bold, which are answered, which are about a
+  note, and which are locked. **Older threads** loads more.
+- **A thread** opens with its first post and a line above what is new since you
+  last read it. **Reply**, **Mark as answer** in Q&A-style categories, **Open
+  note** and **Save as note**.
+- **New thread** starts one in any channel except Polls.
+
+**Save as note** (in the Lounge or the Chat tab) writes the conversation into
+`conversations/`: who said what and when, the answer marked, and a link back.
+With the assistant set up, tick **Add a summary** for decisions, to-dos and
+open questions at the top. Nothing is sent to a model unless you tick it.
 
 ## Publishing and exporting
 

@@ -487,6 +487,56 @@ export function Conversations() {
         <strong>Features</strong>, then press <strong>Check again</strong>.
       </P>
 
+      <H2 id="lounge">The Lounge: every conversation at once</H2>
+      <P>
+        <Code>⌘K → Open the Lounge</Code>, or the Lounge button in the Chat tab, shows every
+        conversation in the notebook: the ones about notes and the ones people started on
+        github.com.
+      </P>
+      <UL>
+        <LI>
+          <strong>Channels</strong> are the repository&rsquo;s Discussions categories, each with an
+          unread count. <strong>Unanswered</strong> lists questions in Q&amp;A-style categories that
+          nobody has answered yet.
+        </LI>
+        <LI>
+          <strong>Threads</strong> show which are unread, answered, about a note, or locked.
+        </LI>
+        <LI>
+          A thread opens with its first post and a line marking what is{" "}
+          <strong>new since you were last here</strong>. From there you can reply, mark an answer,
+          open the note it is about, or save it as a note.
+        </LI>
+        <LI>
+          <strong>New thread</strong> starts one in any channel except Polls, which GitHub does not
+          let apps create.
+        </LI>
+      </UL>
+      <P>
+        The first time you open the Lounge on a device sets a starting point. Threads that were
+        quiet before then are not shown as unread, so a busy repository doesn&rsquo;t open with
+        hundreds of old threads marked new.
+      </P>
+
+      <H2 id="answers">Answers</H2>
+      <P>
+        In a category that takes answers, such as Q&amp;A, the person who asked and the
+        repository&rsquo;s maintainers see <strong>Mark as answer</strong> under each reply. This
+        works in the Chat tab and the Lounge, and it is the same answer GitHub shows.
+      </P>
+
+      <H2 id="save">Save a conversation as a note</H2>
+      <P>
+        <strong>Save as note</strong> writes the conversation into <Code>conversations/</Code>:
+        every message in order, who said it and when, the answer marked, and a link back to the
+        discussion. Messages a maintainer hid are left out.
+      </P>
+      <Note>
+        If the assistant is set up, you can tick <strong>Add a summary</strong> to put decisions,
+        to-dos and open questions at the top. This sends the conversation to your model provider
+        with your own key, and it appears in Receipts. It is off unless you tick it.
+      </Note>
+
       <H2 id="who">Who can take part, and who can read it</H2>
       <Table
         head={["Repository", "Who can read", "Who can write"]}

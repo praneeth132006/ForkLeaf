@@ -693,6 +693,15 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new", "github"],
       },
       {
+        id: "lounge",
+        title: "The Lounge",
+        summary:
+          "Every conversation in the notebook as channels and threads, with unread counts, unanswered questions and answers you can mark. Save any thread as a note, with an optional summary by your own model.",
+        how: "⌘K → Open the Lounge, or the Lounge button in the Chat tab",
+        docs: "/docs/conversations#lounge",
+        tags: ["new", "github"],
+      },
+      {
         id: "mcp",
         title: "Use your notebook from an AI assistant",
         summary:
