@@ -25,8 +25,13 @@ import {
  * the discussion it found last time and the read is usually one request.
  */
 
-/** A GraphQL node id: base64-ish, with the type prefix GitHub puts on it. */
-const NODE_ID = /^[\w=-]{1,120}$/;
+/**
+ * A GraphQL node id. Two shapes: the current `DC_kwDO…` (URL-safe base64 with
+ * a type prefix) and the legacy plain base64 older comments still carry,
+ * which can contain `+` and `/`. It travels as a GraphQL variable, never in a
+ * URL or a query string, so this is about rejecting junk, not escaping.
+ */
+const NODE_ID = /^[\w=+/-]{1,200}$/;
 
 /** A repository path, the way notes are addressed everywhere else. */
 function readPath(value: unknown): string {

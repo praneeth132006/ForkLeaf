@@ -168,6 +168,22 @@ describe("POST /api/gh/discussions", () => {
     expect(addDiscussionComment.mock.calls[0]?.[0].replyToId).toBe("DC_kwDOabc123");
   });
 
+  it("accepts the legacy base64 ids older comments still carry", async () => {
+    // Seen on github.com/vercel/next.js: plain base64, which can hold `+` and `/`.
+    findNoteConversation.mockResolvedValue({ repo, discussion });
+    addDiscussionComment.mockResolvedValue({ id: "c3" });
+
+    const { status } = await post({
+      ...message,
+      replyTo: "MDE3OkRpc2N1c3Npb25+Db21/tZW50MTc2NjQwMg==",
+    });
+
+    expect(status).toBe(200);
+    expect(addDiscussionComment.mock.calls[0]?.[0].replyToId).toBe(
+      "MDE3OkRpc2N1c3Npb25+Db21/tZW50MTc2NjQwMg==",
+    );
+  });
+
   it("refuses an empty message, an oversized one, and a malformed reply target", async () => {
     expect((await post({ ...message, body: "   " })).status).toBe(400);
     expect((await post({ ...message, body: "x".repeat(70_000) })).status).toBe(400);
