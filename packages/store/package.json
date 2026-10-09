@@ -17,7 +17,7 @@
     "idb": "^8.0.3"
   },
   "devDependencies": {
-    "@types/node": "^24",
+    "@types/node": "^26",
     "typescript": "^5.9.3"
   }
 }
