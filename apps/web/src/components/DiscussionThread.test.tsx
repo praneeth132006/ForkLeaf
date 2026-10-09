@@ -179,3 +179,42 @@ describe("Composer", () => {
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
   });
 });
+
+describe("ThreadMessages — links to notes", () => {
+  const links = {
+    resolve: (link: { target: string }) =>
+      link.target === "runbook"
+        ? { href: "/editor?note=ops/runbook.md", exists: true, title: "ops/runbook.md" }
+        : { href: "#missing", exists: false, title: "No note" },
+    open: vi.fn(),
+  };
+
+  it("opens the note a [[link]] in a message names", () => {
+    render(
+      <ThreadMessages
+        discussion={discussion([message("a", { body: "See [[runbook]] and [[nowhere]]." })])}
+        links={links as never}
+      />,
+    );
+    const found = screen.getByRole("link", { name: "runbook" });
+    expect(found.getAttribute("href")).toBe("/editor?note=ops/runbook.md");
+    expect(found.className).toContain("fl-wikilink-found");
+    expect(screen.getByRole("link", { name: "nowhere" }).className).toContain(
+      "fl-wikilink-missing",
+    );
+
+    fireEvent.click(found);
+    expect(links.open).toHaveBeenCalledWith("runbook");
+  });
+
+  it("leaves ordinary links alone", () => {
+    render(
+      <ThreadMessages
+        discussion={discussion([message("a", { body: "[docs](https://example.com)" })])}
+        links={links as never}
+      />,
+    );
+    fireEvent.click(screen.getByRole("link", { name: "docs" }));
+    expect(links.open).not.toHaveBeenCalled();
+  });
+});

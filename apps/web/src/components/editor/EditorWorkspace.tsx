@@ -1706,6 +1706,27 @@ export function EditorWorkspace() {
   });
 
   /**
+   * `[[links]]` in a conversation, resolved against this notebook and opened
+   * in the editor — closing the Lounge on the way, since the note is what the
+   * reader asked to see.
+   */
+  const threadLinks = useMemo(
+    () => ({
+      resolve: links.resolve,
+      open: (target: string) => {
+        const path = links.pathFor(target);
+        if (!path) {
+          setNotice(`There is no note called “${target}” in this notebook yet.`);
+          return;
+        }
+        setDialog(null);
+        void notebook.openNote(path);
+      },
+    }),
+    [links, notebook],
+  );
+
+  /**
    * The notes around the one being written, for ⌘K to weigh.
    *
    * The link graph is built for backlinks and answers this for free: a note
@@ -5450,6 +5471,7 @@ export function EditorWorkspace() {
                   onClose={hideSide}
                   onOpenLounge={conversationTarget ? () => setDialog("lounge") : undefined}
                   onSaveAsNote={setSavingThread}
+                  links={threadLinks}
                 />
               </div>
             )}
@@ -5792,6 +5814,7 @@ export function EditorWorkspace() {
             setDialog(null);
             setSavingThread(discussion);
           }}
+          links={threadLinks}
         />
       )}
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import type { DiscussionCommentDto, NoteDiscussionDto } from "@forkleaf/github-client";
-import { markdownToHtml } from "@forkleaf/markdown-engine";
+import { markdownToHtml, type WikilinkResolver } from "@forkleaf/markdown-engine";
 import { firstNewMessageId } from "@/lib/conversation";
 import { relativeTime } from "@/lib/relative-time";
 
@@ -12,6 +12,20 @@ import { relativeTime } from "@/lib/relative-time";
  */
 
 // ─── The messages ──────────────────────────────────────────────────────────
+
+/**
+ * How `[[links]]` in a message resolve, and what following one does.
+ *
+ * People write `[[the other note]]` in a conversation about a notebook as
+ * naturally as in the notebook itself, so a link in a message is a link to a
+ * note — shown as found or missing, and opened in the editor when clicked.
+ */
+export interface ThreadLinks {
+  resolve: WikilinkResolver;
+  open: (target: string) => void;
+}
+
+const LinksContext = createContext<ThreadLinks | null>(null);
 
 export interface ThreadMessagesProps {
   discussion: NoteDiscussionDto;
@@ -26,6 +40,8 @@ export interface ThreadMessagesProps {
   onReply?: (comment: DiscussionCommentDto) => void;
   /** Marks or unmarks an answer. Resolves to a reason it did not, or null. */
   onAnswer?: (comment: DiscussionCommentDto, answer: boolean) => Promise<string | null>;
+  /** Makes `[[links]]` open notes. Without it they render, and go nowhere. */
+  links?: ThreadLinks;
 }
 
 /** Removes ForkLeaf's own marker, so it is not mistaken for content. */
@@ -39,6 +55,7 @@ export function ThreadMessages({
   showOpening = false,
   onReply,
   onAnswer,
+  links,
 }: ThreadMessagesProps) {
   const [answering, setAnswering] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -69,92 +86,104 @@ export function ThreadMessages({
   );
 
   return (
-    <ol className="space-y-4">
-      {failure && (
-        <li role="alert" className="text-[11.5px] text-[var(--fl-danger)]">
-          {failure}
-        </li>
-      )}
+    <LinksContext.Provider value={links ?? null}>
+      <ol
+        className="space-y-4"
+        onClick={(event) => {
+          if (!links) return;
+          const anchor = (event.target as Element).closest?.("a[data-wikilink]");
+          const target = anchor?.getAttribute("data-wikilink");
+          if (!target) return;
+          event.preventDefault();
+          links.open(target);
+        }}
+      >
+        {failure && (
+          <li role="alert" className="text-[11.5px] text-[var(--fl-danger)]">
+            {failure}
+          </li>
+        )}
 
-      {opening && (
-        <li>
-          <Message
-            message={{
-              id: `${discussion.id}-opening`,
-              author: discussion.author,
-              body: opening,
-              createdAt: discussion.createdAt,
-              url: discussion.url,
-              isAnswer: false,
-              isMinimized: false,
-              viewerDidAuthor: discussion.viewerDidAuthor,
-              replies: [],
-              replyCount: 0,
-              canMarkAnswer: false,
-              canUnmarkAnswer: false,
-            }}
-            label="Opening post"
-          />
-        </li>
-      )}
-
-      {discussion.commentCount > discussion.comments.length && (
-        <li className="text-center text-[11.5px] text-[var(--fl-muted)]">
-          <a
-            href={discussion.url}
-            target="_blank"
-            rel="noreferrer"
-            className="underline-offset-2 hover:underline"
-          >
-            {discussion.commentCount - discussion.comments.length} earlier messages on GitHub ↗
-          </a>
-        </li>
-      )}
-
-      {discussion.comments.flatMap((comment) => {
-        const items = [];
-        if (comment.id === firstNew) items.push(divider(`new-${comment.id}`));
-        items.push(
-          <li key={comment.id}>
+        {opening && (
+          <li>
             <Message
-              message={comment}
-              onReply={onReply ? () => onReply(comment) : undefined}
-              onAnswer={
-                answer &&
-                discussion.answerable &&
-                (comment.canMarkAnswer || comment.canUnmarkAnswer)
-                  ? (value) => void answer(comment, value)
-                  : undefined
-              }
-              answering={answering === comment.id}
+              message={{
+                id: `${discussion.id}-opening`,
+                author: discussion.author,
+                body: opening,
+                createdAt: discussion.createdAt,
+                url: discussion.url,
+                isAnswer: false,
+                isMinimized: false,
+                viewerDidAuthor: discussion.viewerDidAuthor,
+                replies: [],
+                replyCount: 0,
+                canMarkAnswer: false,
+                canUnmarkAnswer: false,
+              }}
+              label="Opening post"
             />
-            {(comment.replies.length > 0 || comment.replyCount > comment.replies.length) && (
-              <ol className="mt-2 ml-3 space-y-3 border-l border-[var(--fl-border)] pl-3">
-                {comment.replyCount > comment.replies.length && (
-                  <li className="text-[11.5px] text-[var(--fl-muted)]">
-                    <a
-                      href={comment.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline-offset-2 hover:underline"
-                    >
-                      {comment.replyCount - comment.replies.length} earlier replies on GitHub ↗
-                    </a>
-                  </li>
-                )}
-                {comment.replies.flatMap((reply) => [
-                  ...(reply.id === firstNew ? [divider(`new-${reply.id}`)] : []),
-                  <li key={reply.id}>
-                    <Message message={reply} />
-                  </li>,
-                ])}
-              </ol>
-            )}
-          </li>,
-        );
-        return items;
-      })}
-    </ol>
+          </li>
+        )}
+
+        {discussion.commentCount > discussion.comments.length && (
+          <li className="text-center text-[11.5px] text-[var(--fl-muted)]">
+            <a
+              href={discussion.url}
+              target="_blank"
+              rel="noreferrer"
+              className="underline-offset-2 hover:underline"
+            >
+              {discussion.commentCount - discussion.comments.length} earlier messages on GitHub ↗
+            </a>
+          </li>
+        )}
+
+        {discussion.comments.flatMap((comment) => {
+          const items = [];
+          if (comment.id === firstNew) items.push(divider(`new-${comment.id}`));
+          items.push(
+            <li key={comment.id}>
+              <Message
+                message={comment}
+                onReply={onReply ? () => onReply(comment) : undefined}
+                onAnswer={
+                  answer &&
+                  discussion.answerable &&
+                  (comment.canMarkAnswer || comment.canUnmarkAnswer)
+                    ? (value) => void answer(comment, value)
+                    : undefined
+                }
+                answering={answering === comment.id}
+              />
+              {(comment.replies.length > 0 || comment.replyCount > comment.replies.length) && (
+                <ol className="mt-2 ml-3 space-y-3 border-l border-[var(--fl-border)] pl-3">
+                  {comment.replyCount > comment.replies.length && (
+                    <li className="text-[11.5px] text-[var(--fl-muted)]">
+                      <a
+                        href={comment.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline-offset-2 hover:underline"
+                      >
+                        {comment.replyCount - comment.replies.length} earlier replies on GitHub ↗
+                      </a>
+                    </li>
+                  )}
+                  {comment.replies.flatMap((reply) => [
+                    ...(reply.id === firstNew ? [divider(`new-${reply.id}`)] : []),
+                    <li key={reply.id}>
+                      <Message message={reply} />
+                    </li>,
+                  ])}
+                </ol>
+              )}
+            </li>,
+          );
+          return items;
+        })}
+      </ol>
+    </LinksContext.Provider>
   );
 }
 
@@ -172,6 +201,7 @@ function Message({
   label?: string;
 }) {
   const [shown, setShown] = useState(!message.isMinimized);
+  const links = useContext(LinksContext);
   const login = message.author?.login ?? "ghost";
 
   return (
@@ -228,7 +258,12 @@ function Message({
             className="fl-prose fl-assistant-answer mt-0.5 text-[13px] break-words text-[var(--fl-text)]"
             // Safe: `markdownToHtml` sanitises its output. The body is somebody
             // else's Markdown, which is exactly what the sanitiser is for.
-            dangerouslySetInnerHTML={{ __html: markdownToHtml(message.body) }}
+            dangerouslySetInnerHTML={{
+              __html: markdownToHtml(
+                message.body,
+                links ? { resolveWikilink: links.resolve } : undefined,
+              ),
+            }}
           />
         ) : (
           <button

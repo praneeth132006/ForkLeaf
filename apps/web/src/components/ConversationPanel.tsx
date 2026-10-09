@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { DiscussionCommentDto, NoteDiscussionDto } from "@forkleaf/github-client";
 import type { ConversationError, ConversationState } from "@/hooks/useNoteConversation";
-import { Composer, ThreadMessages } from "@/components/DiscussionThread";
+import { Composer, ThreadMessages, type ThreadLinks } from "@/components/DiscussionThread";
 
 /**
  * The conversation about the open note.
@@ -33,6 +33,8 @@ export interface ConversationPanelProps {
   onOpenLounge?: () => void;
   /** Keeps this conversation as a note. */
   onSaveAsNote?: (discussion: NoteDiscussionDto) => void;
+  /** Makes `[[links]]` in messages open notes. */
+  links?: ThreadLinks;
 }
 
 export function ConversationPanel({
@@ -46,6 +48,7 @@ export function ConversationPanel({
   onClose,
   onOpenLounge,
   onSaveAsNote,
+  links,
 }: ConversationPanelProps) {
   const [replyTo, setReplyTo] = useState<DiscussionCommentDto | null>(null);
   const [focusKey, setFocusKey] = useState(0);
@@ -157,6 +160,7 @@ export function ConversationPanel({
         ) : (
           <ThreadMessages
             discussion={discussion}
+            {...(links ? { links } : {})}
             onReply={
               cannotWrite
                 ? undefined

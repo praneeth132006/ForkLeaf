@@ -8,7 +8,7 @@ import type {
   ThreadSummaryDto,
 } from "@forkleaf/github-client";
 import { Dialog } from "@/components/Dialog";
-import { Composer, ThreadMessages } from "@/components/DiscussionThread";
+import { Composer, ThreadMessages, type ThreadLinks } from "@/components/DiscussionThread";
 import { DiscussionsOff, Empty } from "@/components/ConversationPanel";
 import type { Lounge } from "@/hooks/useLounge";
 import { relativeTime } from "@/lib/relative-time";
@@ -31,6 +31,8 @@ export interface LoungeDialogProps {
   onOpenNote: (path: string) => void;
   /** Keeps a thread as a note. */
   onSaveAsNote: (discussion: NoteDiscussionDto) => void;
+  /** Makes `[[links]]` in messages open notes. */
+  links?: ThreadLinks;
 }
 
 /** Categories a thread can be started in: GitHub will not let the API open a poll. */
@@ -44,6 +46,7 @@ export function LoungeDialog({
   onClose,
   onOpenNote,
   onSaveAsNote,
+  links,
 }: LoungeDialogProps) {
   const [composing, setComposing] = useState(false);
   const { list, threads, unread, channel, filter, selected, thread } = lounge;
@@ -229,6 +232,7 @@ export function LoungeDialog({
                 onBack={() => lounge.select(null)}
                 onOpenNote={onOpenNote}
                 onSaveAsNote={onSaveAsNote}
+                links={links}
                 fallbackTitle={threads.find((t) => t.number === selected)?.title ?? ""}
                 discussion={thread.discussion}
               />
@@ -345,6 +349,7 @@ function OpenThread({
   onBack,
   onOpenNote,
   onSaveAsNote,
+  links,
 }: {
   lounge: Lounge;
   discussion: NoteDiscussionDto | null;
@@ -353,6 +358,7 @@ function OpenThread({
   onBack: () => void;
   onOpenNote: (path: string) => void;
   onSaveAsNote: (discussion: NoteDiscussionDto) => void;
+  links?: ThreadLinks;
 }) {
   const [replyTo, setReplyTo] = useState<DiscussionCommentDto | null>(null);
   const [focusKey, setFocusKey] = useState(0);
@@ -418,6 +424,7 @@ function OpenThread({
           <ThreadMessages
             discussion={discussion}
             since={lounge.since}
+            {...(links ? { links } : {})}
             showOpening={!discussion.notePath}
             onReply={
               writable
