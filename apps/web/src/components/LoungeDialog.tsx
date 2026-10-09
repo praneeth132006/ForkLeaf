@@ -332,7 +332,9 @@ function ThreadItem({
               {thread.commentCount} {thread.commentCount === 1 ? "reply" : "replies"}
             </span>
             {thread.answered && <span className="text-[var(--fl-accent)]">✓ Answered</span>}
-            {thread.notePath && <span title={thread.notePath}>📝 Note</span>}
+            {thread.notePath && (
+              <span title={thread.notePath}>{thread.quote ? "❝ Passage" : "📝 Note"}</span>
+            )}
             {thread.locked && <span>🔒</span>}
           </span>
         </span>
@@ -409,6 +411,14 @@ function OpenThread({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 text-[13px]">
+        {discussion?.quote && (
+          <blockquote
+            aria-label="The passage"
+            className="mb-4 border-l-2 border-[var(--fl-accent)] pl-3 text-[13px] text-[var(--fl-text)] italic"
+          >
+            {discussion.quote}
+          </blockquote>
+        )}
         {lounge.thread.status === "loading" && !discussion ? (
           <Empty>Loading the thread…</Empty>
         ) : !discussion ? (
@@ -425,6 +435,8 @@ function OpenThread({
             discussion={discussion}
             since={lounge.since}
             {...(links ? { links } : {})}
+            // ForkLeaf's own opening posts say nothing the header and the
+            // quoted passage above do not.
             showOpening={!discussion.notePath}
             onReply={
               writable

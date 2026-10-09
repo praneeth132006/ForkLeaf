@@ -368,3 +368,18 @@ describe("LoungeDialog — a new thread", () => {
     expect(screen.queryByRole("button", { name: "New thread" })).toBeNull();
   });
 });
+
+describe("LoungeDialog — passages", () => {
+  it("marks passage threads in the list", () => {
+    const threads = [summary(7, { notePath: "a.md", quote: "Rotate keys" })];
+    setup(fakeLounge({ threads, list: { ...fakeLounge().list, threads } }));
+    expect(screen.getByRole("region", { name: "Threads" }).textContent).toContain("❝ Passage");
+  });
+
+  it("quotes the passage above its thread", () => {
+    setup(opened({ notePath: "a.md", quote: "Rotate keys monthly." }));
+    expect(screen.getByRole("blockquote", { name: "The passage" }).textContent).toBe(
+      "Rotate keys monthly.",
+    );
+  });
+});

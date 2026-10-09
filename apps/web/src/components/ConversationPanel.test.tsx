@@ -320,3 +320,82 @@ describe("ConversationPanel — v2 actions", () => {
     expect(setAnswer).toHaveBeenCalledWith("a", true);
   });
 });
+
+describe("ConversationPanel — passages", () => {
+  const passage = (number: number, quote: string, extra: Record<string, unknown> = {}) =>
+    ({
+      id: `D_${number}`,
+      number,
+      title: "t",
+      url: "",
+      category: { id: "C", name: "General", slug: "general" },
+      author: null,
+      createdAt: "2026-10-01T00:00:00Z",
+      lastActivityAt: "2026-10-02T00:00:00Z",
+      lastByViewer: false,
+      commentCount: 2,
+      answered: false,
+      locked: false,
+      notePath: "a.md",
+      quote,
+      ...extra,
+    }) as never;
+
+  it("lists the passages talked about, new ones marked, rewritten ones said so", () => {
+    const onOpenPassage = vi.fn();
+    const onShowPassage = vi.fn();
+    setup({
+      passages: [passage(8, "Rotate keys monthly"), passage(9, "Old wording", { answered: true })],
+      passageUnread: new Set([8]),
+      passageStatus: (quote) => (quote === "Old wording" ? "changed" : "here"),
+      onOpenPassage,
+      onShowPassage,
+    });
+
+    const list = screen.getByRole("region", { name: "Passages" });
+    expect(list.textContent).toContain("Passages · 2");
+    expect(list.textContent).toContain("New");
+    expect(list.textContent).toContain("Passage changed since");
+    // Only a passage still in the note can be shown in it.
+    expect(screen.getAllByRole("button", { name: "Show in note" })).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /Rotate keys monthly/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Show in note" }));
+    expect((onOpenPassage.mock.calls[0]?.[0] as { number: number }).number).toBe(8);
+    expect(onShowPassage).toHaveBeenCalledWith("Rotate keys monthly");
+  });
+
+  it("asks about a chosen passage, and starts its own thread", async () => {
+    const sendPassage = vi.fn().mockResolvedValue(null);
+    const onCancelPassage = vi.fn();
+    setup({ pendingPassage: "Rotate keys monthly", sendPassage, onCancelPassage });
+
+    expect(screen.getByText("Rotate keys monthly")).toBeTruthy();
+    const box = screen.getByRole("textbox", { name: "Message" });
+    expect(document.activeElement).toBe(box);
+
+    fireEvent.change(box, { target: { value: "Still true?" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    });
+
+    expect(sendPassage).toHaveBeenCalledWith("Rotate keys monthly", "Still true?");
+    expect(onCancelPassage).toHaveBeenCalled();
+  });
+
+  it("lets a passage be talked about even when the note's own thread is locked", () => {
+    setup({
+      state: ready(discussion([message("a")], { locked: true })),
+      pendingPassage: "Rotate keys",
+      sendPassage: vi.fn(),
+    });
+    expect(screen.getByRole("textbox", { name: "Message" })).toBeTruthy();
+  });
+
+  it("can be talked out of a passage", () => {
+    const onCancelPassage = vi.fn();
+    setup({ pendingPassage: "Rotate keys", sendPassage: vi.fn(), onCancelPassage });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel the passage" }));
+    expect(onCancelPassage).toHaveBeenCalled();
+  });
+});

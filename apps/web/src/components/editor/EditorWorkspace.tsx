@@ -204,6 +204,8 @@ import { useNoteConversation, type ConversationTarget } from "@/hooks/useNoteCon
 import { useLounge } from "@/hooks/useLounge";
 import { LoungeDialog } from "@/components/LoungeDialog";
 import { SaveThreadDialog } from "@/components/SaveThreadDialog";
+import { DiscussSelection } from "@/components/DiscussSelection";
+import { findQuoteRange, passageStatus } from "@/lib/passages";
 import { CONVERSATION_FOLDER, summaryRequest, threadToNote, transcriptOf } from "@/lib/thread-note";
 import type { NoteDiscussionDto } from "@forkleaf/github-client";
 import { EditorStatusBar } from "@/components/EditorStatusBar";
@@ -926,6 +928,16 @@ export function EditorWorkspace() {
     [user, workspace],
   );
   const lounge = useLounge({ target: loungeTarget, open: openDialog === "lounge" });
+  /**
+   * A passage the reader chose to talk about, waiting for its first message.
+   * Kept with the note it came from, so switching notes drops it rather than
+   * asking about one note's words in another's conversation.
+   */
+  const [pendingPassage, setPendingPassage] = useState<{ path: string; quote: string } | null>(
+    null,
+  );
+  const passageToAsk =
+    pendingPassage && pendingPassage.path === notePath ? pendingPassage.quote : null;
   /** A conversation on its way to becoming a note. */
   const [savingThread, setSavingThread] = useState<NoteDiscussionDto | null>(null);
 
@@ -2301,6 +2313,8 @@ export function EditorWorkspace() {
    * the day one is.
    */
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  /** The same element, as state: the "Discuss" button is handed it during render. */
+  const [canvasElement, setCanvasElement] = useState<HTMLDivElement | null>(null);
 
   /**
    * Rings an image once the note it is in has actually drawn it.
@@ -5207,7 +5221,13 @@ export function EditorWorkspace() {
             )}
 
             {/* ── Canvas ───────────────────────────────────────────────── */}
-            <div ref={canvasRef} className="flex min-h-0 flex-1 flex-col">
+            <div
+              ref={(element) => {
+                canvasRef.current = element;
+                setCanvasElement(element);
+              }}
+              className="flex min-h-0 flex-1 flex-col"
+            >
               {note && sealed && !opened ? (
                 isShared(note.content) ? (
                   <UnlockPanel
@@ -5472,6 +5492,33 @@ export function EditorWorkspace() {
                   onOpenLounge={conversationTarget ? () => setDialog("lounge") : undefined}
                   onSaveAsNote={setSavingThread}
                   links={threadLinks}
+                  passages={conversation.passages}
+                  passageUnread={conversation.passageUnread}
+                  passageStatus={(quote) => (note ? passageStatus(note.content, quote) : "changed")}
+                  onOpenPassage={(thread) => {
+                    lounge.select(thread.number);
+                    setDialog("lounge");
+                  }}
+                  onShowPassage={(quote) => {
+                    const range = canvasElement ? findQuoteRange(canvasElement, quote) : null;
+                    if (!range) {
+                      setNotice(
+                        "Those words are not on the page — switch view, or they were changed.",
+                      );
+                      return;
+                    }
+                    const selection = window.getSelection();
+                    selection?.removeAllRanges();
+                    selection?.addRange(range);
+                    const element =
+                      range.startContainer instanceof Element
+                        ? range.startContainer
+                        : range.startContainer.parentElement;
+                    element?.scrollIntoView({ block: "center", behavior: "smooth" });
+                  }}
+                  pendingPassage={passageToAsk}
+                  onCancelPassage={() => setPendingPassage(null)}
+                  sendPassage={conversation.sendPassage}
                 />
               </div>
             )}
@@ -5815,6 +5862,17 @@ export function EditorWorkspace() {
             setSavingThread(discussion);
           }}
           links={threadLinks}
+        />
+      )}
+
+      {conversationTarget && !focusMode && (
+        <DiscussSelection
+          root={canvasElement}
+          onDiscuss={(quote) => {
+            if (!notePath) return;
+            setPendingPassage({ path: notePath, quote });
+            showSide("chat");
+          }}
         />
       )}
 

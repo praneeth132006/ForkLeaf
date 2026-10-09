@@ -119,6 +119,7 @@ describe("useNoteConversation", () => {
       repo: "notes",
       path: "a.md",
       number: undefined,
+      passages: true,
     });
 
     // The next read passes the number back, so the server can skip the search.
@@ -362,5 +363,84 @@ describe("useNoteConversation — answers", () => {
       failure = await result.current.setAnswer("c1", true);
     });
     expect(failure).toEqual({ code: "discussions-forbidden", message: "No." });
+  });
+});
+
+describe("useNoteConversation — passages", () => {
+  const passage = (number: number, extra: Record<string, unknown> = {}) => ({
+    id: `D_${number}`,
+    number,
+    title: "“Rotate keys” — A",
+    url: "",
+    category: { id: "C", name: "General", slug: "general" },
+    author: null,
+    createdAt: "2026-10-01T00:00:00Z",
+    lastActivityAt: "2026-10-02T00:00:00Z",
+    lastByViewer: false,
+    commentCount: 1,
+    answered: false,
+    locked: false,
+    notePath: "a.md",
+    quote: "Rotate keys",
+    ...extra,
+  });
+
+  it("lists the note's passage threads and counts the unread ones", async () => {
+    readNoteConversation.mockResolvedValue({
+      ...conversation([]),
+      passages: [passage(8), passage(9, { lastByViewer: true })],
+    });
+
+    const { result } = renderHook(() => useNoteConversation({ target, active: true }));
+    await settle();
+
+    expect(result.current.passages.map((p) => p.number)).toEqual([8, 9]);
+    expect([...result.current.passageUnread]).toEqual([8]);
+    expect(result.current.unread).toBe(1);
+  });
+
+  it("keeps the last list when the passage search fails once", async () => {
+    readNoteConversation
+      .mockResolvedValueOnce({ ...conversation([]), passages: [passage(8)] })
+      .mockResolvedValueOnce({ ...conversation([]), passages: null });
+
+    const { result } = renderHook(() => useNoteConversation({ target, active: true }));
+    await settle();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_ACTIVE_MS);
+    });
+
+    expect(readNoteConversation).toHaveBeenCalledTimes(2);
+    expect(result.current.passages.map((p) => p.number)).toEqual([8]);
+  });
+
+  it("opens a thread about a passage, and reads the list again", async () => {
+    readNoteConversation.mockResolvedValue({ ...conversation([]), passages: [] });
+    sendNoteMessage.mockResolvedValue({
+      number: 20,
+      comment: comment("first", "2026-10-03T00:00:00Z", true),
+      passage: true,
+    });
+
+    const { result } = renderHook(() => useNoteConversation({ target, active: true }));
+    await settle();
+
+    let failure: unknown = "unset";
+    await act(async () => {
+      failure = await result.current.sendPassage("Rotate keys", "Still monthly?");
+    });
+    await settle();
+
+    expect(failure).toBeNull();
+    expect(sendNoteMessage).toHaveBeenCalledWith({
+      owner: "me",
+      repo: "notes",
+      branch: "main",
+      path: "a.md",
+      title: "A",
+      body: "Still monthly?",
+      passage: "Rotate keys",
+    });
+    expect(readNoteConversation).toHaveBeenCalledTimes(2);
   });
 });

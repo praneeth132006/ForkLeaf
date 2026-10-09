@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { DiscussionCommentDto, NoteDiscussionDto } from "@forkleaf/github-client";
+import type {
+  DiscussionCommentDto,
+  NoteDiscussionDto,
+  ThreadSummaryDto,
+} from "@forkleaf/github-client";
 import type { ConversationError, ConversationState } from "@/hooks/useNoteConversation";
 import { Composer, ThreadMessages, type ThreadLinks } from "@/components/DiscussionThread";
 
@@ -35,6 +39,20 @@ export interface ConversationPanelProps {
   onSaveAsNote?: (discussion: NoteDiscussionDto) => void;
   /** Makes `[[links]]` in messages open notes. */
   links?: ThreadLinks;
+
+  /** Threads about passages of the note. */
+  passages?: ThreadSummaryDto[];
+  passageUnread?: Set<number>;
+  /** Whether a passage's words are still in the note. */
+  passageStatus?: (quote: string) => "here" | "changed";
+  /** Reads a passage's thread — in the Lounge. */
+  onOpenPassage?: (thread: ThreadSummaryDto) => void;
+  /** Shows the passage in the note. */
+  onShowPassage?: (quote: string) => void;
+  /** A passage the reader chose to talk about, waiting for its first message. */
+  pendingPassage?: string | null;
+  onCancelPassage?: () => void;
+  sendPassage?: (quote: string, body: string) => Promise<ConversationError | null>;
 }
 
 export function ConversationPanel({
@@ -49,6 +67,14 @@ export function ConversationPanel({
   onOpenLounge,
   onSaveAsNote,
   links,
+  passages = [],
+  passageUnread,
+  passageStatus,
+  onOpenPassage,
+  onShowPassage,
+  pendingPassage = null,
+  onCancelPassage,
+  sendPassage,
 }: ConversationPanelProps) {
   const [replyTo, setReplyTo] = useState<DiscussionCommentDto | null>(null);
   const [focusKey, setFocusKey] = useState(0);
@@ -66,6 +92,16 @@ export function ConversationPanel({
     const element = list.current;
     if (element) element.scrollTop = element.scrollHeight;
   }, [messageCount]);
+
+  // A passage gets a thread of its own, so the note's thread being locked is
+  // no reason not to start one.
+  const cannotStart = !repo
+    ? null
+    : !repo.enabled
+      ? "Discussions is switched off for this repository."
+      : !repo.canComment
+        ? "Only this repository's collaborators can join its conversations."
+        : null;
 
   const cannotWrite = !repo
     ? null
@@ -134,6 +170,57 @@ export function ConversationPanel({
 
       {/* ── Messages ─────────────────────────────────────────────────────── */}
       <div ref={list} className="min-h-0 flex-1 overflow-y-auto px-3 py-3 text-[13px]">
+        {!unavailable && repo?.enabled && passages.length > 0 && (
+          <section aria-label="Passages" className="mb-4">
+            <h3 className="mb-1.5 text-[11px] font-semibold tracking-wide text-[var(--fl-muted)] uppercase">
+              Passages · {passages.length}
+            </h3>
+            <ul className="space-y-1.5">
+              {passages.map((thread) => {
+                const unread = passageUnread?.has(thread.number) ?? false;
+                const changed = thread.quote && passageStatus?.(thread.quote) === "changed";
+                return (
+                  <li
+                    key={thread.number}
+                    className="rounded-lg border border-[var(--fl-border)] px-2.5 py-2"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onOpenPassage?.(thread)}
+                      className="block w-full text-left"
+                    >
+                      <span
+                        className={`line-clamp-2 border-l-2 border-[var(--fl-accent)] pl-2 text-[12.5px] italic ${
+                          unread ? "font-semibold text-[var(--fl-text)]" : "text-[var(--fl-text)]"
+                        }`}
+                      >
+                        {thread.quote}
+                      </span>
+                      <span className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[11px] text-[var(--fl-muted)]">
+                        {unread && <span className="font-medium text-[var(--fl-accent)]">New</span>}
+                        <span>
+                          {thread.commentCount} {thread.commentCount === 1 ? "reply" : "replies"}
+                        </span>
+                        {thread.answered && <span>· ✓ Answered</span>}
+                        {changed && <span>· Passage changed since</span>}
+                      </span>
+                    </button>
+                    {onShowPassage && thread.quote && !changed && (
+                      <button
+                        type="button"
+                        onClick={() => onShowPassage(thread.quote!)}
+                        className="mt-1 text-[11px] text-[var(--fl-muted)] underline-offset-2 hover:text-[var(--fl-text)] hover:underline"
+                      >
+                        Show in note
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
         {unavailable ? (
           <Empty>{unavailable}</Empty>
         ) : state.status === "loading" && !state.conversation ? (
@@ -193,7 +280,42 @@ export function ConversationPanel({
             </p>
           )}
 
-          {cannotWrite ? (
+          {pendingPassage && sendPassage ? (
+            cannotStart ? (
+              <p className="text-[12px] text-[var(--fl-muted)]">{cannotStart}</p>
+            ) : (
+              <>
+                <div className="mb-1.5 flex items-start gap-1.5 text-[11.5px] text-[var(--fl-muted)]">
+                  <span className="min-w-0 flex-1">
+                    About this passage:
+                    <span className="mt-0.5 line-clamp-2 border-l-2 border-[var(--fl-accent)] pl-2 text-[var(--fl-text)] italic">
+                      {pendingPassage}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onCancelPassage}
+                    aria-label="Cancel the passage"
+                    className="rounded px-1 hover:text-[var(--fl-text)]"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <Composer
+                  sending={sending}
+                  replyTo={null}
+                  onCancelReply={() => undefined}
+                  focusKey={pendingPassage}
+                  placeholder="What about it? Starts a thread of its own."
+                  onSend={async (body) => {
+                    const error = await sendPassage(pendingPassage, body);
+                    if (!error) onCancelPassage?.();
+                    return error?.message ?? null;
+                  }}
+                />
+              </>
+            )
+          ) : cannotWrite ? (
             <p className="text-[12px] text-[var(--fl-muted)]">{cannotWrite}</p>
           ) : (
             <Composer

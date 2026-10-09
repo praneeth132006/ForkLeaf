@@ -322,7 +322,7 @@ export interface ComposerProps {
   replyTo: DiscussionCommentDto | null;
   onCancelReply: () => void;
   /** Bumped to move the cursor into the box — when Reply is pressed. */
-  focusKey?: number;
+  focusKey?: number | string;
   placeholder?: string;
 }
 
@@ -341,7 +341,7 @@ export function Composer({
   const working = sending || busy;
 
   useEffect(() => {
-    if (focusKey > 0) box?.focus();
+    if (focusKey) box?.focus();
   }, [focusKey, box]);
 
   const submit = async () => {

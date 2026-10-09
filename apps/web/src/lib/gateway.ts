@@ -2,7 +2,20 @@
 
 import type { RemoteGateway, RemoteCommitInput, RemoteCommitResult } from "@forkleaf/store";
 import type { RepoRef, TreeNode, Workspace } from "@forkleaf/types";
-import type { DiscussionCommentDto, LoungeDto, NoteConversationDto } from "@forkleaf/github-client";
+import type {
+  DiscussionCommentDto,
+  LoungeDto,
+  NoteConversationDto,
+  ThreadSummaryDto,
+} from "@forkleaf/github-client";
+
+/**
+ * A note's conversation, and — when asked for — the threads about its
+ * passages. `passages` is null when that lookup failed on its own.
+ */
+export type NoteConversationWithPassages = NoteConversationDto & {
+  passages?: ThreadSummaryDto[] | null;
+};
 
 /**
  * The browser's view of GitHub.
@@ -925,13 +938,16 @@ export async function readNoteConversation(options: {
   path: string;
   /** The discussion found last time, checked rather than trusted by the server. */
   number?: number;
-}): Promise<NoteConversationDto> {
+  /** Also list the threads opened on passages of the note. */
+  passages?: boolean;
+}): Promise<NoteConversationWithPassages> {
   const params = new URLSearchParams({
     owner: options.owner,
     repo: options.repo,
     path: options.path,
   });
   if (options.number !== undefined) params.set("number", String(options.number));
+  if (options.passages) params.set("passages", "1");
   return call(`/api/gh/discussions?${params.toString()}`, { timeoutMs: 20_000 });
 }
 
@@ -945,7 +961,9 @@ export async function sendNoteMessage(options: {
   body: string;
   number?: number;
   replyTo?: string;
-}): Promise<{ number: number; comment: DiscussionCommentDto }> {
+  /** Opens a new thread about this passage, instead of writing in the note's own. */
+  passage?: string;
+}): Promise<{ number: number; comment: DiscussionCommentDto; passage?: boolean }> {
   // No timeout: a message that gave up waiting may still have been posted,
   // and "it failed" followed by the message appearing is worse than a wait.
   return call("/api/gh/discussions", { method: "POST", body: JSON.stringify(options) });

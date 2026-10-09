@@ -1,15 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { NoteConversationDto } from "@forkleaf/github-client";
+import type { ThreadSummaryDto } from "@forkleaf/github-client";
 import {
   ApiGatewayError,
   readNoteConversation,
+  type NoteConversationWithPassages,
   sendNoteMessage,
   setThreadAnswer,
 } from "@/lib/gateway";
 import {
   countUnread,
+  isThreadUnread,
   latestMessageAt,
   markSeenUpTo,
   rememberNumber,
@@ -56,7 +58,7 @@ export interface ConversationError {
 
 export interface ConversationState {
   status: "loading" | "ready" | "error";
-  conversation: NoteConversationDto | null;
+  conversation: NoteConversationWithPassages | null;
   error: ConversationError | null;
 }
 
@@ -77,8 +79,14 @@ export function useNoteConversation(options: {
   active: boolean;
 }): {
   state: ConversationState;
-  /** Messages from other people this device has not shown yet. */
+  /** Messages from other people this device has not shown yet, passages included. */
   unread: number;
+  /** Threads about passages of the note, newest activity first. */
+  passages: ThreadSummaryDto[];
+  /** Which of them have something new in them. */
+  passageUnread: Set<number>;
+  /** Opens a thread about a passage, with a first message. */
+  sendPassage: (quote: string, body: string) => Promise<ConversationError | null>;
   sending: boolean;
   /** Posts a message. Resolves to an error to show, or null when it was sent. */
   send: (body: string, replyTo?: string) => Promise<ConversationError | null>;
@@ -130,12 +138,23 @@ export function useNoteConversation(options: {
           repo,
           path,
           number: rememberedNumber(owner, repo, path),
+          passages: true,
         });
         if (cancelled) return;
         if (conversation.discussion) {
           rememberNumber(owner, repo, path, conversation.discussion.number);
         }
-        setStored({ key, status: "ready", conversation, error: null });
+        // A passage search that failed this time keeps the list it found
+        // last time, rather than emptying it.
+        setStored((previous) => ({
+          key,
+          status: "ready",
+          conversation:
+            conversation.passages === null && previous.key === key && previous.conversation
+              ? { ...conversation, passages: previous.conversation.passages ?? null }
+              : conversation,
+          error: null,
+        }));
       } catch (error) {
         if (cancelled) return;
         const failure = asError(error);
@@ -186,8 +205,16 @@ export function useNoteConversation(options: {
     markSeenUpTo(owner, repo, discussion.number, latest);
   }, [active, discussion, latest, owner, repo]);
 
+  const passages = state.conversation?.passages ?? [];
+  const passageUnread = new Set(
+    passages
+      .filter((thread) => isThreadUnread(thread, seenUpTo(owner, repo, thread.number), null))
+      .map((thread) => thread.number),
+  );
   const unread =
-    active || !discussion ? 0 : countUnread(discussion, seenUpTo(owner, repo, discussion.number));
+    (active || !discussion
+      ? 0
+      : countUnread(discussion, seenUpTo(owner, repo, discussion.number))) + passageUnread.size;
 
   const send = useCallback(
     async (body: string, replyTo?: string): Promise<ConversationError | null> => {
@@ -250,5 +277,42 @@ export function useNoteConversation(options: {
     [owner, repo],
   );
 
-  return { state, unread, sending, send, setAnswer, refresh };
+  const sendPassage = useCallback(
+    async (quote: string, body: string): Promise<ConversationError | null> => {
+      if (!target) return { code: "validation", message: "Open a note first." };
+      setSending(true);
+      try {
+        const { number, comment } = await sendNoteMessage({
+          owner,
+          repo,
+          branch: target.branch,
+          path,
+          title: target.title,
+          body,
+          passage: quote,
+        });
+        markSeenUpTo(owner, repo, number, comment.createdAt);
+        // The new thread is in the next read of the passages, not this one.
+        setTick((value) => value + 1);
+        return null;
+      } catch (error) {
+        return asError(error);
+      } finally {
+        setSending(false);
+      }
+    },
+    [target, owner, repo, path],
+  );
+
+  return {
+    state,
+    unread,
+    passages,
+    passageUnread,
+    sending,
+    send,
+    sendPassage,
+    setAnswer,
+    refresh,
+  };
 }
