@@ -201,6 +201,11 @@ import { AssistantPanel } from "@/components/AssistantPanel";
 import { ConversationPanel } from "@/components/ConversationPanel";
 import { SidePanelTabs, type SideView } from "@/components/SidePanelTabs";
 import { useNoteConversation, type ConversationTarget } from "@/hooks/useNoteConversation";
+import { useLounge } from "@/hooks/useLounge";
+import { LoungeDialog } from "@/components/LoungeDialog";
+import { SaveThreadDialog } from "@/components/SaveThreadDialog";
+import { CONVERSATION_FOLDER, summaryRequest, threadToNote, transcriptOf } from "@/lib/thread-note";
+import type { NoteDiscussionDto } from "@forkleaf/github-client";
 import { EditorStatusBar } from "@/components/EditorStatusBar";
 import { EditorTabs } from "@/components/EditorTabs";
 import { ConflictDialog } from "@/components/ConflictDialog";
@@ -668,6 +673,7 @@ export function EditorWorkspace() {
     | "lineage"
     | "switch"
     | "encrypt-for-people"
+    | "lounge"
     | null
   >(null);
   /**
@@ -911,6 +917,18 @@ export function EditorWorkspace() {
     target: conversationTarget,
     active: sideShown && sideView === "chat" && (wide || drawer === "side"),
   });
+  /** Every conversation in the notebook, read only while the Lounge is open. */
+  const loungeTarget = useMemo(
+    () =>
+      user && workspace && !workspace.isLocal
+        ? { owner: workspace.repo.owner, repo: workspace.repo.repo }
+        : null,
+    [user, workspace],
+  );
+  const lounge = useLounge({ target: loungeTarget, open: openDialog === "lounge" });
+  /** A conversation on its way to becoming a note. */
+  const [savingThread, setSavingThread] = useState<NoteDiscussionDto | null>(null);
+
   const conversationUnavailable = !note
     ? "Open a note to see the conversation about it."
     : sealed
@@ -1788,6 +1806,55 @@ export function EditorWorkspace() {
       },
     };
   }, [assistantSettings, assistantKey, notebook]);
+
+  /**
+   * Writes a conversation into conversations/, with a summary by the reader's
+   * own model when they ticked the box for one. Resolves to a reason it could
+   * not, for the dialog to show.
+   */
+  const saveThreadAsNote = useCallback(
+    async (discussion: NoteDiscussionDto, withSummary: boolean): Promise<string | null> => {
+      let summary: string | undefined;
+      if (withSummary) {
+        if (!isReady(assistantSettings, assistantKey)) return "The assistant is not set up.";
+        try {
+          let reply = "";
+          await streamChat({
+            settings: { ...assistantSettings, sendNote: true },
+            key: assistantKey,
+            note: { title: discussion.title, content: transcriptOf(discussion) },
+            messages: [{ role: "user", text: summaryRequest(discussion.title) }],
+            receipt: { purpose: "Conversation summary", path: discussion.notePath },
+            signal: AbortSignal.timeout(120_000),
+            onDelta: (delta) => {
+              reply += delta;
+            },
+          });
+          summary = reply;
+        } catch (error) {
+          return `The summary could not be written: ${
+            error instanceof Error ? error.message : String(error)
+          }`;
+        }
+      }
+
+      const made = threadToNote(discussion, {
+        now: new Date(),
+        ...(summary ? { summary } : {}),
+      });
+      const created = await notebook.createNote(
+        made.title,
+        CONVERSATION_FOLDER,
+        made.content,
+        made.frontmatter,
+      );
+      if (!created) return "The note could not be created. Is a notebook open?";
+      setSavingThread(null);
+      setNotice(`Saved the conversation to ${created.path}.`);
+      return null;
+    },
+    [assistantSettings, assistantKey, notebook],
+  );
 
   /** Cards in the open note, for its "Study" button. */
   const noteCardCount = useMemo(
@@ -3479,6 +3546,18 @@ export function EditorWorkspace() {
               `${slugifyFilename(title || "note")}.md`,
               serializeDocument(note.content, note.frontmatter),
             ),
+        });
+      }
+
+      if (workspace && !workspace.isLocal && user) {
+        list.push({
+          id: "lounge",
+          label: "Open the Lounge",
+          group: "View",
+          hint: "Every conversation in this notebook",
+          keywords:
+            "chat channels discussions discussion team threads questions answers collaborators github conversation",
+          run: () => setDialog("lounge"),
         });
       }
 
@@ -5366,8 +5445,11 @@ export function EditorWorkspace() {
                   state={conversation.state}
                   sending={conversation.sending}
                   send={conversation.send}
+                  setAnswer={conversation.setAnswer}
                   refresh={conversation.refresh}
                   onClose={hideSide}
+                  onOpenLounge={conversationTarget ? () => setDialog("lounge") : undefined}
+                  onSaveAsNote={setSavingThread}
                 />
               </div>
             )}
@@ -5694,6 +5776,31 @@ export function EditorWorkspace() {
             notebook.openNote(path);
           }}
           onClose={() => setDialog(null)}
+        />
+      )}
+
+      {openDialog === "lounge" && workspace && !workspace.isLocal && (
+        <LoungeDialog
+          lounge={lounge}
+          repoName={`${workspace.repo.owner}/${workspace.repo.repo}`}
+          onClose={() => setDialog(null)}
+          onOpenNote={(path) => {
+            setDialog(null);
+            void notebook.openNote(path);
+          }}
+          onSaveAsNote={(discussion) => {
+            setDialog(null);
+            setSavingThread(discussion);
+          }}
+        />
+      )}
+
+      {savingThread && (
+        <SaveThreadDialog
+          discussion={savingThread}
+          ai={cardWriter ? { name: cardWriter.name } : null}
+          onSave={(withSummary) => saveThreadAsNote(savingThread, withSummary)}
+          onClose={() => setSavingThread(null)}
         />
       )}
 
