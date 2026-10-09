@@ -4,7 +4,9 @@ import { GitHubError } from "./errors";
 import {
   codeForGraphQLType,
   discussionBody,
+  emojiFromHtml,
   isNoteDiscussion,
+  notePathOf,
   noteMarker,
   pickCategory,
   type DiscussionCategoryDto,
@@ -400,5 +402,232 @@ describe("writing", () => {
     expect(posted).toMatchObject({ id: "c9", replies: [], replyCount: 0 });
     expect(calls[0]?.variables).toEqual({ discussionId: "D_5", body: "hello", replyToId: null });
     expect(calls[1]?.variables.replyToId).toBe("c1");
+  });
+});
+
+// ─── v2: the Lounge ──────────────────────────────────────────────────────────
+
+describe("notePathOf", () => {
+  it("reads the note back out of its marker", () => {
+    expect(notePathOf(`hi\n\n${noteMarker("ops/run book.md")}`)).toBe("ops/run book.md");
+  });
+
+  it("is null for a discussion somebody started on GitHub, or a broken marker", () => {
+    expect(notePathOf("Just a question")).toBeNull();
+    expect(notePathOf("<!-- forkleaf:note %E0%A4%A -->")).toBeNull();
+  });
+});
+
+describe("emojiFromHtml", () => {
+  it("keeps the character and drops GitHub's markup", () => {
+    expect(emojiFromHtml('<div><g-emoji class="g-emoji" alias="pray">🙏</g-emoji></div>')).toBe(
+      "🙏",
+    );
+    expect(emojiFromHtml(null)).toBe("");
+  });
+});
+
+function summary(number: number, extra: Record<string, unknown> = {}) {
+  return {
+    id: `D_${number}`,
+    number,
+    title: `Thread ${number}`,
+    url: `https://github.com/octo/notes/discussions/${number}`,
+    body: "Opening post",
+    createdAt: "2026-10-01T09:00:00Z",
+    locked: false,
+    isAnswered: false,
+    viewerDidAuthor: false,
+    author: { login: "ada", avatarUrl: "a", url: "u" },
+    category: {
+      id: "C_qa",
+      name: "Q&A",
+      slug: "q-a",
+      emojiHTML: "<div><g-emoji>🙏</g-emoji></div>",
+      isAnswerable: true,
+    },
+    comments: { totalCount: 0, nodes: [] },
+    ...extra,
+  };
+}
+
+describe("listDiscussions", () => {
+  it("lists threads with their category, note and paging cursor", async () => {
+    const { client, calls } = fakeGraphQL({
+      ForkLeafLounge: () =>
+        ok({
+          repository: {
+            ...repoFields,
+            discussions: {
+              pageInfo: { hasNextPage: true, endCursor: "CUR" },
+              nodes: [summary(3, { body: `x\n${noteMarker("a.md")}`, isAnswered: true }), null],
+            },
+          },
+        }),
+    });
+
+    const lounge = await client.listDiscussions({
+      owner: "octo",
+      repo: "notes",
+      categoryId: "C_qa",
+      after: "PREV",
+    });
+
+    expect(calls[0]?.variables).toEqual({
+      owner: "octo",
+      repo: "notes",
+      categoryId: "C_qa",
+      after: "PREV",
+    });
+    expect(lounge.nextCursor).toBe("CUR");
+    expect(lounge.threads).toHaveLength(1);
+    expect(lounge.threads[0]).toMatchObject({
+      number: 3,
+      notePath: "a.md",
+      answered: true,
+      category: { slug: "q-a", emoji: "🙏", answerable: true },
+      lastActivityAt: "2026-10-01T09:00:00Z",
+      commentCount: 0,
+    });
+  });
+
+  it("asks for every category when none is named, and has no cursor on the last page", async () => {
+    const { client, calls } = fakeGraphQL({
+      ForkLeafLounge: () =>
+        ok({
+          repository: {
+            ...repoFields,
+            discussions: { pageInfo: { hasNextPage: false, endCursor: "END" }, nodes: [] },
+          },
+        }),
+    });
+
+    const lounge = await client.listDiscussions({ owner: "octo", repo: "notes" });
+    expect(calls[0]?.variables).toMatchObject({ categoryId: null, after: null });
+    expect(lounge.nextCursor).toBeNull();
+  });
+
+  it("measures activity by the newest message, a reply included, and whose it was", async () => {
+    const { client } = fakeGraphQL({
+      ForkLeafLounge: () =>
+        ok({
+          repository: {
+            ...repoFields,
+            discussions: {
+              pageInfo: { hasNextPage: false, endCursor: null },
+              nodes: [
+                summary(1, {
+                  comments: {
+                    totalCount: 2,
+                    nodes: [
+                      {
+                        createdAt: "2026-10-02T09:00:00Z",
+                        viewerDidAuthor: false,
+                        replies: {
+                          nodes: [{ createdAt: "2026-10-03T09:00:00Z", viewerDidAuthor: true }],
+                        },
+                      },
+                    ],
+                  },
+                }),
+                summary(2, {
+                  comments: {
+                    totalCount: 1,
+                    nodes: [
+                      {
+                        createdAt: "2026-10-02T09:00:00Z",
+                        viewerDidAuthor: false,
+                        replies: { nodes: [] },
+                      },
+                    ],
+                  },
+                }),
+              ],
+            },
+          },
+        }),
+    });
+
+    const [first, second] = (await client.listDiscussions({ owner: "octo", repo: "notes" }))
+      .threads;
+    expect(first).toMatchObject({ lastActivityAt: "2026-10-03T09:00:00Z", lastByViewer: true });
+    expect(second).toMatchObject({ lastActivityAt: "2026-10-02T09:00:00Z", lastByViewer: false });
+  });
+});
+
+describe("readDiscussion", () => {
+  it("reads any discussion with its opening post and who may mark answers", async () => {
+    const { client } = fakeGraphQL({
+      ForkLeafNoteThread: () =>
+        ok({
+          repository: {
+            ...repoFields,
+            discussion: {
+              ...thread(8, "a.md", [
+                { ...comment("c1"), viewerCanMarkAsAnswer: true, viewerCanUnmarkAsAnswer: false },
+              ]),
+              body: "How do I rotate the keys?",
+              createdAt: "2026-10-01T08:00:00Z",
+              viewerDidAuthor: true,
+              author: { login: "me", avatarUrl: "a", url: "u" },
+              category: { name: "Q&A", isAnswerable: true },
+            },
+          },
+        }),
+    });
+
+    const found = await client.readDiscussion({ owner: "octo", repo: "notes", number: 8 });
+    expect(found.discussion).toMatchObject({
+      body: "How do I rotate the keys?",
+      answerable: true,
+      viewerDidAuthor: true,
+      author: { login: "me" },
+      notePath: null,
+    });
+    expect(found.discussion?.comments[0]).toMatchObject({
+      canMarkAnswer: true,
+      canUnmarkAnswer: false,
+    });
+  });
+
+  it("says when the discussion is gone", async () => {
+    const { client } = fakeGraphQL({
+      ForkLeafNoteThread: () =>
+        ok({ repository: { ...repoFields, discussion: null } }, [
+          { type: "NOT_FOUND", message: "Could not resolve", path: ["repository", "discussion"] },
+        ]),
+    });
+
+    await expect(
+      client.readDiscussion({ owner: "octo", repo: "notes", number: 99 }),
+    ).rejects.toMatchObject({ code: "not-found" });
+  });
+});
+
+describe("setDiscussionAnswer", () => {
+  it("marks and unmarks, as writes", async () => {
+    const { client, calls } = fakeGraphQL({
+      ForkLeafMarkAnswer: () => ok({ markDiscussionCommentAsAnswer: { discussion: { id: "D" } } }),
+      ForkLeafUnmarkAnswer: () =>
+        ok({ unmarkDiscussionCommentAsAnswer: { discussion: { id: "D" } } }),
+    });
+
+    await client.setDiscussionAnswer({ commentId: "DC_1", answer: true });
+    await client.setDiscussionAnswer({ commentId: "DC_1", answer: false });
+
+    expect(calls.map((c) => [c.operation, c.variables.id])).toEqual([
+      ["ForkLeafMarkAnswer", "DC_1"],
+      ["ForkLeafUnmarkAnswer", "DC_1"],
+    ]);
+  });
+
+  it("is not retried after a server error", async () => {
+    const { client, fetchImpl } = fakeGraphQL({
+      ForkLeafMarkAnswer: () => new Response("{}", { status: 502 }),
+    });
+    await expect(
+      client.setDiscussionAnswer({ commentId: "DC_1", answer: true }),
+    ).rejects.toBeInstanceOf(GitHubError);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });

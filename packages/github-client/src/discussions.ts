@@ -49,6 +49,13 @@ export interface DiscussionCommentDto {
   replies: DiscussionCommentDto[];
   /** Every reply, including any too old to be in `replies`. */
   replyCount: number;
+  /**
+   * Whether the signed-in account may mark this as the answer, or take that
+   * back. GitHub decides — the discussion's author and maintainers, in a
+   * category that takes answers — and says so per comment.
+   */
+  canMarkAnswer: boolean;
+  canUnmarkAnswer: boolean;
 }
 
 export interface NoteDiscussionDto {
@@ -58,6 +65,15 @@ export interface NoteDiscussionDto {
   url: string;
   locked: boolean;
   category: string;
+  /** Whether the category takes answers — Q&A, usually. */
+  answerable: boolean;
+  /** The opening post. For a conversation ForkLeaf opened, mostly the marker. */
+  body: string;
+  author: DiscussionAuthorDto | null;
+  createdAt: string;
+  viewerDidAuthor: boolean;
+  /** The note this discussion is about, when ForkLeaf opened it for one. */
+  notePath: string | null;
   /** The most recent comments, oldest first. */
   comments: DiscussionCommentDto[];
   /** Every top-level comment, including any too old to be in `comments`. */
@@ -68,6 +84,39 @@ export interface DiscussionCategoryDto {
   id: string;
   name: string;
   slug: string;
+  /** The category's emoji as a character, when GitHub gave one. */
+  emoji?: string;
+  /** Whether threads in it can have an answer marked. */
+  answerable?: boolean;
+}
+
+/** One discussion in a list: enough to show it and to tell whether it is unread. */
+export interface ThreadSummaryDto {
+  id: string;
+  number: number;
+  title: string;
+  url: string;
+  category: DiscussionCategoryDto;
+  author: DiscussionAuthorDto | null;
+  createdAt: string;
+  /**
+   * When the newest message was posted — the opening post, the newest
+   * comment or the newest reply to it. Not `updatedAt`, which an edit bumps.
+   */
+  lastActivityAt: string;
+  /** Whether that newest message is the signed-in account's own. */
+  lastByViewer: boolean;
+  commentCount: number;
+  answered: boolean;
+  locked: boolean;
+  notePath: string | null;
+}
+
+export interface LoungeDto {
+  repo: DiscussionRepoDto;
+  threads: ThreadSummaryDto[];
+  /** Pass back as `after` for the next, older page. Null when there is none. */
+  nextCursor: string | null;
 }
 
 export interface DiscussionRepoDto {
@@ -113,6 +162,25 @@ export function isNoteDiscussion(body: string, path: string): boolean {
 }
 
 /**
+ * The note a discussion is about, read back out of its marker. Null for a
+ * discussion somebody started on github.com, or a marker that does not decode.
+ */
+export function notePathOf(body: string): string | null {
+  const match = /<!-- forkleaf:note (\S+) -->/.exec(body);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]!);
+  } catch {
+    return null;
+  }
+}
+
+/** GitHub sends a category's emoji as markup around the character. */
+export function emojiFromHtml(html: string | null | undefined): string {
+  return (html ?? "").replace(/<[^>]*>/g, "").trim();
+}
+
+/**
  * The category a new conversation goes in.
  *
  * General first, because that is what a conversation about a note is. Never
@@ -152,17 +220,21 @@ export function discussionBody(options: {
 
 const COMMENT_FIELDS = `
   id body createdAt url isAnswer isMinimized viewerDidAuthor
+  viewerCanMarkAsAnswer viewerCanUnmarkAsAnswer
   author { login avatarUrl url }
 `;
 
+const CATEGORY_FIELDS = `id name slug emojiHTML isAnswerable`;
+
 const REPO_FIELDS = `
   id url isPrivate hasDiscussionsEnabled viewerPermission
-  discussionCategories(first: 25) { nodes { id name slug } }
+  discussionCategories(first: 25) { nodes { ${CATEGORY_FIELDS} } }
 `;
 
 const THREAD_FIELDS = `
-  id number title url body locked
-  category { name }
+  id number title url body locked createdAt viewerDidAuthor
+  author { login avatarUrl url }
+  category { name isAnswerable }
   comments(last: ${COMMENT_PAGE}) {
     totalCount
     nodes {
@@ -212,6 +284,39 @@ const CREATE_MUTATION = `
   }
 `;
 
+/** Every discussion, newest activity first, optionally in one category. */
+const LOUNGE_QUERY = `
+  query ForkLeafLounge($owner: String!, $repo: String!, $categoryId: ID, $after: String) {
+    repository(owner: $owner, name: $repo) {
+      ${REPO_FIELDS}
+      discussions(first: 40, after: $after, categoryId: $categoryId, orderBy: { field: UPDATED_AT, direction: DESC }) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id number title url body createdAt locked isAnswered viewerDidAuthor
+          author { login avatarUrl url }
+          category { ${CATEGORY_FIELDS} }
+          comments(last: 1) {
+            totalCount
+            nodes { createdAt viewerDidAuthor replies(last: 1) { nodes { createdAt viewerDidAuthor } } }
+          }
+        }
+      }
+    }
+  }
+`;
+
+const MARK_ANSWER_MUTATION = `
+  mutation ForkLeafMarkAnswer($id: ID!) {
+    markDiscussionCommentAsAnswer(input: { id: $id }) { discussion { id } }
+  }
+`;
+
+const UNMARK_ANSWER_MUTATION = `
+  mutation ForkLeafUnmarkAnswer($id: ID!) {
+    unmarkDiscussionCommentAsAnswer(input: { id: $id }) { discussion { id } }
+  }
+`;
+
 const COMMENT_MUTATION = `
   mutation ForkLeafComment($discussionId: ID!, $body: String!, $replyToId: ID) {
     addDiscussionComment(input: { discussionId: $discussionId, body: $body, replyToId: $replyToId }) {
@@ -234,8 +339,52 @@ interface ApiComment {
   isAnswer?: boolean;
   isMinimized: boolean;
   viewerDidAuthor: boolean;
+  viewerCanMarkAsAnswer?: boolean;
+  viewerCanUnmarkAsAnswer?: boolean;
   author: ApiAuthor | null;
   replies?: { totalCount: number; nodes: (ApiComment | null)[] };
+}
+
+interface ApiCategory {
+  id: string;
+  name: string;
+  slug: string;
+  emojiHTML?: string | null;
+  isAnswerable?: boolean;
+}
+
+interface ApiActivity {
+  createdAt: string;
+  viewerDidAuthor: boolean;
+}
+
+interface ApiThreadSummary {
+  id: string;
+  number: number;
+  title: string;
+  url: string;
+  body: string;
+  createdAt: string;
+  locked: boolean;
+  isAnswered: boolean | null;
+  viewerDidAuthor: boolean;
+  author: ApiAuthor | null;
+  category: ApiCategory;
+  comments: {
+    totalCount: number;
+    nodes: ((ApiActivity & { replies?: { nodes: (ApiActivity | null)[] } }) | null)[];
+  };
+}
+
+interface LoungeResponse {
+  repository:
+    | (ApiRepo & {
+        discussions: {
+          pageInfo: { hasNextPage: boolean; endCursor: string | null };
+          nodes: (ApiThreadSummary | null)[];
+        };
+      })
+    | null;
 }
 
 interface ApiThread {
@@ -245,7 +394,10 @@ interface ApiThread {
   url: string;
   body: string;
   locked: boolean;
-  category: { name: string } | null;
+  createdAt?: string;
+  viewerDidAuthor?: boolean;
+  author?: ApiAuthor | null;
+  category: { name: string; isAnswerable?: boolean } | null;
   comments: { totalCount: number; nodes: (ApiComment | null)[] };
 }
 
@@ -255,7 +407,7 @@ interface ApiRepo {
   isPrivate: boolean;
   hasDiscussionsEnabled: boolean;
   viewerPermission: string | null;
-  discussionCategories: { nodes: (DiscussionCategoryDto | null)[] };
+  discussionCategories: { nodes: (ApiCategory | null)[] };
 }
 
 interface ThreadResponse {
@@ -298,22 +450,30 @@ function toRepo(repo: ApiRepo): DiscussionRepoDto {
     // private one is its collaborators' alone, and GitHub reports no
     // permission at all for an account that is not one.
     canComment: repo.hasDiscussionsEnabled && (repo.viewerPermission !== null || !repo.isPrivate),
-    categories: repo.discussionCategories.nodes.filter(
-      (c): c is DiscussionCategoryDto => c !== null,
-    ),
+    categories: repo.discussionCategories.nodes
+      .filter((c): c is ApiCategory => c !== null)
+      .map(toCategory),
   };
+}
+
+function toCategory(category: ApiCategory): DiscussionCategoryDto {
+  return {
+    id: category.id,
+    name: category.name,
+    slug: category.slug,
+    emoji: emojiFromHtml(category.emojiHTML),
+    answerable: category.isAnswerable ?? false,
+  };
+}
+
+function toAuthor(author: ApiAuthor | null | undefined): DiscussionAuthorDto | null {
+  return author ? { login: author.login, avatarUrl: author.avatarUrl, url: author.url } : null;
 }
 
 function toComment(comment: ApiComment): DiscussionCommentDto {
   return {
     id: comment.id,
-    author: comment.author
-      ? {
-          login: comment.author.login,
-          avatarUrl: comment.author.avatarUrl,
-          url: comment.author.url,
-        }
-      : null,
+    author: toAuthor(comment.author),
     body: comment.body,
     createdAt: comment.createdAt,
     url: comment.url,
@@ -324,6 +484,8 @@ function toComment(comment: ApiComment): DiscussionCommentDto {
       .filter((r): r is ApiComment => r !== null)
       .map((r) => toComment({ ...r, replies: undefined })),
     replyCount: comment.replies?.totalCount ?? 0,
+    canMarkAnswer: comment.viewerCanMarkAsAnswer ?? false,
+    canUnmarkAnswer: comment.viewerCanUnmarkAsAnswer ?? false,
   };
 }
 
@@ -335,6 +497,12 @@ function toThread(thread: ApiThread): NoteDiscussionDto {
     url: thread.url,
     locked: thread.locked,
     category: thread.category?.name ?? "",
+    answerable: thread.category?.isAnswerable ?? false,
+    body: thread.body,
+    author: toAuthor(thread.author),
+    createdAt: thread.createdAt ?? "",
+    viewerDidAuthor: thread.viewerDidAuthor ?? false,
+    notePath: notePathOf(thread.body),
     comments: thread.comments.nodes.filter((c): c is ApiComment => c !== null).map(toComment),
     commentCount: thread.comments.totalCount,
   };
@@ -445,4 +613,93 @@ export async function addDiscussionComment(
     { write: true },
   );
   return toComment(data.addDiscussionComment.comment);
+}
+
+// ─── The Lounge: every conversation in the notebook ─────────────────────────
+
+/** The newest message in a listed thread, and whose it was. */
+function lastActivity(thread: ApiThreadSummary): { at: string; byViewer: boolean } {
+  let at = thread.createdAt;
+  let byViewer = thread.viewerDidAuthor;
+  const last = thread.comments.nodes.find((n) => n !== null) ?? null;
+  const candidates: ApiActivity[] = last
+    ? [last, ...(last.replies?.nodes ?? []).filter((r): r is ApiActivity => r !== null)]
+    : [];
+  for (const candidate of candidates) {
+    if (candidate.createdAt > at) {
+      at = candidate.createdAt;
+      byViewer = candidate.viewerDidAuthor;
+    }
+  }
+  return { at, byViewer };
+}
+
+function toSummary(thread: ApiThreadSummary): ThreadSummaryDto {
+  const last = lastActivity(thread);
+  return {
+    id: thread.id,
+    number: thread.number,
+    title: thread.title,
+    url: thread.url,
+    category: toCategory(thread.category),
+    author: toAuthor(thread.author),
+    createdAt: thread.createdAt,
+    lastActivityAt: last.at,
+    lastByViewer: last.byViewer,
+    commentCount: thread.comments.totalCount,
+    answered: thread.isAnswered ?? false,
+    locked: thread.locked,
+    notePath: notePathOf(thread.body),
+  };
+}
+
+/**
+ * The notebook's discussions, most recently active first.
+ *
+ * Ordered by GitHub's `updatedAt`, which moves with any activity; each thread
+ * also carries when its newest message was posted, which is what "unread"
+ * is measured against, because an edit moves `updatedAt` too.
+ */
+export async function listDiscussions(
+  gql: GraphQLRunner,
+  options: { owner: string; repo: string; categoryId?: string; after?: string },
+): Promise<LoungeDto> {
+  const data = await gql<LoungeResponse>(LOUNGE_QUERY, {
+    owner: options.owner,
+    repo: options.repo,
+    categoryId: options.categoryId ?? null,
+    after: options.after ?? null,
+  });
+  if (!data.repository) throw missingRepository(options.owner, options.repo);
+
+  const page = data.repository.discussions;
+  return {
+    repo: toRepo(data.repository),
+    threads: page.nodes.filter((n): n is ApiThreadSummary => n !== null).map(toSummary),
+    nextCursor: page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null,
+  };
+}
+
+/** One discussion, whatever started it, with the repository's settings. */
+export async function readDiscussion(
+  gql: GraphQLRunner,
+  options: { owner: string; repo: string; number: number },
+): Promise<NoteConversationDto> {
+  const found = await readThread(gql, options.owner, options.repo, options.number);
+  if (!found.thread) {
+    throw new GitHubError("not-found", `Discussion #${options.number} is not there any more.`, 404);
+  }
+  return { repo: found.repo, discussion: toThread(found.thread) };
+}
+
+/** Marks a comment as the answer to its discussion, or takes that back. */
+export async function setDiscussionAnswer(
+  gql: GraphQLRunner,
+  input: { commentId: string; answer: boolean },
+): Promise<void> {
+  await gql(
+    input.answer ? MARK_ANSWER_MUTATION : UNMARK_ANSWER_MUTATION,
+    { id: input.commentId },
+    { write: true },
+  );
 }

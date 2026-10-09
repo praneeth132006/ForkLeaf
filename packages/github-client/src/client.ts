@@ -7,7 +7,11 @@ import {
   codeForGraphQLType,
   createNoteDiscussion,
   findNoteConversation,
+  listDiscussions,
+  readDiscussion,
+  setDiscussionAnswer,
   type DiscussionCommentDto,
+  type LoungeDto,
   type GraphQLErrorEntry,
   type NoteConversationDto,
 } from "./discussions";
@@ -449,6 +453,29 @@ export class GitHubClient {
     replyToId?: string;
   }): Promise<DiscussionCommentDto> {
     return addDiscussionComment(this.graphql, input);
+  }
+
+  /** Every discussion in the repository, newest activity first. */
+  listDiscussions(options: {
+    owner: string;
+    repo: string;
+    categoryId?: string;
+    after?: string;
+  }): Promise<LoungeDto> {
+    return listDiscussions(this.graphql, options);
+  }
+
+  /** One discussion by number, whatever started it. */
+  readDiscussion(options: {
+    owner: string;
+    repo: string;
+    number: number;
+  }): Promise<NoteConversationDto> {
+    return readDiscussion(this.graphql, options);
+  }
+
+  setDiscussionAnswer(input: { commentId: string; answer: boolean }): Promise<void> {
+    return setDiscussionAnswer(this.graphql, input);
   }
 
   // ─── Identity ─────────────────────────────────────────────────────────────

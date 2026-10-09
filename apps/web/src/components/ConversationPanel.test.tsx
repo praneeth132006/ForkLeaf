@@ -40,6 +40,8 @@ function message(id: string, extra: Partial<DiscussionCommentDto> = {}): Discuss
     viewerDidAuthor: false,
     replies: [],
     replyCount: 0,
+    canMarkAnswer: false,
+    canUnmarkAnswer: false,
     ...extra,
   };
 }
@@ -52,6 +54,12 @@ function discussion(comments: DiscussionCommentDto[], extra: Partial<NoteDiscuss
     url: "https://github.com/me/notes/discussions/4",
     locked: false,
     category: "General",
+    answerable: false,
+    body: "",
+    author: null,
+    createdAt: "2026-10-01T00:00:00Z",
+    viewerDidAuthor: false,
+    notePath: null,
     comments,
     commentCount: comments.length,
     ...extra,

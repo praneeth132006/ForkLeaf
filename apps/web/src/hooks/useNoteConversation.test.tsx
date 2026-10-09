@@ -51,6 +51,8 @@ function comment(id: string, createdAt: string, viewerDidAuthor = false) {
     viewerDidAuthor,
     replies: [],
     replyCount: 0,
+    canMarkAnswer: false,
+    canUnmarkAnswer: false,
   };
 }
 
@@ -64,6 +66,12 @@ function conversation(comments: ReturnType<typeof comment>[]): NoteConversationD
       url: "",
       locked: false,
       category: "General",
+      answerable: false,
+      body: "",
+      author: null,
+      createdAt: "2026-10-01T00:00:00Z",
+      viewerDidAuthor: false,
+      notePath: null,
       comments,
       commentCount: comments.length,
     },

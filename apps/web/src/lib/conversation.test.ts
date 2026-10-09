@@ -25,6 +25,8 @@ function message(id: string, createdAt: string, extra: Partial<DiscussionComment
     viewerDidAuthor: false,
     replies: [],
     replyCount: 0,
+    canMarkAnswer: false,
+    canUnmarkAnswer: false,
     ...extra,
   } satisfies DiscussionCommentDto;
 }
@@ -37,6 +39,12 @@ function discussion(comments: DiscussionCommentDto[]): NoteDiscussionDto {
     url: "",
     locked: false,
     category: "General",
+    answerable: false,
+    body: "",
+    author: null,
+    createdAt: "2026-10-01T00:00:00Z",
+    viewerDidAuthor: false,
+    notePath: null,
     comments,
     commentCount: comments.length,
   };

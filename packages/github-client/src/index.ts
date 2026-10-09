@@ -27,6 +27,8 @@ export { encodeBase64, decodeBase64 } from "./base64";
 export {
   noteMarker,
   isNoteDiscussion,
+  notePathOf,
+  emojiFromHtml,
   pickCategory,
   discussionBody,
   MAX_DISCUSSION_TITLE,
@@ -37,4 +39,6 @@ export {
   type DiscussionCategoryDto,
   type DiscussionRepoDto,
   type NoteConversationDto,
+  type ThreadSummaryDto,
+  type LoungeDto,
 } from "./discussions";
