@@ -50,8 +50,16 @@
   --fl-bg: #fcfcfa;
   --fl-surface: #ffffff;
   --fl-elevated: #f2f3ef;
-  --fl-border: #e4e6e0;
-  --fl-border-strong: #cfd3ca;
+  /* Hairlines have to be *seen*. These were #e4e6e0 / #cfd3ca, which on a
+     white card is a border you find by squinting — and the dark pair was
+     worse. Raised until every panel, field and dialog edge reads at a glance
+     without turning the page into a grid. */
+  --fl-border: #d9dcd3;
+  --fl-border-strong: #b6bbaf;
+  /* Lines that carry meaning rather than separate surfaces: a diagram's
+     outlines and arrows. Close to body text, because an arrow you cannot
+     follow is not an arrow. */
+  --fl-ink-line: #5a6156;
   --fl-text: #12150f;
   --fl-muted: #6c7268;
 
@@ -81,8 +89,9 @@
   --fl-bg: #000000;
   --fl-surface: #0a0a0a;
   --fl-elevated: #131313;
-  --fl-border: #1f1f1f;
-  --fl-border-strong: #333333;
+  --fl-border: #2e2e2e;
+  --fl-border-strong: #4a4a4a;
+  --fl-ink-line: #a4adbb;
   --fl-text: #f0f0f0;
   --fl-muted: #8a8a8a;
 

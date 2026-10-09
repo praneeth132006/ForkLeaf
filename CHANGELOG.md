@@ -9,6 +9,19 @@ description, and the heading becomes the day's date when they ship.
 
 ## Unreleased
 
+### Borders you can see
+
+Panel, card, field and dialog edges were drawn in a grey barely different from
+the background — in the dark theme, `#1f1f1f` on black — so the layout had to
+be found by squinting. Every border is stronger now, in both themes, and the
+stronger hairline used for hover and dividers moved up with it.
+
+### A changelog you can read
+
+The changelog is a dated timeline now, newest first, at **Changelog** in every
+page's footer — each day's changes beside its date, labelled New, Fixed or
+Security. It is rendered from `CHANGELOG.md`, which is laid out the same way.
+
 ## 2026-09-29
 
 ### Encrypted for the people who should read it
