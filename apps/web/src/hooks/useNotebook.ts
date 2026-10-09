@@ -92,6 +92,15 @@ export interface NotebookState {
   activeWorkspace: Workspace | null;
   tree: TreeNode[];
   /**
+   * The workspace `tree` was loaded for, or null while it is still loading.
+   *
+   * An empty tree means two different things — a repository with nothing in
+   * it, and a repository whose file list has not arrived — and anything that
+   * must not write over an existing file (an import, say) needs to tell them
+   * apart.
+   */
+  treeFor: string | null;
+  /**
    * Every note the user currently has open, in tab order. Notes stay loaded
    * when you switch between them, so moving between two files you are editing
    * together is instant and neither loses its place.
@@ -270,6 +279,7 @@ export function useNotebook(request: NotebookRequest = {}) {
     workspaces: [],
     activeWorkspace: null,
     tree: [],
+    treeFor: null,
     openNotes: [],
     activePath: null,
     sync: {
@@ -661,14 +671,19 @@ export function useNotebook(request: NotebookRequest = {}) {
       if (workspace.isLocal) {
         // Local mode has no remote tree; build one from what is stored.
         const localNotes = await notes.listNotes(workspace.id);
-        if (!cancelled) patch({ tree: treeFromPaths(localNotes.map((note) => note.path)) });
+        if (!cancelled) {
+          patch({
+            tree: treeFromPaths(localNotes.map((note) => note.path)),
+            treeFor: workspace.id,
+          });
+        }
         return;
       }
 
       const tree = await notes.getTree(workspace.id, (fresh) => {
-        if (!cancelled) patch({ tree: fresh });
+        if (!cancelled) patch({ tree: fresh, treeFor: workspace.id });
       });
-      if (!cancelled) patch({ tree });
+      if (!cancelled) patch({ tree, treeFor: workspace.id });
     };
 
     void load().catch((error) => {
@@ -1425,7 +1440,13 @@ export function useNotebook(request: NotebookRequest = {}) {
 
   const switchWorkspace = useCallback(
     (workspace: Workspace) => {
-      patch({ activeWorkspace: workspace, openNotes: [], activePath: null, tree: [] });
+      patch({
+        activeWorkspace: workspace,
+        openNotes: [],
+        activePath: null,
+        tree: [],
+        treeFor: null,
+      });
     },
     [patch],
   );

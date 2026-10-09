@@ -9,7 +9,12 @@ import {
 import { MAX_COMMITTABLE_BYTES, servableTypeFor } from "@/lib/media";
 
 /**
- * Bringing a notebook in from Obsidian or Notion.
+ * Bringing notes in from this computer: plain Markdown files, an Obsidian
+ * vault, or a Notion export.
+ *
+ * Plain Markdown is the simple case and the common one — a few `.md` files,
+ * or a folder of them, from a laptop. They come across exactly as written:
+ * folders kept, nothing rewritten, pictures beside them copied too.
  *
  * Both export plain markdown already, which is most of the work. What differs
  * is the dialect around it:
@@ -29,7 +34,7 @@ import { MAX_COMMITTABLE_BYTES, servableTypeFor } from "@/lib/media";
  * person says so.
  */
 
-export type ImportSource = "obsidian" | "notion";
+export type ImportSource = "markdown" | "obsidian" | "notion";
 
 export interface ImportInput {
   /** The file's path inside the folder that was picked, e.g. `Vault/Ideas/one.md`. */
@@ -201,7 +206,7 @@ export async function planImport(
           return whole;
         },
       );
-    } else {
+    } else if (options.source === "notion") {
       content = content.replace(
         /(!?)\[([^\]]*)\]\(([^)\s]+)\)/g,
         (whole, bang: string, label: string, href: string) => {

@@ -136,6 +136,57 @@ describe("planImport — Notion", () => {
   });
 });
 
+describe("planImport — Markdown files", () => {
+  it("imports picked files into the chosen folder exactly as written", async () => {
+    const text = "# Plan\n\n![[not obsidian]] and [link](Other%20note.md)\n";
+    const plan = await planImport([file("plan.md", text), file("Other note.md", "# Other")], {
+      source: "markdown",
+      destination: "Projects",
+      taken: [],
+    });
+
+    expect(plan.notes.map((note) => note.path)).toEqual([
+      "Projects/plan.md",
+      "Projects/Other note.md",
+    ]);
+    // Plain Markdown is not a dialect to translate: nothing is rewritten.
+    expect(plan.notes[0]!.content).toBe(text);
+    expect(plan.linksRewritten).toBe(0);
+  });
+
+  it("imports to the top of the repository when no folder is given", async () => {
+    const plan = await planImport([file("readme.md", "# Hi")], {
+      source: "markdown",
+      destination: "",
+      taken: [],
+    });
+    expect(plan.notes.map((note) => note.path)).toEqual(["readme.md"]);
+  });
+
+  it("keeps a picked folder's own structure, and the pictures beside the notes", async () => {
+    const plan = await planImport(
+      [
+        file("notes/a.md", "# A"),
+        file("notes/sub/b.md", "# B"),
+        file("notes/sub/pic.png", new Uint8Array([137, 80, 78, 71]), "image/png"),
+      ],
+      { source: "markdown", destination: "Imported", taken: [] },
+    );
+    expect(plan.notes.map((note) => note.path)).toEqual(["Imported/a.md", "Imported/sub/b.md"]);
+    expect(plan.assets.map((asset) => asset.path)).toEqual(["Imported/sub/pic.png"]);
+  });
+
+  it("never replaces a note already in the repository", async () => {
+    const plan = await planImport([file("plan.md", "# New")], {
+      source: "markdown",
+      destination: "",
+      taken: ["plan.md"],
+    });
+    expect(plan.notes[0]!.path).not.toBe("plan.md");
+    expect(plan.notes[0]!.path).toMatch(/\.md$/);
+  });
+});
+
 describe("planImport limits", () => {
   it("skips a note or attachment too large to commit", async () => {
     const big = new Uint8Array(3 * 1024 * 1024 + 1);

@@ -482,17 +482,30 @@ export function EncryptedNotes() {
 export function Importing() {
   return (
     <>
-      <Lead>Bring an Obsidian vault or a Notion export across, links and pictures included.</Lead>
+      <Lead>
+        Bring Markdown files from your computer into a repository — or an Obsidian vault or a Notion
+        export, links and pictures included.
+      </Lead>
       <OL>
         <LI>
-          <strong>/ → Import notes from Obsidian or Notion</strong>.
+          The <strong>Import</strong> button beside <strong>New Note</strong> in the sidebar, or{" "}
+          <strong>⌘K → Import Markdown files</strong>.
         </LI>
-        <LI>Pick where it comes from, and the folder it goes into.</LI>
         <LI>
-          <strong>Choose folder…</strong>, check what will come across, then <strong>Import</strong>
-          .
+          Pick <strong>Markdown files</strong>, <strong>Obsidian vault</strong> or{" "}
+          <strong>Notion export</strong>, then the repository and the folder the notes go into.
+        </LI>
+        <LI>
+          <strong>Choose files…</strong>, <strong>Choose a folder…</strong>, or drop them on the
+          dialog. Check where each note will land, then <strong>Import</strong>.
         </LI>
       </OL>
+      <H3>Markdown files</H3>
+      <P>
+        Any <Code>.md</Code> files, or a folder of them. They come across exactly as written; a
+        folder keeps its own sub-folders, and pictures beside the notes are copied too. A name that
+        is already taken in that folder gets a number instead, and the dialog says which.
+      </P>
       <H3>Obsidian</H3>
       <P>
         Choose the vault folder. Folders and front matter come across as they are;{" "}

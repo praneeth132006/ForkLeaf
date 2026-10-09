@@ -2009,7 +2009,9 @@ export function EditorWorkspace() {
      * redirect, not a page.
      */
     const here = `${window.location.pathname}${window.location.search}`;
-    window.location.assign(`${GITHUB_SIGN_IN_URL}?next=${encodeURIComponent(here)}`);
+    const target = new URL(GITHUB_SIGN_IN_URL, window.location.origin);
+    target.searchParams.set("next", here);
+    window.location.assign(target.toString());
   }, []);
 
   /**
@@ -3715,10 +3717,11 @@ export function EditorWorkspace() {
       );
       list.push({
         id: "import",
-        label: "Import notes from Obsidian or Notion",
+        label: "Import Markdown files",
         group: "Notes",
-        hint: "A vault or an unzipped Notion export, into a folder of its own",
-        keywords: "import obsidian notion vault export migrate move bring notes folder markdown",
+        hint: ".md files or a folder from this computer — or an Obsidian vault or Notion export",
+        keywords:
+          "import upload md markdown files laptop computer folder obsidian notion vault export migrate move bring notes",
         run: () => setDialog("import"),
       });
       list.push({
@@ -4425,6 +4428,7 @@ export function EditorWorkspace() {
                 ? { onOpenPdfBeside: (path: string) => openRepoPdf(path, "", "beside") }
                 : {})}
               {...(localFiles.supported ? { onOpenPdfFile: () => void localFiles.openPdf() } : {})}
+              onImportFiles={() => setDialog("import")}
               onCreateNote={handleCreate}
               currentFolder={currentFolder}
               onDeleteNote={handleDelete}
@@ -5637,6 +5641,21 @@ export function EditorWorkspace() {
         <ImportDialog
           onClose={() => setDialog(null)}
           taken={takenPaths}
+          initialFolder={currentFolder}
+          folders={collectFolders(notebook.tree)}
+          repositories={notebook.workspaces.map((entry) => ({
+            id: entry.id,
+            label: entry.name,
+            detail: entry.isLocal
+              ? "This device only"
+              : `${entry.repo.owner}/${entry.repo.repo} · ${entry.repo.branch}`,
+          }))}
+          repository={workspace.id}
+          onChooseRepository={(id) => {
+            const next = notebook.workspaces.find((entry) => entry.id === id);
+            if (next) notebook.switchWorkspace(next);
+          }}
+          ready={notebook.treeFor === workspace.id}
           onImport={(plan) =>
             notebook.importDocuments(
               plan.notes.map((entry) => ({ path: entry.path, raw: entry.content })),

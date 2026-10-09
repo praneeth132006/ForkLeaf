@@ -9,6 +9,16 @@ description, and the heading becomes the day's date when they ship.
 
 ## Unreleased
 
+### Import Markdown files from your computer
+
+**Import**, at the top of the notes list (or ⌘K → **Import Markdown files**),
+brings `.md` files into a repository: pick files, pick a folder, or drop them on
+the dialog. Choose which connected repository and which folder they go into,
+see where each note will land, then import. They come across exactly as
+written, with pictures beside them copied too; a name already taken gets a
+number, and the dialog says which. Obsidian vaults and Notion exports are the
+other two options in the same dialog.
+
 ### Drawing diagrams, made calmer
 
 The diagram canvas works more like a whiteboard:
