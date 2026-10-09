@@ -38,7 +38,7 @@
     "@forkleaf/types": "workspace:*",
     "@types/node": "^24",
     "esbuild": "^0.28.2",
-    "tsx": "^4.23.12",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3"
   },
   "publishConfig": {
