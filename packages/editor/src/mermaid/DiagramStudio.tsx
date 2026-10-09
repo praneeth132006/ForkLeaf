@@ -30,6 +30,15 @@ import { SequenceCanvas } from "./SequenceCanvas";
 export type StudioView = "canvas" | "preview";
 
 /**
+ * Which panes are on screen.
+ *
+ * The diagram alone is the default: most people open a diagram to look at it
+ * or drag it about, and a column of Mermaid syntax beside it is noise until
+ * they want it. Source alone and both side by side are one click away.
+ */
+export type StudioLayout = "diagram" | "split" | "source";
+
+/**
  * How the studio is dressed.
  *
  * `flat` is one continuous slab divided by hairlines — right for a dialog,
@@ -50,6 +59,8 @@ export interface DiagramStudioProps {
   theme?: "light" | "dark";
   /** Which pane the right-hand side opens on. */
   initialView?: StudioView;
+  /** Which panes are on screen to begin with. The diagram alone by default. */
+  initialLayout?: StudioLayout;
   /** How the panes are dressed. See `StudioChrome`. */
   chrome?: StudioChrome;
   /**
@@ -95,6 +106,7 @@ export function DiagramStudio({
   onChange,
   theme,
   initialView = "canvas",
+  initialLayout = "diagram",
   chrome = "flat",
   initialSplit = DEFAULT_SPLIT,
 }: DiagramStudioProps) {
@@ -119,8 +131,9 @@ export function DiagramStudio({
   const [showCheatsheet, setShowCheatsheet] = useState(false);
   // Either pane can be given the whole width — a diagram big enough to be worth
   // drawing carefully wants the room, and so does a long source file.
-  const [showSource, setShowSource] = useState(true);
-  const [showDiagram, setShowDiagram] = useState(true);
+  const [layout, setLayout] = useState<StudioLayout>(initialLayout);
+  const showSource = layout !== "diagram";
+  const showDiagram = layout !== "source";
 
   const [split, setSplit] = useState(() => clampSplit(initialSplit));
   const [dragging, setDragging] = useState(false);
@@ -293,26 +306,37 @@ export function DiagramStudio({
           layered ? "fl-panel" : "border-b border-[var(--fl-border)]"
         }`}
       >
+        {/* One choice of three rather than two independent toggles: two
+            switches allowed a fourth state — both off — that had to be
+            refused, and a refused click reads as a broken button. */}
         <div
-          className="flex rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] p-0.5"
-          role="group"
-          aria-label="Studio panes"
+          className="flex rounded-lg border border-[var(--fl-border-strong)] bg-[var(--fl-bg)] p-0.5"
+          role="radiogroup"
+          aria-label="What to show"
         >
           <PaneToggle
-            active={showSource}
-            // Never let both panes be hidden — an empty studio is not a state
-            // anyone asked for.
-            onClick={() => (showDiagram ? setShowSource((value) => !value) : undefined)}
-            title="Show or hide the Mermaid source"
+            active={layout === "diagram"}
+            onClick={() => setLayout("diagram")}
+            title="The diagram on its own"
           >
-            Source
+            <LayoutGlyph layout="diagram" />
+            Diagram
           </PaneToggle>
           <PaneToggle
-            active={showDiagram}
-            onClick={() => (showSource ? setShowDiagram((value) => !value) : undefined)}
-            title="Show or hide the diagram"
+            active={layout === "split"}
+            onClick={() => setLayout("split")}
+            title="The diagram and its Mermaid source side by side"
           >
-            Diagram
+            <LayoutGlyph layout="split" />
+            Both
+          </PaneToggle>
+          <PaneToggle
+            active={layout === "source"}
+            onClick={() => setLayout("source")}
+            title="The Mermaid source on its own"
+          >
+            <LayoutGlyph layout="source" />
+            Source
           </PaneToggle>
         </div>
 
@@ -459,8 +483,8 @@ export function DiagramStudio({
 
               {canvasAvailable && (
                 <div
-                  className="ml-auto flex rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] p-0.5"
-                  role="tablist"
+                  className="ml-auto flex rounded-lg border border-[var(--fl-border-strong)] bg-[var(--fl-bg)] p-0.5"
+                  role="radiogroup"
                   aria-label="Diagram view"
                 >
                   <PaneToggle
@@ -562,10 +586,11 @@ function PaneToggle({
   return (
     <button
       type="button"
-      aria-pressed={active}
+      role="radio"
+      aria-checked={active}
       onClick={onClick}
       title={title}
-      className={`rounded-[6px] px-3 py-1 text-[13px] font-medium transition-colors ${
+      className={`flex items-center gap-1.5 rounded-[6px] px-3 py-1 text-[13px] font-medium transition-colors ${
         active
           ? "bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)]"
           : "text-[var(--fl-muted)] hover:text-[var(--fl-text)]"
@@ -573,5 +598,34 @@ function PaneToggle({
     >
       {children}
     </button>
+  );
+}
+
+/** A small picture of each layout: the diagram, both halves, or the source. */
+function LayoutGlyph({ layout }: { layout: StudioLayout }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className="h-3.5 w-3.5 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2" />
+      {layout === "diagram" && (
+        <>
+          <rect x="4.5" y="5.5" width="3" height="2.5" rx="0.6" />
+          <rect x="8.5" y="8.5" width="3" height="2.5" rx="0.6" />
+          <path d="M7.5 6.75h2.25v1.75" />
+        </>
+      )}
+      {layout === "split" && <path d="M8 2.75v10.5M3.75 6h2.5M3.75 8.5h2" />}
+      {layout === "source" && (
+        <path d="M5 6.25 3.75 8 5 9.75M11 6.25 12.25 8 11 9.75M9 5.5 7 10.5" />
+      )}
+    </svg>
   );
 }

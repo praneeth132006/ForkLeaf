@@ -9,6 +9,13 @@ description, and the heading becomes the day's date when they ship.
 
 ## Unreleased
 
+### Diagrams open on the diagram
+
+The diagram editor opens on the diagram alone now, not on a column of Mermaid
+source beside it. **Diagram**, **Both** and **Source** at the top switch
+between the three — one choice rather than two toggles that could not both be
+off.
+
 ### Sign in with one click
 
 **Sign in** and **Continue with GitHub** go straight to GitHub now. The sign-in
