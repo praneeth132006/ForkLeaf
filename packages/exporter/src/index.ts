@@ -22,6 +22,8 @@ export {
   type BookFile,
   type BookNote,
   type BuildBookOptions,
+  type BookComments,
+  commentsSection,
 } from "./book";
 export { toDocx } from "./docx";
 export { gardenLinks, gardenLayout, gardenMapSvg, type GardenLinks } from "./garden";
