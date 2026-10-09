@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question
+    url: https://github.com/praneeth132006/ForkLeaf/discussions/categories/q-a
+    about: Questions about using or running ForkLeaf belong in Discussions.
+  - name: Share an idea
+    url: https://github.com/praneeth132006/ForkLeaf/discussions/categories/ideas
+    about: Talk through a larger idea before it becomes a feature request.
+  - name: Report a security vulnerability
+    url: https://github.com/praneeth132006/ForkLeaf/security/advisories/new
+    about: Please report security issues privately, never in a public issue.
+  - name: Documentation
+    url: https://www.forkleaf.in/docs
+    about: Guides for every part of ForkLeaf.

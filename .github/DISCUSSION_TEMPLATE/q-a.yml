@@ -1,0 +1,24 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for asking! Have a quick look at the [documentation](https://www.forkleaf.in/docs) first; the answer may already be there.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: What are you trying to do, and what happened instead?
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where are you using ForkLeaf?
+      options:
+        - www.forkleaf.in
+        - Running it locally
+        - Self-hosted deployment
+        - Browser extension
+        - MCP server / AI assistant
+    validations:
+      required: true

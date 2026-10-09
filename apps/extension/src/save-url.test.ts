@@ -33,7 +33,7 @@ describe("normaliseOrigin", () => {
 });
 
 describe("saveUrl", () => {
-  const origin = "https://forkleaf.vercel.app";
+  const origin = "https://www.forkleaf.in";
 
   it("builds the save address the app reads", () => {
     const url = new URL(
@@ -44,7 +44,7 @@ describe("saveUrl", () => {
         text: "Some words",
       }),
     );
-    expect(url.origin + url.pathname).toBe("https://forkleaf.vercel.app/save");
+    expect(url.origin + url.pathname).toBe("https://www.forkleaf.in/save");
     expect(Object.fromEntries(url.searchParams)).toEqual({
       save: "1",
       kind: "quote",

@@ -182,7 +182,7 @@ describe("the generator stamp", () => {
       existingPaths: [],
     });
 
-    expect(note.frontmatter.generator).toBe("https://forkleaf.vercel.app");
+    expect(note.frontmatter.generator).toBe("https://www.forkleaf.in");
   });
 });
 

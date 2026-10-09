@@ -1,0 +1,15 @@
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is hard or missing today? A real example helps most.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How might ForkLeaf solve it? Rough sketches are welcome.
+    validations:
+      required: true

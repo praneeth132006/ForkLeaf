@@ -8,7 +8,7 @@ import { REPO_URL } from "@/lib/constants";
 
 const EXTENSION_URL = `${REPO_URL}/tree/main/apps/extension`;
 const MCP_URL = `${REPO_URL}/tree/main/packages/mcp`;
-const ADDRESS = "https://forkleaf.vercel.app/api/mcp";
+const ADDRESS = "https://www.forkleaf.in/api/mcp";
 
 export function BrowserExtension() {
   return (
@@ -48,7 +48,7 @@ export function BrowserExtension() {
           the toolbar.
         </LI>
         <LI>
-          Only if you run ForkLeaf somewhere other than <Code>https://forkleaf.vercel.app</Code>:
+          Only if you run ForkLeaf somewhere other than <Code>https://www.forkleaf.in</Code>:
           right-click the button → <strong>Options</strong> and enter that address.
         </LI>
       </OL>

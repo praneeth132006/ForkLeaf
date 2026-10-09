@@ -305,7 +305,7 @@ ForkLeaf address in its **Options**.
   right-click → **Show my ForkLeaf highlights here** marks them again.
 
 It opens ForkLeaf's save address, so ForkLeaf still asks before saving. It needs
-no account and no host permissions. Step-by-step install: [/docs/browser-extension](https://forkleaf.vercel.app/docs/browser-extension), or `apps/extension/README.md`.
+no account and no host permissions. Step-by-step install: [/docs/browser-extension](https://www.forkleaf.in/docs/browser-extension), or `apps/extension/README.md`.
 
 ### Everything you saved
 
@@ -602,16 +602,16 @@ Claude Code, Claude Desktop, claude.ai, Cursor, VS Code or any other MCP client
 can work with your notes. Setup is one address and a sign-in:
 
 1. In the editor, **All tools → Connect an AI assistant** (or `/connect`) shows
-   the address, `https://forkleaf.vercel.app/api/mcp`, and a copy-ready step
+   the address, `https://www.forkleaf.in/api/mcp`, and a copy-ready step
    for each assistant — for Claude Code:
-   `claude mcp add --transport http forkleaf https://forkleaf.vercel.app/api/mcp`.
+   `claude mcp add --transport http forkleaf https://www.forkleaf.in/api/mcp`.
 2. The assistant opens ForkLeaf in your browser. Choose the repository it may
    use (optionally a folder, a branch, and **Read only**) and press **Allow**.
 
 There is no token to create. The assistant keeps and renews its own sign-in;
 ForkLeaf stores nothing about the connection. `packages/mcp` is the same set of
 tools as a local server, for anyone who would rather run it themselves. Full
-guide: [/docs/mcp](https://forkleaf.vercel.app/docs/mcp).
+guide: [/docs/mcp](https://www.forkleaf.in/docs/mcp).
 
 | Tool                   | What the assistant can do                           |
 | ---------------------- | --------------------------------------------------- |
