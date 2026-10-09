@@ -1,12 +1,12 @@
 import {
   mermaidToGraph,
   splitMembers,
-  tidyLayout,
   type Graph,
   type GraphEdge,
   type GraphNode,
 } from "./graph-model";
 import { hasMembers, isMarker, sizeOf, MEMBER_HEADER, MEMBER_HEIGHT, type Size } from "./geometry";
+import { tidyLayout } from "./layout";
 import type { DiagramDiff, DiffStatus, GraphDiff } from "./diff";
 
 /**

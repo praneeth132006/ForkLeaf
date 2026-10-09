@@ -8,12 +8,13 @@ import {
   updateNode,
   nextNodeId,
   splitMembers,
-  tidyLayout,
   duplicateNodes,
   moveNodes,
   removeMany,
   type Graph,
 } from "./graph-model";
+import { tidyLayout } from "./layout";
+import { sizeOf } from "./geometry";
 import { detectKind, DIAGRAM_TEMPLATES } from "./templates";
 import { parseMermaidError } from "./errors";
 import { completionsFor, expandSnippet } from "./completions";
@@ -652,6 +653,83 @@ describe("tidyLayout", () => {
     };
 
     expect(tidyLayout(cyclic).nodes).toHaveLength(2);
+  });
+
+  it("draws a loop as an arrow going back, not by moving the step it returns to", () => {
+    // The flowchart template's shape: a retry arrow from "Show error" back up
+    // to "Collect input". Layered naively, that arrow pushed "Collect input"
+    // below everything and the arrow from "Start" ran through every box.
+    const loop: Graph = {
+      kind: "flowchart",
+      direction: "TD",
+      nodes: [
+        { id: "start", label: "Start", shape: "stadium", x: 0, y: 0 },
+        { id: "input", label: "Collect input", shape: "parallelogram", x: 0, y: 0 },
+        { id: "valid", label: "Valid?", shape: "diamond", x: 0, y: 0 },
+        { id: "save", label: "Save to database", shape: "cylinder", x: 0, y: 0 },
+        { id: "error", label: "Show error", shape: "rect", x: 0, y: 0 },
+        { id: "done", label: "Done", shape: "stadium", x: 0, y: 0 },
+      ],
+      edges: [
+        { id: "e1", from: "start", to: "input", style: "arrow" },
+        { id: "e2", from: "input", to: "valid", style: "arrow" },
+        { id: "e3", from: "valid", to: "save", style: "arrow", label: "Yes" },
+        { id: "e4", from: "valid", to: "error", style: "arrow", label: "No" },
+        { id: "e5", from: "error", to: "input", style: "arrow" },
+        { id: "e6", from: "save", to: "done", style: "arrow" },
+      ],
+    };
+    const tidy = tidyLayout(loop);
+    const y = (id: string) => tidy.nodes.find((node) => node.id === id)!.y;
+
+    expect(y("start")).toBeLessThan(y("input"));
+    expect(y("input")).toBeLessThan(y("valid"));
+    expect(y("valid")).toBeLessThan(y("save"));
+    expect(y("save")).toBe(y("error"));
+    expect(y("done")).toBeGreaterThan(y("save"));
+  });
+
+  it("centres boxes of different widths on one axis", () => {
+    const tidy = tidyLayout({
+      kind: "flowchart",
+      direction: "TD",
+      nodes: [
+        { id: "a", label: "Go", shape: "rect", x: 0, y: 0 },
+        { id: "b", label: "A much longer label than the first", shape: "rect", x: 0, y: 0 },
+      ],
+      edges: [{ id: "e", from: "a", to: "b", style: "arrow" }],
+    });
+    const centre = (id: string) => {
+      const node = tidy.nodes.find((n) => n.id === id)!;
+      return node.x + sizeOf(node).width / 2;
+    };
+    expect(Math.abs(centre("a") - centre("b"))).toBeLessThanOrEqual(8);
+  });
+
+  it("runs bottom to top when the diagram does", () => {
+    const tidy = tidyLayout({ ...messy, direction: "BT" });
+    const y = (id: string) => tidy.nodes.find((node) => node.id === id)!.y;
+    expect(y("a")).toBeGreaterThan(y("d"));
+  });
+
+  it("orders a layer to avoid crossing arrows", () => {
+    // Written in the order that would cross: p1's child second, p2's first.
+    const tidy = tidyLayout({
+      kind: "flowchart",
+      direction: "TD",
+      nodes: [
+        { id: "p1", label: "P1", shape: "rect", x: 0, y: 0 },
+        { id: "p2", label: "P2", shape: "rect", x: 0, y: 0 },
+        { id: "c2", label: "C2", shape: "rect", x: 0, y: 0 },
+        { id: "c1", label: "C1", shape: "rect", x: 0, y: 0 },
+      ],
+      edges: [
+        { id: "e1", from: "p1", to: "c1", style: "arrow" },
+        { id: "e2", from: "p2", to: "c2", style: "arrow" },
+      ],
+    });
+    const x = (id: string) => tidy.nodes.find((node) => node.id === id)!.x;
+    expect(x("c1")).toBeLessThan(x("c2"));
   });
 
   it("leaves an empty graph alone", () => {

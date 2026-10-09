@@ -9,6 +9,15 @@ description, and the heading becomes the day's date when they ship.
 
 ## Unreleased
 
+### Tidy up that tidies
+
+**Tidy up** on the diagram canvas handles loops now. A "No → try again" arrow
+used to push the step it returns to below everything else, so the main arrow
+into that step ran through every box in between. Loops are drawn as an arrow
+going back instead; each row is ordered to cross as few arrows as it can; boxes
+of different widths are centred on one line; and bottom-to-top and
+right-to-left diagrams are laid out that way round.
+
 ### Diagrams open on the diagram
 
 The diagram editor opens on the diagram alone now, not on a column of Mermaid
