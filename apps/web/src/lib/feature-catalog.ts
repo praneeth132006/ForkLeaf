@@ -702,6 +702,24 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new", "github"],
       },
       {
+        id: "passages",
+        title: "Talk about a passage",
+        summary:
+          "Select words in a note and press Discuss: a thread about just that passage, listed beside the note, with a warning when its words are rewritten.",
+        how: "Select text in a note, then Discuss",
+        docs: "/docs/conversations#passages",
+        tags: ["new", "github"],
+      },
+      {
+        id: "page-comments",
+        title: "Comments on published books",
+        summary:
+          "Readers comment under every page with their GitHub account, and each page's comments are the same conversation as its note's Chat tab.",
+        how: "Publish as a book… → Comments on every page",
+        docs: "/docs/conversations#comments",
+        tags: ["new", "github"],
+      },
+      {
         id: "mcp",
         title: "Use your notebook from an AI assistant",
         summary:

@@ -556,6 +556,60 @@ export function Conversations() {
         kept from.
       </Note>
 
+      <H2 id="passages">Talk about a passage</H2>
+      <P>
+        Select some words in a note and press <strong>Discuss</strong>, the button that appears
+        under the selection. The Chat tab opens with the passage quoted, and your first message
+        starts a thread about those words alone.
+      </P>
+      <UL>
+        <LI>
+          The Chat tab lists a note&rsquo;s passage threads above its own messages, marking new and
+          answered ones. Click one to read it in the Lounge.
+        </LI>
+        <LI>
+          <strong>Show in note</strong> selects the passage on the page. If the words have since
+          been rewritten, the thread says <em>Passage changed since</em> instead of pointing at the
+          wrong place.
+        </LI>
+        <LI>
+          A passage is matched by its words, ignoring spacing, so it is found in rich text, in the
+          source view and after a paragraph is re-wrapped.
+        </LI>
+      </UL>
+      <P>
+        <Code>[[Links]]</Code> in any message, in the Chat tab or the Lounge, open the note they
+        name.
+      </P>
+
+      <H2 id="comments">Comments on published books and gardens</H2>
+      <P>
+        In <strong>Publish as a book…</strong>, tick <strong>Comments on every page</strong>.
+        Readers sign in with GitHub to comment, through <A href="https://giscus.app">giscus</A>, an
+        open-source comments widget built on GitHub Discussions. Each page&rsquo;s comments are the
+        same conversation as its note&rsquo;s Chat tab, whichever side starts it.
+      </P>
+      <OL>
+        <LI>The notes repository must be public, so readers can see the comments.</LI>
+        <LI>Discussions must be switched on.</LI>
+        <LI>
+          The <A href="https://github.com/apps/giscus">giscus app</A> must be installed on the
+          repository. The dialog links to it.
+        </LI>
+      </OL>
+      <Note>
+        The comments load giscus&rsquo;s script on the published page, and only when a reader
+        scrolls down to them. Pages published without the box ticked load nothing extra.
+      </Note>
+
+      <H2 id="assistants">AI assistants</H2>
+      <P>
+        An assistant connected over <A href="/docs/mcp">MCP</A> can read a note&rsquo;s
+        conversation, list every conversation or only the unanswered questions, and read one in
+        full. It can reply too, under your name. It is told to do that only when you ask, after
+        showing you the text, and it cannot reply on a read-only connection.
+      </P>
+
       <H2 id="self-hosting">Running your own ForkLeaf</H2>
       <P>
         ForkLeaf signs in as a GitHub App, and a GitHub App can only do what its permissions allow.

@@ -361,6 +361,19 @@ export function McpServer() {
           [<Code key="3">read_note</Code>, "One note in full, with the notes that link to it"],
           [<Code key="4">write_note</Code>, "Create a note, or replace one, as a single commit"],
           [<Code key="5">append_to_daily_note</Code>, "Add to today's journal/YYYY-MM-DD.md"],
+          [
+            <Code key="6">read_note_conversation</Code>,
+            "What collaborators said about a note, and the threads about its passages",
+          ],
+          [
+            <Code key="7">list_conversations</Code>,
+            "Every conversation, or only unanswered questions",
+          ],
+          [<Code key="8">read_conversation</Code>, "One conversation in full"],
+          [
+            <Code key="9">reply_to_conversation</Code>,
+            "Post a reply under your name — only when you ask, after you have seen the text",
+          ],
         ]}
       />
       <P>

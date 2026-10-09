@@ -48,6 +48,7 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] A documentation page for every feature
 - [x] Talk about a note with collaborators, in GitHub Discussions
 - [x] The Lounge: every conversation as channels, answers, and threads saved as notes
+- [x] Threads about passages, comments on published books, and conversations for AI assistants
 
 What comes next is tracked in [future-implementations.md](future-implementations.md).
 
@@ -615,13 +616,17 @@ ForkLeaf stores nothing about the connection. `packages/mcp` is the same set of
 tools as a local server, for anyone who would rather run it themselves. Full
 guide: [/docs/mcp](https://www.forkleaf.in/docs/mcp).
 
-| Tool                   | What the assistant can do                           |
-| ---------------------- | --------------------------------------------------- |
-| `search_notes`         | Search every note, with the line each match is on   |
-| `list_notes`           | List the notes, or those in one folder              |
-| `read_note`            | Read a note in full, with the notes that link to it |
-| `write_note`           | Create or replace a note, as one commit             |
-| `append_to_daily_note` | Add to today's `journal/YYYY-MM-DD.md`              |
+| Tool                     | What the assistant can do                              |
+| ------------------------ | ------------------------------------------------------ |
+| `search_notes`           | Search every note, with the line each match is on      |
+| `list_notes`             | List the notes, or those in one folder                 |
+| `read_note`              | Read a note in full, with the notes that link to it    |
+| `write_note`             | Create or replace a note, as one commit                |
+| `append_to_daily_note`   | Add to today's `journal/YYYY-MM-DD.md`                 |
+| `read_note_conversation` | What collaborators said about a note, and its passages |
+| `list_conversations`     | Every conversation, or only unanswered questions       |
+| `read_conversation`      | One conversation in full                               |
+| `reply_to_conversation`  | Post a reply, under your name, when you ask it to      |
 
 It works only on the repository you chose. It will not touch anything
 but notes, anything in a hidden folder, or anything outside the notebook, and it
@@ -696,6 +701,24 @@ on github.com.
   last read it. **Reply**, **Mark as answer** in Q&A-style categories, **Open
   note** and **Save as note**.
 - **New thread** starts one in any channel except Polls.
+
+### Talk about a passage
+
+Select words in a note and press **Discuss**, the button that appears under the
+selection. The Chat tab opens with the passage quoted, and your first message
+starts a thread about those words. The Chat tab lists a note's passage threads
+above its own messages: **New** ones, answered ones, and ones whose words have
+since been rewritten. **Show in note** selects the passage on the page.
+
+`[[Links]]` in any message open the note they name.
+
+### Comments on published books and gardens
+
+In **Publish as a book…**, tick **Comments on every page**. Readers sign in with
+GitHub to comment, through [giscus](https://giscus.app), and each page's
+comments are the same conversation as its note's Chat tab. It needs a public
+repository with Discussions on, and the giscus app installed on it; the dialog
+says which is missing.
 
 **Save as note** (in the Lounge or the Chat tab) writes the conversation into
 `conversations/`: who said what and when, the answer marked, and a link back.
