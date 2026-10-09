@@ -1,10 +1,5 @@
 import { type NextRequest } from "next/server";
-import {
-  GitHubError,
-  MAX_DISCUSSION_BODY,
-  discussionBody,
-  pickCategory,
-} from "@forkleaf/github-client";
+import { discussionBody, pickCategory } from "@forkleaf/github-client";
 import {
   ApiError,
   assertName,
@@ -13,6 +8,7 @@ import {
   normalize,
   requireClient,
 } from "@/lib/api-helpers";
+import { explained, isNodeId, readBody, readNumber } from "@/lib/discussions-api";
 
 /**
  * The conversation about a note, kept in the repository's GitHub Discussions.
@@ -25,14 +21,6 @@ import {
  * the discussion it found last time and the read is usually one request.
  */
 
-/**
- * A GraphQL node id. Two shapes: the current `DC_kwDO…` (URL-safe base64 with
- * a type prefix) and the legacy plain base64 older comments still carry,
- * which can contain `+` and `/`. It travels as a GraphQL variable, never in a
- * URL or a query string, so this is about rejecting junk, not escaping.
- */
-const NODE_ID = /^[\w=+/-]{1,200}$/;
-
 /** A repository path, the way notes are addressed everywhere else. */
 function readPath(value: unknown): string {
   const path = typeof value === "string" ? normalize(value) : "";
@@ -40,38 +28,6 @@ function readPath(value: unknown): string {
     throw new ApiError(400, "validation", "Name the note this conversation is about.");
   }
   return path;
-}
-
-function readNumber(value: unknown): number | undefined {
-  if (value === null || value === undefined || value === "") return undefined;
-  const number = Number(value);
-  if (!Number.isInteger(number) || number <= 0 || number > 10_000_000) {
-    throw new ApiError(400, "validation", "That is not a discussion number.");
-  }
-  return number;
-}
-
-/**
- * GitHub's refusal, said in a way that helps.
- *
- * "Resource not accessible by integration" is what GitHub says when ForkLeaf's
- * GitHub App was never given the Discussions permission, or was not installed
- * on this repository. Neither is something the reader did wrong, and neither
- * is fixed by trying again.
- */
-async function explained<T>(run: () => Promise<T>): Promise<T> {
-  try {
-    return await run();
-  } catch (error) {
-    if (error instanceof GitHubError && error.code === "forbidden") {
-      throw new ApiError(
-        403,
-        "discussions-forbidden",
-        "GitHub did not let ForkLeaf use Discussions in this repository. The repository's owner may need to approve ForkLeaf's access to Discussions on GitHub.",
-      );
-    }
-    throw error;
-  }
 }
 
 export async function GET(request: NextRequest) {
@@ -100,18 +56,10 @@ export async function POST(request: NextRequest) {
     const path = readPath(input.path);
     const knownNumber = readNumber(input.number);
 
-    const body = typeof input.body === "string" ? input.body.trim() : "";
-    if (!body) throw new ApiError(400, "validation", "Write something to send.");
-    if (body.length > MAX_DISCUSSION_BODY) {
-      throw new ApiError(400, "validation", "That message is longer than GitHub allows.");
-    }
+    const body = readBody(input.body);
 
     const replyTo = input.replyTo;
-    if (
-      replyTo !== undefined &&
-      replyTo !== null &&
-      !(typeof replyTo === "string" && NODE_ID.test(replyTo))
-    ) {
+    if (replyTo !== undefined && replyTo !== null && !isNodeId(replyTo)) {
       throw new ApiError(400, "validation", "That is not a message to reply to.");
     }
 
