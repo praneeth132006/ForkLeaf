@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { NoteConversationDto } from "@forkleaf/github-client";
-import { ApiGatewayError, readNoteConversation, sendNoteMessage } from "@/lib/gateway";
+import {
+  ApiGatewayError,
+  readNoteConversation,
+  sendNoteMessage,
+  setThreadAnswer,
+} from "@/lib/gateway";
 import {
   countUnread,
   latestMessageAt,
@@ -77,6 +82,11 @@ export function useNoteConversation(options: {
   sending: boolean;
   /** Posts a message. Resolves to an error to show, or null when it was sent. */
   send: (body: string, replyTo?: string) => Promise<ConversationError | null>;
+  /**
+   * Marks a message as the answer, or takes that back. Reads the conversation
+   * again afterwards: marking one answer unmarks any other.
+   */
+  setAnswer: (commentId: string, answer: boolean) => Promise<ConversationError | null>;
   /** Asks GitHub again now. */
   refresh: () => void;
 } {
@@ -227,5 +237,18 @@ export function useNoteConversation(options: {
 
   const refresh = useCallback(() => setTick((value) => value + 1), []);
 
-  return { state, unread, sending, send, refresh };
+  const setAnswer = useCallback(
+    async (commentId: string, answer: boolean): Promise<ConversationError | null> => {
+      try {
+        await setThreadAnswer({ owner, repo, commentId, answer });
+        setTick((value) => value + 1);
+        return null;
+      } catch (error) {
+        return asError(error);
+      }
+    },
+    [owner, repo],
+  );
+
+  return { state, unread, sending, send, setAnswer, refresh };
 }

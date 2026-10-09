@@ -285,3 +285,38 @@ describe("ConversationPanel — writing", () => {
     expect(onClose).toHaveBeenCalled();
   });
 });
+
+describe("ConversationPanel — v2 actions", () => {
+  it("saves the conversation as a note, and opens the Lounge", () => {
+    const onSaveAsNote = vi.fn();
+    const onOpenLounge = vi.fn();
+    const d = discussion([message("a")]);
+    setup({ state: ready(d), onSaveAsNote, onOpenLounge });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save this conversation as a note" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Every conversation in this notebook (the Lounge)" }),
+    );
+
+    expect(onSaveAsNote).toHaveBeenCalledWith(d);
+    expect(onOpenLounge).toHaveBeenCalled();
+  });
+
+  it("does not offer to save a conversation with nothing in it", () => {
+    setup({ state: ready(null), onSaveAsNote: vi.fn() });
+    expect(screen.queryByRole("button", { name: "Save this conversation as a note" })).toBeNull();
+  });
+
+  it("marks an answer through the conversation", async () => {
+    const setAnswer = vi.fn().mockResolvedValue(null);
+    setup({
+      state: ready(discussion([message("a", { canMarkAnswer: true })], { answerable: true })),
+      setAnswer,
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Mark as answer" }));
+    });
+    expect(setAnswer).toHaveBeenCalledWith("a", true);
+  });
+});

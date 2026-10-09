@@ -12,6 +12,7 @@ import {
 
 const readNoteConversation = vi.fn();
 const sendNoteMessage = vi.fn();
+const setThreadAnswer = vi.fn();
 
 vi.mock("@/lib/gateway", async () => {
   const actual = await vi.importActual<typeof import("@/lib/gateway")>("@/lib/gateway");
@@ -19,6 +20,7 @@ vi.mock("@/lib/gateway", async () => {
     ...actual,
     readNoteConversation: (...args: unknown[]) => readNoteConversation(...args),
     sendNoteMessage: (...args: unknown[]) => sendNoteMessage(...args),
+    setThreadAnswer: (...args: unknown[]) => setThreadAnswer(...args),
   };
 });
 
@@ -321,5 +323,44 @@ describe("useNoteConversation", () => {
       code: "locked",
       message: "This conversation has been locked on GitHub.",
     });
+  });
+});
+
+describe("useNoteConversation — answers", () => {
+  it("marks an answer and reads the conversation again", async () => {
+    readNoteConversation.mockResolvedValue(conversation([comment("c1", "2026-10-01T10:00:00Z")]));
+    setThreadAnswer.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useNoteConversation({ target, active: true }));
+    await settle();
+
+    let failure: unknown = "unset";
+    await act(async () => {
+      failure = await result.current.setAnswer("c1", true);
+    });
+    await settle();
+
+    expect(failure).toBeNull();
+    expect(setThreadAnswer).toHaveBeenCalledWith({
+      owner: "me",
+      repo: "notes",
+      commentId: "c1",
+      answer: true,
+    });
+    expect(readNoteConversation).toHaveBeenCalledTimes(2);
+  });
+
+  it("hands back why it could not", async () => {
+    readNoteConversation.mockResolvedValue(conversation([]));
+    setThreadAnswer.mockRejectedValue(new ApiGatewayError("discussions-forbidden", "No.", 403));
+
+    const { result } = renderHook(() => useNoteConversation({ target, active: true }));
+    await settle();
+
+    let failure: unknown = null;
+    await act(async () => {
+      failure = await result.current.setAnswer("c1", true);
+    });
+    expect(failure).toEqual({ code: "discussions-forbidden", message: "No." });
   });
 });
