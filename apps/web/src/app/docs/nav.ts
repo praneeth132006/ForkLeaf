@@ -172,7 +172,7 @@ export const DOC_SECTIONS: DocSection[] = [
         slug: "signing-in",
         title: "Signing in",
         summary:
-          "What the GitHub OAuth flow does, which permissions it asks for, and why it needs them.",
+          "Which permissions ForkLeaf asks GitHub for, what it uses them for, and how to revoke them.",
       },
       {
         slug: "repositories",

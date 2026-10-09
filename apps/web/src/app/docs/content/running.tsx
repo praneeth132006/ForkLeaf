@@ -126,8 +126,8 @@ export function Faq() {
         <Code>repo</Code> is the narrowest classic OAuth scope that can write to a private
         repository; GitHub has no per-repository classic scope. It is also the only scope asked for
         — nothing about your profile, email, organisations or gists is requested alongside it. If
-        you only keep public notes, <Code>public_repo</Code> is offered as an equal choice.{" "}
-        <A href="/docs/signing-in">Signing in</A>.
+        you only keep public notes, <Code>public_repo</Code> is offered on the sign-in page as{" "}
+        <strong>Public repositories only</strong>. <A href="/docs/signing-in">Signing in</A>.
       </Def>
       <Def term="Can I use a repository I already have?">
         Yes — any repository you can write to, on any branch, and optionally scoped to a single

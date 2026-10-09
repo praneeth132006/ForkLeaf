@@ -31,6 +31,8 @@ export interface EditorSidebarProps {
   onOpenPdfBeside?: (path: string) => void;
   /** Opens a PDF from this computer. Absent where the browser cannot. */
   onOpenPdfFile?: () => void;
+  /** Opens the import dialog, for .md files from this computer. */
+  onImportFiles?: () => void;
   onCreateNote: (folder: string) => void;
   /**
    * The folder a new note belongs in when nobody has said otherwise — the
@@ -595,6 +597,35 @@ export function EditorSidebar(props: EditorSidebarProps) {
           <p className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
             {props.activeWorkspace?.isLocal ? "Notes" : "Repository"}
           </p>
+
+          {/* Importing sits on the list it adds to, labelled, rather than only
+              in ⌘K where nobody looking for "upload" would find it. It is not
+              a fourth square beside New Note: at the sidebar's default width
+              that squeezed the one button people come here for to "Ne…". */}
+          {props.onImportFiles && (
+            <button
+              type="button"
+              onClick={props.onImportFiles}
+              title="Import .md files from this computer"
+              aria-label="Import Markdown files"
+              className="flex h-5 shrink-0 items-center gap-1 rounded px-1.5 text-[11px] font-medium text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+            >
+              <svg
+                viewBox="0 0 16 16"
+                aria-hidden="true"
+                className="h-3 w-3"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              >
+                <path d="M8 2.25v7.5M5 6.75l3 3 3-3" />
+                <path d="M2.75 10.25v1.5c0 .83.67 1.5 1.5 1.5h7.5c.83 0 1.5-.67 1.5-1.5v-1.5" />
+              </svg>
+              Import
+            </button>
+          )}
 
           <button
             type="button"

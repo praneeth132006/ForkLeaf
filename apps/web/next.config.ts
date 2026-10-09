@@ -27,6 +27,16 @@ const nextConfig: NextConfig = {
   ],
 
   /**
+   * `/changelog` renders the repository's CHANGELOG.md, copied into
+   * `content/` by scripts/copy-changelog.mjs before dev and build. Shipped with
+   * that page explicitly, because the page reads it with a path the tracer is
+   * told to leave alone.
+   */
+  outputFileTracingIncludes: {
+    "/changelog": ["./content/CHANGELOG.md"],
+  },
+
+  /**
    * Baseline headers for every response, including the static assets that
    * `src/proxy.ts` deliberately skips. The policy work that needs a per-request
    * value — Content-Security-Policy with its nonce, HSTS, the cross-origin

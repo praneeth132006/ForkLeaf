@@ -738,10 +738,10 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
       },
       {
         id: "import",
-        title: "Import from Obsidian or Notion",
+        title: "Import Markdown files",
         summary:
-          "Bring a vault or a Notion export across, with embeds turned into images and links rewritten to still work.",
-        how: "⌘K → Import notes from Obsidian or Notion",
+          "Bring .md files or a folder from your computer into any connected repository — or an Obsidian vault or Notion export, with embeds turned into images and links rewritten to still work.",
+        how: "Import, beside New Note — or ⌘K → Import Markdown files",
         tags: ["new"],
       },
       {

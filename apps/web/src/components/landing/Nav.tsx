@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ForkLeafLogo } from "@/components/Brand";
-import { REPO_URL } from "@/lib/constants";
+import { GITHUB_SIGN_IN_URL, REPO_URL } from "@/lib/constants";
 import { ThemeToggle } from "./ThemeToggle";
 import { SectionLink } from "./SectionLink";
 
@@ -83,7 +83,7 @@ export function Nav({
             </Link>
           ) : (
             githubAvailable && (
-              <a href="/sign-in" className="fl-btn fl-btn-primary !px-4 !py-2 !text-sm">
+              <a href={GITHUB_SIGN_IN_URL} className="fl-btn fl-btn-primary !px-4 !py-2 !text-sm">
                 <GitHubGlyph />
                 Sign in
               </a>

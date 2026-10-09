@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { GITHUB_SIGN_IN_URL } from "@/lib/constants";
 import { ForkLeafMark } from "@/components/Brand";
 import { GitHubGlyph } from "./Nav";
 
@@ -39,7 +40,7 @@ export function CallToAction({ githubAvailable }: { githubAvailable: boolean }) 
 
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
             {githubAvailable && (
-              <a href="/sign-in" className="fl-btn fl-btn-primary !rounded-full !px-6">
+              <a href={GITHUB_SIGN_IN_URL} className="fl-btn fl-btn-primary !rounded-full !px-6">
                 <GitHubGlyph />
                 Continue with GitHub
               </a>

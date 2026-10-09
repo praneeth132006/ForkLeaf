@@ -36,7 +36,7 @@ describe("ImportDialog", () => {
   });
 
   it("shows what an Obsidian vault will bring, then imports it", async () => {
-    const props = open();
+    const props = open({ initialSource: "obsidian" });
     choose([
       picked("Vault/one.md", "# One\n\n![[missing.png]]"),
       picked("Vault/Ideas/two.md", "# Two"),
@@ -97,5 +97,109 @@ describe("ImportDialog", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("1 item could not be imported");
     expect(alert.textContent).toContain("Storage is full.");
+  });
+
+  it("starts on Markdown files, with a picker for files as well as folders", () => {
+    open();
+    expect(
+      (screen.getByRole("radio", { name: "Markdown files" }) as HTMLInputElement).checked,
+    ).toBe(true);
+    const files = screen.getByLabelText("Files to import");
+    expect(files.hasAttribute("webkitdirectory")).toBe(false);
+    expect(files.getAttribute("accept")).toContain(".md");
+    expect(screen.getByRole("button", { name: "Choose files…" })).toBeTruthy();
+  });
+
+  it("imports picked .md files into the chosen folder, as written", async () => {
+    const props = open({ folders: ["Projects", "Journal"] });
+    fireEvent.change(screen.getByPlaceholderText("Top of the repository"), {
+      target: { value: "Projects" },
+    });
+    fireEvent.change(screen.getByLabelText("Files to import"), {
+      target: {
+        files: [picked("plan.md", "# Plan\n\n![[kept as is]]"), picked("todo.md", "- [ ] a")],
+      },
+    });
+
+    expect(await screen.findByText("Projects/plan.md")).toBeTruthy();
+    expect(screen.getByText("Projects/todo.md")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Import 2 notes" }));
+    await waitFor(() => expect(props.onImport).toHaveBeenCalled());
+    const plan = (
+      vi.mocked(props.onImport).mock.calls[0] as unknown as [
+        { notes: { path: string; content: string }[] },
+      ]
+    )[0];
+    expect(plan.notes[0]).toMatchObject({
+      path: "Projects/plan.md",
+      content: "# Plan\n\n![[kept as is]]",
+    });
+  });
+
+  it("re-plans when the folder changes after picking", async () => {
+    open();
+    fireEvent.change(screen.getByLabelText("Files to import"), {
+      target: { files: [picked("plan.md", "# Plan")] },
+    });
+    expect(await screen.findByText("plan.md")).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText("Top of the repository"), {
+      target: { value: "Later" },
+    });
+    expect(await screen.findByText("Later/plan.md")).toBeTruthy();
+  });
+
+  it("says when a name is taken, and gives the note another", async () => {
+    open({ taken: ["plan.md"] });
+    fireEvent.change(screen.getByLabelText("Files to import"), {
+      target: { files: [picked("plan.md", "# Plan")] },
+    });
+    expect(await screen.findByText("renamed — that name is taken")).toBeTruthy();
+  });
+
+  it("chooses the repository, and waits for its files before importing", async () => {
+    const onChooseRepository = vi.fn();
+    open({
+      repositories: [
+        { id: "a", label: "notes", detail: "ada/notes · main" },
+        { id: "b", label: "work", detail: "ada/work · main" },
+      ],
+      repository: "a",
+      onChooseRepository,
+      ready: false,
+    });
+    fireEvent.change(screen.getByDisplayValue("notes — ada/notes · main"), {
+      target: { value: "b" },
+    });
+    expect(onChooseRepository).toHaveBeenCalledWith("b");
+
+    fireEvent.change(screen.getByLabelText("Files to import"), {
+      target: { files: [picked("plan.md", "# Plan")] },
+    });
+    const button = (await screen.findByRole("button", {
+      name: "Import 1 note",
+    })) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(screen.getByRole("status").textContent).toContain("nothing is overwritten");
+  });
+
+  it("keeps the plan it imported, even as the imported notes join the repository", async () => {
+    const onOpenNote = vi.fn();
+    const onImport = vi.fn(async () => ({ notes: 1, assets: 0, failed: [] }));
+    const props = { onClose: vi.fn(), onImport, onOpenNote };
+    const { rerender } = render(<ImportDialog {...props} taken={[]} />);
+
+    fireEvent.change(screen.getByLabelText("Files to import"), {
+      target: { files: [picked("plan.md", "# Plan")] },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Import 1 note" }));
+    await screen.findByText("Imported 1 note and 0 files.");
+
+    // The editor's file list now has the imported note in it.
+    rerender(<ImportDialog {...props} taken={["plan.md"]} />);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    fireEvent.click(screen.getByRole("button", { name: "Open the first note" }));
+    expect(onOpenNote).toHaveBeenCalledWith("plan.md");
   });
 });

@@ -23,6 +23,7 @@ import { readSharedDeck, shareDeck } from "@/lib/gateway";
 import { useInlineFlashcards } from "@/lib/inline-flashcards";
 import { useSpacedReading } from "@/lib/spaced-reading";
 import { useCourseBridge } from "@/lib/course-bridge";
+import { GITHUB_SIGN_IN_URL } from "@/lib/constants";
 import { mapNote, noteMapMarkdown } from "@/lib/note-map";
 import { buildSupportIndex, checkClaim, type SupportIndex } from "@/lib/claims";
 import { badgeMarkdown } from "@/lib/notebook-health";
@@ -1998,16 +1999,20 @@ export function EditorWorkspace() {
   const signIn = useCallback(() => {
     track("github_sign_in_started");
     /**
-     * The permission choice comes first.
+     * Straight to GitHub, and back to this note afterwards.
      *
-     * Going straight to the OAuth route sends somebody to a GitHub screen
-     * saying "full control of private repositories" with nothing to explain
-     * why a notes app is asking, and no narrower option — which is a fair
-     * reason to close the tab. `/sign-in` says what each level is for and
-     * offers the public-repositories-only grant as an equal choice.
+     * This used to stop at a page choosing between two permission levels,
+     * which put two cards of fine print between a person and the button they
+     * had just pressed. The narrower, public-only grant is still offered on
+     * `/sign-in` for anyone who goes looking; the button does the common thing.
+     * A full navigation rather than `router.push`: the OAuth route is a
+     * redirect, not a page.
      */
-    router.push("/sign-in");
-  }, [router]);
+    const here = `${window.location.pathname}${window.location.search}`;
+    const target = new URL(GITHUB_SIGN_IN_URL, window.location.origin);
+    target.searchParams.set("next", here);
+    window.location.assign(target.toString());
+  }, []);
 
   /**
    * Signing in again after a token expired, which is a different errand.
@@ -3712,10 +3717,11 @@ export function EditorWorkspace() {
       );
       list.push({
         id: "import",
-        label: "Import notes from Obsidian or Notion",
+        label: "Import Markdown files",
         group: "Notes",
-        hint: "A vault or an unzipped Notion export, into a folder of its own",
-        keywords: "import obsidian notion vault export migrate move bring notes folder markdown",
+        hint: ".md files or a folder from this computer — or an Obsidian vault or Notion export",
+        keywords:
+          "import upload md markdown files laptop computer folder obsidian notion vault export migrate move bring notes",
         run: () => setDialog("import"),
       });
       list.push({
@@ -4422,6 +4428,7 @@ export function EditorWorkspace() {
                 ? { onOpenPdfBeside: (path: string) => openRepoPdf(path, "", "beside") }
                 : {})}
               {...(localFiles.supported ? { onOpenPdfFile: () => void localFiles.openPdf() } : {})}
+              onImportFiles={() => setDialog("import")}
               onCreateNote={handleCreate}
               currentFolder={currentFolder}
               onDeleteNote={handleDelete}
@@ -5634,6 +5641,21 @@ export function EditorWorkspace() {
         <ImportDialog
           onClose={() => setDialog(null)}
           taken={takenPaths}
+          initialFolder={currentFolder}
+          folders={collectFolders(notebook.tree)}
+          repositories={notebook.workspaces.map((entry) => ({
+            id: entry.id,
+            label: entry.name,
+            detail: entry.isLocal
+              ? "This device only"
+              : `${entry.repo.owner}/${entry.repo.repo} · ${entry.repo.branch}`,
+          }))}
+          repository={workspace.id}
+          onChooseRepository={(id) => {
+            const next = notebook.workspaces.find((entry) => entry.id === id);
+            if (next) notebook.switchWorkspace(next);
+          }}
+          ready={notebook.treeFor === workspace.id}
           onImport={(plan) =>
             notebook.importDocuments(
               plan.notes.map((entry) => ({ path: entry.path, raw: entry.content })),

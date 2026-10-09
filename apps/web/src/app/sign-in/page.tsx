@@ -1,26 +1,29 @@
 import Link from "next/link";
+import { ForkLeafMark } from "@/components/Brand";
+import { GitHubGlyph } from "@/components/landing/Nav";
 import { SiteShell } from "@/components/SiteShell";
 import { safeReturnPath } from "@/lib/app-url";
 import { githubOAuthConfigured } from "@/lib/session";
 
 export const metadata = {
-  title: "Sign in with GitHub — ForkLeaf",
+  title: "Sign in",
   description:
-    "Choose how much access ForkLeaf gets to your GitHub repositories, and see exactly what each level is used for.",
+    "Sign in to ForkLeaf with GitHub. Your notes stay as Markdown files in your own repository.",
 };
 
 /**
- * The permission choice, made before GitHub's own consent screen.
+ * Sign in: one button.
  *
- * GitHub's screen names a scope and says what it covers; it cannot say what
- * *this* app does with it, and it offers no alternative. Somebody arriving at
- * "repo — full control of private repositories" with no context has one
- * reasonable response, which is to close the tab.
+ * This page used to be a choice between two permission levels, each with a
+ * list of what it covers, what it never does and a caveat — two cards of fine
+ * print standing between someone and the thing they came to do. Almost
+ * everyone wants their notes in a private repository, so the button asks for
+ * that, and GitHub's own screen names the permission before anything is
+ * granted.
  *
- * So the choice is made here, in words, with the narrower option offered as an
- * equal rather than buried: a person who only ever keeps public notes should
- * never grant access to their private code, and until now they had no way to
- * say so without reading the documentation first.
+ * The narrower grant has not gone anywhere: somebody who only keeps public
+ * notes can still ask for `public_repo`, from a quiet link under the button,
+ * and the documentation explains both. It is an option, not a step.
  */
 export default async function SignInPage({
   searchParams,
@@ -42,202 +45,79 @@ export default async function SignInPage({
   if (!githubOAuthConfigured()) {
     return (
       <SiteShell>
-        <Frame>
+        <Card>
           <h1 className="text-2xl font-semibold tracking-tight">GitHub sign-in is not set up</h1>
           <p className="mt-3 text-[15px] leading-relaxed text-[var(--fl-muted)]">
             GitHub sign-in is unavailable here, so notes stay on this device. That works — it is the
             whole app, minus syncing.
           </p>
-          <Link href={back ?? "/editor"} className="fl-btn fl-btn-primary mt-6 inline-flex">
+          <Link href={back ?? "/editor"} className="fl-btn fl-btn-primary mt-6 w-full">
             Start writing on this device
           </Link>
-        </Frame>
+        </Card>
       </SiteShell>
     );
   }
 
   return (
     <SiteShell>
-      <Frame>
-        <h1 className="text-3xl font-semibold tracking-tight">
-          {expired ? "Sign in to GitHub again" : "Sign in with GitHub"}
+      <Card>
+        <ForkLeafMark className="mx-auto h-10 w-10" />
+        <h1 className="mt-5 text-center text-[26px] font-semibold tracking-tight">
+          {expired ? "Sign in again" : "Sign in to ForkLeaf"}
         </h1>
-
-        {expired && (
-          <p
-            role="status"
-            className="mt-4 max-w-2xl rounded-lg border border-[var(--fl-warn)]/40 bg-[var(--fl-warn)]/10 px-4 py-3 text-sm text-[var(--fl-text)]"
-          >
-            Your previous sign-in expired, which is why pushing stopped. Nothing was lost — every
-            change is saved on this device and goes to GitHub as soon as you are back in.
-          </p>
-        )}
-
-        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-[var(--fl-muted)]">
-          ForkLeaf keeps your notes as Markdown files in a repository you own, so it needs
-          permission to read and write files there. Choose how much of your account that covers. You
-          can change it later, and revoke it entirely, from GitHub.
+        <p
+          role={expired ? "status" : undefined}
+          className="mt-2 text-center text-[15px] leading-relaxed text-[var(--fl-muted)]"
+        >
+          {expired
+            ? "Your sign-in expired, so pushing paused. Nothing was lost — your changes are saved on this device and sync as soon as you are back."
+            : "Your notes are Markdown files in a GitHub repository you own."}
         </p>
-        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-[var(--fl-muted)]">
-          That repository permission is the <em>only</em> thing asked for. Nothing about your
-          profile, your email address, your organisations, your gists or your notifications is
-          requested — your name and avatar arrive with the token itself, so there is no second
-          permission to grant for them.{" "}
-          <Link href="/docs/signing-in#not-asked" className="fl-link">
-            What is not asked for, and why
+
+        <a
+          href={`/api/auth/github?access=all${next}`}
+          className="fl-btn fl-btn-primary mt-7 w-full !py-3.5 !text-[15.5px]"
+        >
+          <GitHubGlyph className="h-[18px] w-[18px]" />
+          Continue with GitHub
+        </a>
+
+        <p className="mt-4 text-center text-[13px] leading-relaxed text-[var(--fl-muted)]">
+          ForkLeaf only asks to read and write your repositories — not your email, profile or
+          organisations. Revoke it any time on GitHub.
+        </p>
+
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t border-[var(--fl-border)] pt-5 text-[13.5px] text-[var(--fl-muted)]">
+          <Link href={back ?? "/editor"} className="fl-link">
+            Continue without an account
           </Link>
-          .
-        </p>
-
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          <Choice
-            href={`/api/auth/github?access=all${next}`}
-            scope="repo"
-            title="Private and public repositories"
-            recommended
-            need="Needed if your notes live in a private repository — which is what most people want for notes."
-            covers={[
-              "Read and write files in the repository you connect",
-              "Commit on your behalf, with your name on the commit",
-              "List your repositories, so you can pick one",
-            ]}
-            excludes={[
-              "Read your email address, your private profile, or your organisation membership",
-              "Create webhooks, deploy keys, or change any repository setting",
-              "Delete a repository, or touch your gists or notifications",
-            ]}
-            caveat="GitHub's classic scopes have no per-repository option, so this grant technically covers every repository your account can reach. ForkLeaf only ever reads or writes the one you connect."
-          />
-
-          <Choice
+          <span aria-hidden="true">·</span>
+          <a
             href={`/api/auth/github?access=public${next}`}
-            scope="public_repo"
-            title="Public repositories only"
-            need="Enough if your notes are going to be public. ForkLeaf literally cannot open a private repository with this — the token is refused by GitHub, not by us."
-            covers={[
-              "Read and write files in your public repositories",
-              "Commit on your behalf, with your name on the commit",
-            ]}
-            excludes={[
-              "Open, read or list any private repository — GitHub refuses the token",
-              "Read your email address or your private profile",
-              "Create webhooks, deploy keys, or change any repository setting",
-            ]}
-            caveat="If you later want a private notes repository, you will be asked to sign in again with the wider permission."
-          />
+            className="fl-link"
+            title="Grants public_repo: ForkLeaf cannot open any private repository"
+          >
+            Public repositories only
+          </a>
         </div>
+      </Card>
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          <Aside title="Organisation repositories">
-            If your notes live in an organisation, an owner may need to approve ForkLeaf under{" "}
-            <em>Settings → Third-party Access → OAuth App access</em>. Until they do, GitHub reports
-            the repository as missing rather than as forbidden — if a repository you can see on
-            github.com is not listed here, that is usually why.
-          </Aside>
-
-          <Aside title="Taking it back">
-            Revoke at any time from{" "}
-            <a
-              href="https://github.com/settings/applications"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="fl-link"
-            >
-              github.com/settings/applications
-            </a>
-            . Your notes are files in your repository and stay exactly where they are.
-          </Aside>
-        </div>
-
-        <p className="mt-8 text-[13.5px] text-[var(--fl-muted)]">
-          Not ready to connect anything?{" "}
-          <Link href="/editor" className="fl-link">
-            Write on this device instead
-          </Link>{" "}
-          — no account, nothing leaves the browser, and you can connect a repository later.
-        </p>
-      </Frame>
+      <p className="mx-auto -mt-10 mb-16 max-w-md px-4 text-center text-[12.5px] sm:-mt-16">
+        <Link href="/docs/signing-in" className="fl-link text-[var(--fl-muted)]">
+          What ForkLeaf can and cannot do with your account
+        </Link>
+      </p>
     </SiteShell>
   );
 }
 
-function Frame({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto w-full max-w-4xl px-6 py-16">{children}</div>;
-}
-
-function Choice({
-  href,
-  scope,
-  title,
-  need,
-  covers,
-  caveat,
-  excludes,
-  recommended,
-}: {
-  href: string;
-  scope: string;
-  title: string;
-  need: string;
-  covers: string[];
-  caveat: string;
-  /** Things this grant conspicuously does not cover, named so nobody has to
-      infer them from a scope name on GitHub's screen. */
-  excludes: string[];
-  recommended?: boolean;
-}) {
+function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col rounded-2xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-5">
-      <div className="flex items-center gap-2">
-        <h2 className="text-[17px] font-semibold text-[var(--fl-text)]">{title}</h2>
-        {recommended && (
-          <span className="rounded-full bg-[var(--fl-accent-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--fl-accent)]">
-            Most people
-          </span>
-        )}
+    <div className="mx-auto w-full max-w-md px-4 py-16 sm:py-24">
+      <div className="rounded-2xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-7 shadow-[var(--fl-shadow)] sm:p-9">
+        {children}
       </div>
-
-      <p className="mt-1 font-mono text-[12px] text-[var(--fl-muted)]">{scope}</p>
-      <p className="mt-3 text-[14px] leading-relaxed text-[var(--fl-text)]">{need}</p>
-
-      <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
-        What it is used for
-      </p>
-      <ul className="mt-2 space-y-1.5">
-        {covers.map((line) => (
-          <li key={line} className="flex gap-2 text-[13.5px] text-[var(--fl-muted)]">
-            <span aria-hidden="true">·</span>
-            <span>{line}</span>
-          </li>
-        ))}
-      </ul>
-
-      <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--fl-muted)]">
-        What it never does
-      </p>
-      <ul className="mt-2 space-y-1.5">
-        {excludes.map((line) => (
-          <li key={line} className="flex gap-2 text-[13.5px] text-[var(--fl-muted)]">
-            <span aria-hidden="true">·</span>
-            <span>{line}</span>
-          </li>
-        ))}
-      </ul>
-
-      <p className="mt-4 text-[12.5px] leading-relaxed text-[var(--fl-muted)]">{caveat}</p>
-
-      <a href={href} className="fl-btn fl-btn-primary mt-5 justify-center">
-        Continue with this
-      </a>
-    </div>
-  );
-}
-
-function Aside({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-xl border border-[var(--fl-border)] p-4">
-      <h2 className="text-[14px] font-semibold text-[var(--fl-text)]">{title}</h2>
-      <p className="mt-1.5 text-[13.5px] leading-relaxed text-[var(--fl-muted)]">{children}</p>
     </div>
   );
 }

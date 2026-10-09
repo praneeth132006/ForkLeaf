@@ -322,8 +322,10 @@ export function McpServer() {
       <OL>
         <LI>The assistant opens a ForkLeaf page in your browser. Sign in with GitHub if asked.</LI>
         <LI>
-          Choose the repository it may use — optionally a folder and a branch — and tick{" "}
-          <strong>Read only</strong> if it should not write.
+          Choose its default repository — optionally a folder and a branch — and tick{" "}
+          <strong>Read only</strong> if it should not write.{" "}
+          <strong>Also let it use my other repositories</strong> is ticked to begin with: untick it
+          to keep the assistant to that one repository.
         </LI>
         <LI>
           Press <strong>Allow</strong>. GitHub confirms, and you are sent back to the assistant.
@@ -338,6 +340,7 @@ export function McpServer() {
       <Table
         head={["Tool", "What it does"]}
         rows={[
+          [<Code key="0">list_repositories</Code>, "The repositories it can use, and the default"],
           [<Code key="1">search_notes</Code>, "Full-text search across every note"],
           [<Code key="2">list_notes</Code>, "The notes in the notebook, or in one folder"],
           [<Code key="3">read_note</Code>, "One note in full, with the notes that link to it"],
@@ -345,6 +348,26 @@ export function McpServer() {
           [<Code key="5">append_to_daily_note</Code>, "Add to today's journal/YYYY-MM-DD.md"],
         ]}
       />
+      <P>
+        Every tool works on the default repository unless you name another —{" "}
+        <em>&ldquo;add this to my work repository&rdquo;</em> or{" "}
+        <em>&ldquo;in ada/handbook, update the onboarding note&rdquo;</em>.
+      </P>
+      <H3 id="where-notes-go">Where its notes go</H3>
+      <UL>
+        <LI>
+          Next to related notes, in a folder that already exists — or in <Code>inbox/</Code> when
+          you did not say where, the same folder <strong>Save to ForkLeaf</strong> uses.
+        </LI>
+        <LI>
+          It will not make up a new folder unless you ask for one. Asked to write to a folder that
+          does not exist, the tool refuses and lists the folders there are.
+        </LI>
+        <LI>
+          After every write it tells you the repository, the full path and a link to the note, and
+          the commit says it came from an assistant.
+        </LI>
+      </UL>
       <P>
         Try asking: <em>&ldquo;What did I write about the launch plan?&rdquo;</em>,{" "}
         <em>&ldquo;Add today&rsquo;s meeting notes to my daily note&rdquo;</em>, or{" "}
@@ -354,7 +377,11 @@ export function McpServer() {
       <H2 id="safety">What it will not do</H2>
       <UL>
         <LI>Touch anything but .md and .mdx notes, or anything in a hidden folder like .github.</LI>
-        <LI>Leave the repository — or the folder — you chose.</LI>
+        <LI>
+          Use a repository other than the default unless you allowed it, and you name it. Inside the
+          default repository it stays in the folder you chose.
+        </LI>
+        <LI>Make up a folder for a new note.</LI>
         <LI>Write at all, if you ticked Read only.</LI>
         <LI>
           Read or overwrite an <strong>encrypted note</strong>. It has no passphrase, so it says the

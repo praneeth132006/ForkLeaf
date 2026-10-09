@@ -15,4 +15,13 @@ export {
   type Tool,
   type ToolResult,
 } from "./protocol";
-export { notebookTools, INSTRUCTIONS } from "./tools";
+export { notebookTools, INSTRUCTIONS, INBOX_FOLDER } from "./tools";
+export {
+  GitHubLibrary,
+  githubBlobUrl,
+  singleNotebook,
+  type GitHubLibraryOptions,
+  type NotebookLibrary,
+  type OpenedNotebook,
+  type RepositoryEntry,
+} from "./library";

@@ -27,8 +27,9 @@ const NOTES = {
 };
 
 describe("the notebook tools", () => {
-  it("offers five tools, and only the three that read in read-only mode", () => {
+  it("offers six tools, and only the four that read in read-only mode", () => {
     expect(setup(NOTES).tools.map((tool) => tool.name)).toEqual([
+      "list_repositories",
       "list_notes",
       "search_notes",
       "read_note",
@@ -36,7 +37,12 @@ describe("the notebook tools", () => {
       "append_to_daily_note",
     ]);
     const readOnly = setup(NOTES, { readOnly: true }).tools;
-    expect(readOnly.map((tool) => tool.name)).toEqual(["list_notes", "search_notes", "read_note"]);
+    expect(readOnly.map((tool) => tool.name)).toEqual([
+      "list_repositories",
+      "list_notes",
+      "search_notes",
+      "read_note",
+    ]);
     expect(readOnly.every((tool: Tool) => tool.annotations?.readOnlyHint)).toBe(true);
   });
 
@@ -109,9 +115,9 @@ describe("the notebook tools", () => {
   describe("write_note", () => {
     it("creates and updates notes as commits, with a message", async () => {
       const { run, notebook } = setup(NOTES);
-      expect(body(await run("write_note", { path: "ideas/new.md", content: "# New" }))).toBe(
-        "Created ideas/new.md.",
-      );
+      expect(
+        body(await run("write_note", { path: "ideas/new.md", content: "# New", new_folder: true })),
+      ).toBe("Created ideas/new.md.");
       expect(
         body(
           await run("write_note", {
@@ -153,6 +159,33 @@ describe("the notebook tools", () => {
       expect(notebook.files.get("private/diary.md")).toBe(ENCRYPTED);
     });
 
+    it("will not invent a folder, and says where a note can go instead", async () => {
+      const { run, notebook } = setup(NOTES);
+      const refused = run("write_note", { path: "notes/ai/2026/thoughts.md", content: "# Hm" });
+      await expect(refused).rejects.toThrow(/notes\/ai\/2026\/ does not exist/);
+      await expect(
+        run("write_note", { path: "notes/ai/thoughts.md", content: "# Hm" }),
+      ).rejects.toThrow(/journal, private, projects/);
+      expect(notebook.commits).toEqual([]);
+
+      // An existing folder, the inbox and the top are always fine.
+      await run("write_note", { path: "projects/new.md", content: "# A" });
+      await run("write_note", { path: "inbox/idea.md", content: "# B" });
+      await run("write_note", { path: "top.md", content: "# C" });
+      expect(notebook.commits.map((commit) => commit.path)).toEqual([
+        "projects/new.md",
+        "inbox/idea.md",
+        "top.md",
+      ]);
+    });
+
+    it("lets an existing note be updated wherever it is", async () => {
+      const { run } = setup({ "deep/down/note.md": "# Old" });
+      expect(body(await run("write_note", { path: "deep/down/note.md", content: "# New" }))).toBe(
+        "Updated deep/down/note.md.",
+      );
+    });
+
     it("requires content, and refuses a note far too large", async () => {
       const { run } = setup(NOTES);
       await expect(run("write_note", { path: "a.md" })).rejects.toThrow(/content/);
@@ -174,6 +207,15 @@ describe("the notebook tools", () => {
       expect(notebook.files.get("journal/2026-09-13.md")).toBe(
         "# Sunday, September 13, 2026\n\n- [ ] Call the bank\n\nBank called back.\n",
       );
+    });
+  });
+
+  describe("list_repositories", () => {
+    it("names the one notebook, and says how to reach others", async () => {
+      const { run } = setup(NOTES);
+      const listed = body(await run("list_repositories"));
+      expect(listed).toContain("notebook (default)");
+      expect(listed).toContain("Also let it use my other repositories");
     });
   });
 

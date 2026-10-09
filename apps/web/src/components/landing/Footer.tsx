@@ -15,8 +15,9 @@ import { SectionLink } from "./SectionLink";
  * Site footer.
  *
  * Every link here goes somewhere real. The previous version advertised a
- * Twitter, a Discord, a changelog and a community page that do not exist, which
- * is a worse first impression than having fewer links.
+ * Twitter, a Discord, a changelog and a community page that did not exist,
+ * which is a worse first impression than having fewer links. The changelog
+ * does exist now — `/changelog`, rendered from CHANGELOG.md — so it is back.
  *
  * The `#`-prefixed entries are sections of the home page, and this footer is
  * rendered on every page. They go through `SectionLink`, which resolves them
@@ -30,6 +31,7 @@ const COLUMNS = [
       { label: "How it works", href: "#how" },
       { label: "What it does", href: "#toolkit" },
       { label: "Features", href: "/features" },
+      { label: "Changelog", href: "/changelog" },
       { label: "Where it fits", href: "#why" },
       { label: "Pricing", href: "#pricing" },
       { label: "Open the editor", href: "/editor" },
@@ -123,6 +125,7 @@ export function Footer() {
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <FooterLink href="/privacy">Privacy</FooterLink>
             <FooterLink href="/terms">Terms</FooterLink>
+            <FooterLink href="/changelog">Changelog</FooterLink>
             <FooterLink href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</FooterLink>
             <span>Your notes are in your repository, not ours.</span>
           </div>

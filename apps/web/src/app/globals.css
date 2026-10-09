@@ -50,8 +50,16 @@
   --fl-bg: #fcfcfa;
   --fl-surface: #ffffff;
   --fl-elevated: #f2f3ef;
-  --fl-border: #e4e6e0;
-  --fl-border-strong: #cfd3ca;
+  /* Hairlines have to be *seen*. These were #e4e6e0 / #cfd3ca, which on a
+     white card is a border you find by squinting — and the dark pair was
+     worse. Raised until every panel, field and dialog edge reads at a glance
+     without turning the page into a grid. */
+  --fl-border: #d9dcd3;
+  --fl-border-strong: #b6bbaf;
+  /* Lines that carry meaning rather than separate surfaces: a diagram's
+     outlines and arrows. Close to body text, because an arrow you cannot
+     follow is not an arrow. */
+  --fl-ink-line: #5a6156;
   --fl-text: #12150f;
   --fl-muted: #6c7268;
 
@@ -81,8 +89,9 @@
   --fl-bg: #000000;
   --fl-surface: #0a0a0a;
   --fl-elevated: #131313;
-  --fl-border: #1f1f1f;
-  --fl-border-strong: #333333;
+  --fl-border: #2e2e2e;
+  --fl-border-strong: #4a4a4a;
+  --fl-ink-line: #a4adbb;
   --fl-text: #f0f0f0;
   --fl-muted: #8a8a8a;
 
@@ -417,6 +426,49 @@ select:focus-visible {
 
 .fl-prose > * + * {
   margin-top: 1rem;
+}
+
+/* ── A changelog entry's description ───────────────────────────────────────
+   Rendered markdown at interface size: a timeline of forty entries set in the
+   reading serif at document size is a wall, and these are notes about the
+   product rather than notes in it. */
+.fl-changelog-body {
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--fl-muted);
+}
+
+.fl-changelog-body > * + * {
+  margin-top: 0.6rem;
+}
+
+.fl-changelog-body ul {
+  list-style: disc;
+  padding-left: 1.2rem;
+}
+
+.fl-changelog-body ul > li + li {
+  margin-top: 0.3rem;
+}
+
+.fl-changelog-body strong {
+  color: var(--fl-text);
+  font-weight: 600;
+}
+
+.fl-changelog-body code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  padding: 0.1em 0.35em;
+  border-radius: 5px;
+  background: var(--fl-elevated);
+  color: var(--fl-text);
+}
+
+.fl-changelog-body a {
+  color: var(--fl-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* ── An answer in the assistant panel ──────────────────────────────────────

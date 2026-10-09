@@ -22,7 +22,6 @@ export {
   updateEdge,
   removeEdge,
   nextNodeId,
-  tidyLayout,
   duplicateNodes,
   moveNodes,
   removeMany,
@@ -93,6 +92,7 @@ export {
   LABEL_PADDING,
   type Size,
 } from "./geometry";
+export { tidyLayout } from "./layout";
 
 export {
   diffDiagrams,

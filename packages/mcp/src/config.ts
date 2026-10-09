@@ -17,6 +17,11 @@ export interface ServerConfig {
   directory: string;
   /** When true, the tools that write are not offered at all. */
   readOnly: boolean;
+  /**
+   * When true, tools may also name any other repository the token can reach;
+   * FORKLEAF_REPO stays the default.
+   */
+  allRepositories: boolean;
 }
 
 export class ConfigError extends Error {
@@ -56,6 +61,7 @@ export function configFromEnv(env: Record<string, string | undefined>): ServerCo
   }
 
   const readOnly = /^(1|true|yes)$/i.test((env.FORKLEAF_READ_ONLY ?? "").trim());
+  const allRepositories = /^(1|true|yes)$/i.test((env.FORKLEAF_ALL_REPOS ?? "").trim());
 
-  return { token, owner, repo, branch, directory, readOnly };
+  return { token, owner, repo, branch, directory, readOnly, allRepositories };
 }

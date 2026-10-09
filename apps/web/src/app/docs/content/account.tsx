@@ -288,7 +288,7 @@ export function Security() {
         It is the narrowest classic OAuth scope that allows writing to a private repository, and it
         is the only scope requested — no profile, email or organisation permission is asked for
         alongside it. If you only keep notes in public repositories, <Code>public_repo</Code> is
-        offered as an equal choice on the sign-in page.
+        offered on the sign-in page as <strong>Public repositories only</strong>.
       </Def>
       <Def term="Notes are only as private as the repository">
         ForkLeaf creates the notes repository private, but if you make it public, or connect a

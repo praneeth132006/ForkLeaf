@@ -28,8 +28,8 @@ import { createOAuthState, githubOAuthConfigured, setReturnPath } from "@/lib/se
  *
  * What is genuinely not on offer is per-repository selection: classic OAuth
  * scopes have no such thing, and pretending otherwise in the UI would be worse
- * than saying so. The narrower `public_repo` grant is offered instead, as an
- * equal choice rather than as a thing you would have to know to ask for.
+ * than saying so. The narrower `public_repo` grant is offered instead, as a
+ * link under the sign-in page's one button.
  */
 
 /** The scopes this route will ask for, by the name the UI uses. */
