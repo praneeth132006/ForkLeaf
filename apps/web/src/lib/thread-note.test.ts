@@ -66,7 +66,7 @@ describe("threadToNote", () => {
 
     expect(content).toContain("# How do we rotate keys?");
     expect(content).toContain(
-      "> Saved from [discussion #12](https://github.com/me/notes/discussions/12) on 2026-10-09 — 3 messages from @ada, @grace, @linus.",
+      "> Saved from [discussion #12](https://github.com/me/notes/discussions/12) on 2026-10-09 — 4 messages from @ada, @grace, @linus.",
     );
     // The opening question comes first, then the answer, then the reply.
     const order = ["We never wrote this down.", "Monthly, with the script.", "Thanks!"].map((s) =>
@@ -138,7 +138,8 @@ describe("threadToNote", () => {
 describe("participants and messageCount", () => {
   it("lists everyone who wrote, once, in the order they first spoke", () => {
     expect(participants(discussion())).toEqual(["ada", "grace", "linus"]);
-    expect(messageCount(discussion())).toBe(3);
+    expect(messageCount(discussion())).toBe(4);
+    expect(messageCount(discussion({ notePath: "a.md" }))).toBe(3);
   });
 });
 

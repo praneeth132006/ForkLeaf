@@ -59,7 +59,8 @@ export function participants(discussion: NoteDiscussionDto): string[] {
   const add = (login: string | undefined) => {
     if (login) seen.add(login);
   };
-  if (!discussion.notePath) add(discussion.author?.login);
+  // The opening post's author spoke only if the opening post says something.
+  if (!discussion.notePath && withoutMarker(discussion.body)) add(discussion.author?.login);
   for (const comment of discussion.comments) {
     add(comment.author?.login);
     for (const reply of comment.replies) add(reply.author?.login);
@@ -67,8 +68,13 @@ export function participants(discussion: NoteDiscussionDto): string[] {
   return [...seen];
 }
 
+/**
+ * Every message, the opening post included when it is one — a question asked
+ * on github.com, not the sentence ForkLeaf writes when it opens a discussion.
+ */
 export function messageCount(discussion: NoteDiscussionDto): number {
-  return discussion.comments.reduce((sum, c) => sum + 1 + c.replies.length, 0);
+  const opening = !discussion.notePath && withoutMarker(discussion.body) ? 1 : 0;
+  return discussion.comments.reduce((sum, c) => sum + 1 + c.replies.length, opening);
 }
 
 export function threadToNote(
