@@ -46,6 +46,7 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] Saves from the web in their own repository, filed automatically
 - [x] Connect an AI assistant in one step
 - [x] A documentation page for every feature
+- [x] Talk about a note with collaborators, in GitHub Discussions
 
 What comes next is tracked in [future-implementations.md](future-implementations.md).
 
@@ -662,6 +663,24 @@ folder, check what will come across, then **Import**.
 - **Several repositories.** Connect as many as you like from the sidebar and
   switch between them.
 
+### Talk about a note
+
+The column beside the note has three tabs: **Note** (properties, export,
+history), **Chat** and **Assistant**. One click switches between them.
+
+1. Open **Chat**, the speech bubble in the header, or ⌘K → **Talk about this
+   note**.
+2. Write a message. **Enter** starts a new line and **⌘↵** sends. **Reply**
+   answers one message.
+3. The first message starts a GitHub Discussion in the repository's General
+   category. Collaborators can reply here or on github.com.
+
+The Chat tab counts unread messages while something else is showing. New
+messages are checked every 15 seconds while Chat is open and every minute
+otherwise, never while the tab is in the background. Discussions must be
+switched on in the repository's settings, and the Chat tab links there when it
+is off. Encrypted notes never get a conversation.
+
 ## Publishing and exporting
 
 | Feature                        | How to use it                                                                                  |
@@ -693,5 +712,6 @@ to make it open `.md` files.
 | **⌘⇧F**          | Focus mode                       |
 | **⌘1 / ⌘2 / ⌘3** | Rich, Split and Source views     |
 | **⌘\\**          | Show or hide the sidebar         |
+| **⌥⌘A**          | Open or close the assistant      |
 | **⌘⇧?**          | Help                             |
 | **Esc**          | Close a dialog                   |

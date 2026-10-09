@@ -140,8 +140,9 @@ export function Assistant() {
 
       <P>
         Open it with <Code>⌥⌘A</Code>, the sparkle in the editor header, or{" "}
-        <Code>⌘K → Ask the assistant</Code>. It sits where the document panel sits, and the seam
-        beside it drags.
+        <Code>⌘K → Ask the assistant</Code>. It is the <strong>Assistant</strong> tab of the column
+        beside the note, next to <strong>Note</strong> and <A href="/docs/conversations">Chat</A>,
+        and the seam beside it drags. Switching tabs keeps the conversation with the model.
       </P>
 
       <Note>

@@ -684,6 +684,15 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "conversations",
+        title: "Talk about a note",
+        summary:
+          "Chat with collaborators in a tab beside the note, with an unread count. Every message is a GitHub Discussion in the notebook's own repository, so people can answer from github.com too.",
+        how: "The Chat tab beside the note, the speech bubble in the header, or ⌘K → Talk about this note",
+        docs: "/docs/conversations",
+        tags: ["new", "github"],
+      },
+      {
         id: "mcp",
         title: "Use your notebook from an AI assistant",
         summary:

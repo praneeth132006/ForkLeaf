@@ -436,3 +436,84 @@ export function Conflicts() {
     </>
   );
 }
+
+export function Conversations() {
+  return (
+    <>
+      <Lead>
+        Talk about a note with the people you share the notebook with, beside the note itself. Every
+        message is a GitHub Discussion in the notebook&rsquo;s own repository, so nothing about it
+        lives anywhere but GitHub.
+      </Lead>
+
+      <H2 id="open">Open it</H2>
+      <P>
+        The column beside the note has three tabs — <strong>Note</strong>, <strong>Chat</strong> and{" "}
+        <strong>Assistant</strong> — and one click switches between them. You can also use the
+        speech bubble in the editor header, or <Code>⌘K → Talk about this note</Code>. When someone
+        replies while you are looking at something else, the Chat tab shows how many messages you
+        have not read, and the header button gets a dot.
+      </P>
+
+      <H2 id="how">How it works</H2>
+      <UL>
+        <LI>
+          The first message about a note starts a discussion in the repository&rsquo;s{" "}
+          <strong>General</strong> category, titled after the note and linking to its file. Every
+          message after that is a comment on it, and a reply is a reply on GitHub.
+        </LI>
+        <LI>
+          Collaborators can answer here or on github.com and in GitHub&rsquo;s phone app. Both
+          places show the same conversation.
+        </LI>
+        <LI>
+          New messages are checked for every fifteen seconds while the Chat tab is open, every
+          minute while it is not, and not at all while the browser tab is in the background. Coming
+          back to the tab checks at once.
+        </LI>
+        <LI>
+          Messages are Markdown. <Code>Enter</Code> starts a new line and <Code>⌘↵</Code> sends.
+        </LI>
+        <LI>
+          This device remembers which messages you have seen, so the unread count is per device.
+        </LI>
+      </UL>
+
+      <H2 id="turn-on">Turn on Discussions</H2>
+      <P>
+        Discussions is a repository setting, off by default. ForkLeaf does not change repository
+        settings for you, so the Chat tab links to the right page: on GitHub, open the
+        repository&rsquo;s <strong>Settings</strong>, tick <strong>Discussions</strong> under{" "}
+        <strong>Features</strong>, then press <strong>Check again</strong>.
+      </P>
+
+      <H2 id="who">Who can take part, and who can read it</H2>
+      <Table
+        head={["Repository", "Who can read", "Who can write"]}
+        rows={[
+          ["Private", "Its collaborators", "Its collaborators"],
+          ["Public", "Anyone", "Anyone signed in to GitHub"],
+        ]}
+      />
+      <P>
+        The Chat tab says so when a repository is public. A maintainer can lock a conversation or
+        hide a message on GitHub, and the Chat tab respects both.
+      </P>
+
+      <Note>
+        Encrypted notes never get a conversation. Anyone who can read the repository can read a
+        discussion&rsquo;s title and messages, and those are exactly the people an encrypted note is
+        kept from.
+      </Note>
+
+      <H2 id="self-hosting">Running your own ForkLeaf</H2>
+      <P>
+        ForkLeaf signs in as a GitHub App, and a GitHub App can only do what its permissions allow.
+        To use conversations, give the App the <strong>Discussions: Read and write</strong>{" "}
+        repository permission. Accounts that already installed it must then approve the new
+        permission, which GitHub asks them to do. Until they do, the Chat tab explains that ForkLeaf
+        is not yet allowed to use Discussions in that repository.
+      </P>
+    </>
+  );
+}
