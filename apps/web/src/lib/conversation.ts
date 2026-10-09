@@ -1,4 +1,8 @@
-import type { DiscussionCommentDto, NoteDiscussionDto } from "@forkleaf/github-client";
+import type {
+  DiscussionCommentDto,
+  NoteDiscussionDto,
+  ThreadSummaryDto,
+} from "@forkleaf/github-client";
 
 /**
  * The bookkeeping behind a note's conversation that is not a network call:
@@ -116,4 +120,58 @@ export function seenUpTo(owner: string, repo: string, number: number): string | 
 export function markSeenUpTo(owner: string, repo: string, number: number, at: string): void {
   const current = seenUpTo(owner, repo, number);
   if (current === null || at > current) write(seenKey(owner, repo, number), at);
+}
+
+// ─── The Lounge ─────────────────────────────────────────────────────────────
+
+function baselineKey(owner: string, repo: string): string {
+  return `forkleaf:lounge-since:${owner}/${repo}`;
+}
+
+/**
+ * When this device first opened the Lounge for a repository.
+ *
+ * A thread nobody has opened here is unread only if something was said in it
+ * after this — otherwise the first visit to a busy repository would show
+ * hundreds of years-old threads as news.
+ */
+export function loungeBaseline(owner: string, repo: string): string | null {
+  return read(baselineKey(owner, repo));
+}
+
+/** Sets the baseline on the first visit, and returns whichever is in force. */
+export function startLoungeBaseline(owner: string, repo: string, now: string): string {
+  const existing = loungeBaseline(owner, repo);
+  if (existing !== null) return existing;
+  write(baselineKey(owner, repo), now);
+  return now;
+}
+
+/** Whether a listed thread has something in it this device has not shown. */
+export function isThreadUnread(
+  thread: ThreadSummaryDto,
+  seenAt: string | null,
+  baseline: string | null,
+): boolean {
+  if (thread.lastByViewer) return false;
+  const since = seenAt ?? baseline;
+  return since === null || thread.lastActivityAt > since;
+}
+
+/**
+ * The first message posted after `since` by somebody else, in the order the
+ * thread is read — where the "new since you were last here" line goes. Null
+ * when there is nothing new, or nothing to measure against.
+ */
+export function firstNewMessageId(
+  discussion: NoteDiscussionDto,
+  since: string | null,
+): string | null {
+  if (since === null) return null;
+  for (const comment of discussion.comments) {
+    for (const message of [comment, ...comment.replies]) {
+      if (!message.viewerDidAuthor && message.createdAt > since) return message.id;
+    }
+  }
+  return null;
 }

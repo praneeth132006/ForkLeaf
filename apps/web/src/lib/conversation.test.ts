@@ -3,6 +3,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { DiscussionCommentDto, NoteDiscussionDto } from "@forkleaf/github-client";
 import {
   countUnread,
+  firstNewMessageId,
+  isThreadUnread,
+  loungeBaseline,
+  startLoungeBaseline,
   latestMessageAt,
   markSeenUpTo,
   rememberNumber,
@@ -122,5 +126,53 @@ describe("what this device remembers", () => {
     markSeenUpTo("me", "notes", 7, "2026-10-01T12:00:00Z");
     markSeenUpTo("me", "notes", 7, "2026-10-01T09:00:00Z");
     expect(seenUpTo("me", "notes", 7)).toBe("2026-10-01T12:00:00Z");
+  });
+});
+
+// ─── The Lounge ─────────────────────────────────────────────────────────────
+
+describe("the Lounge's idea of unread", () => {
+  const listed = (lastActivityAt: string, lastByViewer = false) =>
+    ({ lastActivityAt, lastByViewer }) as Parameters<typeof isThreadUnread>[0];
+
+  it("sets the first-visit baseline once", () => {
+    expect(loungeBaseline("me", "notes")).toBeNull();
+    expect(startLoungeBaseline("me", "notes", "2026-10-01T00:00:00Z")).toBe("2026-10-01T00:00:00Z");
+    expect(startLoungeBaseline("me", "notes", "2026-10-05T00:00:00Z")).toBe("2026-10-01T00:00:00Z");
+    expect(loungeBaseline("me", "notes")).toBe("2026-10-01T00:00:00Z");
+  });
+
+  it("does not call a thread from before the first visit unread", () => {
+    expect(isThreadUnread(listed("2026-09-01T00:00:00Z"), null, "2026-10-01T00:00:00Z")).toBe(
+      false,
+    );
+    expect(isThreadUnread(listed("2026-10-02T00:00:00Z"), null, "2026-10-01T00:00:00Z")).toBe(true);
+  });
+
+  it("measures an opened thread against when it was last seen", () => {
+    expect(
+      isThreadUnread(
+        listed("2026-10-02T00:00:00Z"),
+        "2026-10-03T00:00:00Z",
+        "2026-09-01T00:00:00Z",
+      ),
+    ).toBe(false);
+    expect(
+      isThreadUnread(
+        listed("2026-10-04T00:00:00Z"),
+        "2026-10-03T00:00:00Z",
+        "2026-09-01T00:00:00Z",
+      ),
+    ).toBe(true);
+  });
+
+  it("never calls your own last word unread", () => {
+    expect(isThreadUnread(listed("2026-10-04T00:00:00Z", true), null, null)).toBe(false);
+  });
+
+  it("finds where the new messages start, in reading order", () => {
+    expect(firstNewMessageId(thread, "2026-10-01T10:30:00Z")).toBe("a1");
+    expect(firstNewMessageId(thread, "2026-10-01T12:30:00Z")).toBeNull(); // a2 is mine
+    expect(firstNewMessageId(thread, null)).toBeNull();
   });
 });
