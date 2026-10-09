@@ -2,6 +2,7 @@
 
 import type { RemoteGateway, RemoteCommitInput, RemoteCommitResult } from "@forkleaf/store";
 import type { RepoRef, TreeNode, Workspace } from "@forkleaf/types";
+import type { DiscussionCommentDto, NoteConversationDto } from "@forkleaf/github-client";
 
 /**
  * The browser's view of GitHub.
@@ -913,4 +914,39 @@ export async function shareDeck(options: {
   repo?: string;
 }): Promise<{ owner: string; repo: string; sha: string; cards: number }> {
   return call("/api/gh/deck", { method: "POST", body: JSON.stringify(options) });
+}
+
+// ─── A note's conversation ──────────────────────────────────────────────────
+
+/** The conversation about a note, from the repository's GitHub Discussions. */
+export async function readNoteConversation(options: {
+  owner: string;
+  repo: string;
+  path: string;
+  /** The discussion found last time, checked rather than trusted by the server. */
+  number?: number;
+}): Promise<NoteConversationDto> {
+  const params = new URLSearchParams({
+    owner: options.owner,
+    repo: options.repo,
+    path: options.path,
+  });
+  if (options.number !== undefined) params.set("number", String(options.number));
+  return call(`/api/gh/discussions?${params.toString()}`, { timeoutMs: 20_000 });
+}
+
+/** Adds a message to a note's conversation, opening it if this is the first. */
+export async function sendNoteMessage(options: {
+  owner: string;
+  repo: string;
+  branch: string;
+  path: string;
+  title: string;
+  body: string;
+  number?: number;
+  replyTo?: string;
+}): Promise<{ number: number; comment: DiscussionCommentDto }> {
+  // No timeout: a message that gave up waiting may still have been posted,
+  // and "it failed" followed by the message appearing is worse than a wait.
+  return call("/api/gh/discussions", { method: "POST", body: JSON.stringify(options) });
 }
