@@ -19,13 +19,24 @@ assistant. The rest of this README is for running the server yourself.
 
 ## Tools
 
-| Tool                   | What it does                                                       |
-| ---------------------- | ------------------------------------------------------------------ |
-| `search_notes`         | Full-text search across every note, with the line each match is on |
-| `list_notes`           | The notes in the notebook, or in one folder                        |
-| `read_note`            | One note in full, with the notes that link to it                   |
-| `write_note`           | Create a note, or replace one's whole content, as one commit       |
-| `append_to_daily_note` | Add text to `journal/YYYY-MM-DD.md`, creating it if needed         |
+| Tool                   | What it does                                                           |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `list_repositories`    | The repositories it can use, which is the default, which are read only |
+| `search_notes`         | Full-text search across every note, with the line each match is on     |
+| `list_notes`           | The notes in the notebook, or in one folder                            |
+| `read_note`            | One note in full, with the notes that link to it                       |
+| `write_note`           | Create a note, or replace one's whole content, as one commit           |
+| `append_to_daily_note` | Add text to `journal/YYYY-MM-DD.md`, creating it if needed             |
+
+Every tool works on `FORKLEAF_REPO` unless it is given `repository: owner/name`
+— which it can be when `FORKLEAF_ALL_REPOS=true`. Each write answers with the
+repository, the full path and a link to the note on GitHub.
+
+A new note goes in a folder that already has notes, in `inbox/`, or at the top.
+A folder that does not exist yet is refused — with the list of folders there
+are — unless the call passes `new_folder: true`, which the tool reserves for
+when the person asked for a new folder. That is what keeps an assistant's notes
+where you will find them.
 
 ## What it will not do
 
@@ -82,6 +93,7 @@ In `claude_desktop_config.json`:
 | `FORKLEAF_BRANCH`       | no       | Branch to use; defaults to the repository's default     |
 | `FORKLEAF_DIR`          | no       | Folder the notes live in, when it is not the whole repo |
 | `FORKLEAF_READ_ONLY`    | no       | `true` to offer only the tools that read                |
+| `FORKLEAF_ALL_REPOS`    | no       | `true` to let tools name the token's other repositories |
 
 Searching reads up to 300 notes, cached for 30 seconds. The server writes
 nothing to stdout but protocol messages; problems are reported on stderr.

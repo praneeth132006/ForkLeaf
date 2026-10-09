@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { GitHubClient } from "@forkleaf/github-client";
 import {
-  GitHubNotebook,
+  GitHubLibrary,
   INSTRUCTIONS,
   createServer,
   errorResponse,
@@ -19,7 +19,8 @@ import { enforceRateLimit } from "@/lib/rate-limit";
  * JSON-RPC message (or a batch), and is answered with JSON. The tools are the
  * same ones the local `packages/mcp` server offers, working on the repository
  * the person chose when connecting — searching, reading, and, unless they asked
- * for read-only, writing notes as commits.
+ * for read-only, writing notes as commits — and, when they allowed it, on any
+ * other repository of theirs that a tool names.
  */
 
 export const maxDuration = 60;
@@ -48,11 +49,6 @@ function unauthorized(request: NextRequest, description: string) {
 }
 
 const accepted = () => new NextResponse(null, { status: 202, headers: CORS });
-
-const methodOf = (message: unknown) =>
-  typeof message === "object" && message !== null
-    ? (message as { method?: unknown }).method
-    : undefined;
 
 export async function POST(request: NextRequest) {
   const bearer = /^Bearer\s+(.+)$/i.exec(request.headers.get("authorization") ?? "")?.[1]?.trim();
@@ -90,34 +86,20 @@ export async function POST(request: NextRequest) {
 
   const { target } = access;
   const client = new GitHubClient({ token: access.token, userAgent: "forkleaf-mcp" });
-  const messages = Array.isArray(message) ? message : [message];
 
-  // Only a tool call touches the repository; saying hello should not cost a
-  // GitHub request.
-  let branch = target.branch ?? "main";
-  if (!target.branch && messages.some((each) => methodOf(each) === "tools/call")) {
-    const repo = await client.getRepo(target.owner, target.repo).catch(() => null);
-    if (!repo) {
-      return noStoreJson(
-        errorResponse(
-          null,
-          -32002,
-          `${target.owner}/${target.repo} could not be read. It may have been renamed or deleted, or access was removed — connect again.`,
-        ),
-      );
-    }
-    branch = repo.defaultBranch;
-  }
-
-  const notebook = new GitHubNotebook(client, {
+  // Repositories are opened only when a tool call needs one, so saying hello
+  // costs no GitHub request.
+  const library = new GitHubLibrary(client, {
     owner: target.owner,
     repo: target.repo,
-    branch,
+    branch: target.branch,
     directory: target.directory,
+    readOnly: target.readOnly,
+    allRepositories: target.allRepositories === true,
   });
   const handleMessage = createServer(
     { name: "forkleaf", version: "1.0.0", instructions: INSTRUCTIONS },
-    notebookTools(notebook, { readOnly: target.readOnly, root: target.directory }),
+    notebookTools(library, { readOnly: target.readOnly }),
   );
 
   if (Array.isArray(message)) {

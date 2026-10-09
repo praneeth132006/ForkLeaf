@@ -12,7 +12,12 @@ describe("configFromEnv", () => {
       branch: null,
       directory: "",
       readOnly: false,
+      allRepositories: false,
     });
+  });
+
+  it("lets tools use the token's other repositories when asked", () => {
+    expect(configFromEnv({ ...BASE, FORKLEAF_ALL_REPOS: "1" }).allRepositories).toBe(true);
   });
 
   it("accepts GITHUB_TOKEN, a branch, a folder and read-only", () => {
@@ -31,6 +36,7 @@ describe("configFromEnv", () => {
       branch: "drafts/2026",
       directory: "docs/notes",
       readOnly: true,
+      allRepositories: false,
     });
   });
 

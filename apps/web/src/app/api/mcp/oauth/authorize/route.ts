@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
           branch: branchInput || null,
           directory: normalize(typeof body?.directory === "string" ? body.directory : ""),
           readOnly,
+          allRepositories: body?.allRepositories === true,
           login,
         },
       }),

@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline";
 import { GitHubClient } from "@forkleaf/github-client";
 import { ConfigError, configFromEnv } from "./config";
-import { GitHubNotebook } from "./notebook";
+import { GitHubLibrary } from "./library";
 import { PARSE_ERROR, createServer, errorResponse } from "./protocol";
 import { INSTRUCTIONS, notebookTools } from "./tools";
 
@@ -25,25 +25,27 @@ async function main() {
   }
 
   const client = new GitHubClient({ token: config.token, userAgent: "forkleaf-mcp" });
-  const branch = config.branch ?? (await client.getRepo(config.owner, config.repo))?.defaultBranch;
-  if (!branch) {
+  if (!(await client.getRepo(config.owner, config.repo).catch(() => null))) {
     log(`${config.owner}/${config.repo} was not found, or the token cannot read it.`);
     process.exit(1);
   }
 
-  const notebook = new GitHubNotebook(client, {
+  const library = new GitHubLibrary(client, {
     owner: config.owner,
     repo: config.repo,
-    branch,
+    branch: config.branch,
     directory: config.directory,
+    readOnly: config.readOnly,
+    allRepositories: config.allRepositories,
   });
   const handle = createServer(
     { name: "forkleaf", version: "1.0.0", instructions: INSTRUCTIONS },
-    notebookTools(notebook, { readOnly: config.readOnly, root: config.directory }),
+    notebookTools(library, { readOnly: config.readOnly }),
   );
 
   log(
-    `Serving ${config.owner}/${config.repo}@${branch}${config.directory ? `/${config.directory}` : ""}` +
+    `Serving ${config.owner}/${config.repo}${config.branch ? `@${config.branch}` : ""}${config.directory ? `/${config.directory}` : ""}` +
+      (config.allRepositories ? ", and your other repositories by name" : "") +
       (config.readOnly ? " (read-only)" : ""),
   );
 

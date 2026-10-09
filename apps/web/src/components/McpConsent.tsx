@@ -7,8 +7,9 @@ import { redirectWith } from "@/lib/mcp-oauth";
 /**
  * "Let this assistant use your notebook?"
  *
- * Choose the repository, optionally a folder and a branch, and whether the
- * assistant may write. Allow sends the person through GitHub once, for a grant
+ * Choose the repository, optionally a folder and a branch, whether the
+ * assistant may write, and whether it may also use the person's other
+ * repositories when asked to by name. Allow sends the person through GitHub once, for a grant
  * that belongs to the assistant; Don't allow tells the assistant no.
  */
 
@@ -38,7 +39,7 @@ export interface McpConsentProps {
 }
 
 const field =
-  "w-full rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-2 text-[13.5px] text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]";
+  "w-full rounded-lg border border-[var(--fl-border-strong)] bg-[var(--fl-surface)] px-3 py-2 text-[13.5px] text-[var(--fl-text)] outline-none focus:border-[var(--fl-accent)]";
 
 export function McpConsent({
   resume,
@@ -54,6 +55,10 @@ export function McpConsent({
   const [directory, setDirectory] = useState("");
   const [branch, setBranch] = useState("");
   const [readOnly, setReadOnly] = useState(false);
+  // On by default: people connect once and then ask for notes in whichever
+  // repository they mean, and a connection that silently could not reach the
+  // second one was the complaint. Said plainly above the button either way.
+  const [allRepositories, setAllRepositories] = useState(true);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -148,6 +153,7 @@ export function McpConsent({
           branch,
           directory,
           readOnly,
+          allRepositories,
         }),
       });
       const body = await response.json().catch(() => null);
@@ -184,11 +190,14 @@ export function McpConsent({
         </p>
       )}
       <ul className="mt-3 list-disc space-y-1 pl-5 text-[13.5px] text-[var(--fl-muted)]">
-        <li>It can search and read the notes in the repository you choose.</li>
+        <li>
+          It can search and read the notes in the repository you choose
+          {allRepositories ? ", and in your other repositories when you ask it to by name" : ""}.
+        </li>
         <li>
           {readOnly
             ? "It cannot change anything."
-            : "It can create and change notes there. Every change is a commit you can undo."}
+            : "It can create and change notes there. Every change is a commit you can undo, and it tells you where each note went."}
         </li>
         <li>Encrypted notes stay sealed — it is never given a passphrase.</li>
       </ul>
@@ -213,7 +222,7 @@ export function McpConsent({
         <div className="mt-5 flex flex-col gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--fl-muted)]">
-              Notebook repository
+              Default repository
             </span>
             <input
               value={filter}
@@ -225,7 +234,7 @@ export function McpConsent({
           </label>
           <div
             role="radiogroup"
-            aria-label="Notebook repository"
+            aria-label="Default repository"
             className="max-h-52 overflow-y-auto rounded-lg border border-[var(--fl-border)]"
           >
             {repos === null ? (
@@ -285,6 +294,22 @@ export function McpConsent({
               className="accent-[var(--fl-accent)]"
             />
             Read only — it may search and read, but not write
+          </label>
+
+          <label className="flex items-start gap-2 text-[13.5px] text-[var(--fl-text)]">
+            <input
+              type="checkbox"
+              checked={allRepositories}
+              onChange={(event) => setAllRepositories(event.target.checked)}
+              className="mt-[3px] accent-[var(--fl-accent)]"
+            />
+            <span>
+              Also let it use my other repositories
+              <span className="block text-[12px] text-[var(--fl-muted)]">
+                The one above stays the default. It uses another only when you name it, as
+                owner/name.
+              </span>
+            </span>
           </label>
 
           {problem && (

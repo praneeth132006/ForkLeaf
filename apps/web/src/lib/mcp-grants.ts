@@ -19,6 +19,12 @@ export interface NotebookTarget {
   branch: string | null;
   directory: string;
   readOnly: boolean;
+  /**
+   * Whether the assistant may also open the person's other repositories by
+   * name, with this one as the default. Absent on connections made before it
+   * was offered, which keep to their one repository.
+   */
+  allRepositories?: boolean;
   /** The GitHub account that chose the notebook. */
   login: string;
 }

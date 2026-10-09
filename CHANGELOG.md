@@ -9,6 +9,22 @@ description, and the heading becomes the day's date when they ship.
 
 ## Unreleased
 
+### An assistant's notes, where you can find them — in any of your repositories
+
+- **Other repositories.** Connecting an assistant used to tie it to one
+  repository for good. The consent screen now has **Also let it use my other
+  repositories** (ticked to begin with): the repository you pick stays the
+  default, and the assistant uses another when you name it — "add this to my
+  work repository". A new `list_repositories` tool shows which it can use.
+  Connections made before this keep to their one repository and say how to
+  reconnect.
+- **No more notes in random places.** A new note goes beside related notes, in
+  `inbox/` when you did not say where, or at the top. A folder that does not
+  exist is refused, with the list of folders there are, unless you asked for a
+  new one.
+- **It says where.** Every write answers with the repository, the full path and
+  a link to the note, and the assistant is told to pass that on.
+
 ### Import Markdown files from your computer
 
 **Import**, at the top of the notes list (or ⌘K → **Import Markdown files**),
