@@ -9,6 +9,24 @@ description, and the heading becomes the day's date when they ship.
 
 ## Unreleased
 
+### Drawing diagrams, made calmer
+
+The diagram canvas works more like a whiteboard:
+
+- **Arrows meet the middle of a side.** They used to leave a box wherever the
+  line between two centres happened to cross its edge. Each now attaches to the
+  middle of the side facing the other box, leaves it square-on and curves
+  smoothly into the other — and re-routes as boxes move. Two arrows on the same
+  side sit a little apart rather than merging.
+- **Lines you can see.** Outlines and arrows are drawn close to text colour
+  instead of in the faint border grey.
+- **Less on screen.** The eight labelled shape buttons are a floating bar of
+  icons at the bottom of the canvas; the strip of eight hints is behind a
+  **?**; the four connection dots show only on the box under the pointer or the
+  selected one; a selected box gets a soft halo.
+- While dragging a new arrow onto a box, the preview is the connector that will
+  be made.
+
 ### Tidy up that tidies
 
 **Tidy up** on the diagram canvas handles loops now. A "No → try again" arrow

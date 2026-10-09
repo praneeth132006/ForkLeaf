@@ -39,6 +39,7 @@ import {
 } from "@forkleaf/diagrams";
 import { DraftInput } from "./DraftInput";
 import { resolveDrop } from "./drag";
+import { pointOnRoute, routeAll, routeConnector, routeToPoint, type Box } from "./connector";
 
 export interface VisualBuilderProps {
   graph: Graph;
@@ -53,11 +54,11 @@ const FIT_PADDING = 80;
 /**
  * Extra room kept below the content when fitting.
  *
- * The keyboard-hint strip floats over the bottom of the canvas, so a fit that
+ * The shape toolbar floats over the bottom of the canvas, so a fit that
  * treats the full height as usable parks the last row of boxes underneath it —
  * the node is on screen and still unreadable.
  */
-const HINT_STRIP = 48;
+const HINT_STRIP = 64;
 
 /** The shape a plain new node takes in each dialect. */
 function defaultShapeFor(kind: Graph["kind"]): NodeShape {
@@ -881,30 +882,20 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
     drag.kind === "move" && drag.nodeId === node.id ? drag.preview : { x: node.x, y: node.y };
 
   const laidOut: GraphNode[] = graph.nodes.map((node) => ({ ...node, ...positionOf(node) }));
+  // Routed together rather than one at a time, so arrows sharing a side of a
+  // box are spread apart instead of meeting at one point.
+  const routes = routeAll(graph.edges, new Map(laidOut.map((node) => [node.id, boxOf(node)])));
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-2">
-        <span className="mr-0.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--fl-muted)]">
-          Add
-        </span>
-
-        {SHAPES_FOR_KIND[graph.kind].map((shape) => (
-          <button
-            key={shape}
-            type="button"
-            onClick={() => createNode(shape)}
-            title={`Add a ${SHAPE_LABELS[shape].toLowerCase()} node`}
-            className="flex items-center gap-1.5 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] py-1 pl-1.5 pr-2.5 text-[12.5px] text-[var(--fl-text)] transition-colors hover:border-[var(--fl-accent)] hover:text-[var(--fl-accent)]"
-          >
-            <ShapeIcon shape={shape} />
-            {SHAPE_LABELS[shape]}
-          </button>
-        ))}
-
-        <div className="ml-auto flex items-center gap-2">
-          <div className="flex items-center rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)]">
+      {/* One quiet row of view controls. Adding shapes moved to the floating
+          bar on the canvas, where the shapes go — this row used to hold eight
+          labelled shape buttons as well, and wrapped onto two lines in a
+          dialog before the diagram had begun. */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-2">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-lg border border-[var(--fl-border-strong)] bg-[var(--fl-bg)]">
             <ZoomButton label="Undo (⌘Z)" onClick={undo} disabled={!history.canUndo}>
               <UndoGlyph />
             </ZoomButton>
@@ -912,7 +903,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
               label="Redo (⌘⇧Z)"
               onClick={redo}
               disabled={!history.canRedo}
-              className="border-l border-[var(--fl-border)]"
+              className="border-l border-[var(--fl-border-strong)]"
             >
               <UndoGlyph flipped />
             </ZoomButton>
@@ -923,11 +914,13 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             onClick={tidy}
             disabled={graph.nodes.length === 0}
             title="Lay the diagram out in layers that follow its own arrows"
-            className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2.5 py-1 text-[12.5px] text-[var(--fl-text)] transition-colors hover:border-[var(--fl-accent)] hover:text-[var(--fl-accent)] disabled:opacity-40 disabled:hover:border-[var(--fl-border)] disabled:hover:text-[var(--fl-text)]"
+            className="rounded-lg border border-[var(--fl-border-strong)] bg-[var(--fl-bg)] px-2.5 py-1 text-[12.5px] text-[var(--fl-text)] transition-colors hover:border-[var(--fl-accent)] hover:text-[var(--fl-accent)] disabled:opacity-40 disabled:hover:border-[var(--fl-border-strong)] disabled:hover:text-[var(--fl-text)]"
           >
             Tidy up
           </button>
+        </div>
 
+        <div className="ml-auto flex items-center gap-2">
           {/* Mermaid lays out ER diagrams and mindmaps itself and ignores a
               direction, so offering one here would be a control that does
               nothing. */}
@@ -939,7 +932,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                 onChange={(event) =>
                   onChange({ ...graph, direction: event.target.value as Graph["direction"] })
                 }
-                className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)] px-2 py-1 text-[12.5px] text-[var(--fl-text)]"
+                className="rounded-lg border border-[var(--fl-border-strong)] bg-[var(--fl-bg)] px-2 py-1 text-[12.5px] text-[var(--fl-text)]"
               >
                 <option value="TD">Top to bottom</option>
                 <option value="LR">Left to right</option>
@@ -951,7 +944,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
             </label>
           )}
 
-          <div className="flex items-center rounded-lg border border-[var(--fl-border)] bg-[var(--fl-bg)]">
+          <div className="flex items-center rounded-lg border border-[var(--fl-border-strong)] bg-[var(--fl-bg)]">
             <ZoomButton
               label="Zoom out"
               onClick={() => {
@@ -965,7 +958,7 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
               type="button"
               onClick={fit}
               title="Fit the diagram to the canvas (⌘0)"
-              className="w-14 border-x border-[var(--fl-border)] py-1 text-center font-mono text-[11.5px] text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]"
+              className="w-14 border-x border-[var(--fl-border-strong)] py-1 text-center font-mono text-[11.5px] text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]"
             >
               {Math.round(zoom * 100)}%
             </button>
@@ -979,6 +972,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
               +
             </ZoomButton>
           </div>
+
+          <ShortcutsButton freeform={freeform} />
         </div>
       </div>
 
@@ -1055,12 +1050,12 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
 
           {/* Edges first, so nodes sit on top of them. */}
           {graph.edges.map((edge) => {
-            const from = laidOut.find((n) => n.id === edge.from);
-            const to = laidOut.find((n) => n.id === edge.to);
-            if (!from || !to) return null;
+            const route = routes.get(edge.id);
+            if (!route) return null;
 
-            const start = anchorPoint(from, to);
-            const end = anchorPoint(to, from);
+            const middle = pointOnRoute(route, 0.5);
+            const nearStart = pointOnRoute(route, 0.14);
+            const nearEnd = pointOnRoute(route, 0.86);
             const isSelected = selection.has(edge.id);
             const decor = edgeDecor(edge.style, edge.dashed);
 
@@ -1073,33 +1068,34 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                 }}
                 className="cursor-pointer"
               >
-                {/* A wide transparent stroke makes the thin line easy to hit. */}
-                <line
-                  x1={start.x}
-                  y1={start.y}
-                  x2={end.x}
-                  y2={end.y}
+                {/* A wide transparent stroke makes the thin line easy to hit.
+                    `fill="none"` matters on a curve: a filled path would catch
+                    clicks across the whole bulge between its ends. */}
+                <path
+                  d={route.d}
+                  fill="none"
                   stroke="transparent"
                   strokeWidth={18}
+                  pointerEvents="stroke"
                 />
-                <line
-                  x1={start.x}
-                  y1={start.y}
-                  x2={end.x}
-                  y2={end.y}
-                  stroke={isSelected ? "var(--fl-accent)" : "var(--fl-border-strong)"}
-                  strokeWidth={decor.width}
+                <path
+                  d={route.d}
+                  fill="none"
+                  stroke={isSelected ? "var(--fl-accent)" : "var(--fl-ink-line)"}
+                  strokeWidth={isSelected ? decor.width + 0.6 : decor.width}
                   strokeDasharray={decor.dash}
+                  strokeLinecap="round"
                   markerStart={markerUrl(decor.start, isSelected)}
                   markerEnd={markerUrl(decor.end, isSelected)}
                 />
                 {edge.label && (
                   <text
-                    x={(start.x + end.x) / 2}
-                    y={(start.y + end.y) / 2 - 6}
+                    x={middle.x}
+                    y={middle.y}
                     textAnchor="middle"
-                    className="fill-[var(--fl-text)] text-[11px]"
-                    style={{ paintOrder: "stroke", stroke: "var(--fl-bg)", strokeWidth: 5 }}
+                    dominantBaseline="central"
+                    className="fill-[var(--fl-text)] text-[12px] font-medium"
+                    style={{ paintOrder: "stroke", stroke: "var(--fl-bg)", strokeWidth: 6 }}
                   >
                     {edge.label}
                   </text>
@@ -1110,8 +1106,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                     could belong to either side. */}
                 {edge.fromCardinality && (
                   <text
-                    x={start.x + (end.x - start.x) * 0.16}
-                    y={start.y + (end.y - start.y) * 0.16 - 5}
+                    x={nearStart.x + 8}
+                    y={nearStart.y - 6}
                     textAnchor="middle"
                     className="fill-[var(--fl-muted)] text-[10.5px]"
                     style={{ paintOrder: "stroke", stroke: "var(--fl-bg)", strokeWidth: 4 }}
@@ -1121,8 +1117,8 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
                 )}
                 {edge.toCardinality && (
                   <text
-                    x={start.x + (end.x - start.x) * 0.84}
-                    y={start.y + (end.y - start.y) * 0.84 - 5}
+                    x={nearEnd.x + 8}
+                    y={nearEnd.y - 6}
                     textAnchor="middle"
                     className="fill-[var(--fl-muted)] text-[10.5px]"
                     style={{ paintOrder: "stroke", stroke: "var(--fl-bg)", strokeWidth: 4 }}
@@ -1140,17 +1136,24 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
               const from = laidOut.find((n) => n.id === drag.fromId);
               if (!from) return null;
 
-              const target = nodeAt(graph, drag.cursor);
+              // Over another node, the preview is the connector that will be
+              // made — side to side, as it will be drawn. Over empty canvas it
+              // follows the cursor, where a release will add the next box.
+              const target = nodeAt(graph, drag.cursor, PORT_HIT_RADIUS);
+              const landing = target && target.id !== drag.fromId ? target : null;
+              const preview = landing
+                ? routeConnector(boxOf(from), boxOf(landing))
+                : routeToPoint(boxOf(from), drag.cursor);
               return (
                 <>
-                  <line
-                    x1={from.x + sizeOf(from).width / 2}
-                    y1={from.y + sizeOf(from).height / 2}
-                    x2={drag.cursor.x}
-                    y2={drag.cursor.y}
+                  <path
+                    d={preview.d}
+                    fill="none"
                     stroke="var(--fl-accent)"
                     strokeWidth={2}
-                    strokeDasharray="5 4"
+                    strokeDasharray={landing ? undefined : "5 4"}
+                    strokeLinecap="round"
+                    markerEnd={landing ? markerUrl("arrow", true) : undefined}
                     pointerEvents="none"
                   />
                   {/* Highlight the node the arrow would land on. */}
@@ -1265,21 +1268,29 @@ export function VisualBuilder({ graph, onChange }: VisualBuilderProps) {
           </div>
         )}
 
-        {/* Interaction hints. Fades out while dragging so it never sits under
-            the thing being moved. */}
+        {/* The shape bar, floating over the bottom of the canvas the way
+            whiteboard tools keep theirs: icons only, each named on hover, so
+            the whole vocabulary of the diagram type fits in one short row.
+            Fades while dragging so it never sits under the thing being moved. */}
         <div
-          className={`pointer-events-none absolute bottom-2 left-2 hidden gap-3 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)]/90 px-2.5 py-1.5 text-[11px] text-[var(--fl-muted)] backdrop-blur transition-opacity sm:flex ${
-            drag.kind === "none" ? "opacity-100" : "opacity-0"
+          role="toolbar"
+          aria-label="Add a shape"
+          className={`absolute bottom-3 left-1/2 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-0.5 overflow-x-auto rounded-xl border border-[var(--fl-border-strong)] bg-[var(--fl-surface)] p-1 shadow-[var(--fl-shadow-lg)] transition-opacity ${
+            drag.kind === "none" ? "opacity-100" : "pointer-events-none opacity-0"
           }`}
         >
-          <span>Double-click empty space to add</span>
-          <span>Drag a handle onto empty space to add and connect</span>
-          <span>Drag empty space to select many</span>
-          <span>Space to pan</span>
-          <span>Tab to continue</span>
-          <span>⌘D duplicate</span>
-          <span>Arrows nudge</span>
-          <span>{freeform ? "Snapping off" : "Alt to disable snapping"}</span>
+          {SHAPES_FOR_KIND[graph.kind].map((shape) => (
+            <button
+              key={shape}
+              type="button"
+              onClick={() => createNode(shape)}
+              title={`Add ${SHAPE_LABELS[shape].toLowerCase()}`}
+              aria-label={`Add ${SHAPE_LABELS[shape].toLowerCase()}`}
+              className="flex h-9 w-10 shrink-0 items-center justify-center rounded-lg text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-accent)]"
+            >
+              <ShapeIcon shape={shape} large />
+            </button>
+          ))}
         </div>
       </div>
 
@@ -1462,7 +1473,7 @@ interface EdgeDecor {
 }
 
 function edgeDecor(style: EdgeStyle, dashed?: boolean): EdgeDecor {
-  const base = { start: null, end: null, dash: undefined, width: 1.8 } as EdgeDecor;
+  const base = { start: null, end: null, dash: undefined, width: 2 } as EdgeDecor;
 
   switch (style) {
     case "open":
@@ -1518,7 +1529,7 @@ interface MarkerSpec {
 }
 
 const EDGE_MARKERS: MarkerSpec[] = [
-  { id: "arrow", path: "M 0 1 L 11 6 L 0 11 z", refX: 10, filled: true, size: 7 },
+  { id: "arrow", path: "M 0 1.5 L 11 6 L 0 10.5 z", refX: 10, filled: true, size: 6 },
   { id: "triangle", path: "M 0 0 L 12 6 L 0 12 z", refX: 11, filled: false, size: 9 },
   { id: "diamond-filled", path: "M 0 6 L 6 1 L 12 6 L 6 11 z", refX: 1, filled: true, size: 9 },
   { id: "diamond-open", path: "M 0 6 L 6 1 L 12 6 L 6 11 z", refX: 1, filled: false, size: 9 },
@@ -1529,7 +1540,7 @@ const EDGE_MARKERS: MarkerSpec[] = [
 ];
 
 function renderMarker(spec: MarkerSpec, active: boolean) {
-  const colour = active ? "var(--fl-accent)" : "var(--fl-border-strong)";
+  const colour = active ? "var(--fl-accent)" : "var(--fl-ink-line)";
 
   return (
     <marker
@@ -1575,8 +1586,8 @@ function NodeShapeView({
   onStartConnect,
   onDoubleClick,
 }: NodeShapeViewProps) {
-  const stroke = selected ? "var(--fl-accent)" : "var(--fl-border-strong)";
-  const strokeWidth = selected ? 2.5 : 1.5;
+  const stroke = selected ? "var(--fl-accent)" : "var(--fl-ink-line)";
+  const strokeWidth = selected ? 2.25 : 1.6;
   const { width, height } = sizeOf(node);
   const marker = isMarker(node.shape);
   const boxed = hasMembers(node.shape);
@@ -1587,9 +1598,23 @@ function NodeShapeView({
       transform={`translate(${node.x}, ${node.y})`}
       onPointerDown={onPointerDown}
       onDoubleClick={onDoubleClick}
-      className={dragging ? "cursor-grabbing" : "cursor-move"}
+      className={`group ${dragging ? "cursor-grabbing" : "cursor-move"}`}
       opacity={dragging ? 0.85 : 1}
     >
+      {/* The selection halo: a soft ring just outside the shape, so a
+          selected box is obvious without its own outline getting heavier. */}
+      {selected && !marker && (
+        <rect
+          x={-5}
+          y={-5}
+          width={width + 10}
+          height={height + 10}
+          rx={10}
+          fill="var(--fl-accent-soft)"
+          stroke="none"
+          pointerEvents="none"
+        />
+      )}
       {renderShape(node.shape, stroke, strokeWidth, "var(--fl-surface)", node.label)}
 
       {/* A class or entity is a name and a list, so it is laid out as one
@@ -1635,7 +1660,11 @@ function NodeShapeView({
 
       {/* Connection handles on all four edges rather than only the right one:
           with a single handle, an arrow that should go upward has to be dragged
-          around the box. Each has a generous invisible hit area. */}
+          around the box. Each has a generous invisible hit area.
+
+          Shown only on the box under the pointer and the selected one. Four
+          dots on every box at once turned a ten-box diagram into forty
+          targets competing with the diagram itself. */}
       {(
         [
           { x: width, y: height / 2 },
@@ -1653,11 +1682,13 @@ function NodeShapeView({
           <circle
             cx={handle.x}
             cy={handle.y}
-            r={5.5}
-            fill="var(--fl-accent)"
-            stroke="var(--fl-bg)"
+            r={5}
+            fill="var(--fl-surface)"
+            stroke="var(--fl-accent)"
             strokeWidth={2}
-            opacity={selected ? 1 : 0.55}
+            className={`transition-opacity duration-100 ${
+              selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            }`}
           >
             <title>Drag onto another node to connect</title>
           </circle>
@@ -1746,7 +1777,7 @@ function renderShape(
           width={w}
           height={h}
           rx={3}
-          fill="var(--fl-border-strong)"
+          fill="var(--fl-ink-line)"
           stroke={stroke}
           strokeWidth={strokeWidth}
         />
@@ -1826,7 +1857,7 @@ function cloudPath(w: number, h: number): string {
 }
 
 /** A tiny silhouette of each shape, for the Add buttons. */
-function ShapeIcon({ shape }: { shape: NodeShape }) {
+function ShapeIcon({ shape, large = false }: { shape: NodeShape; large?: boolean }) {
   const common = {
     fill: "none",
     stroke: "currentColor",
@@ -1834,7 +1865,11 @@ function ShapeIcon({ shape }: { shape: NodeShape }) {
   } as const;
 
   return (
-    <svg viewBox="0 0 20 14" aria-hidden="true" className="h-3.5 w-5 shrink-0 opacity-70">
+    <svg
+      viewBox="0 0 20 14"
+      aria-hidden="true"
+      className={large ? "h-[18px] w-[26px] shrink-0" : "h-3.5 w-5 shrink-0 opacity-70"}
+    >
       {shape === "start" ? (
         <circle cx="10" cy="7" r="4.5" fill="currentColor" />
       ) : shape === "end" ? (
@@ -1890,6 +1925,59 @@ function ShapeIcon({ shape }: { shape: NodeShape }) {
   );
 }
 
+/**
+ * The canvas's gestures, behind one "?" rather than spelled out along the
+ * bottom of the canvas. They used to be a strip of eight hints, permanently on
+ * screen, which is a lot of reading standing between someone and their boxes.
+ */
+function ShortcutsButton({ freeform }: { freeform: boolean }) {
+  const [open, setOpen] = useState(false);
+  const rows: [string, string][] = [
+    ["Double-click empty space", "Add a box"],
+    ["Drag a dot on a box's edge", "Connect — onto empty space adds a box"],
+    ["Drag empty space", "Select several"],
+    ["Space + drag, or scroll", "Pan"],
+    ["⌘ + scroll, or pinch", "Zoom"],
+    ["Enter / Tab", "Rename / add the next box"],
+    ["⌘D · Delete · arrows", "Duplicate · remove · nudge"],
+    ["Hold Alt while dragging", freeform ? "Snapping is off" : "Turn off snapping"],
+  ];
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label="Canvas shortcuts"
+        title="Canvas shortcuts"
+        className="flex h-[28px] w-[28px] items-center justify-center rounded-lg border border-[var(--fl-border-strong)] bg-[var(--fl-bg)] text-[12.5px] font-semibold text-[var(--fl-muted)] transition-colors hover:text-[var(--fl-text)]"
+      >
+        ?
+      </button>
+      {open && (
+        <div
+          role="dialog"
+          aria-label="Canvas shortcuts"
+          className="absolute right-0 top-full z-20 mt-1.5 w-72 rounded-xl border border-[var(--fl-border-strong)] bg-[var(--fl-surface)] p-3 text-[12px] shadow-[var(--fl-shadow-lg)]"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setOpen(false);
+          }}
+        >
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
+            {rows.map(([keys, action]) => (
+              <React.Fragment key={keys}>
+                <dt className="whitespace-nowrap text-[var(--fl-text)]">{keys}</dt>
+                <dd className="text-[var(--fl-muted)]">{action}</dd>
+              </React.Fragment>
+            ))}
+          </dl>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ZoomButton({
   label,
   onClick,
@@ -1938,26 +2026,10 @@ function UndoGlyph({ flipped = false }: { flipped?: boolean }) {
 
 // ─── Geometry ───────────────────────────────────────────────────────────────
 
-/** Where an edge should meet a node: on the border, pointing at the other node. */
-function anchorPoint(node: GraphNode, toward: GraphNode): Point {
-  const size = sizeOf(node);
-  const towardSize = sizeOf(toward);
-  const cx = node.x + size.width / 2;
-  const cy = node.y + size.height / 2;
-  const tx = toward.x + towardSize.width / 2;
-  const ty = toward.y + towardSize.height / 2;
-
-  const dx = tx - cx;
-  const dy = ty - cy;
-  if (dx === 0 && dy === 0) return { x: cx, y: cy };
-
-  // Scale the direction vector until it hits the box edge, whichever axis it
-  // crosses first.
-  const scaleX = dx === 0 ? Infinity : size.width / 2 / Math.abs(dx);
-  const scaleY = dy === 0 ? Infinity : size.height / 2 / Math.abs(dy);
-  const scale = Math.min(scaleX, scaleY);
-
-  return { x: cx + dx * scale, y: cy + dy * scale };
+/** A node's footprint, as the connector router wants it. */
+function boxOf(node: GraphNode): Box {
+  const { width, height } = sizeOf(node);
+  return { x: node.x, y: node.y, width, height, shape: node.shape };
 }
 
 /**
