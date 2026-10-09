@@ -21,23 +21,22 @@ export const metadata = {
  *
  * Rendered from the repository's own `CHANGELOG.md`, so the page and the file
  * cannot drift apart: an entry is added once, in the file, and appears here.
- * The file is traced into the server bundle by `outputFileTracingIncludes` in
- * `next.config.ts`; the candidates below cover both the monorepo layout in
- * development and the traced layout in a deployment.
+ * scripts/copy-changelog.mjs copies it into the app's `content/` before dev
+ * and build, and next.config.ts ships that one file with this page.
+ *
+ * The path is marked for the bundler to leave alone. Left to work out a
+ * runtime path itself, it traced the whole project into this page's server
+ * code.
  */
 async function readChangelog(): Promise<string> {
-  const candidates = [
-    path.join(process.cwd(), "CHANGELOG.md"),
-    path.join(process.cwd(), "..", "..", "CHANGELOG.md"),
-  ];
-  for (const candidate of candidates) {
-    try {
-      return await readFile(candidate, "utf8");
-    } catch {
-      // Try the next layout.
-    }
+  try {
+    return await readFile(
+      path.join(/* turbopackIgnore: true */ process.cwd(), "content", "CHANGELOG.md"),
+      "utf8",
+    );
+  } catch {
+    return "";
   }
-  return "";
 }
 
 const KIND_LABEL: Record<ChangeKind, string> = {

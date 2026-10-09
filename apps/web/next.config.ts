@@ -27,12 +27,13 @@ const nextConfig: NextConfig = {
   ],
 
   /**
-   * `/changelog` renders the repository's own CHANGELOG.md, which lives at the
-   * monorepo root — outside this app, so the tracer would not otherwise ship
-   * it with the page's server bundle.
+   * `/changelog` renders the repository's CHANGELOG.md, copied into
+   * `content/` by scripts/copy-changelog.mjs before dev and build. Shipped with
+   * that page explicitly, because the page reads it with a path the tracer is
+   * told to leave alone.
    */
   outputFileTracingIncludes: {
-    "/changelog": ["../../CHANGELOG.md"],
+    "/changelog": ["./content/CHANGELOG.md"],
   },
 
   /**

@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/copy-pdf-assets.mjs && next dev",
-    "build": "node scripts/copy-pdf-assets.mjs && next build",
+    "dev": "node scripts/copy-pdf-assets.mjs && node scripts/copy-changelog.mjs && next dev",
+    "build": "node scripts/copy-pdf-assets.mjs && node scripts/copy-changelog.mjs && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"

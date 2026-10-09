@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Copied from pdfjs-dist at build time by scripts/copy-pdf-assets.mjs
 /public/pdfjs
+
+# CHANGELOG.md, copied in by scripts/copy-changelog.mjs
+/content/CHANGELOG.md
