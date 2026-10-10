@@ -610,6 +610,44 @@ export function Conversations() {
         showing you the text, and it cannot reply on a read-only connection.
       </P>
 
+      <H2 id="live">Live updates and notifications</H2>
+      <P>
+        On forkleaf.in, new messages arrive as they are posted: a reply shows up in the Chat tab and
+        the Lounge within a few seconds, without a refresh. The dot on the bell (<strong>🔔</strong>
+        , in the Chat tab and the Lounge) is filled while that is working. When it is hollow,
+        ForkLeaf checks for new messages every 15 seconds instead.
+      </P>
+      <P>The bell also turns on notifications, per repository and per device:</P>
+      <Table
+        head={["Setting", "You are told about"]}
+        rows={[
+          ["Off (the default)", "Nothing"],
+          [
+            "Threads I'm in",
+            "New messages in threads you have opened or written in on this device, and messages that @mention you",
+          ],
+          ["Everything", "Every new message in the notebook"],
+        ]}
+      />
+      <UL>
+        <LI>
+          You are only notified while ForkLeaf is not the window in front, and never about your own
+          messages, edits or deletions.
+        </LI>
+        <LI>
+          A busy thread updates one notification instead of stacking many. Clicking it opens the
+          thread.
+        </LI>
+        <LI>
+          The tab&rsquo;s title also counts new messages, for example <em>(2) Editor</em>. This
+          works even if your browser blocks notifications, and clears when you look at the tab.
+        </LI>
+        <LI>
+          With notifications on, ForkLeaf stays connected while the tab is in the background,
+          because that is when they matter. With them off, it disconnects until you come back.
+        </LI>
+      </UL>
+
       <H2 id="self-hosting">Running your own ForkLeaf</H2>
       <P>
         ForkLeaf signs in as a GitHub App, and a GitHub App can only do what its permissions allow.
@@ -617,6 +655,32 @@ export function Conversations() {
         repository permission. Accounts that already installed it must then approve the new
         permission, which GitHub asks them to do. Until they do, the Chat tab explains that ForkLeaf
         is not yet allowed to use Discussions in that repository.
+      </P>
+      <H3 id="self-hosting-live">Live updates</H3>
+      <OL>
+        <LI>
+          In the GitHub App&rsquo;s settings, turn on <strong>Webhook</strong>. Set the URL to{" "}
+          <Code>https://&lt;your host&gt;/api/gh/webhook</Code> and choose a secret (
+          <Code>openssl rand -hex 32</Code>).
+        </LI>
+        <LI>
+          Under <strong>Subscribe to events</strong>, tick <strong>Discussion</strong> and{" "}
+          <strong>Discussion comment</strong>.
+        </LI>
+        <LI>
+          Set <Code>GITHUB_WEBHOOK_SECRET</Code> to the same secret, and set{" "}
+          <Code>UPSTASH_REDIS_REST_URL</Code> and <Code>UPSTASH_REDIS_REST_TOKEN</Code>. A webhook
+          and a reader&rsquo;s live stream can run on different server instances, and the shared
+          store is what connects them.
+        </LI>
+      </OL>
+      <P>
+        Each delivery&rsquo;s signature is checked before anything is read, and a delivery GitHub
+        sends twice is recorded once. ForkLeaf keeps a short log per repository for a day: the
+        discussion number, what happened, who did it, and the first 140 characters of a new message.
+        Only people who can read the repository can open that repository&rsquo;s live stream. The
+        stream checks for news every 3 seconds with a single store read, which comes to about 29,000
+        Upstash commands per day for a tab left open all day.
       </P>
     </>
   );

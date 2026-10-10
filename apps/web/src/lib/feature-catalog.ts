@@ -711,6 +711,15 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new", "github"],
       },
       {
+        id: "live-conversations",
+        title: "Live conversations and notifications",
+        summary:
+          "Replies arrive as they are posted, through the GitHub App's webhooks. Optional notifications for threads you are in, or everything, plus a count in the tab's title.",
+        how: "The bell in the Chat tab or the Lounge",
+        docs: "/docs/conversations#live",
+        tags: ["new", "github"],
+      },
+      {
         id: "page-comments",
         title: "Comments on published books",
         summary:

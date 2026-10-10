@@ -49,6 +49,7 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] Talk about a note with collaborators, in GitHub Discussions
 - [x] The Lounge: every conversation as channels, answers, and threads saved as notes
 - [x] Threads about passages, comments on published books, and conversations for AI assistants
+- [x] Live conversations through GitHub webhooks, and notifications
 
 What comes next is tracked in [future-implementations.md](future-implementations.md).
 
@@ -711,6 +712,15 @@ above its own messages: **New** ones, answered ones, and ones whose words have
 since been rewritten. **Show in note** selects the passage on the page.
 
 `[[Links]]` in any message open the note they name.
+
+### Live updates and notifications
+
+New messages arrive as they are posted, without a refresh. The filled dot on the
+**bell** (in the Chat tab and the Lounge) means it is working; hollow means
+ForkLeaf is checking every 15 seconds instead. The bell also turns on
+notifications for **Threads I'm in** or **Everything**, per repository and per
+device. You are only notified while ForkLeaf is not the window in front, never
+about your own messages, and the tab's title counts new messages either way.
 
 ### Comments on published books and gardens
 
