@@ -8,6 +8,7 @@ import type {
 } from "@forkleaf/github-client";
 import type { ConversationError, ConversationState } from "@/hooks/useNoteConversation";
 import { Composer, ThreadMessages, type ThreadLinks } from "@/components/DiscussionThread";
+import { NotifyMenu } from "@/components/NotifyMenu";
 
 /**
  * The conversation about the open note.
@@ -39,6 +40,8 @@ export interface ConversationPanelProps {
   onSaveAsNote?: (discussion: NoteDiscussionDto) => void;
   /** Makes `[[links]]` in messages open notes. */
   links?: ThreadLinks;
+  /** Live updates and notifications: the bell in the header. */
+  notify?: React.ComponentProps<typeof NotifyMenu>;
 
   /** Threads about passages of the note. */
   passages?: ThreadSummaryDto[];
@@ -67,6 +70,7 @@ export function ConversationPanel({
   onOpenLounge,
   onSaveAsNote,
   links,
+  notify,
   passages = [],
   passageUnread,
   passageStatus,
@@ -141,6 +145,8 @@ export function ConversationPanel({
             <path d="M4 2.5h6l2.5 2.5v8.5H4zM6 2.5v3h4v-3M6 13.5v-4h4v4" />
           </IconAction>
         )}
+
+        {!unavailable && notify && <NotifyMenu {...notify} />}
 
         {!unavailable && onOpenLounge && (
           <IconAction

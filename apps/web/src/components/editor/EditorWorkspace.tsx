@@ -202,6 +202,9 @@ import { ConversationPanel } from "@/components/ConversationPanel";
 import { SidePanelTabs, type SideView } from "@/components/SidePanelTabs";
 import { useNoteConversation, type ConversationTarget } from "@/hooks/useNoteConversation";
 import { useLounge } from "@/hooks/useLounge";
+import { useLiveActivity } from "@/hooks/useLiveActivity";
+import { useConversationAlerts } from "@/hooks/useConversationAlerts";
+import { readNotifyMode } from "@/lib/notify";
 import { LoungeDialog } from "@/components/LoungeDialog";
 import { SaveThreadDialog } from "@/components/SaveThreadDialog";
 import { DiscussSelection } from "@/components/DiscussSelection";
@@ -915,11 +918,7 @@ export function EditorWorkspace() {
         : null,
     [user, workspace, notePath, sealed, title],
   );
-  const conversation = useNoteConversation({
-    target: conversationTarget,
-    active: sideShown && sideView === "chat" && (wide || drawer === "side"),
-  });
-  /** Every conversation in the notebook, read only while the Lounge is open. */
+  /** The notebook's repository, for everything that is about all its conversations. */
   const loungeTarget = useMemo(
     () =>
       user && workspace && !workspace.isLocal
@@ -927,7 +926,38 @@ export function EditorWorkspace() {
         : null,
     [user, workspace],
   );
-  const lounge = useLounge({ target: loungeTarget, open: openDialog === "lounge" });
+  /**
+   * Conversations as they happen, when this server has webhooks. Kept
+   * connected while the tab is hidden only if notifications are on — read
+   * from the setting directly, since changing it re-renders this component.
+   */
+  const live = useLiveActivity(loungeTarget, {
+    whileHidden: loungeTarget
+      ? readNotifyMode(loungeTarget.owner, loungeTarget.repo) !== "off"
+      : false,
+  });
+  const conversation = useNoteConversation({
+    target: conversationTarget,
+    active: sideShown && sideView === "chat" && (wide || drawer === "side"),
+    live,
+  });
+  /** Every conversation in the notebook, read only while the Lounge is open. */
+  const lounge = useLounge({ target: loungeTarget, open: openDialog === "lounge", live });
+  const alerts = useConversationAlerts({
+    target: loungeTarget,
+    viewer: user?.login ?? null,
+    entries: live.entries,
+    onOpen: (number) => {
+      lounge.select(number);
+      setDialog("lounge");
+    },
+  });
+  const notify = {
+    live: live.status,
+    mode: alerts.mode,
+    permission: alerts.permission,
+    onChange: alerts.setMode,
+  };
   /**
    * A passage the reader chose to talk about, waiting for its first message.
    * Kept with the note it came from, so switching notes drops it rather than
@@ -5492,6 +5522,7 @@ export function EditorWorkspace() {
                   onOpenLounge={conversationTarget ? () => setDialog("lounge") : undefined}
                   onSaveAsNote={setSavingThread}
                   links={threadLinks}
+                  notify={notify}
                   passages={conversation.passages}
                   passageUnread={conversation.passageUnread}
                   passageStatus={(quote) => (note ? passageStatus(note.content, quote) : "changed")}
@@ -5862,6 +5893,7 @@ export function EditorWorkspace() {
             setSavingThread(discussion);
           }}
           links={threadLinks}
+          notify={notify}
         />
       )}
 

@@ -10,6 +10,7 @@ import type {
 import { Dialog } from "@/components/Dialog";
 import { Composer, ThreadMessages, type ThreadLinks } from "@/components/DiscussionThread";
 import { DiscussionsOff, Empty } from "@/components/ConversationPanel";
+import { NotifyMenu } from "@/components/NotifyMenu";
 import type { Lounge } from "@/hooks/useLounge";
 import { relativeTime } from "@/lib/relative-time";
 
@@ -33,6 +34,8 @@ export interface LoungeDialogProps {
   onSaveAsNote: (discussion: NoteDiscussionDto) => void;
   /** Makes `[[links]]` in messages open notes. */
   links?: ThreadLinks;
+  /** Live updates and notifications: the bell beside New thread. */
+  notify?: React.ComponentProps<typeof NotifyMenu>;
 }
 
 /** Categories a thread can be started in: GitHub will not let the API open a poll. */
@@ -47,6 +50,7 @@ export function LoungeDialog({
   onOpenNote,
   onSaveAsNote,
   links,
+  notify,
 }: LoungeDialogProps) {
   const [composing, setComposing] = useState(false);
   const { list, threads, unread, channel, filter, selected, thread } = lounge;
@@ -134,6 +138,14 @@ export function LoungeDialog({
                 />
               ))}
             </ul>
+            {notify && (
+              <div className="ml-2 flex shrink-0 items-center md:mt-3 md:ml-0">
+                <NotifyMenu {...notify} />
+                <span className="ml-1 hidden text-[11.5px] text-[var(--fl-muted)] md:inline">
+                  {notify.live === "live" ? "Live" : "Notifications"}
+                </span>
+              </div>
+            )}
             {repo!.canComment && (
               <button
                 type="button"

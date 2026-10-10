@@ -399,3 +399,22 @@ describe("ConversationPanel — passages", () => {
     expect(onCancelPassage).toHaveBeenCalled();
   });
 });
+
+describe("ConversationPanel — live", () => {
+  it("shows the bell, with whether messages are arriving live", () => {
+    setup({
+      notify: { live: "live", mode: "off", permission: "default", onChange: vi.fn() },
+    });
+    expect(
+      screen.getByRole("button", { name: "Notifications and live updates — live" }),
+    ).toBeTruthy();
+  });
+
+  it("has no bell where there is no conversation", () => {
+    setup({
+      unavailable: "Sign in.",
+      notify: { live: "off", mode: "off", permission: "default", onChange: vi.fn() },
+    });
+    expect(screen.queryByRole("button", { name: /Notifications/ })).toBeNull();
+  });
+});

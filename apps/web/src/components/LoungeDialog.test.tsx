@@ -383,3 +383,24 @@ describe("LoungeDialog — passages", () => {
     );
   });
 });
+
+describe("LoungeDialog — live", () => {
+  it("shows the bell beside New thread, saying it is live", () => {
+    const onClose = vi.fn();
+    render(
+      <LoungeDialog
+        lounge={fakeLounge()}
+        repoName="me/notes"
+        onClose={onClose}
+        onOpenNote={vi.fn()}
+        onSaveAsNote={vi.fn()}
+        notify={{ live: "live", mode: "all", permission: "granted", onChange: vi.fn() }}
+      />,
+    );
+    const channels = screen.getByRole("navigation", { name: "Channels" });
+    expect(
+      within(channels).getByRole("button", { name: /Notifications and live updates — live/ }),
+    ).toBeTruthy();
+    expect(channels.textContent).toContain("Live");
+  });
+});
