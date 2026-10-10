@@ -23,6 +23,7 @@ import {
   startLoungeBaseline,
   withMessage,
 } from "@/lib/conversation";
+import { latestVersion, type LiveActivity } from "@/hooks/useLiveActivity";
 
 /**
  * Every conversation in the notebook, kept fresh while the Lounge is open.
@@ -35,6 +36,8 @@ import {
 
 export const LIST_POLL_MS = 30_000;
 export const THREAD_POLL_MS = 15_000;
+/** While the live stream is connected, the timers are only a safety net. */
+export const LIVE_POLL_MS = 120_000;
 
 /** Failures that asking again on a timer will not fix. */
 const STOPPING = new Set(["unauthorized", "forbidden", "discussions-forbidden", "not-found"]);
@@ -81,8 +84,10 @@ export function useLounge(options: {
   target: { owner: string; repo: string } | null;
   /** Whether the Lounge is on screen. Nothing is read while it is not. */
   open: boolean;
+  /** The repository's live stream, when there is one. */
+  live?: LiveActivity;
 }) {
-  const { target, open } = options;
+  const { target, open, live } = options;
   const owner = target?.owner ?? "";
   const repo = target?.repo ?? "";
 
@@ -109,8 +114,13 @@ export function useLounge(options: {
   const [listTick, setListTick] = useState(0);
   const [threadTick, setThreadTick] = useState(0);
 
+  const isLive = live?.status === "live";
+  // Anything at all changes the list; only the open thread's news re-reads it.
+  const listLive = latestVersion(live?.entries ?? []);
+
   const listKey = target && open ? `${owner}/${repo}#${channel ?? "all"}` : null;
   const threadKey = target && open && selected !== null ? `${owner}/${repo}#${selected}` : null;
+  const threadLive = latestVersion(live?.entries ?? [], (entry) => entry.n === selected);
 
   // ── The list ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -149,7 +159,7 @@ export function useLounge(options: {
         }));
         if (STOPPING.has(failure.code)) return;
       }
-      if (!cancelled) timer = setTimeout(() => void load(), LIST_POLL_MS);
+      if (!cancelled) timer = setTimeout(() => void load(), isLive ? LIVE_POLL_MS : LIST_POLL_MS);
     };
 
     const onVisibility = () => {
@@ -165,7 +175,7 @@ export function useLounge(options: {
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [listKey, owner, repo, channel, listTick]);
+  }, [listKey, owner, repo, channel, listTick, listLive, isLive]);
 
   // ── The open thread ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -201,7 +211,7 @@ export function useLounge(options: {
         }));
         if (STOPPING.has(failure.code)) return;
       }
-      if (!cancelled) timer = setTimeout(() => void load(), THREAD_POLL_MS);
+      if (!cancelled) timer = setTimeout(() => void load(), isLive ? LIVE_POLL_MS : THREAD_POLL_MS);
     };
 
     const onVisibility = () => {
@@ -217,7 +227,7 @@ export function useLounge(options: {
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [threadKey, owner, repo, selected, threadTick]);
+  }, [threadKey, owner, repo, selected, threadTick, threadLive, isLive]);
 
   // ── What the screen shows ─────────────────────────────────────────────────
   const listShown: ListState =

@@ -372,3 +372,40 @@ describe("useLounge — a thread", () => {
     expect(failure).toEqual({ code: "locked", message: "Locked." });
   });
 });
+
+describe("useLounge — live", () => {
+  const entry = (v: number, n: number) =>
+    ({ v, n, kind: "comment", title: "", by: "ada", at: "", note: null, excerpt: null }) as never;
+
+  it("re-reads the list on any news, and the open thread on its own", async () => {
+    listLounge.mockResolvedValue({ repo, threads: [summary(5)], nextCursor: null });
+    readLoungeThread.mockResolvedValue({ repo, discussion: discussion(5) });
+
+    const { result, rerender } = renderHook(
+      ({ entries }) => useLounge({ target, open: true, live: { status: "live", entries } }),
+      { initialProps: { entries: [] as never[] } },
+    );
+    await settle();
+    act(() => result.current.select(5));
+    await settle();
+    const lists = listLounge.mock.calls.length;
+    const threads = readLoungeThread.mock.calls.length;
+
+    rerender({ entries: [entry(1, 8)] });
+    await settle();
+    expect(listLounge.mock.calls.length).toBe(lists + 1);
+    expect(readLoungeThread.mock.calls.length).toBe(threads);
+
+    rerender({ entries: [entry(1, 8), entry(2, 5)] });
+    await settle();
+    expect(readLoungeThread.mock.calls.length).toBe(threads + 1);
+  });
+
+  it("slows its timers to a safety net while live", async () => {
+    listLounge.mockResolvedValue({ repo, threads: [], nextCursor: null });
+    renderHook(() => useLounge({ target, open: true, live: { status: "live", entries: [] } }));
+    await settle();
+    await wait(LIST_POLL_MS * 3);
+    expect(listLounge).toHaveBeenCalledTimes(1);
+  });
+});

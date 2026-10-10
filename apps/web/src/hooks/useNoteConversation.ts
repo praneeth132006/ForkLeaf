@@ -19,6 +19,7 @@ import {
   seenUpTo,
   withMessage,
 } from "@/lib/conversation";
+import { latestVersion, type LiveActivity } from "@/hooks/useLiveActivity";
 
 /**
  * The conversation about the open note, kept fresh while it is open.
@@ -36,6 +37,11 @@ import {
 /** How often to look, by whether the conversation is on screen. */
 export const POLL_ACTIVE_MS = 15_000;
 export const POLL_IDLE_MS = 60_000;
+/**
+ * While the live stream is connected: news arrives as it happens, so the
+ * timer is only a safety net for anything the stream missed.
+ */
+export const POLL_LIVE_MS = 120_000;
 /** After GitHub says "slow down". */
 export const POLL_LIMITED_MS = 120_000;
 
@@ -77,6 +83,8 @@ export function useNoteConversation(options: {
   target: ConversationTarget | null;
   /** Whether the conversation is on screen. */
   active: boolean;
+  /** The repository's live stream, when there is one. */
+  live?: LiveActivity;
 }): {
   state: ConversationState;
   /** Messages from other people this device has not shown yet, passages included. */
@@ -98,7 +106,7 @@ export function useNoteConversation(options: {
   /** Asks GitHub again now. */
   refresh: () => void;
 } {
-  const { target, active } = options;
+  const { target, active, live } = options;
   const owner = target?.owner ?? "";
   const repo = target?.repo ?? "";
   const path = target?.path ?? "";
@@ -113,6 +121,15 @@ export function useNoteConversation(options: {
   const [sending, setSending] = useState(false);
   /** Bumped to ask again at once — after a refresh, or a first message. */
   const [tick, setTick] = useState(0);
+
+  // Something happened in this note's conversation, or a thread opened on one
+  // of its passages: read now rather than at the next tick.
+  const knownNumber = stored.key === key ? stored.conversation?.discussion?.number : undefined;
+  const liveVersion = latestVersion(
+    live?.entries ?? [],
+    (entry) => entry.n === knownNumber || entry.note === path,
+  );
+  const isLive = live?.status === "live";
 
   useEffect(() => {
     if (key === null) return;
@@ -131,7 +148,7 @@ export function useNoteConversation(options: {
       if (document.visibilityState === "hidden") return; // Picked up again on return.
 
       inFlight = true;
-      let next = active ? POLL_ACTIVE_MS : POLL_IDLE_MS;
+      let next = isLive ? POLL_LIVE_MS : active ? POLL_ACTIVE_MS : POLL_IDLE_MS;
       try {
         const conversation = await readNoteConversation({
           owner,
@@ -185,7 +202,7 @@ export function useNoteConversation(options: {
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [key, owner, repo, path, active, tick]);
+  }, [key, owner, repo, path, active, tick, liveVersion, isLive]);
 
   // An answer for a different note is never shown — between switching notes
   // and the first read of the new one, this is a fresh "loading".

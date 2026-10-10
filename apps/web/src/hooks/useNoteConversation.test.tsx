@@ -6,6 +6,7 @@ import { ApiGatewayError } from "@/lib/gateway";
 import {
   POLL_ACTIVE_MS,
   POLL_IDLE_MS,
+  POLL_LIVE_MS,
   useNoteConversation,
   type ConversationTarget,
 } from "./useNoteConversation";
@@ -440,6 +441,60 @@ describe("useNoteConversation — passages", () => {
       title: "A",
       body: "Still monthly?",
       passage: "Rotate keys",
+    });
+    expect(readNoteConversation).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("useNoteConversation — live", () => {
+  const entry = (v: number, extra: Record<string, unknown> = {}) =>
+    ({
+      v,
+      n: 4,
+      kind: "comment",
+      title: "",
+      by: "ada",
+      at: "",
+      note: null,
+      excerpt: null,
+      ...extra,
+    }) as never;
+
+  it("reads at once when something happens in this note's conversation, and not otherwise", async () => {
+    readNoteConversation.mockResolvedValue(conversation([]));
+    const { rerender } = renderHook(
+      ({ entries }) =>
+        useNoteConversation({ target, active: true, live: { status: "live", entries } }),
+      { initialProps: { entries: [] as never[] } },
+    );
+    await settle();
+    expect(readNoteConversation).toHaveBeenCalledTimes(1);
+
+    rerender({ entries: [entry(1, { n: 99 })] }); // another discussion
+    await settle();
+    expect(readNoteConversation).toHaveBeenCalledTimes(1);
+
+    rerender({ entries: [entry(1, { n: 99 }), entry(2)] }); // this one
+    await settle();
+    expect(readNoteConversation).toHaveBeenCalledTimes(2);
+
+    rerender({ entries: [entry(1, { n: 99 }), entry(2), entry(3, { n: 50, note: "a.md" })] });
+    await settle(); // a new passage thread on this note
+    expect(readNoteConversation).toHaveBeenCalledTimes(3);
+  });
+
+  it("only checks every two minutes while live", async () => {
+    readNoteConversation.mockResolvedValue(conversation([]));
+    renderHook(() =>
+      useNoteConversation({ target, active: true, live: { status: "live", entries: [] } }),
+    );
+    await settle();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_ACTIVE_MS * 4);
+    });
+    expect(readNoteConversation).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_LIVE_MS);
     });
     expect(readNoteConversation).toHaveBeenCalledTimes(2);
   });
