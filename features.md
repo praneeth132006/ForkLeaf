@@ -46,6 +46,10 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] Saves from the web in their own repository, filed automatically
 - [x] Connect an AI assistant in one step
 - [x] A documentation page for every feature
+- [x] Talk about a note with collaborators, in GitHub Discussions
+- [x] The Lounge: every conversation as channels, answers, and threads saved as notes
+- [x] Threads about passages, comments on published books, and conversations for AI assistants
+- [x] Live conversations through GitHub webhooks, and notifications
 
 What comes next is tracked in [future-implementations.md](future-implementations.md).
 
@@ -613,13 +617,17 @@ ForkLeaf stores nothing about the connection. `packages/mcp` is the same set of
 tools as a local server, for anyone who would rather run it themselves. Full
 guide: [/docs/mcp](https://www.forkleaf.in/docs/mcp).
 
-| Tool                   | What the assistant can do                           |
-| ---------------------- | --------------------------------------------------- |
-| `search_notes`         | Search every note, with the line each match is on   |
-| `list_notes`           | List the notes, or those in one folder              |
-| `read_note`            | Read a note in full, with the notes that link to it |
-| `write_note`           | Create or replace a note, as one commit             |
-| `append_to_daily_note` | Add to today's `journal/YYYY-MM-DD.md`              |
+| Tool                     | What the assistant can do                              |
+| ------------------------ | ------------------------------------------------------ |
+| `search_notes`           | Search every note, with the line each match is on      |
+| `list_notes`             | List the notes, or those in one folder                 |
+| `read_note`              | Read a note in full, with the notes that link to it    |
+| `write_note`             | Create or replace a note, as one commit                |
+| `append_to_daily_note`   | Add to today's `journal/YYYY-MM-DD.md`                 |
+| `read_note_conversation` | What collaborators said about a note, and its passages |
+| `list_conversations`     | Every conversation, or only unanswered questions       |
+| `read_conversation`      | One conversation in full                               |
+| `reply_to_conversation`  | Post a reply, under your name, when you ask it to      |
 
 It works only on the repository you chose. It will not touch anything
 but notes, anything in a hidden folder, or anything outside the notebook, and it
@@ -662,6 +670,71 @@ folder, check what will come across, then **Import**.
 - **Several repositories.** Connect as many as you like from the sidebar and
   switch between them.
 
+### Talk about a note
+
+The column beside the note has three tabs: **Note** (properties, export,
+history), **Chat** and **Assistant**. One click switches between them.
+
+1. Open **Chat**, the speech bubble in the header, or ⌘K → **Talk about this
+   note**.
+2. Write a message. **Enter** starts a new line and **⌘↵** sends. **Reply**
+   answers one message.
+3. The first message starts a GitHub Discussion in the repository's General
+   category. Collaborators can reply here or on github.com.
+
+The Chat tab counts unread messages while something else is showing. New
+messages are checked every 15 seconds while Chat is open and every minute
+otherwise, never while the tab is in the background. Discussions must be
+switched on in the repository's settings, and the Chat tab links there when it
+is off. Encrypted notes never get a conversation.
+
+### The Lounge
+
+⌘K → **Open the Lounge**, or the Lounge button in the Chat tab, shows every
+conversation in the notebook: the ones about notes and the ones people started
+on github.com.
+
+- **Channels** are the repository's Discussions categories, each with an unread
+  count. **Unanswered** lists questions nobody has answered yet.
+- **Threads** show unread ones in bold, which are answered, which are about a
+  note, and which are locked. **Older threads** loads more.
+- **A thread** opens with its first post and a line above what is new since you
+  last read it. **Reply**, **Mark as answer** in Q&A-style categories, **Open
+  note** and **Save as note**.
+- **New thread** starts one in any channel except Polls.
+
+### Talk about a passage
+
+Select words in a note and press **Discuss**, the button that appears under the
+selection. The Chat tab opens with the passage quoted, and your first message
+starts a thread about those words. The Chat tab lists a note's passage threads
+above its own messages: **New** ones, answered ones, and ones whose words have
+since been rewritten. **Show in note** selects the passage on the page.
+
+`[[Links]]` in any message open the note they name.
+
+### Live updates and notifications
+
+New messages arrive as they are posted, without a refresh. The filled dot on the
+**bell** (in the Chat tab and the Lounge) means it is working; hollow means
+ForkLeaf is checking every 15 seconds instead. The bell also turns on
+notifications for **Threads I'm in** or **Everything**, per repository and per
+device. You are only notified while ForkLeaf is not the window in front, never
+about your own messages, and the tab's title counts new messages either way.
+
+### Comments on published books and gardens
+
+In **Publish as a book…**, tick **Comments on every page**. Readers sign in with
+GitHub to comment, through [giscus](https://giscus.app), and each page's
+comments are the same conversation as its note's Chat tab. It needs a public
+repository with Discussions on, and the giscus app installed on it; the dialog
+says which is missing.
+
+**Save as note** (in the Lounge or the Chat tab) writes the conversation into
+`conversations/`: who said what and when, the answer marked, and a link back.
+With the assistant set up, tick **Add a summary** for decisions, to-dos and
+open questions at the top. Nothing is sent to a model unless you tick it.
+
 ## Publishing and exporting
 
 | Feature                        | How to use it                                                                                  |
@@ -693,5 +766,6 @@ to make it open `.md` files.
 | **⌘⇧F**          | Focus mode                       |
 | **⌘1 / ⌘2 / ⌘3** | Rich, Split and Source views     |
 | **⌘\\**          | Show or hide the sidebar         |
+| **⌥⌘A**          | Open or close the assistant      |
 | **⌘⇧?**          | Help                             |
 | **Esc**          | Close a dialog                   |

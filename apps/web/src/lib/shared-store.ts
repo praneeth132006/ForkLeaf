@@ -23,6 +23,17 @@ export interface SharedStore {
   hit(key: string, windowMs: number): Promise<{ count: number; resetAt: number }>;
   /** Marks a key as used for `ttlMs`. True the first time, false if it was already marked. */
   once(key: string, ttlMs: number): Promise<boolean>;
+  /**
+   * Adds an entry to a short log, keeping the newest `max`, and returns the
+   * log's new version — one more than before, so a reader that knows the
+   * version it last saw knows how many entries are new. The entry is stored
+   * as `{ v, ...value }`.
+   */
+  append(key: string, value: Record<string, unknown>, max: number, ttlMs: number): Promise<number>;
+  /** The log's version and its newest `count` entries, newest first. */
+  log(key: string, count: number): Promise<{ version: number; entries: Record<string, unknown>[] }>;
+  /** Only the log's version: one command, for asking "anything new?" often. */
+  logVersion(key: string): Promise<number>;
 }
 
 // ── Memory ────────────────────────────────────────────────────────────────
@@ -32,6 +43,10 @@ const MAX_KEYS = 10_000;
 export function memoryStore(now: () => number = Date.now): SharedStore & { clear(): void } {
   const counters = new Map<string, { count: number; resetAt: number }>();
   const marks = new Map<string, number>();
+  const logs = new Map<
+    string,
+    { version: number; entries: Record<string, unknown>[]; until: number }
+  >();
 
   const sweep = (time: number) => {
     for (const [key, window] of counters) if (window.resetAt <= time) counters.delete(key);
@@ -40,6 +55,8 @@ export function memoryStore(now: () => number = Date.now): SharedStore & { clear
     // the cost is a reset budget, never a refused request.
     if (counters.size > MAX_KEYS) counters.clear();
     if (marks.size > MAX_KEYS) marks.clear();
+    for (const [key, log] of logs) if (log.until <= time) logs.delete(key);
+    if (logs.size > MAX_KEYS) logs.clear();
   };
 
   return {
@@ -63,9 +80,32 @@ export function memoryStore(now: () => number = Date.now): SharedStore & { clear
       marks.set(key, time + ttlMs);
       return true;
     },
+    async append(key, value, max, ttlMs) {
+      const time = now();
+      if (logs.size > MAX_KEYS) sweep(time);
+      const existing = logs.get(key);
+      const live = existing && existing.until > time ? existing : { version: 0, entries: [] };
+      const version = live.version + 1;
+      logs.set(key, {
+        version,
+        entries: [{ v: version, ...value }, ...live.entries].slice(0, max),
+        until: time + ttlMs,
+      });
+      return version;
+    },
+    async logVersion(key) {
+      const existing = logs.get(key);
+      return existing && existing.until > now() ? existing.version : 0;
+    },
+    async log(key, count) {
+      const existing = logs.get(key);
+      if (!existing || existing.until <= now()) return { version: 0, entries: [] };
+      return { version: existing.version, entries: existing.entries.slice(0, count) };
+    },
     clear() {
       counters.clear();
       marks.clear();
+      logs.clear();
     },
   };
 }
@@ -130,6 +170,42 @@ export function restStore(
       const [result] = await pipeline([["SET", safeKey(`once:${key}`), "1", "NX", "PX", ttlMs]]);
       return result === "OK";
     },
+    async append(key, value, max, ttlMs) {
+      const counter = safeKey(`log:${key}:v`);
+      const list = safeKey(`log:${key}`);
+      // The version first, so the entry can carry it: two webhooks arriving
+      // together get two versions and two entries, in whichever order Redis
+      // took them.
+      const [version] = await pipeline([
+        ["INCR", counter],
+        ["PEXPIRE", counter, ttlMs],
+      ]);
+      const v = Number(version);
+      await pipeline([
+        ["LPUSH", list, JSON.stringify({ v, ...value })],
+        ["LTRIM", list, 0, max - 1],
+        ["PEXPIRE", list, ttlMs],
+      ]);
+      return v;
+    },
+    async logVersion(key) {
+      const [version] = await pipeline([["GET", safeKey(`log:${key}:v`)]]);
+      return Number(version ?? 0) || 0;
+    },
+    async log(key, count) {
+      const [version, entries] = await pipeline([
+        ["GET", safeKey(`log:${key}:v`)],
+        ["LRANGE", safeKey(`log:${key}`), 0, count - 1],
+      ]);
+      const parsed = (Array.isArray(entries) ? entries : []).flatMap((entry) => {
+        try {
+          return [JSON.parse(String(entry)) as Record<string, unknown>];
+        } catch {
+          return [];
+        }
+      });
+      return { version: Number(version ?? 0) || 0, entries: parsed };
+    },
   };
 }
 
@@ -164,6 +240,21 @@ export function sharedStore(): SharedStore {
       fallback(
         () => remote.once(key, ttlMs),
         () => memory.once(key, ttlMs),
+      ),
+    append: (key, value, max, ttlMs) =>
+      fallback(
+        () => remote.append(key, value, max, ttlMs),
+        () => memory.append(key, value, max, ttlMs),
+      ),
+    log: (key, count) =>
+      fallback(
+        () => remote.log(key, count),
+        () => memory.log(key, count),
+      ),
+    logVersion: (key) =>
+      fallback(
+        () => remote.logVersion(key),
+        () => memory.logVersion(key),
       ),
   };
 }

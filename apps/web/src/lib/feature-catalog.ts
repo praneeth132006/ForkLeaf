@@ -684,6 +684,51 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         tags: ["new"],
       },
       {
+        id: "conversations",
+        title: "Talk about a note",
+        summary:
+          "Chat with collaborators in a tab beside the note, with an unread count. Every message is a GitHub Discussion in the notebook's own repository, so people can answer from github.com too.",
+        how: "The Chat tab beside the note, the speech bubble in the header, or ⌘K → Talk about this note",
+        docs: "/docs/conversations",
+        tags: ["new", "github"],
+      },
+      {
+        id: "lounge",
+        title: "The Lounge",
+        summary:
+          "Every conversation in the notebook as channels and threads, with unread counts, unanswered questions and answers you can mark. Save any thread as a note, with an optional summary by your own model.",
+        how: "⌘K → Open the Lounge, or the Lounge button in the Chat tab",
+        docs: "/docs/conversations#lounge",
+        tags: ["new", "github"],
+      },
+      {
+        id: "passages",
+        title: "Talk about a passage",
+        summary:
+          "Select words in a note and press Discuss: a thread about just that passage, listed beside the note, with a warning when its words are rewritten.",
+        how: "Select text in a note, then Discuss",
+        docs: "/docs/conversations#passages",
+        tags: ["new", "github"],
+      },
+      {
+        id: "live-conversations",
+        title: "Live conversations and notifications",
+        summary:
+          "Replies arrive as they are posted, through the GitHub App's webhooks. Optional notifications for threads you are in, or everything, plus a count in the tab's title.",
+        how: "The bell in the Chat tab or the Lounge",
+        docs: "/docs/conversations#live",
+        tags: ["new", "github"],
+      },
+      {
+        id: "page-comments",
+        title: "Comments on published books",
+        summary:
+          "Readers comment under every page with their GitHub account, and each page's comments are the same conversation as its note's Chat tab.",
+        how: "Publish as a book… → Comments on every page",
+        docs: "/docs/conversations#comments",
+        tags: ["new", "github"],
+      },
+      {
         id: "mcp",
         title: "Use your notebook from an AI assistant",
         summary:

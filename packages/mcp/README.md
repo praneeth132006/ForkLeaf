@@ -19,14 +19,18 @@ assistant. The rest of this README is for running the server yourself.
 
 ## Tools
 
-| Tool                   | What it does                                                           |
-| ---------------------- | ---------------------------------------------------------------------- |
-| `list_repositories`    | The repositories it can use, which is the default, which are read only |
-| `search_notes`         | Full-text search across every note, with the line each match is on     |
-| `list_notes`           | The notes in the notebook, or in one folder                            |
-| `read_note`            | One note in full, with the notes that link to it                       |
-| `write_note`           | Create a note, or replace one's whole content, as one commit           |
-| `append_to_daily_note` | Add text to `journal/YYYY-MM-DD.md`, creating it if needed             |
+| Tool                     | What it does                                                                  |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| `list_repositories`      | The repositories it can use, which is the default, which are read only        |
+| `search_notes`           | Full-text search across every note, with the line each match is on            |
+| `list_notes`             | The notes in the notebook, or in one folder                                   |
+| `read_note`              | One note in full, with the notes that link to it                              |
+| `write_note`             | Create a note, or replace one's whole content, as one commit                  |
+| `append_to_daily_note`   | Add text to `journal/YYYY-MM-DD.md`, creating it if needed                    |
+| `read_note_conversation` | A note's conversation (GitHub Discussions) and the threads about its passages |
+| `list_conversations`     | Every conversation, newest first, or only the unanswered questions            |
+| `read_conversation`      | One conversation in full, by number                                           |
+| `reply_to_conversation`  | Post a reply under your name — only when you ask, after seeing the text       |
 
 Every tool works on `FORKLEAF_REPO` unless it is given `repository: owner/name`
 — which it can be when `FORKLEAF_ALL_REPOS=true`. Each write answers with the

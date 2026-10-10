@@ -21,7 +21,7 @@ import {
   Views,
   VoiceNotes,
 } from "./everyday";
-import { SigningIn, Repositories, Sync, Conflicts } from "./github";
+import { SigningIn, Repositories, Sync, Conflicts, Conversations } from "./github";
 import { Plans, PrivacyAndData, Security } from "./account";
 import { Troubleshooting, Faq, Support } from "./running";
 
@@ -50,6 +50,7 @@ export const DOC_CONTENT: Record<string, () => React.JSX.Element> = {
   conflicts: Conflicts,
   "browser-extension": BrowserExtension,
   assistant: Assistant,
+  conversations: Conversations,
   mcp: McpServer,
   "slash-menu": SlashMenu,
   journal: Journal,

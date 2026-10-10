@@ -27,14 +27,18 @@ const NOTES = {
 };
 
 describe("the notebook tools", () => {
-  it("offers six tools, and only the four that read in read-only mode", () => {
+  it("offers ten tools, and only the seven that read in read-only mode", () => {
     expect(setup(NOTES).tools.map((tool) => tool.name)).toEqual([
       "list_repositories",
       "list_notes",
       "search_notes",
       "read_note",
+      "read_note_conversation",
+      "list_conversations",
+      "read_conversation",
       "write_note",
       "append_to_daily_note",
+      "reply_to_conversation",
     ]);
     const readOnly = setup(NOTES, { readOnly: true }).tools;
     expect(readOnly.map((tool) => tool.name)).toEqual([
@@ -42,6 +46,9 @@ describe("the notebook tools", () => {
       "list_notes",
       "search_notes",
       "read_note",
+      "read_note_conversation",
+      "list_conversations",
+      "read_conversation",
     ]);
     expect(readOnly.every((tool: Tool) => tool.annotations?.readOnlyHint)).toBe(true);
   });

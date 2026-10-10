@@ -3,9 +3,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { Note, Workspace } from "@forkleaf/types";
 import { deriveTitle } from "@forkleaf/markdown-engine";
-import { buildBook, chapterSlug, type BookNote } from "@forkleaf/exporter";
+import { buildBook, chapterSlug, type BookComments, type BookNote } from "@forkleaf/exporter";
+import { pickCategory, type DiscussionRepoDto } from "@forkleaf/github-client";
 import {
   ApiGatewayError,
+  listLounge,
   publishBook,
   readBook,
   unpublishBook,
@@ -104,6 +106,70 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
   );
 
   /**
+   * Comments under every page, by giscus, kept in the notes repository's
+   * Discussions — the same conversations as each note's Chat tab. Remembered
+   * per folder, like the garden.
+   */
+  const commentsKey = `forkleaf:book-comments:${workspace.repo.owner}/${workspace.repo.repo}:${book}`;
+  const [comments, setComments] = useState(() => {
+    try {
+      return window.localStorage.getItem(commentsKey) === "1";
+    } catch {
+      return false;
+    }
+  });
+  /** The notes repository's Discussions settings, read once comments are asked for. */
+  const [commentsRepo, setCommentsRepo] = useState<
+    { repo: DiscussionRepoDto } | { error: string } | null
+  >(null);
+  const chooseComments = useCallback(
+    (next: boolean) => {
+      setComments(next);
+      try {
+        window.localStorage.setItem(commentsKey, next ? "1" : "0");
+      } catch {
+        // Not remembered is fine; the checkbox still says what will happen.
+      }
+    },
+    [commentsKey],
+  );
+  useEffect(() => {
+    if (!comments || commentsRepo !== null) return;
+    let cancelled = false;
+    listLounge({ owner: workspace.repo.owner, repo: workspace.repo.repo })
+      .then((lounge) => {
+        if (!cancelled) setCommentsRepo({ repo: lounge.repo });
+      })
+      .catch((problem: unknown) => {
+        if (!cancelled) setCommentsRepo({ error: messageFor(problem) });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [comments, commentsRepo, workspace.repo.owner, workspace.repo.repo]);
+
+  /** What giscus needs, or why it cannot have it. */
+  const commentsPlan = useMemo((): { config: BookComments } | { problem: string } | null => {
+    if (!comments) return null;
+    if (commentsRepo === null) return { problem: "Checking the repository…" };
+    if ("error" in commentsRepo) return { problem: commentsRepo.error };
+    const name = `${workspace.repo.owner}/${workspace.repo.repo}`;
+    const repo = commentsRepo.repo;
+    if (!repo.enabled) return { problem: `Turn on Discussions in ${name}'s settings first.` };
+    if (repo.private) {
+      return {
+        problem: `Comments need a public repository, and ${name} is private: readers could not see them.`,
+      };
+    }
+    const category = pickCategory(repo.categories);
+    if (!category) return { problem: `${name} has no Discussions category comments can go in.` };
+    return {
+      config: { repo: name, repoId: repo.id, category: category.name, categoryId: category.id },
+    };
+  }, [comments, commentsRepo, workspace.repo.owner, workspace.repo.repo]);
+  const commentsConfig = commentsPlan && "config" in commentsPlan ? commentsPlan.config : undefined;
+
+  /**
    * What this folder already is, asked once on open.
    *
    * Without it the dialog would offer to publish a book that is already
@@ -161,6 +227,7 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
         // published copy.
         suggestUrl: (note) => suggestEditUrl(workspace.repo, note.path),
         garden,
+        ...(commentsConfig ? { comments: commentsConfig } : {}),
       });
 
       setStep("Committing the book to your repository…");
@@ -188,7 +255,7 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
       setError(messageFor(problem));
       setStage("idle");
     }
-  }, [chapters, title, book, target, workspace.repo, garden]);
+  }, [chapters, title, book, target, workspace.repo, garden, commentsConfig]);
 
   const unpublish = useCallback(async () => {
     setStage("working");
@@ -243,6 +310,46 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
           Every page lists the notes that link to it, and the contents page shows a map of how they
           connect.
         </span>
+      </span>
+    </label>
+  );
+
+  const commentsChoice = (
+    <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[var(--fl-border)] px-3 py-2.5">
+      <input
+        type="checkbox"
+        checked={comments}
+        onChange={(event) => chooseComments(event.target.checked)}
+        disabled={stage === "working"}
+        className="mt-0.5"
+      />
+      <span className="space-y-0.5">
+        <span className="block text-[13px] font-medium text-[var(--fl-text)]">
+          Comments on every page
+        </span>
+        <span className="block text-[12px] leading-relaxed text-[var(--fl-muted)]">
+          Readers sign in with GitHub to comment, through giscus. Each page&rsquo;s comments are the
+          same conversation as its note&rsquo;s Chat tab.
+        </span>
+        {commentsPlan && "problem" in commentsPlan && (
+          <span role="status" className="block text-[12px] leading-relaxed text-[var(--fl-warn)]">
+            {commentsPlan.problem}
+            {commentsPlan.problem.endsWith("…") ? "" : " Publishing goes ahead without comments."}
+          </span>
+        )}
+        {commentsConfig && (
+          <span className="block text-[12px] leading-relaxed text-[var(--fl-muted)]">
+            The giscus app must be installed on {commentsConfig.repo}:{" "}
+            <a
+              href="https://github.com/apps/giscus"
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2"
+            >
+              install giscus ↗
+            </a>
+          </span>
+        )}
       </span>
     </label>
   );
@@ -333,6 +440,7 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
           )}
 
           {gardenChoice}
+          {commentsChoice}
           {where}
           {problem}
 
@@ -404,6 +512,7 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
         </div>
 
         {gardenChoice}
+        {commentsChoice}
         {where}
         {problem}
 

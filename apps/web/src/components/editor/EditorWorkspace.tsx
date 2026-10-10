@@ -198,6 +198,19 @@ import { useColumnWidth } from "@/hooks/useColumnWidth";
 import { EditorSidebar } from "@/components/EditorSidebar";
 import { EditorRightPanel } from "@/components/EditorRightPanel";
 import { AssistantPanel } from "@/components/AssistantPanel";
+import { ConversationPanel } from "@/components/ConversationPanel";
+import { SidePanelTabs, type SideView } from "@/components/SidePanelTabs";
+import { useNoteConversation, type ConversationTarget } from "@/hooks/useNoteConversation";
+import { useLounge } from "@/hooks/useLounge";
+import { useLiveActivity } from "@/hooks/useLiveActivity";
+import { useConversationAlerts } from "@/hooks/useConversationAlerts";
+import { readNotifyMode } from "@/lib/notify";
+import { LoungeDialog } from "@/components/LoungeDialog";
+import { SaveThreadDialog } from "@/components/SaveThreadDialog";
+import { DiscussSelection } from "@/components/DiscussSelection";
+import { findQuoteRange, passageStatus } from "@/lib/passages";
+import { CONVERSATION_FOLDER, summaryRequest, threadToNote, transcriptOf } from "@/lib/thread-note";
+import type { NoteDiscussionDto } from "@forkleaf/github-client";
 import { EditorStatusBar } from "@/components/EditorStatusBar";
 import { EditorTabs } from "@/components/EditorTabs";
 import { ConflictDialog } from "@/components/ConflictDialog";
@@ -276,6 +289,25 @@ const MarkdownEditor = dynamic(
  * windows of the same notebook.
  */
 type PdfPlacement = "document" | "beside" | "tab";
+
+/**
+ * Whether the window is wide enough for columns beside the note.
+ *
+ * The same `lg` breakpoint the layout's classes use. Below it the column is a
+ * drawer that is shut unless opened, so a conversation "showing" in it is not
+ * one anybody is reading.
+ */
+const WIDE_QUERY = "(min-width: 1024px)";
+
+function subscribeToWidth(onChange: () => void): () => void {
+  const query = window.matchMedia(WIDE_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function readWide(): boolean {
+  return window.matchMedia(WIDE_QUERY).matches;
+}
 
 const PDF_PLACEMENT_KEY = "forkleaf:pdf-placement";
 /** The old two-way setting, still read so nobody's choice is thrown away. */
@@ -379,10 +411,10 @@ const PLACEMENTS: { value: PdfPlacement; label: string; hint: string }[] = [
  */
 const COLUMNS = {
   sidebar: { key: "forkleaf:width:sidebar", start: 256, min: 180, max: 520 },
-  panel: { key: "forkleaf:width:panel", start: 288, min: 240, max: 560 },
+  // Note, Chat and Assistant share one column, so its range covers all three.
+  panel: { key: "forkleaf:width:panel", start: 320, min: 240, max: 640 },
   reader: { key: "forkleaf:width:reader", start: 640, min: 360, max: 1120 },
   index: { key: "forkleaf:width:pdf-index", start: 288, min: 200, max: 520 },
-  assistant: { key: "forkleaf:width:assistant", start: 340, min: 280, max: 640 },
 } as const;
 
 const MODES: { value: EditorViewMode; label: string; hint: string }[] = [
@@ -479,14 +511,35 @@ export function EditorWorkspace() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   /**
-   * Whether the assistant is beside the note.
+   * What the column beside the note shows: the note's details, the
+   * conversation about it, or the assistant.
    *
-   * Closed until asked for, and not remembered between sessions on purpose:
-   * the panel is where a question goes, not part of the furniture, and an
-   * editor that reopens with a chat column every morning is one that has
-   * decided for you what writing looks like.
+   * Not remembered between sessions on purpose: the assistant and the chat
+   * are where a question goes, not part of the furniture, and an editor that
+   * reopens with a chat column every morning is one that has decided for you
+   * what writing looks like.
    */
-  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [sideView, setSideView] = useState<SideView>("note");
+  /** Whether the assistant is what the column is showing. */
+  const assistantOpen = !panelCollapsed && sideView === "assistant";
+  /** Whether the conversation is what the column is showing. */
+  const chatOpen = !panelCollapsed && sideView === "chat";
+  /**
+   * The assistant keeps its conversation while another tab is showing, so it
+   * stays mounted once it has been opened. Set during render — React's way of
+   * deriving state from state — rather than in an effect a frame late.
+   */
+  const [assistantMounted, setAssistantMounted] = useState(false);
+  if (sideView === "assistant" && !assistantMounted) setAssistantMounted(true);
+  /**
+   * Where a shortcut that opened a view goes back to when pressed again.
+   *
+   * ⌥⌘A twice leaves the column as it was: hidden if it was hidden, on the
+   * view it was showing otherwise. A tab clicked by hand is a choice, so after
+   * one the shortcut goes back to the note's details and leaves the column
+   * open.
+   */
+  const [sideReturn, setSideReturn] = useState<SideView | "hidden">("hidden");
   /**
    * Everything but the note, put away.
    *
@@ -518,12 +571,6 @@ export function EditorWorkspace() {
     COLUMNS.reader.min,
     COLUMNS.reader.max,
   );
-  const [assistantWidth, setAssistantWidth, resetAssistantWidth] = useColumnWidth(
-    COLUMNS.assistant.key,
-    COLUMNS.assistant.start,
-    COLUMNS.assistant.min,
-    COLUMNS.assistant.max,
-  );
   /**
    * Which panel is open over the document on a narrow screen.
    *
@@ -534,7 +581,55 @@ export function EditorWorkspace() {
    * nothing else. They are the same two panels; on a narrow screen they slide
    * over the document instead of sitting beside it.
    */
-  const [drawer, setDrawer] = useState<"files" | "document" | "assistant" | null>(null);
+  const [drawer, setDrawer] = useState<"files" | "side" | null>(null);
+
+  /**
+   * Shows a view in the column beside the note — or, asked again, puts the
+   * column back the way it was. The column on a wide screen; the drawer on a
+   * narrow one, where there is no room beside anything.
+   */
+  const toggleSide = useCallback(
+    (view: SideView) => {
+      if (!readWide()) {
+        if (drawer === "side" && sideView === view) {
+          setDrawer(null);
+          return;
+        }
+        setSideView(view);
+        setDrawer("side");
+        return;
+      }
+
+      setDrawer(null);
+      if (!panelCollapsed && sideView === view) {
+        setSideReturn("hidden");
+        if (sideReturn === "hidden" || sideReturn === view) setPanelCollapsed(true);
+        else setSideView(sideReturn);
+        return;
+      }
+      setSideReturn(panelCollapsed ? "hidden" : sideView);
+      setSideView(view);
+      setPanelCollapsed(false);
+    },
+    [drawer, sideView, panelCollapsed, sideReturn],
+  );
+
+  /** Shows a view beside the note, whatever was showing before. */
+  const showSide = useCallback((view: SideView) => {
+    setSideView(view);
+    if (readWide()) {
+      setDrawer(null);
+      setPanelCollapsed(false);
+    } else {
+      setDrawer("side");
+    }
+  }, []);
+
+  /** Puts the column away: the drawer on a narrow screen, the column on a wide one. */
+  const hideSide = useCallback(() => {
+    if (drawer === "side") setDrawer(null);
+    else setPanelCollapsed(true);
+  }, [drawer]);
 
   /**
    * The folder being published as a book, and the notes to build it from.
@@ -583,6 +678,7 @@ export function EditorWorkspace() {
     | "lineage"
     | "switch"
     | "encrypt-for-people"
+    | "lounge"
     | null
   >(null);
   /**
@@ -789,6 +885,101 @@ export function EditorWorkspace() {
   // instead — which is also the arrangement the feature exists for, since the
   // point of opening a paper in a notes app is to write about it.
   const reader = usePdfReader(workspace);
+
+  /**
+   * The column beside the note, and whether it is on screen.
+   *
+   * The PDF reader takes the same space, so while one is open only the
+   * assistant — which is often what the reader is being asked about — stays.
+   */
+  const sideShown =
+    (!panelCollapsed || drawer === "side") &&
+    !focusMode &&
+    (sideView === "assistant" || reader.status === "idle");
+  const wide = useSyncExternalStore(subscribeToWidth, readWide, () => true);
+
+  /**
+   * The conversation about the open note, in the repository's Discussions.
+   *
+   * None for an encrypted note, ever: a discussion's title and messages are
+   * readable by anyone who can read the repository, which is exactly who an
+   * encrypted note is being kept from.
+   */
+  const conversationTarget = useMemo<ConversationTarget | null>(
+    () =>
+      user && workspace && !workspace.isLocal && notePath && !sealed
+        ? {
+            owner: workspace.repo.owner,
+            repo: workspace.repo.repo,
+            branch: workspace.repo.branch,
+            path: notePath,
+            title,
+          }
+        : null,
+    [user, workspace, notePath, sealed, title],
+  );
+  /** The notebook's repository, for everything that is about all its conversations. */
+  const loungeTarget = useMemo(
+    () =>
+      user && workspace && !workspace.isLocal
+        ? { owner: workspace.repo.owner, repo: workspace.repo.repo }
+        : null,
+    [user, workspace],
+  );
+  /**
+   * Conversations as they happen, when this server has webhooks. Kept
+   * connected while the tab is hidden only if notifications are on — read
+   * from the setting directly, since changing it re-renders this component.
+   */
+  const live = useLiveActivity(loungeTarget, {
+    whileHidden: loungeTarget
+      ? readNotifyMode(loungeTarget.owner, loungeTarget.repo) !== "off"
+      : false,
+  });
+  const conversation = useNoteConversation({
+    target: conversationTarget,
+    active: sideShown && sideView === "chat" && (wide || drawer === "side"),
+    live,
+  });
+  /** Every conversation in the notebook, read only while the Lounge is open. */
+  const lounge = useLounge({ target: loungeTarget, open: openDialog === "lounge", live });
+  const alerts = useConversationAlerts({
+    target: loungeTarget,
+    viewer: user?.login ?? null,
+    entries: live.entries,
+    onOpen: (number) => {
+      lounge.select(number);
+      setDialog("lounge");
+    },
+  });
+  const notify = {
+    live: live.status,
+    mode: alerts.mode,
+    permission: alerts.permission,
+    onChange: alerts.setMode,
+  };
+  /**
+   * A passage the reader chose to talk about, waiting for its first message.
+   * Kept with the note it came from, so switching notes drops it rather than
+   * asking about one note's words in another's conversation.
+   */
+  const [pendingPassage, setPendingPassage] = useState<{ path: string; quote: string } | null>(
+    null,
+  );
+  const passageToAsk =
+    pendingPassage && pendingPassage.path === notePath ? pendingPassage.quote : null;
+  /** A conversation on its way to becoming a note. */
+  const [savingThread, setSavingThread] = useState<NoteDiscussionDto | null>(null);
+
+  const conversationUnavailable = !note
+    ? "Open a note to see the conversation about it."
+    : sealed
+      ? "This note is encrypted, so it has no conversation. A GitHub Discussion can be read by anyone with access to the repository."
+      : !user
+        ? "Sign in with GitHub to talk about this note with your collaborators."
+        : !workspace || workspace.isLocal
+          ? "Connect a GitHub repository to talk about notes. Conversations are kept in its GitHub Discussions."
+          : undefined;
   const [readerCitation, setReaderCitation] = useState<PdfCitation | null>(null);
   /** The repo path of the document open in the reader, for writing links to. */
   const [readerPath, setReaderPath] = useState<string | null>(null);
@@ -1557,6 +1748,27 @@ export function EditorWorkspace() {
   });
 
   /**
+   * `[[links]]` in a conversation, resolved against this notebook and opened
+   * in the editor — closing the Lounge on the way, since the note is what the
+   * reader asked to see.
+   */
+  const threadLinks = useMemo(
+    () => ({
+      resolve: links.resolve,
+      open: (target: string) => {
+        const path = links.pathFor(target);
+        if (!path) {
+          setNotice(`There is no note called “${target}” in this notebook yet.`);
+          return;
+        }
+        setDialog(null);
+        void notebook.openNote(path);
+      },
+    }),
+    [links, notebook],
+  );
+
+  /**
    * The notes around the one being written, for ⌘K to weigh.
    *
    * The link graph is built for backlinks and answers this for free: a note
@@ -1657,6 +1869,55 @@ export function EditorWorkspace() {
       },
     };
   }, [assistantSettings, assistantKey, notebook]);
+
+  /**
+   * Writes a conversation into conversations/, with a summary by the reader's
+   * own model when they ticked the box for one. Resolves to a reason it could
+   * not, for the dialog to show.
+   */
+  const saveThreadAsNote = useCallback(
+    async (discussion: NoteDiscussionDto, withSummary: boolean): Promise<string | null> => {
+      let summary: string | undefined;
+      if (withSummary) {
+        if (!isReady(assistantSettings, assistantKey)) return "The assistant is not set up.";
+        try {
+          let reply = "";
+          await streamChat({
+            settings: { ...assistantSettings, sendNote: true },
+            key: assistantKey,
+            note: { title: discussion.title, content: transcriptOf(discussion) },
+            messages: [{ role: "user", text: summaryRequest(discussion.title) }],
+            receipt: { purpose: "Conversation summary", path: discussion.notePath },
+            signal: AbortSignal.timeout(120_000),
+            onDelta: (delta) => {
+              reply += delta;
+            },
+          });
+          summary = reply;
+        } catch (error) {
+          return `The summary could not be written: ${
+            error instanceof Error ? error.message : String(error)
+          }`;
+        }
+      }
+
+      const made = threadToNote(discussion, {
+        now: new Date(),
+        ...(summary ? { summary } : {}),
+      });
+      const created = await notebook.createNote(
+        made.title,
+        CONVERSATION_FOLDER,
+        made.content,
+        made.frontmatter,
+      );
+      if (!created) return "The note could not be created. Is a notebook open?";
+      setSavingThread(null);
+      setNotice(`Saved the conversation to ${created.path}.`);
+      return null;
+    },
+    [assistantSettings, assistantKey, notebook],
+  );
 
   /** Cards in the open note, for its "Study" button. */
   const noteCardCount = useMemo(
@@ -2082,6 +2343,8 @@ export function EditorWorkspace() {
    * the day one is.
    */
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  /** The same element, as state: the "Discuss" button is handed it during render. */
+  const [canvasElement, setCanvasElement] = useState<HTMLDivElement | null>(null);
 
   /**
    * Rings an image once the note it is in has actually drawn it.
@@ -3259,7 +3522,15 @@ export function EditorWorkspace() {
         group: "View",
         hint: "⌥⌘A",
         keywords: "ai chat claude gpt gemini llm model ask copilot ollama",
-        run: () => setAssistantOpen((value) => !value),
+        run: () => toggleSide("assistant"),
+      },
+      {
+        id: "conversation",
+        label: chatOpen ? "Hide the conversation" : "Talk about this note",
+        group: "View",
+        keywords:
+          "chat conversation discussion discussions comment comments message reply collaborators team github",
+        run: () => toggleSide("chat"),
       },
       {
         id: "help",
@@ -3340,6 +3611,18 @@ export function EditorWorkspace() {
               `${slugifyFilename(title || "note")}.md`,
               serializeDocument(note.content, note.frontmatter),
             ),
+        });
+      }
+
+      if (workspace && !workspace.isLocal && user) {
+        list.push({
+          id: "lounge",
+          label: "Open the Lounge",
+          group: "View",
+          hint: "Every conversation in this notebook",
+          keywords:
+            "chat channels discussions discussion team threads questions answers collaborators github conversation",
+          run: () => setDialog("lounge"),
         });
       }
 
@@ -3978,6 +4261,8 @@ export function EditorWorkspace() {
     sidebarCollapsed,
     panelCollapsed,
     assistantOpen,
+    chatOpen,
+    toggleSide,
     notebook,
     router,
     toggleTheme,
@@ -4047,16 +4332,11 @@ export function EditorWorkspace() {
       if (event.key.toLowerCase() !== "a" && event.code !== "KeyA") return;
       event.preventDefault();
       event.stopPropagation();
-      if (window.matchMedia("(min-width: 1024px)").matches) {
-        setDrawer(null);
-        setAssistantOpen((open) => !open);
-        return;
-      }
-      setDrawer((open) => (open === "assistant" ? null : "assistant"));
+      toggleSide("assistant");
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, []);
+  }, [toggleSide]);
 
   // ── The / menu's tools ──────────────────────────────────────────────────
 
@@ -4720,17 +5000,38 @@ export function EditorWorkspace() {
                   it ever use. It opens the column on a wide screen and the
                   drawer on a narrow one — the same panel, put where there is
                   room for it. */}
+                {/* The conversation, beside the assistant: both are a place
+                  to ask about the note, one of people and one of a model. The
+                  dot is the unread count's shorthand, for when the column with
+                  the full count is put away. */}
                 <IconButton
-                  onClick={() => {
-                    if (window.matchMedia("(min-width: 1024px)").matches) {
-                      setDrawer(null);
-                      setAssistantOpen((open) => !open);
-                      return;
-                    }
-                    setDrawer((open) => (open === "assistant" ? null : "assistant"));
-                  }}
-                  label="Assistant (⌥⌘A)"
+                  onClick={() => toggleSide("chat")}
+                  label={
+                    conversation.unread > 0
+                      ? `Conversation — ${conversation.unread} unread`
+                      : "Conversation about this note"
+                  }
+                  className="relative"
                 >
+                  <svg
+                    viewBox="0 0 16 16"
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M2.5 4.25A1.75 1.75 0 0 1 4.25 2.5h7.5a1.75 1.75 0 0 1 1.75 1.75v5a1.75 1.75 0 0 1-1.75 1.75H7l-3 2.5V11h.25a1.75 1.75 0 0 1-1.75-1.75z" />
+                  </svg>
+                  {conversation.unread > 0 && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute top-1 right-1 h-2 w-2 rounded-full bg-[var(--fl-accent)]"
+                    />
+                  )}
+                </IconButton>
+
+                <IconButton onClick={() => toggleSide("assistant")} label="Assistant (⌥⌘A)">
                   <svg
                     viewBox="0 0 16 16"
                     className="h-4 w-4"
@@ -4748,7 +5049,7 @@ export function EditorWorkspace() {
                   in the document panel, so below `lg` this button is the only
                   route to any of them. */}
                 <IconButton
-                  onClick={() => setDrawer((open) => (open === "document" ? null : "document"))}
+                  onClick={() => setDrawer((open) => (open === "side" ? null : "side"))}
                   label="Document, export and history"
                   className="inline-flex lg:hidden"
                 >
@@ -4950,7 +5251,13 @@ export function EditorWorkspace() {
             )}
 
             {/* ── Canvas ───────────────────────────────────────────────── */}
-            <div ref={canvasRef} className="flex min-h-0 flex-1 flex-col">
+            <div
+              ref={(element) => {
+                canvasRef.current = element;
+                setCanvasElement(element);
+              }}
+              className="flex min-h-0 flex-1 flex-col"
+            >
               {note && sealed && !opened ? (
                 isShared(note.content) ? (
                   <UnlockPanel
@@ -5070,9 +5377,15 @@ export function EditorWorkspace() {
           </div>
         )}
 
-        {(!panelCollapsed || drawer === "document") && !focusMode && reader.status === "idle" && (
+        {/* ── The column beside the note ──────────────────────────────────
+          One column, three things in it — the note's details, the
+          conversation about it, and the assistant — switched by the tabs at
+          its top. Below `lg` it slides over the document like the file tree:
+          a chat column and a note side by side on a phone is two columns of
+          neither. */}
+        {sideShown && (
           <ColumnResizer
-            label="Document panel"
+            label="Side panel"
             width={panelWidth}
             min={COLUMNS.panel.min}
             max={COLUMNS.panel.max}
@@ -5083,166 +5396,219 @@ export function EditorWorkspace() {
           />
         )}
 
-        {(!panelCollapsed || drawer === "document") && !focusMode && reader.status === "idle" && (
+        {sideShown && (
           <div
-            className={`fl-panel lg:w-[var(--fl-col)] ${
-              drawer === "document"
-                ? "fixed inset-y-2 right-2 z-40 flex w-[min(21rem,88vw)] shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:shadow-none"
+            className={`fl-panel flex-col lg:w-[var(--fl-col)] ${
+              drawer === "side"
+                ? "fixed inset-y-2 right-2 z-40 flex w-[min(23rem,92vw)] shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:shadow-none"
                 : "hidden lg:flex"
             }`}
             style={{ "--fl-col": `${panelWidth}px` } as React.CSSProperties}
           >
-            <EditorRightPanel
-              collapsed={false}
-              onToggle={() => (drawer === "document" ? setDrawer(null) : setPanelCollapsed(true))}
-              note={note}
-              workspace={workspace}
-              locked={noteLocked || sealed}
-              encrypted={sealed}
-              resurfaced={resurfaced}
-              onOpenNote={(path) => {
-                setDrawer(null);
-                notebook.openNote(path);
+            <SidePanelTabs
+              view={sideView}
+              onChange={(view) => {
+                setSideReturn("note");
+                setSideView(view);
               }}
-              onFrontmatterChange={notebook.updateFrontmatter}
-              onRewrite={notebook.saveNote}
-              onExport={() => {
-                setDrawer(null);
-                setDialog("export");
-              }}
-              onShowHistory={() => {
-                setDrawer(null);
-                setDialog("history");
-              }}
-              onReview={
-                workspace && !workspace.isLocal
-                  ? () => {
-                      setDrawer(null);
-                      setDialog("review");
-                    }
-                  : undefined
-              }
-              onLinkFile={
-                workspace && !workspace.isLocal
-                  ? () => {
-                      setDrawer(null);
-                      setDialog("link-file");
-                    }
-                  : undefined
-              }
-              onOpenFile={
-                workspace && !workspace.isLocal
-                  ? (target) => {
-                      setDrawer(null);
-                      setViewingFile(target);
-                    }
-                  : undefined
-              }
-              onCapture={
-                user
-                  ? () => {
-                      setDrawer(null);
-                      setDialog("capture");
-                    }
-                  : undefined
-              }
-              onPublish={
-                workspace && !workspace.isLocal
-                  ? () => {
-                      setDrawer(null);
-                      setDialog("publish");
-                    }
-                  : undefined
-              }
-              published={publishedNote}
-              syncMode={notebook.syncPreference.mode}
-              onSyncNow={() => void saveEverything()}
-              assetUrls={notebook.assetUrls}
-              links={{
-                ready: links.ready,
-                backlinks: note ? links.backlinksFor(note.path) : [],
-                outgoing: note ? links.outgoingFor(note.path) : [],
-                titleFor: links.titleFor,
-                onOpen: notebook.openNote,
-                onCreate: createLinked,
-              }}
+              unread={conversation.unread}
             />
-          </div>
-        )}
 
-        {/* ── The assistant ──────────────────────────────────────────────
-          Last in the row, so it is the column nearest the hand and never
-          between the note and the thing the note is about. Below `lg` it
-          slides over the document like the other two panels: a chat column
-          and a note side by side on a phone is two columns of neither. */}
-        {assistantOpen && !focusMode && (
-          <ColumnResizer
-            label="Assistant"
-            width={assistantWidth}
-            min={COLUMNS.assistant.min}
-            max={COLUMNS.assistant.max}
-            side="right"
-            onChange={setAssistantWidth}
-            onReset={resetAssistantWidth}
-            className="hidden lg:block"
-          />
-        )}
-
-        {(assistantOpen || drawer === "assistant") && !focusMode && (
-          <div
-            className={`fl-panel lg:w-[var(--fl-col)] ${
-              drawer === "assistant"
-                ? "fixed inset-y-2 right-2 z-40 flex w-[min(23rem,92vw)] shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:shadow-none"
-                : "hidden lg:flex"
-            }`}
-            style={{ "--fl-col": `${assistantWidth}px` } as React.CSSProperties}
-          >
-            <AssistantPanel
-              note={note ? { title, content: note.content, path: note.path } : null}
-              onShowReceipts={() => setDialog("receipts")}
-              onClose={() => {
-                setDrawer(null);
-                setAssistantOpen(false);
-              }}
-              onInsert={
-                note && !noteLocked && !sealed
-                  ? (markdown) => {
-                      const current = notebook.note;
-                      if (!current) return;
-                      // Appended, like every other thing that arrives from
-                      // outside the editor: the editor owns the selection, and
-                      // this panel has had focus for the length of a
-                      // conversation.
-                      const separator = current.content.endsWith("\n") ? "" : "\n";
-                      void notebook.saveNote(`${current.content}${separator}\n${markdown}\n`);
-                      setNotice("Added to the end of this note.");
-                    }
-                  : undefined
-              }
-              onReplace={
-                note && !noteLocked && !sealed
-                  ? (markdown) => {
-                      const current = notebook.note;
-                      if (!current) return;
-                      // Safe to do without asking: the previous text is one
-                      // ⌘Z away in the editor, and every save is a commit, so
-                      // the version replaced is still in the note's history.
-                      void notebook.saveNote(`${markdown.trim()}\n`);
-                      setNotice("Note replaced. ⌘Z puts it back.");
-                    }
-                  : undefined
-              }
-              /* Why, rather than a pair of buttons that quietly are not there. */
-              cannotWrite={
-                !note
-                  ? "Open a note to put answers into it."
-                  : sealed
-                    ? "This note is encrypted, so answers cannot be added to it."
-                    : noteLocked
-                      ? "This note is locked. Unlock it — ⌘⇧L — to add answers to it."
+            {sideView === "note" && (
+              <div
+                role="tabpanel"
+                id="side-panel-note"
+                aria-labelledby="side-tab-note"
+                className="flex min-h-0 flex-1"
+              >
+                <EditorRightPanel
+                  collapsed={false}
+                  onToggle={hideSide}
+                  note={note}
+                  workspace={workspace}
+                  locked={noteLocked || sealed}
+                  encrypted={sealed}
+                  resurfaced={resurfaced}
+                  onOpenNote={(path) => {
+                    setDrawer(null);
+                    notebook.openNote(path);
+                  }}
+                  onFrontmatterChange={notebook.updateFrontmatter}
+                  onRewrite={notebook.saveNote}
+                  onExport={() => {
+                    setDrawer(null);
+                    setDialog("export");
+                  }}
+                  onShowHistory={() => {
+                    setDrawer(null);
+                    setDialog("history");
+                  }}
+                  onReview={
+                    workspace && !workspace.isLocal
+                      ? () => {
+                          setDrawer(null);
+                          setDialog("review");
+                        }
                       : undefined
-              }
-            />
+                  }
+                  onLinkFile={
+                    workspace && !workspace.isLocal
+                      ? () => {
+                          setDrawer(null);
+                          setDialog("link-file");
+                        }
+                      : undefined
+                  }
+                  onOpenFile={
+                    workspace && !workspace.isLocal
+                      ? (target) => {
+                          setDrawer(null);
+                          setViewingFile(target);
+                        }
+                      : undefined
+                  }
+                  onCapture={
+                    user
+                      ? () => {
+                          setDrawer(null);
+                          setDialog("capture");
+                        }
+                      : undefined
+                  }
+                  onPublish={
+                    workspace && !workspace.isLocal
+                      ? () => {
+                          setDrawer(null);
+                          setDialog("publish");
+                        }
+                      : undefined
+                  }
+                  published={publishedNote}
+                  syncMode={notebook.syncPreference.mode}
+                  onSyncNow={() => void saveEverything()}
+                  assetUrls={notebook.assetUrls}
+                  links={{
+                    ready: links.ready,
+                    backlinks: note ? links.backlinksFor(note.path) : [],
+                    outgoing: note ? links.outgoingFor(note.path) : [],
+                    titleFor: links.titleFor,
+                    onOpen: notebook.openNote,
+                    onCreate: createLinked,
+                  }}
+                />
+              </div>
+            )}
+
+            {sideView === "chat" && (
+              <div
+                role="tabpanel"
+                id="side-panel-chat"
+                aria-labelledby="side-tab-chat"
+                className="flex min-h-0 flex-1"
+              >
+                <ConversationPanel
+                  unavailable={conversationUnavailable}
+                  repoName={
+                    workspace && !workspace.isLocal
+                      ? `${workspace.repo.owner}/${workspace.repo.repo}`
+                      : null
+                  }
+                  state={conversation.state}
+                  sending={conversation.sending}
+                  send={conversation.send}
+                  setAnswer={conversation.setAnswer}
+                  refresh={conversation.refresh}
+                  onClose={hideSide}
+                  onOpenLounge={conversationTarget ? () => setDialog("lounge") : undefined}
+                  onSaveAsNote={setSavingThread}
+                  links={threadLinks}
+                  notify={notify}
+                  passages={conversation.passages}
+                  passageUnread={conversation.passageUnread}
+                  passageStatus={(quote) => (note ? passageStatus(note.content, quote) : "changed")}
+                  onOpenPassage={(thread) => {
+                    lounge.select(thread.number);
+                    setDialog("lounge");
+                  }}
+                  onShowPassage={(quote) => {
+                    const range = canvasElement ? findQuoteRange(canvasElement, quote) : null;
+                    if (!range) {
+                      setNotice(
+                        "Those words are not on the page — switch view, or they were changed.",
+                      );
+                      return;
+                    }
+                    const selection = window.getSelection();
+                    selection?.removeAllRanges();
+                    selection?.addRange(range);
+                    const element =
+                      range.startContainer instanceof Element
+                        ? range.startContainer
+                        : range.startContainer.parentElement;
+                    element?.scrollIntoView({ block: "center", behavior: "smooth" });
+                  }}
+                  pendingPassage={passageToAsk}
+                  onCancelPassage={() => setPendingPassage(null)}
+                  sendPassage={conversation.sendPassage}
+                />
+              </div>
+            )}
+
+            {/* Kept mounted once opened, so switching to the note's details
+              and back does not throw away the conversation with the model. */}
+            {assistantMounted && (
+              <div
+                role="tabpanel"
+                id="side-panel-assistant"
+                aria-labelledby="side-tab-assistant"
+                hidden={sideView !== "assistant"}
+                className={sideView === "assistant" ? "flex min-h-0 flex-1" : undefined}
+              >
+                <AssistantPanel
+                  note={note ? { title, content: note.content, path: note.path } : null}
+                  onShowReceipts={() => setDialog("receipts")}
+                  onClose={hideSide}
+                  onInsert={
+                    note && !noteLocked && !sealed
+                      ? (markdown) => {
+                          const current = notebook.note;
+                          if (!current) return;
+                          // Appended, like every other thing that arrives from
+                          // outside the editor: the editor owns the selection, and
+                          // this panel has had focus for the length of a
+                          // conversation.
+                          const separator = current.content.endsWith("\n") ? "" : "\n";
+                          void notebook.saveNote(`${current.content}${separator}\n${markdown}\n`);
+                          setNotice("Added to the end of this note.");
+                        }
+                      : undefined
+                  }
+                  onReplace={
+                    note && !noteLocked && !sealed
+                      ? (markdown) => {
+                          const current = notebook.note;
+                          if (!current) return;
+                          // Safe to do without asking: the previous text is one
+                          // ⌘Z away in the editor, and every save is a commit, so
+                          // the version replaced is still in the note's history.
+                          void notebook.saveNote(`${markdown.trim()}\n`);
+                          setNotice("Note replaced. ⌘Z puts it back.");
+                        }
+                      : undefined
+                  }
+                  /* Why, rather than a pair of buttons that quietly are not there. */
+                  cannotWrite={
+                    !note
+                      ? "Open a note to put answers into it."
+                      : sealed
+                        ? "This note is encrypted, so answers cannot be added to it."
+                        : noteLocked
+                          ? "This note is locked. Unlock it — ⌘⇧L — to add answers to it."
+                          : undefined
+                  }
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -5510,6 +5876,44 @@ export function EditorWorkspace() {
             notebook.openNote(path);
           }}
           onClose={() => setDialog(null)}
+        />
+      )}
+
+      {openDialog === "lounge" && workspace && !workspace.isLocal && (
+        <LoungeDialog
+          lounge={lounge}
+          repoName={`${workspace.repo.owner}/${workspace.repo.repo}`}
+          onClose={() => setDialog(null)}
+          onOpenNote={(path) => {
+            setDialog(null);
+            void notebook.openNote(path);
+          }}
+          onSaveAsNote={(discussion) => {
+            setDialog(null);
+            setSavingThread(discussion);
+          }}
+          links={threadLinks}
+          notify={notify}
+        />
+      )}
+
+      {conversationTarget && !focusMode && (
+        <DiscussSelection
+          root={canvasElement}
+          onDiscuss={(quote) => {
+            if (!notePath) return;
+            setPendingPassage({ path: notePath, quote });
+            showSide("chat");
+          }}
+        />
+      )}
+
+      {savingThread && (
+        <SaveThreadDialog
+          discussion={savingThread}
+          ai={cardWriter ? { name: cardWriter.name } : null}
+          onSave={(withSummary) => saveThreadAsNote(savingThread, withSummary)}
+          onClose={() => setSavingThread(null)}
         />
       )}
 
@@ -5860,7 +6264,7 @@ export function EditorWorkspace() {
           }
           onConnectAi={() => {
             setDialog(null);
-            setAssistantOpen(true);
+            showSide("assistant");
           }}
           onAddCards={async (path, cards) => {
             const written = await notebook.upsertNote(path, (content) => withCards(content, cards));
