@@ -149,3 +149,12 @@ describe("latestVersion", () => {
     expect(latestVersion(entries, () => false)).toBe(0);
   });
 });
+
+describe("useLiveActivity — for notifications", () => {
+  it("stays connected while the tab is hidden when asked to", () => {
+    renderHook(() => useLiveActivity(target, { whileHidden: true }));
+    visibility = "hidden";
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    expect(FakeEventSource.opened[0]!.closed).toBe(false);
+  });
+});

@@ -25,7 +25,17 @@ export interface LiveActivity {
   entries: ActivityEntry[];
 }
 
-export function useLiveActivity(target: { owner: string; repo: string } | null): LiveActivity {
+export function useLiveActivity(
+  target: { owner: string; repo: string } | null,
+  options: {
+    /**
+     * Stay connected while the tab is hidden — for notifications, which are
+     * for exactly when nobody is looking at the tab.
+     */
+    whileHidden?: boolean;
+  } = {},
+): LiveActivity {
+  const whileHidden = options.whileHidden ?? false;
   const owner = target?.owner ?? "";
   const repo = target?.repo ?? "";
   const key = target ? `${owner}/${repo}` : null;
@@ -44,7 +54,8 @@ export function useLiveActivity(target: { owner: string; repo: string } | null):
     let stopped = false;
 
     const connect = () => {
-      if (stopped || source || document.visibilityState === "hidden") return;
+      if (stopped || source) return;
+      if (!whileHidden && document.visibilityState === "hidden") return;
       const params = new URLSearchParams({ owner, repo });
       if (lastVersion !== null) params.set("since", String(lastVersion));
       const opened = new EventSource(`/api/gh/live?${params.toString()}`);
@@ -99,8 +110,11 @@ export function useLiveActivity(target: { owner: string; repo: string } | null):
     };
 
     const onVisibility = () => {
-      if (document.visibilityState === "hidden") disconnect();
-      else connect();
+      if (document.visibilityState === "hidden") {
+        if (!whileHidden) disconnect();
+      } else {
+        connect();
+      }
     };
 
     connect();
@@ -110,7 +124,7 @@ export function useLiveActivity(target: { owner: string; repo: string } | null):
       disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [key, owner, repo]);
+  }, [key, owner, repo, whileHidden]);
 
   return state.key === key
     ? { status: state.status, entries: state.entries }
