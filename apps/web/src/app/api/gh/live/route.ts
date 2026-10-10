@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
   const key = activityKey(owner, repo);
   const stream = activityStream({
     readLog: () => store.log(key, LOG_MAX),
+    readVersion: () => store.logVersion(key),
     since,
     signal: request.signal,
   });

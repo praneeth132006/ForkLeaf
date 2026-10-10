@@ -254,3 +254,36 @@ describe("activityStream — a browser that leaves", () => {
     expect(reads - after).toBeLessThanOrEqual(1);
   });
 });
+
+describe("activityStream — cheap checks", () => {
+  it("reads the entries only when the version says there is something new", async () => {
+    let version = 3;
+    let logReads = 0;
+    let versionReads = 0;
+    const stream = activityStream({
+      readVersion: async () => {
+        versionReads += 1;
+        if (versionReads === 4) version = 4;
+        return version;
+      },
+      readLog: async () => {
+        logReads += 1;
+        return { version, entries: [{ v: 4, n: 9 }] };
+      },
+      since: null,
+      signal: new AbortController().signal,
+      pollMs: 1,
+      durationMs: 40,
+    });
+    const reader = stream.getReader();
+    let text = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += new TextDecoder().decode(value);
+    }
+    expect(versionReads).toBeGreaterThan(4);
+    expect(logReads).toBe(1);
+    expect(text).toContain("id: 4\nevent: activity");
+  });
+});

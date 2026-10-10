@@ -32,6 +32,8 @@ export interface SharedStore {
   append(key: string, value: Record<string, unknown>, max: number, ttlMs: number): Promise<number>;
   /** The log's version and its newest `count` entries, newest first. */
   log(key: string, count: number): Promise<{ version: number; entries: Record<string, unknown>[] }>;
+  /** Only the log's version: one command, for asking "anything new?" often. */
+  logVersion(key: string): Promise<number>;
 }
 
 // ── Memory ────────────────────────────────────────────────────────────────
@@ -90,6 +92,10 @@ export function memoryStore(now: () => number = Date.now): SharedStore & { clear
         until: time + ttlMs,
       });
       return version;
+    },
+    async logVersion(key) {
+      const existing = logs.get(key);
+      return existing && existing.until > now() ? existing.version : 0;
     },
     async log(key, count) {
       const existing = logs.get(key);
@@ -182,6 +188,10 @@ export function restStore(
       ]);
       return v;
     },
+    async logVersion(key) {
+      const [version] = await pipeline([["GET", safeKey(`log:${key}:v`)]]);
+      return Number(version ?? 0) || 0;
+    },
     async log(key, count) {
       const [version, entries] = await pipeline([
         ["GET", safeKey(`log:${key}:v`)],
@@ -240,6 +250,11 @@ export function sharedStore(): SharedStore {
       fallback(
         () => remote.log(key, count),
         () => memory.log(key, count),
+      ),
+    logVersion: (key) =>
+      fallback(
+        () => remote.logVersion(key),
+        () => memory.logVersion(key),
       ),
   };
 }

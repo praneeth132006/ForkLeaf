@@ -187,3 +187,20 @@ describe("the activity log", () => {
     expect(await store.log("live:me/notes", 5)).toEqual({ version: 7, entries: [{ v: 7, n: 4 }] });
   });
 });
+
+describe("the activity log's version", () => {
+  it("is one GET over REST, and the same number as the log in memory", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify([{ result: "4" }])));
+    expect(
+      await restStore({ url: "https://r.example", token: "t" }, fetchMock).logVersion("live:a/b"),
+    ).toBe(4);
+    expect(
+      JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string),
+    ).toEqual([["GET", "forkleaf:log:live:a_b:v"]]);
+
+    const memory = memoryStore();
+    expect(await memory.logVersion("k")).toBe(0);
+    await memory.append("k", { n: 1 }, 5, 1000);
+    expect(await memory.logVersion("k")).toBe(1);
+  });
+});

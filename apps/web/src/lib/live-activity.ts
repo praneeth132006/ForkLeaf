@@ -162,6 +162,12 @@ export async function verifySignature(
 export interface StreamOptions {
   /** Reads the repository's log. */
   readLog: () => Promise<{ version: number; entries: Record<string, unknown>[] }>;
+  /**
+   * Reads only the log's version — one store command — so the frequent "is
+   * there anything new?" is cheap, and the entries are read only when there
+   * is. Defaults to reading the whole log.
+   */
+  readVersion?: () => Promise<number>;
   /** The last version the browser saw, or null to start from now. */
   since: number | null;
   signal: AbortSignal;
@@ -181,7 +187,8 @@ const encoder = new TextEncoder();
  * Last-Event-ID when it reconnects, so nothing is missed between streams.
  */
 export function activityStream(options: StreamOptions): ReadableStream<Uint8Array> {
-  const pollMs = options.pollMs ?? 2000;
+  const pollMs = options.pollMs ?? 3000;
+  const readVersion = options.readVersion ?? (async () => (await options.readLog()).version);
   const heartbeatMs = options.heartbeatMs ?? 15_000;
   const durationMs = options.durationMs ?? 240_000;
 
@@ -210,13 +217,14 @@ export function activityStream(options: StreamOptions): ReadableStream<Uint8Arra
 
       try {
         while (!closed && !options.signal.aborted && Date.now() - started < durationMs) {
-          const log = await options.readLog();
+          const version = await readVersion();
           // A log that expired or was reset starts again from 1; a browser
           // that saw version 40 of the old one must not wait for 41.
-          if (since === null || since > log.version) {
-            since = log.version;
+          if (since === null || since > version) {
+            since = version;
             send(`retry: 3000\nevent: ready\ndata: ${JSON.stringify({ version: since })}\n\n`);
           }
+          const log = version > since ? await options.readLog() : { version, entries: [] };
           const fresh = log.entries
             .filter((entry) => typeof entry.v === "number" && (entry.v as number) > since!)
             .sort((a, b) => (a.v as number) - (b.v as number));
