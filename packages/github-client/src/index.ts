@@ -23,3 +23,30 @@ export {
 export { Transport, type RateLimit, type TransportConfig, type HttpResponse } from "./http";
 export { GitHubError, asGitHubError, errorCodeForStatus } from "./errors";
 export { encodeBase64, decodeBase64 } from "./base64";
+
+export {
+  noteMarker,
+  isNoteDiscussion,
+  notePathOf,
+  passageOf,
+  passageMarker,
+  passageBody,
+  passageTitle,
+  pageHash,
+  pageHashMarker,
+  isConversationFor,
+  MAX_PASSAGE,
+  emojiFromHtml,
+  pickCategory,
+  discussionBody,
+  MAX_DISCUSSION_TITLE,
+  MAX_DISCUSSION_BODY,
+  type DiscussionAuthorDto,
+  type DiscussionCommentDto,
+  type NoteDiscussionDto,
+  type DiscussionCategoryDto,
+  type DiscussionRepoDto,
+  type NoteConversationDto,
+  type ThreadSummaryDto,
+  type LoungeDto,
+} from "./discussions";

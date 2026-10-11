@@ -209,6 +209,12 @@ export const DOC_SECTIONS: DocSection[] = [
           "Claude, OpenAI, Gemini or a model on your own machine, in a column next to the note — with your own key, kept in your browser.",
       },
       {
+        slug: "conversations",
+        title: "Talk about a note",
+        summary:
+          "Chat with collaborators beside the note. Every message is a GitHub Discussion in the notebook's own repository.",
+      },
+      {
         slug: "mcp",
         title: "Connect an AI assistant (MCP)",
         summary:

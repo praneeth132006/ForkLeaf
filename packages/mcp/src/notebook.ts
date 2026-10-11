@@ -1,4 +1,9 @@
-import type { GitHubClient } from "@forkleaf/github-client";
+import type {
+  GitHubClient,
+  LoungeDto,
+  NoteConversationDto,
+  ThreadSummaryDto,
+} from "@forkleaf/github-client";
 import type { RepoRef, TreeNode } from "@forkleaf/types";
 
 /**
@@ -15,6 +20,23 @@ export interface NotebookFile {
   content: string;
 }
 
+/**
+ * The notebook's conversations — its GitHub Discussions — as the tools see
+ * them. Optional on a notebook: one that is not a GitHub repository has none.
+ */
+export interface NotebookConversations {
+  /** A note's own conversation, and the threads about its passages. */
+  forNote(
+    path: string,
+  ): Promise<{ conversation: NoteConversationDto; passages: ThreadSummaryDto[] }>;
+  /** A page of every thread, newest activity first. */
+  list(options?: { after?: string }): Promise<LoungeDto>;
+  /** One thread by number. */
+  read(number: number): Promise<NoteConversationDto>;
+  /** Posts a message in a thread, and says where it went. */
+  reply(number: number, body: string): Promise<{ url: string }>;
+}
+
 export interface Notebook {
   /** Every markdown path in the notebook. */
   paths(): Promise<string[]>;
@@ -24,6 +46,8 @@ export interface Notebook {
   readAll(): Promise<NotebookFile[]>;
   /** Creates or replaces a note as one commit. */
   write(path: string, content: string, message: string): Promise<void>;
+  /** The notebook's conversations, where it has any. */
+  readonly conversations?: NotebookConversations;
 }
 
 const MARKDOWN = /\.mdx?$/i;
@@ -32,7 +56,10 @@ export class MemoryNotebook implements Notebook {
   readonly files = new Map<string, string>();
   readonly commits: { path: string; content: string; message: string }[] = [];
 
-  constructor(files: Record<string, string> = {}) {
+  constructor(
+    files: Record<string, string> = {},
+    readonly conversations?: NotebookConversations,
+  ) {
     for (const [path, content] of Object.entries(files)) this.files.set(path, content);
   }
 
@@ -88,6 +115,7 @@ export class GitHubNotebook implements Notebook {
   private readonly now: () => number;
   private listing: { at: number; paths: string[] } | null = null;
   private readonly texts = new Map<string, { at: number; content: string | null }>();
+  readonly conversations: NotebookConversations;
 
   constructor(
     private readonly client: GitHubClient,
@@ -97,6 +125,33 @@ export class GitHubNotebook implements Notebook {
     this.maxNotes = options.maxNotes ?? 300;
     this.cacheMs = options.cacheMs ?? 30_000;
     this.now = options.now ?? Date.now;
+
+    const { owner, repo: name } = repo;
+    this.conversations = {
+      forNote: async (path) => {
+        const [conversation, passages] = await Promise.all([
+          client.findNoteConversation({ owner, repo: name, path }),
+          client.findPassageThreads({ owner, repo: name, path }).catch(() => []),
+        ]);
+        return { conversation, passages };
+      },
+      list: (options = {}) =>
+        client.listDiscussions({
+          owner,
+          repo: name,
+          ...(options.after ? { after: options.after } : {}),
+        }),
+      read: (number) => client.readDiscussion({ owner, repo: name, number }),
+      reply: async (number, body) => {
+        const found = await client.readDiscussion({ owner, repo: name, number });
+        if (!found.discussion) throw new Error(`Discussion #${number} is not there.`);
+        const comment = await client.addDiscussionComment({
+          discussionId: found.discussion.id,
+          body,
+        });
+        return { url: comment.url };
+      },
+    };
   }
 
   private fresh(at: number) {

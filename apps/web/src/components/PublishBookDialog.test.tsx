@@ -8,15 +8,20 @@ import { PublishBookDialog } from "./PublishBookDialog";
 const readBook = vi.fn();
 const publishBook = vi.fn();
 const unpublishBook = vi.fn();
+const listLounge = vi.fn();
 
 vi.mock("@/lib/gateway", () => ({
   ApiGatewayError: class extends Error {},
   readBook: (...args: unknown[]) => readBook(...args),
   publishBook: (...args: unknown[]) => publishBook(...args),
   unpublishBook: (...args: unknown[]) => unpublishBook(...args),
+  listLounge: (...args: unknown[]) => listLounge(...args),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -233,5 +238,83 @@ describe("PublishBookDialog", () => {
 
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("GitHub said no."));
     expect(screen.getByText("Publish book")).toBeTruthy();
+  });
+});
+
+describe("PublishBookDialog — comments", () => {
+  const discussionsRepo = {
+    id: "R_kgDO1",
+    url: "https://github.com/me/notes",
+    private: false,
+    enabled: true,
+    canComment: true,
+    categories: [
+      { id: "C_ann", name: "Announcements", slug: "announcements" },
+      { id: "C_gen", name: "General", slug: "general" },
+    ],
+  };
+
+  const chapterHtml = () =>
+    publishBook.mock.calls[0]![0].files.find((f: { path: string }) =>
+      f.path.endsWith("01-intro.html"),
+    )?.content as string;
+
+  it("puts giscus under every page, in the notes repository's General category", async () => {
+    listLounge.mockResolvedValue({ repo: discussionsRepo, threads: [], nextCursor: null });
+    open();
+    await waitFor(() => expect(screen.getByText("Publish book")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /Comments on every page/ }));
+    await waitFor(() => expect(screen.getByRole("link", { name: /install giscus/ })).toBeTruthy());
+    expect(listLounge).toHaveBeenCalledWith({ owner: "me", repo: "notes" });
+
+    fireEvent.click(screen.getByText("Publish book"));
+    await waitFor(() => expect(publishBook).toHaveBeenCalled());
+
+    const html = chapterHtml();
+    expect(html).toContain('data-repo="me/notes"');
+    expect(html).toContain('data-category-id="C_gen"');
+    expect(html).toContain('data-term="handbook/01-intro.md"');
+  });
+
+  it("says why a private repository cannot have them, and publishes without", async () => {
+    listLounge.mockResolvedValue({
+      repo: { ...discussionsRepo, private: true },
+      threads: [],
+      nextCursor: null,
+    });
+    open();
+    await waitFor(() => expect(screen.getByText("Publish book")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /Comments on every page/ }));
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toMatch(
+        /me\/notes is private.*Publishing goes ahead without comments/,
+      ),
+    );
+
+    fireEvent.click(screen.getByText("Publish book"));
+    await waitFor(() => expect(publishBook).toHaveBeenCalled());
+    expect(chapterHtml()).not.toContain("giscus");
+  });
+
+  it("says when Discussions is off", async () => {
+    listLounge.mockResolvedValue({
+      repo: { ...discussionsRepo, enabled: false },
+      threads: [],
+      nextCursor: null,
+    });
+    open();
+    await waitFor(() => expect(screen.getByText("Publish book")).toBeTruthy());
+    fireEvent.click(screen.getByRole("checkbox", { name: /Comments on every page/ }));
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toContain("Turn on Discussions"),
+    );
+  });
+
+  it("asks GitHub nothing until comments are wanted", async () => {
+    open();
+    await waitFor(() => expect(screen.getByText("Publish book")).toBeTruthy());
+    expect(listLounge).not.toHaveBeenCalled();
   });
 });

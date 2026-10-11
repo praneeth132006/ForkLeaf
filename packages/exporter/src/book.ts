@@ -69,6 +69,26 @@ export interface BuildBookOptions {
    * contents page carries a map of how they all connect.
    */
   garden?: boolean;
+  /** Comments under every chapter, kept in the notes' GitHub Discussions. */
+  comments?: BookComments;
+}
+
+/**
+ * Where a book's comments are kept: a public repository's Discussions, through
+ * giscus — the open-source widget that shows a discussion under a page and
+ * lets readers sign in with GitHub to join it.
+ *
+ * Each chapter's discussion is found by its note's path (giscus's "specific"
+ * mapping, strict), and ForkLeaf writes the SHA-1 of that same path into
+ * every conversation it opens — so the comments under a chapter and the Chat
+ * tab beside the note are one conversation, whichever side starts it.
+ */
+export interface BookComments {
+  /** `owner/name`. giscus needs it to be public. */
+  repo: string;
+  repoId: string;
+  category: string;
+  categoryId: string;
 }
 
 export interface Book {
@@ -288,6 +308,7 @@ export async function buildBook(
           theme: options.theme,
           suggestUrl: options.suggestUrl?.(note) ?? null,
           backlinks: links ? links.backlinks[index]!.map((from) => chapters[from]!) : null,
+          comments: options.comments ? { config: options.comments, term: note.path } : null,
         }),
       };
     }),
@@ -323,6 +344,10 @@ export async function buildBook(
  */
 export function stylesheet(theme: "light" | "dark"): string {
   return `${pageStyles(theme)}${GARDEN_STYLES}
+/* ── Comments ── */
+.book-comments { margin: 3rem 0 0; padding-top: 1.5rem; border-top: 1px solid var(--border, #e5e5e5); }
+.book-comments h2 { font-size: 1.1rem; margin: 0 0 .25rem; }
+.book-comments-note { font-size: .85rem; opacity: .7; margin: 0 0 1rem; }
 /* ── Book chrome ──────────────────────────────────────────────────────────
    A published note is a document: one column, centred, nothing around it.
    A book is a place, and a reader who has just arrived in the middle of one
@@ -597,6 +622,8 @@ function chapterPage(input: {
   suggestUrl: string | null;
   /** The chapters that link here, in a garden; null in a plain book. */
   backlinks?: readonly BookChapter[] | null;
+  /** Comments under the chapter, and the term its discussion is found by. */
+  comments?: { config: BookComments; term: string } | null;
 }): string {
   const chapter = input.chapters[input.index]!;
   const previous = input.chapters[input.index - 1];
@@ -624,6 +651,7 @@ ${sidebar(input.book, input.chapters, input.index)}
 ${input.body}
 ${backlinkList(input.backlinks ?? null)}
 ${suggest}
+${input.comments ? commentsSection(input.comments.config, input.comments.term, input.theme) : ""}
   </main>
   <nav class="book-foot" aria-label="Chapters either side">
 ${
@@ -642,6 +670,45 @@ ${
 </body>
 </html>
 `;
+}
+
+/**
+ * Comments under a chapter, by giscus.
+ *
+ * Loaded lazily and only when a reader scrolls to it, so a page nobody
+ * comments on costs its readers nothing. Every value is escaped: the term is
+ * a file name, which can hold a quote.
+ */
+export function commentsSection(
+  config: BookComments,
+  term: string,
+  theme: "light" | "dark",
+): string {
+  const attributes: Record<string, string> = {
+    src: "https://giscus.app/client.js",
+    "data-repo": config.repo,
+    "data-repo-id": config.repoId,
+    "data-category": config.category,
+    "data-category-id": config.categoryId,
+    "data-mapping": "specific",
+    "data-term": term,
+    "data-strict": "1",
+    "data-reactions-enabled": "1",
+    "data-emit-metadata": "0",
+    "data-input-position": "bottom",
+    "data-theme": theme,
+    "data-lang": "en",
+    "data-loading": "lazy",
+    crossorigin: "anonymous",
+  };
+  const attrs = Object.entries(attributes)
+    .map(([name, value]) => `${name}="${escapeHtml(value)}"`)
+    .join(" ");
+  return `<section class="book-comments" aria-labelledby="comments">
+  <h2 id="comments">Comments</h2>
+  <p class="book-comments-note">Comments are GitHub Discussions in ${escapeHtml(config.repo)}. Sign in with GitHub to join in.</p>
+  <script ${attrs} async></script>
+</section>`;
 }
 
 /**

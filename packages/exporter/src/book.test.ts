@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { assignSlugs, buildBook, chapterSlug, readMinutes, type BookNote } from "./book";
+import {
+  assignSlugs,
+  buildBook,
+  chapterSlug,
+  commentsSection,
+  readMinutes,
+  type BookNote,
+} from "./book";
 
 const note = (path: string, markdown = "Body.", title?: string): BookNote => ({
   path,
@@ -462,5 +469,47 @@ describe("linking to a heading", () => {
     const book = await build([note("g.md", "## Voice", "G")]);
     expect(fileAt(book.files, "g.html")).toContain('id="voice"');
     expect(fileAt(book.files, "g.html")).not.toContain('id="voice-"');
+  });
+});
+
+describe("comments under chapters", () => {
+  const comments = {
+    repo: "me/notes",
+    repoId: "R_kgDO1",
+    category: "General",
+    categoryId: "DIC_kwDO1",
+  };
+
+  it("puts giscus under every chapter, found by the note's path", async () => {
+    const book = await buildBook([note("ops/keys.md"), note("ops/run book.md")], {
+      title: "Ops",
+      theme: "light",
+      renderDiagrams: false,
+      comments,
+    });
+    const first = fileAt(book.files, `${book.chapters[0]!.slug}.html`);
+    const second = fileAt(book.files, `${book.chapters[1]!.slug}.html`);
+
+    expect(first).toContain('src="https://giscus.app/client.js"');
+    expect(first).toContain('data-repo="me/notes"');
+    expect(first).toContain('data-repo-id="R_kgDO1"');
+    expect(first).toContain('data-category-id="DIC_kwDO1"');
+    expect(first).toContain('data-mapping="specific"');
+    expect(first).toContain('data-strict="1"');
+    expect(first).toContain('data-term="ops/keys.md"');
+    expect(second).toContain('data-term="ops/run book.md"');
+    expect(first).toContain("Comments are GitHub Discussions in me/notes.");
+  });
+
+  it("escapes a file name that could break out of the attribute", () => {
+    const html = commentsSection(comments, 'a"><script>alert(1)</script>.md', "dark");
+    expect(html).not.toContain("<script>alert");
+    expect(html).toContain('data-term="a&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;.md"');
+    expect(html).toContain('data-theme="dark"');
+  });
+
+  it("leaves a book without comments as it was", async () => {
+    const book = await build([note("a.md")]);
+    expect(fileAt(book.files, `${book.chapters[0]!.slug}.html`)).not.toContain("giscus");
   });
 });

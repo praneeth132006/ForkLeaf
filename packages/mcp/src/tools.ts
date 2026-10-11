@@ -9,6 +9,7 @@ import { SearchIndex } from "@forkleaf/store";
 import { singleNotebook, type NotebookLibrary, type OpenedNotebook } from "./library";
 import type { Notebook, NotebookFile } from "./notebook";
 import { ToolInputError, text, type Tool } from "./protocol";
+import { describeThread, threadLine } from "./conversations";
 
 /**
  * What an assistant can do with a ForkLeaf notebook.
@@ -40,7 +41,10 @@ export const INSTRUCTIONS =
   "Prefer append_to_daily_note for quick captures. " +
   "Tools use the default repository unless you pass repository; list_repositories shows which ones you can use. " +
   "After every write, tell the user the repository and the full path of the note, and give the link the tool returns. " +
-  "Every write is a commit in the user's repository.";
+  "Every write is a commit in the user's repository. " +
+  "Conversations about notes are GitHub Discussions in the same repository: read_note_conversation, " +
+  "list_conversations and read_conversation read them. reply_to_conversation posts under the user's name " +
+  "where their collaborators see it — only when the user asked, after showing them the text.";
 
 /** Where notes go when nobody said where: the same folder ForkLeaf's own captures use. */
 export const INBOX_FOLDER = "inbox";
@@ -351,6 +355,126 @@ export function notebookTools(
     },
   ];
 
+  /** The notebook's conversations, or a refusal that says why there are none. */
+  const conversationsOf = (open: OpenedNotebook) => {
+    const conversations = open.notebook.conversations;
+    if (!conversations) {
+      throw new ToolInputError(
+        `${open.repository} has no conversations: they are GitHub Discussions, and this notebook is not a GitHub repository.`,
+      );
+    }
+    return conversations;
+  };
+
+  const numberArg = (args: Record<string, unknown>) => {
+    const value = Number(args.number);
+    if (!Number.isInteger(value) || value <= 0) {
+      throw new ToolInputError("number is required — the discussion's number, for example 12.");
+    }
+    return value;
+  };
+
+  tools.push(
+    {
+      name: "read_note_conversation",
+      title: "Read the conversation about a note",
+      description:
+        "Read what collaborators have said about one note: its conversation (a GitHub Discussion) " +
+        "and the threads about particular passages of it.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "The note's path, e.g. projects/plan.md" },
+          ...repositoryProperty,
+        },
+        required: ["path"],
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      run: async (args) => {
+        const open = await opened(args);
+        const path = notePath(open, stringArg(args, "path", "projects/plan.md"));
+        const content = await open.notebook.read(path);
+        if (content !== null && isEncrypted(content)) {
+          return text(`${path} is encrypted, and encrypted notes never have a conversation.`);
+        }
+        const { conversation, passages } = await conversationsOf(open).forNote(path);
+        if (!conversation.repo.enabled) {
+          return text(
+            `Discussions is switched off for ${open.repository}, so no note has a conversation.`,
+          );
+        }
+        const parts = [
+          conversation.discussion
+            ? describeThread(conversation.discussion)
+            : `Nobody has started a conversation about ${path} yet.`,
+        ];
+        if (passages.length > 0) {
+          parts.push(
+            `Threads about passages of ${path} (read one with read_conversation):\n` +
+              passages.map(threadLine).join("\n"),
+          );
+        }
+        return text(parts.join("\n\n---\n\n"));
+      },
+    },
+    {
+      name: "list_conversations",
+      title: "List conversations",
+      description:
+        "List the notebook's conversations (GitHub Discussions), newest activity first: " +
+        "about notes, about passages, and ones people started on GitHub. " +
+        "Set unanswered to list only questions nobody has answered.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          unanswered: { type: "boolean", description: "Only questions with no answer yet" },
+          ...repositoryProperty,
+        },
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      run: async (args) => {
+        const open = await opened(args);
+        const lounge = await conversationsOf(open).list();
+        if (!lounge.repo.enabled) {
+          return text(`Discussions is switched off for ${open.repository}.`);
+        }
+        const threads =
+          args.unanswered === true
+            ? lounge.threads.filter((t) => t.category.answerable && !t.answered)
+            : lounge.threads;
+        if (threads.length === 0) {
+          return text(
+            args.unanswered === true ? "Every question has an answer." : "No conversations yet.",
+          );
+        }
+        return text(
+          `${threads.length} ${threads.length === 1 ? "conversation" : "conversations"}${where(open)}:\n` +
+            threads.map(threadLine).join("\n") +
+            (lounge.nextCursor ? "\n(More, older ones are on GitHub.)" : ""),
+        );
+      },
+    },
+    {
+      name: "read_conversation",
+      title: "Read a conversation",
+      description: "Read one conversation (a GitHub Discussion) in full, by its number.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          number: { type: "number", description: "The discussion's number, e.g. 12" },
+          ...repositoryProperty,
+        },
+        required: ["number"],
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      run: async (args) => {
+        const open = await opened(args);
+        const found = await conversationsOf(open).read(numberArg(args));
+        return text(describeThread(found.discussion!));
+      },
+    },
+  );
+
   if (options.readOnly) return tools;
 
   tools.push(
@@ -443,6 +567,42 @@ export function notebookTools(
             : `${existing.replace(/\s+$/, "")}\n\n${addition}\n`;
         await open.notebook.write(path, content, `Add to today's note (via an assistant)`);
         return written(open, existing === null ? "Started" : "Added to", path);
+      },
+    },
+    {
+      name: "reply_to_conversation",
+      title: "Reply in a conversation",
+      description:
+        "Post a message in a conversation (a GitHub Discussion), by its number. It appears under the " +
+        "user's GitHub name, to everyone who can read the repository. Only post when the user asked you " +
+        "to, and show them the text first. Returns a link to the message.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          number: { type: "number", description: "The discussion's number, e.g. 12" },
+          text: { type: "string", description: "The message, in Markdown" },
+          ...repositoryProperty,
+        },
+        required: ["number", "text"],
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      run: async (args) => {
+        const open = await opened(args);
+        if (open.readOnly) {
+          throw new ToolInputError(`${open.repository} is read only for this connection.`);
+        }
+        const number = numberArg(args);
+        const message = stringArg(args, "text", "Thanks — I've added this to the runbook.").trim();
+        if (message.length > 65_536) {
+          throw new ToolInputError("That message is longer than GitHub allows.");
+        }
+        const conversations = conversationsOf(open);
+        const found = await conversations.read(number);
+        if (found.discussion?.locked) {
+          throw new ToolInputError(`#${number} is locked on GitHub, so nobody can reply to it.`);
+        }
+        const { url } = await conversations.reply(number, message);
+        return text(`Posted in #${number}${where(open)}.\nSee it: ${url}`);
       },
     },
   );

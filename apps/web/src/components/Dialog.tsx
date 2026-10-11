@@ -18,6 +18,11 @@ export interface DialogProps {
   steady?: boolean;
   /** Optional line under the title, for orientation. */
   subtitle?: string;
+  /**
+   * Nearly the whole window, with the content filling it edge to edge. For a
+   * view with panes of its own, each scrolling separately, rather than a form.
+   */
+  full?: boolean;
 }
 
 /**
@@ -32,6 +37,7 @@ export function Dialog({
   children,
   wide = false,
   steady = false,
+  full = false,
 }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
@@ -126,8 +132,8 @@ export function Dialog({
         aria-label={title}
         tabIndex={-1}
         className={`flex max-h-[85vh] w-full flex-col overflow-hidden rounded-2xl border border-[var(--fl-border)] bg-[var(--fl-surface)] shadow-[var(--fl-shadow-lg)] ${
-          wide ? "max-w-3xl" : "max-w-md"
-        } ${steady ? "h-[85vh]" : ""}`}
+          full ? "h-[90vh] max-w-6xl" : wide ? "max-w-3xl" : "max-w-md"
+        } ${steady && !full ? "h-[85vh]" : ""}`}
       >
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--fl-border)] px-5 py-3.5">
           <div className="min-w-0">
@@ -154,7 +160,10 @@ export function Dialog({
           </button>
         </div>
 
-        <div data-dialog-content className="min-h-0 flex-1 overflow-y-auto p-5">
+        <div
+          data-dialog-content
+          className={`min-h-0 flex-1 ${full ? "flex overflow-hidden" : "overflow-y-auto p-5"}`}
+        >
           {children}
         </div>
       </div>

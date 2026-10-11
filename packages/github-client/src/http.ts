@@ -15,6 +15,14 @@ export interface HttpOptions {
   /** Override the `Accept` header (used for raw blob reads). */
   accept?: string;
   signal?: AbortSignal;
+  /**
+   * False for a request that must not be sent twice.
+   *
+   * A 502 from GitHub does not say whether the write behind it happened, so
+   * retrying a comment can post it twice. Reads, and writes that land on the
+   * same result however often they run, keep the default.
+   */
+  retry?: boolean;
 }
 
 export interface HttpResponse<T> {
@@ -67,7 +75,9 @@ export class Transport {
     const url = this.resolve(path);
     let lastError: GitHubError | null = null;
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt += 1) {
+    const retries = options.retry === false ? 0 : this.maxRetries;
+
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
       try {
         return await this.attempt<T>(url, options);
       } catch (err) {
@@ -75,7 +85,7 @@ export class Transport {
         lastError = error;
 
         // Client errors other than rate limits will never succeed on retry.
-        if (!error.retryable || attempt === this.maxRetries) throw error;
+        if (!error.retryable || attempt === retries) throw error;
 
         await sleep(this.backoffMs(error, attempt), options.signal);
       }

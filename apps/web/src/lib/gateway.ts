@@ -2,6 +2,20 @@
 
 import type { RemoteGateway, RemoteCommitInput, RemoteCommitResult } from "@forkleaf/store";
 import type { RepoRef, TreeNode, Workspace } from "@forkleaf/types";
+import type {
+  DiscussionCommentDto,
+  LoungeDto,
+  NoteConversationDto,
+  ThreadSummaryDto,
+} from "@forkleaf/github-client";
+
+/**
+ * A note's conversation, and — when asked for — the threads about its
+ * passages. `passages` is null when that lookup failed on its own.
+ */
+export type NoteConversationWithPassages = NoteConversationDto & {
+  passages?: ThreadSummaryDto[] | null;
+};
 
 /**
  * The browser's view of GitHub.
@@ -913,4 +927,115 @@ export async function shareDeck(options: {
   repo?: string;
 }): Promise<{ owner: string; repo: string; sha: string; cards: number }> {
   return call("/api/gh/deck", { method: "POST", body: JSON.stringify(options) });
+}
+
+// ─── A note's conversation ──────────────────────────────────────────────────
+
+/** The conversation about a note, from the repository's GitHub Discussions. */
+export async function readNoteConversation(options: {
+  owner: string;
+  repo: string;
+  path: string;
+  /** The discussion found last time, checked rather than trusted by the server. */
+  number?: number;
+  /** Also list the threads opened on passages of the note. */
+  passages?: boolean;
+}): Promise<NoteConversationWithPassages> {
+  const params = new URLSearchParams({
+    owner: options.owner,
+    repo: options.repo,
+    path: options.path,
+  });
+  if (options.number !== undefined) params.set("number", String(options.number));
+  if (options.passages) params.set("passages", "1");
+  return call(`/api/gh/discussions?${params.toString()}`, { timeoutMs: 20_000 });
+}
+
+/** Adds a message to a note's conversation, opening it if this is the first. */
+export async function sendNoteMessage(options: {
+  owner: string;
+  repo: string;
+  branch: string;
+  path: string;
+  title: string;
+  body: string;
+  number?: number;
+  replyTo?: string;
+  /** Opens a new thread about this passage, instead of writing in the note's own. */
+  passage?: string;
+}): Promise<{ number: number; comment: DiscussionCommentDto; passage?: boolean }> {
+  // No timeout: a message that gave up waiting may still have been posted,
+  // and "it failed" followed by the message appearing is worse than a wait.
+  return call("/api/gh/discussions", { method: "POST", body: JSON.stringify(options) });
+}
+
+// ─── The Lounge ─────────────────────────────────────────────────────────────
+
+/** A page of the notebook's threads, newest activity first. */
+export async function listLounge(options: {
+  owner: string;
+  repo: string;
+  category?: string;
+  after?: string;
+}): Promise<LoungeDto> {
+  const params = new URLSearchParams({ owner: options.owner, repo: options.repo });
+  if (options.category) params.set("category", options.category);
+  if (options.after) params.set("after", options.after);
+  return call(`/api/gh/lounge?${params.toString()}`, { timeoutMs: 20_000 });
+}
+
+/** One thread, whatever started it. */
+export async function readLoungeThread(options: {
+  owner: string;
+  repo: string;
+  number: number;
+}): Promise<NoteConversationDto> {
+  const params = new URLSearchParams({
+    owner: options.owner,
+    repo: options.repo,
+    number: String(options.number),
+  });
+  return call(`/api/gh/lounge?${params.toString()}`, { timeoutMs: 20_000 });
+}
+
+/** A message in a thread, or a reply to one of its messages. No timeout — see sendNoteMessage. */
+export async function replyInThread(options: {
+  owner: string;
+  repo: string;
+  discussionId: string;
+  body: string;
+  replyTo?: string;
+}): Promise<{ comment: DiscussionCommentDto }> {
+  return call("/api/gh/lounge", {
+    method: "POST",
+    body: JSON.stringify({ ...options, action: "reply" }),
+  });
+}
+
+/** A new thread in a channel. */
+export async function startThread(options: {
+  owner: string;
+  repo: string;
+  repositoryId: string;
+  categoryId: string;
+  title: string;
+  body: string;
+}): Promise<{ number: number }> {
+  return call("/api/gh/lounge", {
+    method: "POST",
+    body: JSON.stringify({ ...options, action: "start" }),
+  });
+}
+
+/** Marks a message as its thread's answer, or takes that back. */
+export async function setThreadAnswer(options: {
+  owner: string;
+  repo: string;
+  commentId: string;
+  answer: boolean;
+}): Promise<void> {
+  await call("/api/gh/lounge", {
+    method: "POST",
+    body: JSON.stringify({ ...options, action: "answer" }),
+  });
 }
