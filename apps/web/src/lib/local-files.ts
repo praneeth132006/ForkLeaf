@@ -15,10 +15,11 @@
  *     registered as a markdown handler (see `app/manifest.ts`), and something
  *     ran `xdg-open note.md` or picked it from "Open with"
  *
- * Not supported everywhere. Firefox and Safari have no `showOpenFilePicker`,
- * so `canEditLocalFiles` is false there and the app hides the affordance
- * rather than offering something that throws — a download is still available
- * through the export dialog, which is the honest fallback.
+ * Writing back is not supported everywhere. Firefox and Safari have no
+ * `showOpenFilePicker`, so `canEditLocalFiles` is false there. Opening still
+ * works, through an ordinary file input: the file becomes a note with no
+ * handle behind it, so it saves to the notebook rather than to disk, and a
+ * download is available through the export dialog.
  *
  * ## PDFs are a different kind of open
  *
@@ -47,7 +48,12 @@ export function canReceiveLaunchedFiles(): boolean {
 /** A text file on disk that ForkLeaf currently has open. */
 export interface LocalFile {
   kind: "text";
-  handle: FileSystemFileHandle;
+  /**
+   * The file itself, to write back to. Null when the browser handed over the
+   * contents without one — a file input, or a drop outside Chromium — and the
+   * note can only be saved to the notebook.
+   */
+  handle: FileSystemFileHandle | null;
   /** The file's own name, `meeting-notes.md`. */
   name: string;
   /** Its contents, as text. */
@@ -57,7 +63,7 @@ export interface LocalFile {
 /** A PDF on disk that ForkLeaf currently has open. Read-only, by nature. */
 export interface LocalPdf {
   kind: "pdf";
-  handle: FileSystemFileHandle;
+  handle: FileSystemFileHandle | null;
   name: string;
   /** The file's bytes, for the reader to parse. */
   bytes: Uint8Array;
@@ -88,9 +94,18 @@ const PDF_PICKER_TYPES: FilePickerAcceptType[] = [
   { description: "PDF", accept: { "application/pdf": [".pdf"] } },
 ];
 
+/** `PICKER_TYPES` and `PDF_PICKER_TYPES` again, for an `<input accept>`. */
+const TEXT_INPUT_ACCEPT = ".md,.markdown,.mdown,.mkd,.mdx,.txt,.text,text/markdown,text/plain";
+const PDF_INPUT_ACCEPT = ".pdf,application/pdf";
+
 /** True for a name the reader should take rather than the notebook. */
 export function isPdfName(name: string): boolean {
   return /\.pdf$/i.test(name);
+}
+
+/** True for a name the notebook can open as a note: markdown, or plain text. */
+export function isTextName(name: string): boolean {
+  return /\.(md|markdown|mdown|mkd|mdx|txt|text)$/i.test(name);
 }
 
 /**
@@ -101,7 +116,10 @@ export function isPdfName(name: string): boolean {
  * their mind about opening a file is an editor telling on itself.
  */
 export async function openLocalFile(): Promise<LocalFile | null> {
-  if (!canEditLocalFiles()) throw new Error(UNSUPPORTED);
+  if (!canEditLocalFiles()) {
+    const file = await pickWithInput(TEXT_INPUT_ACCEPT);
+    return file ? readDroppedText(file) : null;
+  }
 
   let handle: FileSystemFileHandle;
   try {
@@ -130,7 +148,10 @@ export async function readLocalFile(handle: FileSystemFileHandle): Promise<Local
  * Returns null when the picker is dismissed, exactly as `openLocalFile` does.
  */
 export async function openPdfFile(): Promise<LocalPdf | null> {
-  if (!canEditLocalFiles()) throw new Error(UNSUPPORTED);
+  if (!canEditLocalFiles()) {
+    const file = await pickWithInput(PDF_INPUT_ACCEPT);
+    return file ? readDroppedPdf(file) : null;
+  }
 
   let handle: FileSystemFileHandle;
   try {
@@ -179,14 +200,64 @@ export async function readLocalPdf(handle: FileSystemFileHandle): Promise<LocalP
  * makes the reader work in those browsers at all: no handle, no writing back,
  * but the document opens.
  */
-export async function readDroppedPdf(file: File): Promise<Omit<LocalPdf, "handle">> {
+export async function readDroppedPdf(file: File): Promise<LocalPdf> {
   if (file.size > MAX_PDF_BYTES) {
     throw new Error(
       `${file.name} is ${(file.size / (1024 * 1024)).toFixed(0)} MB. ForkLeaf can open PDFs up to ${MAX_PDF_BYTES / (1024 * 1024)} MB.`,
     );
   }
 
-  return { kind: "pdf", name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) };
+  return {
+    kind: "pdf",
+    handle: null,
+    name: file.name,
+    bytes: new Uint8Array(await file.arrayBuffer()),
+  };
+}
+
+/** A markdown or text file from a drop or an `<input>`, with no handle to write back to. */
+export async function readDroppedText(file: File): Promise<LocalFile> {
+  return { kind: "text", handle: null, name: file.name, text: await file.text() };
+}
+
+/**
+ * Reads whatever was dropped on the window that ForkLeaf can open.
+ *
+ * Chromium can turn a dropped file into a real handle, which makes a dropped
+ * note save back to its file exactly as one chosen in the picker does. The
+ * handles have to be asked for before the drop event returns — the transfer is
+ * emptied afterwards — so they are all requested first and awaited after.
+ * Anything else falls back to the file's contents alone.
+ */
+export async function readDroppedFiles(transfer: DataTransfer): Promise<LocalDocument[]> {
+  const pending = Array.from(transfer.items)
+    .filter((item) => item.kind === "file")
+    .map((item) => ({
+      file: item.getAsFile(),
+      handle: item.getAsFileSystemHandle?.() ?? Promise.resolve(null),
+    }));
+
+  const opened: LocalDocument[] = [];
+  for (const { file, handle: handlePromise } of pending) {
+    if (!file || !(isPdfName(file.name) || isTextName(file.name))) continue;
+
+    const handle = await handlePromise.catch(() => null);
+    const fileHandle = handle?.kind === "file" ? (handle as FileSystemFileHandle) : null;
+
+    if (isPdfName(file.name)) {
+      opened.push(fileHandle ? await readLocalPdf(fileHandle) : await readDroppedPdf(file));
+    } else {
+      opened.push(fileHandle ? await readLocalFile(fileHandle) : await readDroppedText(file));
+    }
+  }
+  return opened;
+}
+
+/** True when a drag carries at least one file ForkLeaf would open. */
+export function carriesOpenableFile(transfer: DataTransfer | null): boolean {
+  return Array.from(transfer?.files ?? []).some(
+    (file) => isPdfName(file.name) || isTextName(file.name) || file.type === "application/pdf",
+  );
 }
 
 /**
@@ -278,6 +349,23 @@ export function consumeLaunchedFiles(onFiles: (files: LocalDocument[]) => void):
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * The picker for browsers without `showOpenFilePicker`: a file input, clicked.
+ *
+ * Resolves null when the dialog is closed without a choice, so a dismissal is
+ * as quiet here as it is in the native picker.
+ */
+function pickWithInput(accept: string): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = accept;
+    input.addEventListener("change", () => resolve(input.files?.[0] ?? null), { once: true });
+    input.addEventListener("cancel", () => resolve(null), { once: true });
+    input.click();
+  });
+}
 
 const UNSUPPORTED =
   "This browser cannot open files from your computer. Chrome, Edge and other Chromium browsers can.";

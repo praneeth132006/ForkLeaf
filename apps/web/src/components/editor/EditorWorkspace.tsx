@@ -71,7 +71,7 @@ import {
   openPullRequest,
   acceptSuggestion,
 } from "@/lib/gateway";
-import { readDroppedPdf } from "@/lib/local-files";
+import { carriesOpenableFile } from "@/lib/local-files";
 import { insertionFor, quoteMarkdown, referenceMarkdown } from "@/lib/pdf-quote";
 import { mentionsOfPdf, type PdfMention } from "@/lib/pdf-mentions";
 import { pagesOf, readDocumentText } from "@/lib/pdf-index";
@@ -1072,53 +1072,6 @@ export function EditorWorkspace() {
       ),
     [openInReader, pdfPlacement],
   );
-
-  /**
-   * A PDF dropped onto the window opens in the reader.
-   *
-   * Not a convenience. Firefox and Safari have no File System Access API, so
-   * the "Open a PDF…" command does not exist there at all — dropping the file
-   * is the only way in, and without it the whole feature would be a Chromium
-   * feature. Dropping also skips a native dialog for the case the dialog
-   * exists, which is the common one.
-   *
-   * Bound at the window rather than on a drop zone, because a drop zone that
-   * only accepts a file over one particular rectangle is a target people miss.
-   */
-  useEffect(() => {
-    const pdfFrom = (transfer: DataTransfer | null): File | null =>
-      Array.from(transfer?.files ?? []).find(
-        (file) => file.type === "application/pdf" || /\.pdf$/i.test(file.name),
-      ) ?? null;
-
-    const onDragOver = (event: DragEvent) => {
-      // The default action for a dropped file is for the browser to navigate
-      // to it, which throws away everything unsaved in the tab. Preventing the
-      // dragover is what makes the drop reach us at all.
-      if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
-    };
-
-    const onDrop = (event: DragEvent) => {
-      const file = pdfFrom(event.dataTransfer);
-      if (!file) return;
-
-      event.preventDefault();
-      void readDroppedPdf(file)
-        .then((pdf) => openLocalPdf(pdf))
-        .catch((problem: unknown) => {
-          setReaderError(
-            problem instanceof Error ? problem.message : "That PDF could not be opened.",
-          );
-        });
-    };
-
-    window.addEventListener("dragover", onDragOver);
-    window.addEventListener("drop", onDrop);
-    return () => {
-      window.removeEventListener("dragover", onDragOver);
-      window.removeEventListener("drop", onDrop);
-    };
-  }, [openLocalPdf]);
 
   /**
    * Opens a PDF that lives in the repository, at a passage if one was asked for.
@@ -2228,6 +2181,44 @@ export function EditorWorkspace() {
   );
 
   const localFiles = useLocalFiles(adoptFile, openLocalPdf);
+
+  /**
+   * A file dropped onto the window opens: a PDF in the reader, a markdown or
+   * text file as a note.
+   *
+   * Not a convenience. Firefox and Safari have no File System Access API, so
+   * dropping is the way in there that skips a dialog — and for anything else
+   * the browser's default for a drop is to navigate to the file, which throws
+   * away everything unsaved in the tab. A markdown file used to get exactly
+   * that, because only PDFs were caught here.
+   *
+   * Bound at the window rather than on a drop zone, because a drop zone that
+   * only accepts a file over one particular rectangle is a target people miss.
+   * Drops inside the editor are left to it: dragging a file into a note embeds
+   * it, which is a different act from opening it.
+   */
+  const openDropped = localFiles.openDropped;
+  useEffect(() => {
+    const onDragOver = (event: DragEvent) => {
+      // Preventing the dragover is what makes the drop reach us at all.
+      if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+    };
+
+    const onDrop = (event: DragEvent) => {
+      if (event.defaultPrevented || !event.dataTransfer) return;
+      // Even a file ForkLeaf cannot open must not replace the app.
+      event.preventDefault();
+      if (!carriesOpenableFile(event.dataTransfer)) return;
+      void openDropped(event.dataTransfer);
+    };
+
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [openDropped]);
 
   /**
    * Saves the note, and the file behind it when there is one.
@@ -3687,26 +3678,26 @@ export function EditorWorkspace() {
       }
     }
 
-    if (localFiles.supported) {
-      list.push({
-        id: "open-file",
-        label: "Open a file from this computer…",
-        group: "Notes",
-        hint: "Edits the file itself",
-        keywords: "import disk local filesystem md markdown open with",
-        run: () => void localFiles.openFile(),
-      });
+    // Offered in every browser. Where a file cannot be written back to, it
+    // still opens — it saves to the notebook instead of to disk.
+    list.push({
+      id: "open-file",
+      label: "Open a Markdown file from this computer…",
+      group: "Notes",
+      hint: localFiles.supported ? "Edits the file itself" : "Opens it as a note",
+      keywords: "import disk local filesystem md markdown txt text open with",
+      run: () => void localFiles.openFile(),
+    });
 
-      list.push({
-        id: "open-pdf",
-        label: "Open a PDF…",
-        group: "Notes",
-        hint: "Reads it beside your note, and quotes from it",
-        keywords:
-          "pdf paper document read reader cite citation quote source reference article book scan acrobat",
-        run: () => void localFiles.openPdf(),
-      });
-    }
+    list.push({
+      id: "open-pdf",
+      label: "Open a PDF…",
+      group: "Notes",
+      hint: "Reads it beside your note, and quotes from it",
+      keywords:
+        "pdf paper document read reader cite citation quote source reference article book scan acrobat",
+      run: () => void localFiles.openPdf(),
+    });
 
     if (note && workspace && !workspace.isLocal) {
       list.push({
@@ -4730,7 +4721,8 @@ export function EditorWorkspace() {
               {...(workspace && !workspace.isLocal
                 ? { onOpenPdfBeside: (path: string) => openRepoPdf(path, "", "beside") }
                 : {})}
-              {...(localFiles.supported ? { onOpenPdfFile: () => void localFiles.openPdf() } : {})}
+              onOpenMarkdownFile={() => void localFiles.openFile()}
+              onOpenPdfFile={() => void localFiles.openPdf()}
               onImportFiles={() => setDialog("import")}
               onCreateNote={handleCreate}
               currentFolder={currentFolder}

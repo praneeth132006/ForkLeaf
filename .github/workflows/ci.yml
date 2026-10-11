@@ -31,7 +31,7 @@ jobs:
       # what this says. 22 is the current LTS and satisfies the `engines`
       # floor in package.json, so what CI runs is a version somebody could
       # actually be developing on.
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm

@@ -29,7 +29,9 @@ export interface EditorSidebarProps {
   onOpenNote: (path: string) => void;
   /** Opens a PDF in the panel beside the note, rather than in its own tab. */
   onOpenPdfBeside?: (path: string) => void;
-  /** Opens a PDF from this computer. Absent where the browser cannot. */
+  /** Opens a Markdown or text file from this computer, as a note. */
+  onOpenMarkdownFile?: () => void;
+  /** Opens a PDF from this computer. */
   onOpenPdfFile?: () => void;
   /** Opens the import dialog, for .md files from this computer. */
   onImportFiles?: () => void;
@@ -398,7 +400,33 @@ export function EditorSidebar(props: EditorSidebarProps) {
         {/* Opening a PDF was reachable only from the command palette, which
             means it was reachable only by people who already knew it existed.
             It sits beside "New note" because it is the same kind of act: the
-            other way a document gets into the notebook. */}
+            other way a document gets into the notebook. Opening a Markdown
+            file had the same problem, and is the more common of the two. */}
+        {props.onOpenMarkdownFile && (
+          <button
+            type="button"
+            onClick={props.onOpenMarkdownFile}
+            title="Open a Markdown file from this computer"
+            aria-label="Open a Markdown file from this computer"
+            className="flex w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--fl-border)] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)]"
+          >
+            <svg
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            >
+              <rect x="1.8" y="3.6" width="12.4" height="8.8" rx="1.2" />
+              <path d="M4.2 10V6l1.6 2 1.6-2v4" />
+              <path d="M10.8 6v4M9.4 8.7l1.4 1.4 1.4-1.4" />
+            </svg>
+          </button>
+        )}
+
         {props.onOpenPdfFile && (
           <button
             type="button"
