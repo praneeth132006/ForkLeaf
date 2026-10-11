@@ -29,12 +29,12 @@
     "remark-stringify": "^11.0.0",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.0.0",
-    "yaml": "^2.8.1"
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/hast": "^3",
     "@types/mdast": "^4",
-    "@types/node": "^24",
+    "@types/node": "^26",
     "typescript": "^5.9.3"
   }
 }

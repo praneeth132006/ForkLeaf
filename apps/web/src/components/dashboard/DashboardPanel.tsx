@@ -34,6 +34,7 @@ import { PublishedPages } from "./PublishedPages";
 import { usePublishedPages } from "@/hooks/usePublishedPages";
 import { MEMORY_KEY, fading, parseVisits } from "@/lib/note-memory";
 import { dateStamp } from "@/lib/templates";
+import { track } from "@/lib/firebase/analytics";
 
 /**
  * The dashboard.
@@ -209,18 +210,13 @@ export function DashboardPanel({
     [],
   );
 
-  const selectWorkspace = useCallback((workspace: Workspace, reveal = false) => {
+  const selectWorkspace = useCallback((workspace: Workspace) => {
     setActiveId(workspace.id);
     setFolder(null);
     setTag(null);
     setQuery("");
     setVisible(PAGE_SIZE);
-
-    // Only when a person picked it. Connecting a repository already moves the
-    // page around enough without also throwing it down to the bottom.
-    if (reveal) {
-      indexRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    indexRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
   const browseFolder = useCallback((next: string | null) => {
@@ -233,13 +229,15 @@ export function DashboardPanel({
     setVisible(PAGE_SIZE);
   }, []);
 
+  // Connecting a repository is asking to write in it, so it opens straight in
+  // the editor rather than leaving the person on the dashboard to find it.
   const connect = useCallback(
     async (workspace: Workspace) => {
-      await library.addWorkspace(workspace);
-      selectWorkspace(workspace);
-      setAddingRepo(false);
+      await library.addWorkspace(workspace, { refresh: false });
+      track("repo_connected");
+      router.push(`/editor?ws=${encodeURIComponent(workspace.id)}`);
     },
-    [library, selectWorkspace],
+    [library, router],
   );
 
   const disconnect = useCallback(
@@ -406,7 +404,7 @@ export function DashboardPanel({
                   <button
                     type="button"
                     aria-pressed={selected}
-                    onClick={() => selectWorkspace(slice.workspace, true)}
+                    onClick={() => selectWorkspace(slice.workspace)}
                     className="block w-full rounded-xl p-4 pr-11 text-left"
                   >
                     <span className="mb-1 flex items-center gap-2">

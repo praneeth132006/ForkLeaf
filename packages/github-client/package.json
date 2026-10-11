@@ -16,7 +16,7 @@
     "@forkleaf/types": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^24",
+    "@types/node": "^26",
     "typescript": "^5.9.3"
   }
 }
