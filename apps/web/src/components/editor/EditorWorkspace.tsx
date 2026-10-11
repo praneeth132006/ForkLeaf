@@ -251,7 +251,7 @@ import {
 } from "@/lib/assets";
 import { revealAsset } from "@/lib/reveal-asset";
 import { imageTypeFor } from "@/lib/media";
-import { collectFilePaths, collectFolders } from "@/lib/tree";
+import { collectFilePaths, collectFolders, notePlacement } from "@/lib/tree";
 import { hasRelativeImages, repairNoteLinks } from "@/lib/repair-links";
 import { excerptOf, flattenTree, isMarkdown } from "@/lib/library";
 import { track } from "@/lib/firebase/analytics";
@@ -2165,6 +2165,16 @@ export function EditorWorkspace() {
    * in, rather than making a second copy. That is what every desktop editor
    * does, and the file on disk is the authority for a note that came from one.
    */
+  /**
+   * Puts a file opened from this machine into the notebook, where the person
+   * says.
+   *
+   * It used to land at the top of the repository every time, and on a
+   * connected one that is a commit in the wrong place before anybody could
+   * say otherwise. So it asks first, starting from the folder of the note
+   * being edited, and resolves null if the dialog is closed — the file is
+   * then simply not opened.
+   */
   const adoptFile = useCallback(
     async (file: LocalFile, existingNotePath: string | null): Promise<string | null> => {
       if (existingNotePath) {
@@ -2173,11 +2183,32 @@ export function EditorWorkspace() {
         return existingNotePath;
       }
 
-      const title = stripExtension(file.name) || "Untitled";
-      const created = await notebook.createNote(title, "", file.text);
-      return created?.path ?? null;
+      const folders = collectFolders(notebook.tree);
+      return new Promise<string | null>((resolve) => {
+        setPrompt({
+          title: `Open ${file.name}`,
+          label: "Title",
+          initialValue: stripExtension(file.name) || "Untitled",
+          confirmLabel: "Open",
+          body: file.handle
+            ? "Saving writes back to the file on your computer, and to the folder chosen here."
+            : "It becomes a note in the folder chosen here.",
+          parent: {
+            label: "Save in",
+            options: ["", ...folders],
+            initial: folders.includes(currentFolder) ? currentFolder : "",
+            rootLabel: notebook.activeWorkspace?.name ?? "Repository root",
+          },
+          onConfirm: async (value, chosenParent) => {
+            const { folder, title } = notePlacement(chosenParent, value);
+            const created = await notebook.createNote(title || "Untitled", folder, file.text);
+            resolve(created?.path ?? null);
+          },
+          onCancel: () => resolve(null),
+        });
+      });
     },
-    [notebook],
+    [notebook, currentFolder],
   );
 
   const localFiles = useLocalFiles(adoptFile, openLocalPdf);
@@ -2448,19 +2479,30 @@ export function EditorWorkspace() {
 
   const handleCreate = useCallback(
     (folder: string) => {
+      const folders = collectFolders(notebook.tree);
+
       setPrompt({
-        title: folder ? `New note in ${folder}` : "New note",
+        title: "New note",
         label: "Title",
         initialValue: "Untitled note",
         confirmLabel: "Create",
-        // Where it lands, stated before it lands there. A note created into
+        // Where it lands, chosen before it lands there. A note created into
         // the wrong folder on a connected repository is already a commit by
-        // the time anybody notices.
-        body: folder
-          ? `Saved as a file inside “${folder}”.`
-          : `Saved at the top of ${topLevelName}. Open a note first to create alongside it.`,
-        onConfirm: async (value) => {
-          const created = await notebook.createNote(value || "Untitled note", folder);
+        // the time anybody notices — and the folder used to be fixed to the
+        // one of the note being edited, with no way to pick another here.
+        body: "Type a slash in the title to make a new folder on the way.",
+        parent: {
+          label: "Save in",
+          options: ["", ...folders],
+          initial: folders.includes(folder) ? folder : "",
+          rootLabel: notebook.activeWorkspace?.name ?? "Repository root",
+        },
+        onConfirm: async (value, chosenParent) => {
+          const placement = notePlacement(chosenParent, value);
+          const created = await notebook.createNote(
+            placement.title || "Untitled note",
+            placement.folder,
+          );
           track("note_created");
           if (!created) return;
 
