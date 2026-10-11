@@ -34,7 +34,7 @@
   "devDependencies": {
     "@types/hast": "^3",
     "@types/mdast": "^4",
-    "@types/node": "^24",
+    "@types/node": "^26",
     "typescript": "^5.9.3"
   }
 }
