@@ -395,9 +395,15 @@ export function useLibrary() {
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
-  /** Adds a repository to the library and indexes it, without a page reload. */
+  /**
+   * Adds a repository to the library and indexes it, without a page reload.
+   *
+   * `refresh: false` saves the repository and stops there — for a caller that is
+   * about to leave for the editor, which reads the tree itself, and would only
+   * be kept waiting on a network pass whose result nobody is left to see.
+   */
   const addWorkspace = useCallback(
-    async (workspace: Workspace) => {
+    async (workspace: Workspace, { refresh = true }: { refresh?: boolean } = {}) => {
       const db = dbRef.current;
       const notes = repoRef.current;
       const gateway = gatewayRef.current;
@@ -418,6 +424,8 @@ export function useLibrary() {
           slice,
         ]),
       }));
+
+      if (!refresh) return;
 
       // A repository just connected has nothing cached, so the network pass is
       // the only one that will put anything in it.
