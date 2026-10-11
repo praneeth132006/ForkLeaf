@@ -31,6 +31,8 @@ export interface PromptRequest {
   body?: string;
   parent?: PromptParentChoice;
   onConfirm: (value: string, parent: string) => void | Promise<void>;
+  /** Called when the dialog is closed without confirming. */
+  onCancel?: () => void;
 }
 
 export interface PromptDialogProps {
@@ -55,6 +57,11 @@ export function PromptDialog({ request, onClose }: PromptDialogProps) {
   // `busy === false` and both run, which on a connected repository is two
   // commits for one folder.
   const running = useRef(false);
+
+  const cancel = () => {
+    request.onCancel?.();
+    onClose();
+  };
 
   /**
    * Enter, made to mean Create.
@@ -97,7 +104,7 @@ export function PromptDialog({ request, onClose }: PromptDialogProps) {
   };
 
   return (
-    <Dialog title={request.title} onClose={onClose}>
+    <Dialog title={request.title} onClose={cancel}>
       <form ref={formRef} onSubmit={submit}>
         {request.body && (
           <p className="mb-3 text-sm leading-relaxed text-[var(--fl-muted)]">{request.body}</p>
@@ -155,7 +162,7 @@ export function PromptDialog({ request, onClose }: PromptDialogProps) {
         <div className="flex justify-end gap-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={cancel}
             className="rounded-md px-4 py-2 text-sm text-[var(--fl-muted)] hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
           >
             Cancel

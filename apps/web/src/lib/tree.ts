@@ -38,3 +38,21 @@ export function collectFilePaths(nodes: readonly TreeNode[]): string[] {
   walk(nodes);
   return paths;
 }
+
+/**
+ * Where a note named in a dialog goes: the folder chosen in the picker, plus
+ * any folders typed into the name with slashes.
+ *
+ * `ideas/Q3/plan` under `work` is the note `plan` in `work/ideas/Q3`. Empty
+ * segments — a leading, trailing or doubled slash — are dropped rather than
+ * turned into folders with no name.
+ */
+export function notePlacement(parent: string, name: string): { folder: string; title: string } {
+  const segments = name
+    .split("/")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  const title = segments.pop() ?? "";
+  const folder = [parent, ...segments].filter(Boolean).join("/");
+  return { folder, title };
+}
