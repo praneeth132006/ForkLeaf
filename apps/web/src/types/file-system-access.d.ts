@@ -41,6 +41,14 @@ interface FileSystemFileHandle {
   requestPermission?(descriptor?: FileSystemHandlePermissionDescriptor): Promise<PermissionState>;
 }
 
+/**
+ * A dropped file as a handle, in Chromium. Optional because the other engines
+ * do not have it, and a drop there still has to work.
+ */
+interface DataTransferItem {
+  getAsFileSystemHandle?(): Promise<FileSystemHandle | null>;
+}
+
 /** What the operating system launched this window with. */
 interface LaunchParams {
   targetURL?: string;

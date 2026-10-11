@@ -6,6 +6,7 @@ import {
   consumeLaunchedFiles,
   openLocalFile,
   openPdfFile,
+  readDroppedFiles,
   readLocalFile,
   saveLocalFileAs,
   writeLocalFile,
@@ -30,7 +31,11 @@ import {
  */
 
 export interface LocalFilesState {
-  /** False in Firefox and Safari, which have no File System Access API. */
+  /**
+   * Whether a note opened from a file can be written back to it. False in
+   * Firefox and Safari, which have no File System Access API — files still
+   * open there, and save to the notebook instead.
+   */
   supported: boolean;
   /** The file name backing a note, or null for an ordinary note. */
   fileFor: (notePath: string) => string | null;
@@ -38,6 +43,8 @@ export interface LocalFilesState {
   openFile: () => Promise<void>;
   /** Opens a PDF from this machine, in the reader rather than the notebook. */
   openPdf: () => Promise<void>;
+  /** Opens whatever was dropped on the window that can be opened. */
+  openDropped: (transfer: DataTransfer) => Promise<void>;
   /**
    * Writes a note back to its file. Returns false when it has none, so the
    * caller can fall back to "Save as" rather than reporting a failure.
@@ -108,9 +115,11 @@ export function useLocalFiles(
             continue;
           }
 
-          const already = await findOpen(file.handle);
+          const already = file.handle ? await findOpen(file.handle) : null;
           const notePath = await adoptRef.current(file, already);
-          if (!notePath) continue;
+          // Without a handle there is nothing to save back to, so the note is
+          // an ordinary one from here on.
+          if (!notePath || !file.handle) continue;
 
           handles.current.set(notePath, file.handle);
           setNames((current) => ({ ...current, [notePath]: file.name }));
@@ -147,6 +156,17 @@ export function useLocalFiles(
       setError(problem instanceof Error ? problem.message : "That PDF could not be opened.");
     }
   }, [take]);
+
+  const openDropped = useCallback(
+    async (transfer: DataTransfer) => {
+      try {
+        await take(await readDroppedFiles(transfer));
+      } catch (problem) {
+        setError(problem instanceof Error ? problem.message : "That file could not be opened.");
+      }
+    },
+    [take],
+  );
 
   const saveToFile = useCallback(async (notePath: string, text: string) => {
     const handle = handles.current.get(notePath);
@@ -185,6 +205,7 @@ export function useLocalFiles(
     fileFor,
     openFile,
     openPdf,
+    openDropped,
     saveToFile,
     saveFileAs,
     error,
