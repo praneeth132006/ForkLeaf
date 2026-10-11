@@ -28,7 +28,7 @@
     "posthog-js": "^1.438.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "undici": "^7.29.0"
+    "undici": "^7.29.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.16",
