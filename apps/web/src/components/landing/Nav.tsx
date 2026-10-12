@@ -17,7 +17,7 @@ import { SectionLink } from "./SectionLink";
  */
 
 const SECTIONS = [
-  { hash: "#how", label: "How it works" },
+  { hash: "#tour", label: "Tour" },
   { hash: "#toolkit", label: "What it does" },
   { hash: "#compare", label: "Compare" },
   { hash: "#pricing", label: "Pricing" },

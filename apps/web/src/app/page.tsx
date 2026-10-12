@@ -3,8 +3,7 @@ import { getSession, githubOAuthConfigured } from "@/lib/session";
 import { SignInError } from "@/components/SignInError";
 import { Nav } from "@/components/landing/Nav";
 import { Hero } from "@/components/landing/Hero";
-import { HowItWorks } from "@/components/landing/HowItWorks";
-import { Features } from "@/components/landing/Features";
+import { Tour } from "@/components/landing/Tour";
 import { Toolkit } from "@/components/landing/Toolkit";
 import { Why } from "@/components/landing/Why";
 import { Ownership } from "@/components/landing/Ownership";
@@ -69,17 +68,14 @@ export default async function Home({
       )}
 
       <main className="flex-1">
-        {/* Argument before inventory.
-            
-            `Toolkit` — the exhaustive list of everything ForkLeaf does — used
-            to come before `Features`, which is the illustrated case for why
-            any of it matters. That is the wrong way round: a reader who has
-            not yet been given a reason to care meets eight groups of ticked
-            rows, and a capability list read by somebody who is not yet sold
-            is just a long page. `Features` argues, then `Toolkit` proves. */}
+        {/* Argument, then inventory.
+
+            The tour names the four jobs ForkLeaf does and gives each a chapter
+            of the same shape, so the page reads as one system rather than a
+            dozen unrelated cards. `Toolkit` then lists everything, for the
+            reader who has been convinced and wants to check it is finished. */}
         <Hero githubAvailable={githubAvailable} />
-        <HowItWorks />
-        <Features />
+        <Tour />
         <Toolkit />
         <Why />
         <Ownership />
