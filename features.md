@@ -427,9 +427,9 @@ on this device. It says where to look, never which sentence is right.
 ### Map the argument
 
 `/` → **Map the argument** draws an essay as a canvas: the claim on top, each
-reason (a `##` section, or a sentence starting *Because*, *First*, *Moreover*…)
+reason (a `##` section, or a sentence starting _Because_, _First_, _Moreover_…)
 with the evidence under it (a link, citation, figure or quotation), and the
-objections (*However*, *Critics argue*, sections called Objections or Risks)
+objections (_However_, _Critics argue_, sections called Objections or Risks)
 pointing at the claim. A reason with no evidence is drawn in red. `Claim:`,
 `Reason:`, `Evidence:`, `Objection:` and `Rebuttal:` labels always win.
 
@@ -437,10 +437,10 @@ pointing at the claim. A reason with no evidence is drawn in red. `Claim:`,
 
 ⌘K → **Take an exam on my notes** (also `/` → Study): pick a folder, 5–30
 questions and a time limit. Questions are your flashcards, your definitions
-("What does *latency* mean?") and your sections ("Explain *Photosynthesis*"),
+("What does _latency_ mean?") and your sections ("Explain _Photosynthesis_"),
 answered by typing; ⌘↵ moves on and the paper is handed in when time runs out.
 The marks show every miss beside what the notes say. **Save results as a note**
-writes `exams/<time> <folder> exam.md` with a *To go over again* checklist
+writes `exams/<time> <folder> exam.md` with a _To go over again_ checklist
 linking to the headings to reread.
 
 ### Live code
@@ -830,14 +830,14 @@ open questions at the top. Nothing is sent to a model unless you tick it.
 
 ## Publishing and exporting
 
-| Feature                        | How to use it                                                                                  |
-| ------------------------------ | ---------------------------------------------------------------------------------------------- |
-| **Publish a note**             | ⌘K → **Publish this note as a page…**. Commits a page to `docs/` and switches on GitHub Pages. |
-| **Publish a folder as a book** | Right-click a folder → **Publish as book…**. Contents page, one page per note, working links.  |
+| Feature                        | How to use it                                                                                                                                                                                                                                                                           |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Publish a note**             | ⌘K → **Publish this note as a page…**. Commits a page to `docs/` and switches on GitHub Pages.                                                                                                                                                                                          |
+| **Publish a folder as a book** | Right-click a folder → **Publish as book…**. Contents page, one page per note, working links.                                                                                                                                                                                           |
 | **Course website**             | Right-click a folder → **Publish as course website…**: lessons in the order they build on each other, a progress bar and **Mark this lesson done** on every page, ticks on the contents page, and `quiz.html` from the folder's flashcards. Progress is kept in each visitor's browser. |
-| **Digital garden**             | In **Publish as book…**, tick **Publish as a digital garden**: backlinks on every page, a map. |
-| **Suggestions from readers**   | Published pages carry **Suggest an edit**; ⌘K → **See what other people have suggested**.      |
-| **Export**                     | **⌘⇧E**: PDF, Word, HTML, Markdown, plain text or JSON, made in your browser.                  |
+| **Digital garden**             | In **Publish as book…**, tick **Publish as a digital garden**: backlinks on every page, a map.                                                                                                                                                                                          |
+| **Suggestions from readers**   | Published pages carry **Suggest an edit**; ⌘K → **See what other people have suggested**.                                                                                                                                                                                               |
+| **Export**                     | **⌘⇧E**: PDF, Word, HTML, Markdown, plain text or JSON, made in your browser.                                                                                                                                                                                                           |
 
 ## Desktop
 
