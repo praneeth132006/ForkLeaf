@@ -15,6 +15,7 @@ import { gap } from "@/lib/inline-flashcards";
 import { plainText } from "@/lib/mind";
 import { parseHighlights } from "@/lib/pdf-highlights";
 import { dateStamp } from "@/lib/templates";
+import { isBookNote, quotesIn } from "@/lib/book-quotes";
 
 /**
  * Spaced reading: the passages you marked come back, a few a day.
@@ -60,6 +61,15 @@ export function passagesIn(source: PassageSource): ReadingPassage[] {
     const title = source.title.replace(/^Highlights\s+[—-]\s+/, "");
     for (const highlight of parseHighlights(source.content)) {
       add(highlight.text, `p. ${highlight.citation.page}`, title);
+    }
+    return found;
+  }
+
+  // Quotes photographed from paper books: one passage per quotation, with
+  // the page it was on.
+  if (isBookNote(source)) {
+    for (const quote of quotesIn(source.content)) {
+      add(quote.text, quote.page ? `p. ${quote.page}` : null, source.title);
     }
     return found;
   }

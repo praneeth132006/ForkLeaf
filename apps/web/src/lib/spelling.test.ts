@@ -204,7 +204,7 @@ describe("the dictionary worker, with the real English dictionary", () => {
         data: {
           id: 1,
           type: "check",
-          words: ["receive", "recieve", "Teh", "The", "don’t", "Running"],
+          words: ["receive", "recieve", "Teh", "The", "don’t", "Running", "backend", "Repos"],
         },
       } as MessageEvent);
       await scope.onmessage!({ data: { id: 2, type: "suggest", word: "recieve" } } as MessageEvent);
@@ -228,6 +228,8 @@ describe("the dictionary worker, with the real English dictionary", () => {
         ["The", true],
         ["don’t", true],
         ["Running", true],
+        ["backend", true],
+        ["Repos", true],
       ],
     });
     expect((replies[1] as { suggestions: string[] }).suggestions[0]).toBe("receive");

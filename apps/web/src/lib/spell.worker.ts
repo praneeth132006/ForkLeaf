@@ -1,5 +1,6 @@
 import nspell from "nspell";
 import { rankSuggestions } from "./spell-rank";
+import { VOCABULARY } from "./spell-vocabulary";
 
 /**
  * The dictionary, off the main thread.
@@ -47,6 +48,7 @@ async function load(): Promise<ReturnType<typeof nspell>> {
     }),
   ]);
   const built = nspell(aff, dic);
+  for (const word of VOCABULARY) built.add(word);
   for (const word of personal) built.add(word);
   checker = built;
   return built;

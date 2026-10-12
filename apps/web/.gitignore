@@ -44,6 +44,8 @@ next-env.d.ts
 /public/pdfjs
 # Copied from dictionary-en at build time by scripts/copy-dictionaries.mjs
 /public/dictionaries
+# Copied from tesseract.js at build time by scripts/copy-ocr-assets.mjs
+/public/ocr
 
 # CHANGELOG.md, copied in by scripts/copy-changelog.mjs
 /content/CHANGELOG.md

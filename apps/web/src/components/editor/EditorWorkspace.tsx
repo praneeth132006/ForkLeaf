@@ -149,6 +149,9 @@ import { AskDialog } from "@/components/AskDialog";
 import { ContradictionsDialog } from "@/components/ContradictionsDialog";
 import { GlossaryDialog } from "@/components/GlossaryDialog";
 import { ExamDialog } from "@/components/ExamDialog";
+import { OcrDialog } from "@/components/OcrDialog";
+import { BookQuoteDialog } from "@/components/BookQuoteDialog";
+import { BOOKS_FOLDER, bookNote, bookTitles, isBookNote, withQuote } from "@/lib/book-quotes";
 import { EXAM_FOLDER } from "@/lib/exam";
 import { definitionsIn, glossaryFrom, type GlossaryEntry } from "@/lib/glossary";
 import { dismissContradiction, readDismissedContradictions } from "@/lib/contradictions";
@@ -691,6 +694,8 @@ export function EditorWorkspace() {
     | "contradictions"
     | "glossary"
     | "exam"
+    | "ocr"
+    | "book-quote"
     | null
   >(null);
   /**
@@ -2200,6 +2205,28 @@ export function EditorWorkspace() {
           .join("/")}#L${from}-L${to}`,
     };
   }, [workspace, user]);
+
+  /** The books quotes have been kept from, offered again in "Quote from a book". */
+  const [bookList, setBookList] = useState<ReturnType<typeof bookTitles>>([]);
+  useEffect(() => {
+    if (dialog !== "book-quote") return;
+    let live = true;
+    void allNotesForCanvas().then((entries) => {
+      if (!live) return;
+      setBookList(
+        bookTitles(
+          entries.map((entry) => ({
+            path: entry.path,
+            title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+            frontmatter: entry.frontmatter,
+          })),
+        ),
+      );
+    });
+    return () => {
+      live = false;
+    };
+  }, [dialog, allNotesForCanvas]);
 
   /** A deck block shares this note's cards publicly, or copies a shared deck in. */
   const deckBridge = useMemo<DeckBridge>(
@@ -4073,6 +4100,26 @@ export function EditorWorkspace() {
           },
         });
       }
+      if (note && !(sealed && !opened)) {
+        list.push({
+          id: "ocr",
+          label: "Text from a picture",
+          group: "Notes",
+          hint: "A screenshot, slide or photo, read on this device and added to the note as text",
+          keywords:
+            "ocr text picture image screenshot photo scan slide whiteboard recognise read extract copy",
+          run: () => setDialog("ocr"),
+        });
+      }
+      list.push({
+        id: "book-quote",
+        label: "Quote from a book (photo)",
+        group: "Notes",
+        hint: "Photograph a page, tap the lines to keep; they come back in spaced reading",
+        keywords:
+          "book quote photo camera page highlight reading kindle paper passage ocr scan capture",
+        run: () => setDialog("book-quote"),
+      });
       list.push({
         id: "exam",
         label: "Take an exam on my notes",
@@ -4644,6 +4691,8 @@ export function EditorWorkspace() {
         "Hide the note, write what you remember, see what you missed",
       ),
       ...tool("exam", "Study", TOOL_ICONS.cards, "A timed mock exam from a folder, marked"),
+      ...tool("ocr", "Capture", TOOL_ICONS.graph, "A screenshot or photo, read and added as text"),
+      ...tool("book-quote", "Capture", TOOL_ICONS.graph, "Photograph a book page, keep the lines"),
       ...tool(
         "flashcards",
         "Study",
@@ -6530,6 +6579,60 @@ export function EditorWorkspace() {
             setDialog(null);
             setReveal({ path, line });
             notebook.openNote(path);
+          }}
+        />
+      )}
+
+      {openDialog === "ocr" && (
+        <OcrDialog
+          onClose={() => setDialog(null)}
+          onAdd={async (text, picture) => {
+            const current = notebook.note;
+            if (!current) throw new Error("Open a note to add the text to.");
+            if (noteLocked) {
+              throw new Error("This note is locked. Unlock it — ⌘⇧L — to add text.");
+            }
+            const image =
+              picture && images.upload ? `![](${await images.upload(picture)})\n\n` : "";
+            const separator = current.content.endsWith("\n") ? "" : "\n";
+            await notebook.saveNote(`${current.content}${separator}\n${image}${text}\n`);
+            setDialog(null);
+            setNotice(
+              picture && images.upload
+                ? "The picture and its text were added to the end of this note."
+                : "The text was added to the end of this note.",
+            );
+          }}
+        />
+      )}
+
+      {openDialog === "book-quote" && (
+        <BookQuoteDialog
+          onClose={() => setDialog(null)}
+          books={bookList}
+          onSave={async ({ book: name, author, page, text }) => {
+            const today = dateStamp(new Date());
+            const existing = (await notebook.allNotes()).find(
+              (entry) =>
+                isBookNote(entry) &&
+                deriveTitle(entry.content, entry.frontmatter.title, entry.path).toLowerCase() ===
+                  name.toLowerCase(),
+            );
+            if (existing) {
+              await notebook.rewriteNote(
+                existing.path,
+                (content) => withQuote(content, { text, page, date: today }).content,
+              );
+              return existing.path;
+            }
+            const created = await notebook.createNote(
+              name,
+              BOOKS_FOLDER,
+              withQuote(bookNote(name, author), { text, page, date: today }).content,
+            );
+            if (!created) throw new Error("The book's note could not be created.");
+            track("note_created");
+            return created.path;
           }}
         />
       )}

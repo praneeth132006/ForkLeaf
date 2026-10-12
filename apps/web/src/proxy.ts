@@ -262,8 +262,13 @@ export const config = {
   matcher: [
     {
       // Static assets need no policy, and prefetches are not documents.
+      //
+      // `ocr/` and `dictionaries/` are files the text recogniser and the spell
+      // checker load into workers. A worker takes the policy of its own script's
+      // response, and this one — `strict-dynamic`, no `wasm-unsafe-eval` — would
+      // stop Tesseract's worker loading its WebAssembly engine at all.
       source:
-        "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|svg|jpg|jpeg|gif|webp|ico)$).*)",
+        "/((?!_next/static|_next/image|favicon.ico|ocr/|dictionaries/|.*\\.(?:png|svg|jpg|jpeg|gif|webp|ico)$).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },
