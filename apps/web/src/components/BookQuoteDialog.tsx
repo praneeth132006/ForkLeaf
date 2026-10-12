@@ -86,32 +86,38 @@ export function BookQuoteDialog({
     }
   };
 
-  const toggle = (index: number, lines: RecognisedLine[], extend: boolean) => {
-    const next = new Set(chosen);
-    if (extend && chosen.size > 0) {
-      // Shift-click: everything from the nearest chosen line to this one.
-      const anchor = [...chosen].reduce((best, each) =>
-        Math.abs(each - index) < Math.abs(best - index) ? each : best,
-      );
-      for (let i = Math.min(anchor, index); i <= Math.max(anchor, index); i += 1) next.add(i);
-    } else if (next.has(index)) next.delete(index);
-    else next.add(index);
-    setChosen(next);
-    if (!edited) {
-      setPassage(
-        tidyPassage(
-          [...next]
-            .sort((a, b) => a - b)
-            .map((i) => lines[i]!.text)
-            .join("\n"),
-        ),
-      );
-    }
+  const toggle = (index: number, extend: boolean) => {
+    // A functional update, so two clicks in quick succession — a click and
+    // then a shift-click — each see the other's choice.
+    setChosen((current) => {
+      const next = new Set(current);
+      if (extend && current.size > 0) {
+        // Shift-click: everything from the nearest chosen line to this one.
+        const anchor = [...current].reduce((best, each) =>
+          Math.abs(each - index) < Math.abs(best - index) ? each : best,
+        );
+        for (let i = Math.min(anchor, index); i <= Math.max(anchor, index); i += 1) next.add(i);
+      } else if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
   };
+
+  /** The chosen lines as one passage, until the reader edits it by hand. */
+  const joined =
+    phase.kind === "choose"
+      ? tidyPassage(
+          [...chosen]
+            .sort((a, b) => a - b)
+            .map((i) => phase.lines[i]?.text ?? "")
+            .join("\n"),
+        )
+      : "";
+  const quoteText = edited ? passage : joined;
 
   const save = async () => {
     const title = book.trim();
-    const text = tidyPassage(passage);
+    const text = tidyPassage(quoteText);
     if (!text) return setProblem("Choose the lines to keep — tap them above.");
     if (!title) return setProblem("Which book is it from?");
     setProblem(null);
@@ -191,21 +197,14 @@ export function BookQuoteDialog({
               <button
                 type="button"
                 className="ml-auto underline underline-offset-2"
-                onClick={() => {
-                  setChosen(new Set(phase.lines.map((_line, i) => i)));
-                  if (!edited)
-                    setPassage(tidyPassage(phase.lines.map((line) => line.text).join("\n")));
-                }}
+                onClick={() => setChosen(new Set(phase.lines.map((_line, i) => i)))}
               >
                 All
               </button>
               <button
                 type="button"
                 className="underline underline-offset-2"
-                onClick={() => {
-                  setChosen(new Set());
-                  if (!edited) setPassage("");
-                }}
+                onClick={() => setChosen(new Set())}
               >
                 None
               </button>
@@ -219,7 +218,7 @@ export function BookQuoteDialog({
                   <button
                     type="button"
                     aria-pressed={chosen.has(index)}
-                    onClick={(event) => toggle(index, phase.lines, event.shiftKey)}
+                    onClick={(event) => toggle(index, event.shiftKey)}
                     className={`block w-full rounded-md px-2 py-1.5 text-left font-serif text-[14.5px] leading-snug ${
                       chosen.has(index)
                         ? "bg-[var(--fl-accent-soft)] text-[var(--fl-text)]"
@@ -238,7 +237,7 @@ export function BookQuoteDialog({
               </span>
               <textarea
                 aria-label="The quote"
-                value={passage}
+                value={quoteText}
                 onChange={(event) => {
                   setPassage(event.target.value);
                   setEdited(true);

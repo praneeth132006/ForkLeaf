@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { OcrDialog } from "./OcrDialog";
 import { BookQuoteDialog } from "./BookQuoteDialog";
 
@@ -173,6 +173,21 @@ describe("BookQuoteDialog", () => {
       page: "3",
       text: "It was a bright cold day in April, and the clocks were striking thirteen.",
     });
+  });
+
+  it("takes a click and a shift-click made in the same moment", async () => {
+    mount();
+    choose("Take a photo of the page", picture());
+    await screen.findByTestId("book-lines");
+    const first = screen.getByText(lines[0]!.text);
+    const third = screen.getByText(lines[2]!.text);
+    act(() => {
+      first.click();
+      third.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true }));
+    });
+    expect((screen.getByLabelText("The quote") as HTMLTextAreaElement).value).toBe(
+      "It was a bright cold day in April, and the clocks were striking thirteen.",
+    );
   });
 
   it("keeps a correction typed into the quote", async () => {

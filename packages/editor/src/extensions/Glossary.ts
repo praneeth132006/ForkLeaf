@@ -138,9 +138,10 @@ class GlossaryCard {
     if (term && this.view.dom.contains(term)) this.show(term);
     else this.hide();
   };
-  private readonly onKey = (event: KeyboardEvent) => {
-    if (event.key === "Escape") this.hide();
-  };
+  // Typing, or scrolling the term away, ends the hover: a card left floating
+  // over text it no longer belongs to reads as part of the page.
+  private readonly onKey = () => this.hide();
+  private readonly onScroll = () => this.hide();
 
   constructor(
     private readonly view: EditorView,
@@ -150,10 +151,11 @@ class GlossaryCard {
     view.dom.addEventListener("mouseout", this.onOut);
     view.dom.addEventListener("click", this.onTap);
     view.dom.addEventListener("keydown", this.onKey);
+    globalThis.window?.addEventListener("scroll", this.onScroll, true);
   }
 
-  update(): void {
-    if (!this.bridgeOf()?.enabled) this.hide();
+  update(view: EditorView, previous: EditorState): void {
+    if (!this.bridgeOf()?.enabled || !view.state.doc.eq(previous.doc)) this.hide();
   }
 
   private show(element: HTMLElement): void {

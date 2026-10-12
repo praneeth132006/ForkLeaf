@@ -96,7 +96,10 @@ function proseLines(content: string): { title: string | null; lines: Line[] } {
       fence = !fence;
       continue;
     }
-    if (fence || /^\s*\|/.test(line) || line.includes("::")) continue;
+    // A table row, a flashcard, or the `/command` being typed to make this map.
+    if (fence || /^\s*\|/.test(line) || line.includes("::") || /^\s*\/\S*\s*$/.test(line)) {
+      continue;
+    }
     lines.push({ text: line, line: index + 1 });
   }
   return { title, lines };
@@ -231,6 +234,10 @@ function height(text: string): number {
   return Math.min(220, 70 + Math.ceil(text.length / 34) * 22);
 }
 
+/**
+ * Lays the argument out as a canvas. Card text is plain — a canvas card shows
+ * its text as written — with the role on the first line.
+ */
 /** Lays the argument out as a canvas: claim on top, reasons below with their evidence, objections to the side. */
 export function argumentCanvas(shape: ArgumentShape): Canvas {
   const canvas = emptyCanvas();
@@ -276,15 +283,15 @@ export function argumentCanvas(shape: ArgumentShape): Canvas {
   const rowWidth = columns * WIDTH + (columns - 1) * GAP;
   const left = -rowWidth / 2;
 
-  const claimText = `**Claim**\n\n${shape.claim.text}`;
+  const claimText = `Claim\n\n${shape.claim.text}`;
   const claimId = add(claimText, -WIDTH / 2, 0, COLOR.claim);
   const reasonTop = height(claimText) + 120;
 
   const reasonIds = shape.reasons.map((reason, index) => {
     const weak = !backed.has(index);
     const text = weak
-      ? `**Reason**\n\n${reason.text}\n\n_No evidence yet_`
-      : `**Reason**\n\n${reason.text}`;
+      ? `Reason\n\n${reason.text}\n\n(No evidence yet)`
+      : `Reason\n\n${reason.text}`;
     const id = add(
       text,
       left + index * (WIDTH + GAP),
@@ -301,7 +308,7 @@ export function argumentCanvas(shape: ArgumentShape): Canvas {
   const claimEvidenceX = left + columns * (WIDTH + GAP);
   for (const point of shape.evidence) {
     const index = point.backs ?? -1;
-    const text = `**Evidence**\n\n${point.text}`;
+    const text = `Evidence\n\n${point.text}`;
     const owner = index >= 0 ? reasonIds[index] : undefined;
     const x = owner ? left + index * (WIDTH + GAP) : claimEvidenceX;
     const top = stackBottom.get(index) ?? (owner ? owner.bottom + 80 : reasonTop);
@@ -314,7 +321,7 @@ export function argumentCanvas(shape: ArgumentShape): Canvas {
   const objectionX = left - WIDTH - GAP * 3;
   let objectionY = 0;
   for (const point of shape.objections) {
-    const text = `**Objection**\n\n${point.text}`;
+    const text = `Objection\n\n${point.text}`;
     const id = add(text, objectionX, objectionY, COLOR.objection);
     link(id, claimId, "objects", { from: "right", to: "left" }, COLOR.objection);
     objectionY += height(text) + GAP;

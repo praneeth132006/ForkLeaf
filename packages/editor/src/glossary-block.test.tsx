@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type { Editor } from "@tiptap/core";
 import { WysiwygEditor } from "./WysiwygEditor";
 import type { GlossaryBridge } from "./extensions/Glossary";
@@ -90,6 +90,21 @@ describe("glossary terms in rich text", () => {
     fireEvent.click(document.querySelector(".fl-glossary-term")!);
     expect(document.querySelector(".fl-glossary-card")).not.toBeNull();
     fireEvent.keyDown(document.querySelector(".ProseMirror")!, { key: "Escape" });
+    expect(document.querySelector(".fl-glossary-card")).toBeNull();
+  });
+
+  it("hides the card when the page scrolls or the note is typed in", async () => {
+    const { editor } = await mount("Make it idempotent.", bridge().value);
+    fireEvent.mouseOver(document.querySelector(".fl-glossary-term")!);
+    expect(document.querySelector(".fl-glossary-card")).not.toBeNull();
+    fireEvent.scroll(window);
+    expect(document.querySelector(".fl-glossary-card")).toBeNull();
+
+    fireEvent.mouseOver(document.querySelector(".fl-glossary-term")!);
+    expect(document.querySelector(".fl-glossary-card")).not.toBeNull();
+    act(() => {
+      editor.commands.insertContentAt(1, "Now ");
+    });
     expect(document.querySelector(".fl-glossary-card")).toBeNull();
   });
 

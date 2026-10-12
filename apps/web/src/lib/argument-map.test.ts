@@ -94,6 +94,11 @@ describe("readArgument", () => {
     expect(readArgument("", "Untitled").claim.text).toBe("Untitled");
   });
 
+  it("leaves out the /command being typed to make the map", () => {
+    const shape = readArgument("# Claim\n\n## Objections\n\nIt costs too much.\n\n/argument");
+    expect(shape.objections.map((point) => point.text)).toEqual(["It costs too much."]);
+  });
+
   it("leaves code and flashcards out", () => {
     const shape = readArgument(
       "# Claim here\n\n```\nbecause 2024 data\n```\n\nWhy? :: Because 2024",
@@ -112,7 +117,7 @@ describe("argumentCanvas", () => {
     const text = (id: string) =>
       (canvas.nodes.find((node) => node.id === id) as { text: string }).text;
     const claim = canvas.nodes.find((node) =>
-      (node as { text?: string }).text?.startsWith("**Claim**"),
+      (node as { text?: string }).text?.startsWith("Claim\n"),
     )!;
     expect(claim.color).toBe("6");
 
@@ -125,9 +130,9 @@ describe("argumentCanvas", () => {
     const labels = canvas.edges.map((edge) => [edge.label, text(edge.toNode).split("\n")[0]]);
     expect(labels).toEqual(
       expect.arrayContaining([
-        ["supports", "**Claim**"],
-        ["evidence", "**Reason**"],
-        ["objects", "**Claim**"],
+        ["supports", "Claim"],
+        ["evidence", "Reason"],
+        ["objects", "Claim"],
       ]),
     );
   });
