@@ -89,9 +89,48 @@ function announceExpiry(): void {
   }
 }
 
-async function call<T>(url: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
+/**
+ * Whether the server still recognises this browser's sign-in, asked once for
+ * any number of callers.
+ *
+ * A 401 is not proof the sign-in is over. Responses arrive out of order: the
+ * request that renewed the eight-hour token and set a fresh cookie can land
+ * before another request, sent a moment earlier with the old cookie, comes
+ * back refused. That refusal is about a cookie the browser no longer holds.
+ * Signing out on it was how the installed app on a phone kept signing people
+ * out after every wake. The server is the authority, and the browser now sends
+ * it the newest cookie, so ask.
+ *
+ * A network failure here counts as "still signed in": being unable to reach
+ * the server says nothing about the session, and the request will fail on its
+ * own terms.
+ */
+let confirming: Promise<boolean> | null = null;
+
+function confirmStillSignedIn(): Promise<boolean> {
+  confirming ??= fetch("/api/session", {
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(SESSION_TIMEOUT_MS),
+  })
+    .then(async (response) => {
+      if (!response.ok) return false;
+      const body = (await response.json().catch(() => null)) as { mode?: string } | null;
+      return body?.mode === "github";
+    })
+    .catch(() => true)
+    .finally(() => {
+      confirming = null;
+    });
+  return confirming;
+}
+
+async function call<T>(
+  url: string,
+  init?: RequestInit & { timeoutMs?: number; retried?: boolean },
+): Promise<T> {
   let response: Response;
-  const { timeoutMs, ...rest } = init ?? {};
+  const { timeoutMs, retried, ...rest } = init ?? {};
 
   try {
     response = await fetch(url, {
@@ -122,8 +161,19 @@ async function call<T>(url: string, init?: RequestInit & { timeoutMs?: number })
     );
 
     if (error.needsAuth && signedInToGitHub) {
-      signedInToGitHub = false;
-      announceExpiry();
+      // The session check itself is the authority; asking it about itself
+      // would only ask the same question twice.
+      const stillSignedIn = url !== "/api/session" && (await confirmStillSignedIn());
+
+      if (stillSignedIn) {
+        // The refusal was about an older cookie. Once more, with the current
+        // one — and only once, so a route that refuses for its own reasons
+        // cannot loop.
+        if (!retried) return call<T>(url, { ...init, retried: true });
+      } else if (signedInToGitHub) {
+        signedInToGitHub = false;
+        announceExpiry();
+      }
     }
 
     throw error;

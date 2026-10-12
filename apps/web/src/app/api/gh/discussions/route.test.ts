@@ -9,6 +9,7 @@ vi.mock("@/lib/session", () => ({
   getSession: () => Promise.resolve({ token: "t", user: { login: "me" } }),
   getLiveSession: () => Promise.resolve({ token: "t", user: { login: "me" } }),
   clearSessionCookie: () => Promise.resolve(),
+  endCurrentSession: () => Promise.resolve(),
 }));
 
 vi.mock("@forkleaf/github-client", async () => {

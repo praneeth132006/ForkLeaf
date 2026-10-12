@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiGatewayError, fetchSession, onSessionExpired, signOut } from "./gateway";
+import { ApiGatewayError, fetchSession, listRepos, onSessionExpired, signOut } from "./gateway";
 
 /**
  * The browser's half of "the sign-in ended".
@@ -195,6 +195,94 @@ describe("session expiry", () => {
     await expect(fetchSession()).rejects.toBeInstanceOf(ApiGatewayError);
     expect(told).toHaveBeenCalledTimes(1);
 
+    stop();
+  });
+});
+
+/**
+ * A refusal about a cookie the browser no longer holds.
+ *
+ * On a phone waking the installed app, the request that renewed the token can
+ * come back before one sent a moment earlier with the old cookie. That one is
+ * refused, but the browser already has a good session — so it must be checked
+ * with the server, and retried, rather than ending in "signed out".
+ */
+describe("a 401 that is out of date", () => {
+  const github = {
+    mode: "github",
+    user: { id: 1, login: "someone", name: null, avatarUrl: "" },
+    githubAvailable: true,
+    scopes: ["repo"],
+  };
+
+  function routes(handlers: Record<string, () => Response>) {
+    const fetchMock = vi.fn(async (url: string) => {
+      const handler = handlers[url.split("?")[0]!];
+      if (!handler) throw new Error(`unexpected ${url}`);
+      return handler();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("asks the server, retries once, and stays signed in", async () => {
+    await signIn();
+    let attempts = 0;
+    const fetchMock = routes({
+      "/api/gh/repos": () =>
+        ++attempts === 1
+          ? new Response(JSON.stringify({ error: { code: "unauthorized", message: "x" } }), {
+              status: 401,
+            })
+          : new Response(JSON.stringify({ repos: [] }), { status: 200 }),
+      "/api/session": () => new Response(JSON.stringify(github), { status: 200 }),
+    });
+    const told = vi.fn();
+    const stop = onSessionExpired(told);
+
+    await expect(listRepos()).resolves.toEqual([]);
+    expect(attempts).toBe(2);
+    expect(fetchMock).toHaveBeenCalledWith("/api/session", expect.anything());
+    expect(told).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it("signs out when the server agrees the session has ended", async () => {
+    await signIn();
+    routes({
+      "/api/gh/repos": () =>
+        new Response(JSON.stringify({ error: { code: "unauthorized", message: "x" } }), {
+          status: 401,
+        }),
+      "/api/session": () =>
+        new Response(JSON.stringify({ ...github, mode: "local", user: null }), { status: 200 }),
+    });
+    const told = vi.fn();
+    const stop = onSessionExpired(told);
+
+    await expect(listRepos()).rejects.toBeInstanceOf(ApiGatewayError);
+    expect(told).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it("retries only once when a route keeps refusing", async () => {
+    await signIn();
+    let attempts = 0;
+    routes({
+      "/api/gh/repos": () => {
+        attempts += 1;
+        return new Response(JSON.stringify({ error: { code: "unauthorized", message: "x" } }), {
+          status: 401,
+        });
+      },
+      "/api/session": () => new Response(JSON.stringify(github), { status: 200 }),
+    });
+    const told = vi.fn();
+    const stop = onSessionExpired(told);
+
+    await expect(listRepos()).rejects.toBeInstanceOf(ApiGatewayError);
+    expect(attempts).toBe(2);
+    expect(told).not.toHaveBeenCalled();
     stop();
   });
 });

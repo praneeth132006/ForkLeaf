@@ -2,7 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { GitHubClient, GitHubError } from "@forkleaf/github-client";
 import type { RepoRef } from "@forkleaf/types";
-import { clearSessionCookie, getLiveSession } from "@/lib/session";
+import { endCurrentSession, getLiveSession } from "@/lib/session";
 
 /**
  * Shared plumbing for the GitHub proxy routes.
@@ -190,7 +190,8 @@ export async function forgetDeadSession(error: unknown): Promise<boolean> {
   if (!(error instanceof GitHubError) || error.code !== "unauthorized") return false;
 
   console.warn("[forkleaf] GitHub rejected the session token; signing out.");
-  await clearSessionCookie();
+  // This sign-in only: a newer one the browser picked up meanwhile stays.
+  await endCurrentSession();
   return true;
 }
 
