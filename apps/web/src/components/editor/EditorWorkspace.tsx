@@ -144,6 +144,8 @@ import { ToolsDialog } from "@/components/ToolsDialog";
 import { resurface, type Resurfaced } from "@/lib/resurface";
 import { formatCard, withCards } from "@/lib/flashcard-suggestions";
 import { AskDialog } from "@/components/AskDialog";
+import { ContradictionsDialog } from "@/components/ContradictionsDialog";
+import { dismissContradiction, readDismissedContradictions } from "@/lib/contradictions";
 import { MEETING_FOLDER, extractMeeting, meetingNote, withMeetingSummary } from "@/lib/meeting";
 import { plainText } from "@/lib/mind";
 import { CanvasDialog, type CanvasNoteChoice } from "@/components/CanvasDialog";
@@ -680,6 +682,7 @@ export function EditorWorkspace() {
     | "switch"
     | "encrypt-for-people"
     | "lounge"
+    | "contradictions"
     | null
   >(null);
   /**
@@ -3917,6 +3920,15 @@ export function EditorWorkspace() {
         });
       }
       list.push({
+        id: "contradictions",
+        label: "Find contradictions in my notes",
+        group: "Notes",
+        hint: "Sentences that say nearly the same thing but differ on a figure, a 'not', or an opposite word",
+        keywords:
+          "contradiction contradict conflict disagree inconsistent mismatch wrong date number fact check",
+        run: () => setDialog("contradictions"),
+      });
+      list.push({
         id: "tasks",
         label: "Show every open to-do",
         group: "Notes",
@@ -6297,6 +6309,33 @@ export function EditorWorkspace() {
                 content: entry.content,
               }))
           }
+          onOpen={(path, line) => {
+            setDialog(null);
+            setReveal({ path, line });
+            notebook.openNote(path);
+          }}
+        />
+      )}
+
+      {openDialog === "contradictions" && workspace && (
+        <ContradictionsDialog
+          onClose={() => setDialog(null)}
+          loadNotes={async () =>
+            (await notebook.allNotes())
+              .filter(
+                (entry) =>
+                  isMarkdown(entry.path) &&
+                  !isTemplatePath(entry.path) &&
+                  !isEncrypted(entry.content),
+              )
+              .map((entry) => ({
+                path: entry.path,
+                title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+                content: entry.content,
+              }))
+          }
+          dismissed={() => readDismissedContradictions(workspace.id)}
+          onDismiss={(id) => dismissContradiction(workspace.id, id)}
           onOpen={(path, line) => {
             setDialog(null);
             setReveal({ path, line });
