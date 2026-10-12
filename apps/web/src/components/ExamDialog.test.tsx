@@ -19,7 +19,9 @@ const notes = [
 ];
 
 function mount(clock = { now: 0 }) {
-  const onSave = vi.fn(async (title: string, _content: string) => `exams/${title}.md`);
+  const onSave = vi.fn<(title: string, content: string) => Promise<string>>(
+    async (title) => `exams/${title}.md`,
+  );
   const onOpen = vi.fn();
   render(
     <ExamDialog
