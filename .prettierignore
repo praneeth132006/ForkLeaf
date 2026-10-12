@@ -5,3 +5,7 @@ dist
 out
 pnpm-lock.yaml
 *.min.*
+# Copied in at build time from node_modules (see apps/web/scripts/)
+apps/web/public/ocr
+apps/web/public/dictionaries
+apps/web/public/pdfjs

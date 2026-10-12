@@ -42,7 +42,10 @@ const ROOM: StudyRoomDto = {
 
 const mine = { week: 40, streak: 7, mastered: 12, cards: 40, on: "2026-10-12" };
 
-function mount(room: StudyRoomDto = ROOM, share = vi.fn<(progress: unknown) => Promise<void>>(async () => {})) {
+function mount(
+  room: StudyRoomDto = ROOM,
+  share = vi.fn<(progress: unknown) => Promise<void>>(async () => {}),
+) {
   const load = vi.fn(async () => room);
   render(
     <StudyRoomDialog
