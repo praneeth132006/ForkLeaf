@@ -19,10 +19,10 @@ import type {
   ImageBridge,
   LinkBridge,
 } from "@forkleaf/editor";
-import { readSharedDeck, shareDeck } from "@/lib/gateway";
+import { describeRepo, readRepoFile, readSharedDeck, shareDeck } from "@/lib/gateway";
 import { useInlineFlashcards } from "@/lib/inline-flashcards";
 import { useSpacedReading } from "@/lib/spaced-reading";
-import type { GlossaryBridge } from "@forkleaf/editor";
+import type { GlossaryBridge, LiveCodeBridge } from "@forkleaf/editor";
 import { setSpellingEnabled, spellingEnabled, useSpelling } from "@/lib/spelling";
 import { useCourseBridge } from "@/lib/course-bridge";
 import { GITHUB_SIGN_IN_URL } from "@/lib/constants";
@@ -2158,6 +2158,48 @@ export function EditorWorkspace() {
       },
     };
   }, [glossaryOn, glossary, notebook]);
+
+  /**
+   * Live code blocks read files from GitHub through the same proxy every other
+   * repository read uses. A block that names no branch reads the repository's
+   * default — which for this notebook is the branch being written on.
+   */
+  const defaultBranches = useRef(new Map<string, Promise<string>>());
+  const liveCodeBridge = useMemo<LiveCodeBridge>(() => {
+    const own =
+      workspace && !workspace.isLocal ? `${workspace.repo.owner}/${workspace.repo.repo}` : null;
+    const branchOf = (repo: string): Promise<string> => {
+      if (repo === own && workspace) return Promise.resolve(workspace.repo.branch);
+      let known = defaultBranches.current.get(repo);
+      if (!known) {
+        const [owner, name] = repo.split("/") as [string, string];
+        known = describeRepo(owner, name).then((summary) => summary.defaultBranch);
+        known.catch(() => defaultBranches.current.delete(repo));
+        defaultBranches.current.set(repo, known);
+      }
+      return known;
+    };
+    return {
+      defaultRepo: own,
+      read: async (repo, path, ref) => {
+        if (!user)
+          throw new Error("Sign in with GitHub to check this code against its repository.");
+        const [owner, name] = repo.split("/") as [string, string];
+        const file = await readRepoFile({
+          owner,
+          repo: name,
+          ref: ref ?? (await branchOf(repo)),
+          path,
+        });
+        return file ? file.content : null;
+      },
+      webUrl: (repo, path, ref, from, to) =>
+        `https://github.com/${repo}/blob/${encodeURIComponent(ref ?? "HEAD")}/${path
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/")}#L${from}-L${to}`,
+    };
+  }, [workspace, user]);
 
   /** A deck block shares this note's cards publicly, or copies a shared deck in. */
   const deckBridge = useMemo<DeckBridge>(
@@ -5558,6 +5600,7 @@ export function EditorWorkspace() {
                   claims={claimBridge}
                   {...(spellingBridge ? { spelling: spellingBridge } : {})}
                   {...(glossaryBridge ? { glossary: glossaryBridge } : {})}
+                  liveCode={liveCodeBridge}
                   {...(flashcardBridge ? { flashcards: flashcardBridge } : {})}
                   imageDestination={
                     workspace && !workspace.isLocal

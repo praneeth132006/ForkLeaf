@@ -28,6 +28,7 @@ import type { DeckBridge } from "./extensions/DeckBlock";
 import type { ClaimBridge } from "./extensions/ClaimChecker";
 import type { SpellBridge } from "./spelling";
 import type { GlossaryBridge } from "./extensions/Glossary";
+import type { LiveCodeBridge } from "./extensions/LiveCodeBlock";
 
 export interface MarkdownEditorProps {
   /**
@@ -98,6 +99,8 @@ export interface MarkdownEditorProps {
   spelling?: SpellBridge;
   /** Terms the notebook defines, with their definitions on hover, in rich text. */
   glossary?: GlossaryBridge;
+  /** Reads repositories, for live code blocks. */
+  liveCode?: LiveCodeBridge;
   /**
    * Makes the note readable but not writable, in every mode at once.
    *
@@ -153,6 +156,7 @@ export function MarkdownEditor({
   claims,
   spelling,
   glossary,
+  liveCode,
   readOnly = false,
 }: MarkdownEditorProps) {
   // Split view: the divider position, as a percentage of the container width.
@@ -475,6 +479,7 @@ export function MarkdownEditor({
             {...(claims ? { claims } : {})}
             {...(spelling ? { spelling } : {})}
             {...(glossary ? { glossary } : {})}
+            {...(liveCode ? { liveCode } : {})}
             {...(placeholder ? { placeholder } : {})}
             // A wide bottom pad so the last paragraph can be scrolled to the
             // middle of the screen instead of being pinned to the bottom edge.

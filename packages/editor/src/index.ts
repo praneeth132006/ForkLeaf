@@ -113,3 +113,12 @@ export {
   type GlossaryBridge,
   type GlossaryDefinition,
 } from "./extensions/Glossary";
+export { LiveCodeBlock, type LiveCodeBridge } from "./extensions/LiveCodeBlock";
+export {
+  parseLiveCode,
+  serializeLiveCode,
+  extractCode,
+  sameCode,
+  diffLines,
+  type LiveCodeSpec,
+} from "./live-code";

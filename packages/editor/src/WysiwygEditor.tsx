@@ -81,6 +81,7 @@ import { ClaimChecker, claimCheckerKey, type ClaimBridge } from "./extensions/Cl
 import { DecisionBlock } from "./extensions/DecisionBlock";
 import { Spelling, spellingKey } from "./extensions/Spelling";
 import { Glossary, glossaryKey, type GlossaryBridge } from "./extensions/Glossary";
+import { LiveCodeBlock, type LiveCodeBridge } from "./extensions/LiveCodeBlock";
 import type { SpellBridge } from "./spelling";
 import { Wikilink } from "./extensions/Wikilink";
 import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
@@ -135,6 +136,8 @@ export interface WysiwygEditorProps {
   spelling?: SpellBridge;
   /** Terms the notebook defines, underlined with their definition on hover. */
   glossary?: GlossaryBridge;
+  /** Reads repositories for live code blocks. */
+  liveCode?: LiveCodeBridge;
   /** Today, as `YYYY-MM-DD`, for dating decisions. The device's own by default. */
   today?: () => string;
   /**
@@ -177,6 +180,7 @@ export function WysiwygEditor({
   claims,
   spelling,
   glossary,
+  liveCode,
   today,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
@@ -209,6 +213,8 @@ export function WysiwygEditor({
   spellingRef.current = spelling;
   const glossaryRef = useRef<GlossaryBridge | undefined>(glossary);
   glossaryRef.current = glossary;
+  const liveCodeRef = useRef<LiveCodeBridge | undefined>(liveCode);
+  liveCodeRef.current = liveCode;
   const todayRef = useRef(today);
   todayRef.current = today;
 
@@ -318,6 +324,7 @@ export function WysiwygEditor({
       ClaimChecker.configure({ bridge: () => claimsRef.current }),
       Spelling.configure({ bridge: () => spellingRef.current }),
       Glossary.configure({ bridge: () => glossaryRef.current }),
+      LiveCodeBlock.configure({ bridge: () => liveCodeRef.current }),
       DecisionBlock.configure({
         today: () => {
           if (todayRef.current) return todayRef.current();
