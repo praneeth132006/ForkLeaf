@@ -148,6 +148,8 @@ import { formatCard, withCards } from "@/lib/flashcard-suggestions";
 import { AskDialog } from "@/components/AskDialog";
 import { ContradictionsDialog } from "@/components/ContradictionsDialog";
 import { GlossaryDialog } from "@/components/GlossaryDialog";
+import { ExamDialog } from "@/components/ExamDialog";
+import { EXAM_FOLDER } from "@/lib/exam";
 import { definitionsIn, glossaryFrom, type GlossaryEntry } from "@/lib/glossary";
 import { dismissContradiction, readDismissedContradictions } from "@/lib/contradictions";
 import { MEETING_FOLDER, extractMeeting, meetingNote, withMeetingSummary } from "@/lib/meeting";
@@ -688,6 +690,7 @@ export function EditorWorkspace() {
     | "lounge"
     | "contradictions"
     | "glossary"
+    | "exam"
     | null
   >(null);
   /**
@@ -4029,6 +4032,15 @@ export function EditorWorkspace() {
         });
       }
       list.push({
+        id: "exam",
+        label: "Take an exam on my notes",
+        group: "Notes",
+        hint: "A timed mock exam from a folder's cards, definitions and sections, marked, with what to reread",
+        keywords:
+          "exam test quiz mock practice paper revise revision study timed marks score grade weak spots",
+        run: () => setDialog("exam"),
+      });
+      list.push({
         id: "glossary",
         label: "Glossary",
         group: "Notes",
@@ -4589,6 +4601,7 @@ export function EditorWorkspace() {
         TOOL_ICONS.help,
         "Hide the note, write what you remember, see what you missed",
       ),
+      ...tool("exam", "Study", TOOL_ICONS.cards, "A timed mock exam from a folder, marked"),
       ...tool(
         "flashcards",
         "Study",
@@ -6470,6 +6483,37 @@ export function EditorWorkspace() {
                 content: entry.content,
               }))
           }
+          onOpen={(path, line) => {
+            setDialog(null);
+            setReveal({ path, line });
+            notebook.openNote(path);
+          }}
+        />
+      )}
+
+      {openDialog === "exam" && (
+        <ExamDialog
+          onClose={() => setDialog(null)}
+          loadNotes={async () =>
+            (await notebook.allNotes())
+              .filter(
+                (entry) =>
+                  isMarkdown(entry.path) &&
+                  !isTemplatePath(entry.path) &&
+                  !isEncrypted(entry.content),
+              )
+              .map((entry) => ({
+                path: entry.path,
+                title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+                content: entry.content,
+              }))
+          }
+          onSave={async (examName, content) => {
+            const created = await notebook.createNote(examName, EXAM_FOLDER, content);
+            if (!created) return null;
+            track("note_created");
+            return created.path;
+          }}
           onOpen={(path, line) => {
             setDialog(null);
             setReveal({ path, line });
