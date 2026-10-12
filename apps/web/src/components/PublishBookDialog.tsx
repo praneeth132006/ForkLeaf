@@ -3,7 +3,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { Note, Workspace } from "@forkleaf/types";
 import { deriveTitle } from "@forkleaf/markdown-engine";
-import { buildBook, chapterSlug, type BookComments, type BookNote } from "@forkleaf/exporter";
+import {
+  buildBook,
+  chapterSlug,
+  type BookComments,
+  type BookNote,
+  type CourseOptions,
+} from "@forkleaf/exporter";
 import { pickCategory, type DiscussionRepoDto } from "@forkleaf/github-client";
 import {
   ApiGatewayError,
@@ -16,6 +22,8 @@ import {
 import { Dialog } from "./Dialog";
 import { linkDocuments } from "@/lib/publish-citations";
 import { describeTarget, publishTargetOf, suggestEditUrl } from "@/lib/publish-target";
+import { orderLessons, quizFrom } from "@/lib/course";
+import { readable } from "@/lib/flashcards";
 
 export interface PublishBookDialogProps {
   /** The folder being published, relative to the workspace root. */
@@ -24,7 +32,12 @@ export interface PublishBookDialogProps {
   /** Every note in the notebook; the ones under `folder` become chapters. */
   notes: readonly Note[];
   onClose: () => void;
+  /** Opened from "Publish as course website…": the course option starts ticked. */
+  startAsCourse?: boolean;
 }
+
+/** The most cards a course's quiz page asks. */
+const QUIZ_SIZE = 30;
 
 /** The dialog is either waiting for the reader, or waiting on GitHub. */
 type Stage = "loading" | "idle" | "working";
@@ -44,7 +57,13 @@ type Stage = "loading" | "idle" | "working";
  * server is handed finished files and checks that each one is a file a book is
  * made of.
  */
-export function PublishBookDialog({ folder, workspace, notes, onClose }: PublishBookDialogProps) {
+export function PublishBookDialog({
+  folder,
+  workspace,
+  notes,
+  onClose,
+  startAsCourse = false,
+}: PublishBookDialogProps) {
   const target = useMemo(() => publishTargetOf(workspace), [workspace]);
 
   /** The folder's own name, which is both the book's address and its title. */
@@ -103,6 +122,57 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
       }
     },
     [gardenKey],
+  );
+
+  /**
+   * A course: the same pages in the order the lessons build on each other, a
+   * "done" button and progress on every lesson, and a quiz from the folder's
+   * flashcards. Remembered per folder, like the garden.
+   */
+  const courseKey = `forkleaf:course-site:${workspace.repo.owner}/${workspace.repo.repo}:${book}`;
+  const [asCourse, setAsCourse] = useState(() => {
+    if (startAsCourse) return true;
+    try {
+      return window.localStorage.getItem(courseKey) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const chooseCourse = useCallback(
+    (next: boolean) => {
+      setAsCourse(next);
+      try {
+        window.localStorage.setItem(courseKey, next ? "1" : "0");
+      } catch {
+        // Not remembered is fine; the checkbox still says what will happen.
+      }
+    },
+    [courseKey],
+  );
+  /** The lessons, in course order, and the quiz drawn from their cards. */
+  const lessons = useMemo(
+    () =>
+      orderLessons(
+        chapters.map((note) => ({
+          path: note.path,
+          title: deriveTitle(note.content, note.frontmatter.title, note.path),
+          content: note.content,
+        })),
+      ),
+    [chapters],
+  );
+  const ordered = useMemo(
+    () =>
+      asCourse
+        ? lessons
+            .map((lesson) => chapters.find((note) => note.path === lesson.path))
+            .filter((note): note is Note => note !== undefined)
+        : chapters,
+    [asCourse, lessons, chapters],
+  );
+  const courseCards = useMemo(
+    () => lessons.reduce((sum, lesson) => sum + lesson.cards.length, 0),
+    [lessons],
   );
 
   /**
@@ -207,9 +277,20 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
     setError(null);
 
     try {
-      setStep(`Rendering ${chapters.length} chapters…`);
+      setStep(`Rendering ${ordered.length} ${asCourse ? "lessons" : "chapters"}…`);
 
-      const sources: BookNote[] = chapters.map((note) => ({
+      const course: CourseOptions | null = asCourse
+        ? {
+            key: `${workspace.repo.owner}/${workspace.repo.repo}:${book}`,
+            quiz: quizFrom(lessons, book, QUIZ_SIZE).map((card) => ({
+              question: readable(card.question),
+              answer: readable(card.answer),
+              notePath: card.path,
+            })),
+          }
+        : null;
+
+      const sources: BookNote[] = ordered.map((note) => ({
         path: note.path,
         title: deriveTitle(note.content, note.frontmatter.title, note.path),
         // Citations are written relative to the note, which is right in the
@@ -228,6 +309,7 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
         suggestUrl: (note) => suggestEditUrl(workspace.repo, note.path),
         garden,
         ...(commentsConfig ? { comments: commentsConfig } : {}),
+        ...(course ? { course } : {}),
       });
 
       setStep("Committing the book to your repository…");
@@ -255,7 +337,7 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
       setError(messageFor(problem));
       setStage("idle");
     }
-  }, [chapters, title, book, target, workspace.repo, garden, commentsConfig]);
+  }, [ordered, asCourse, lessons, title, book, target, workspace.repo, garden, commentsConfig]);
 
   const unpublish = useCallback(async () => {
     setStage("working");
@@ -309,6 +391,31 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
         <span className="block text-[12px] leading-relaxed text-[var(--fl-muted)]">
           Every page lists the notes that link to it, and the contents page shows a map of how they
           connect.
+        </span>
+      </span>
+    </label>
+  );
+
+  const courseChoice = (
+    <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-[var(--fl-border)] px-3 py-2.5">
+      <input
+        type="checkbox"
+        checked={asCourse}
+        onChange={(event) => chooseCourse(event.target.checked)}
+        disabled={stage === "working"}
+        className="mt-0.5"
+      />
+      <span className="space-y-0.5">
+        <span className="block text-[13px] font-medium text-[var(--fl-text)]">
+          Publish as a course
+        </span>
+        <span className="block text-[12px] leading-relaxed text-[var(--fl-muted)]">
+          Lessons in the order they build on each other, a “done” button and progress on every page,
+          and{" "}
+          {courseCards > 0
+            ? `a quiz from the folder's ${Math.min(courseCards, QUIZ_SIZE)} flashcard${courseCards === 1 ? "" : "s"}`
+            : "a quiz once the notes have flashcards"}
+          . Progress is kept in each visitor&rsquo;s own browser.
         </span>
       </span>
     </label>
@@ -439,6 +546,7 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
             </p>
           )}
 
+          {courseChoice}
           {gardenChoice}
           {commentsChoice}
           {where}
@@ -498,7 +606,7 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
             {chapters.length === 1 ? "One chapter" : `${chapters.length} chapters`}, in this order
           </p>
           <ol className="max-h-48 space-y-px overflow-y-auto rounded-lg border border-[var(--fl-border)] p-1">
-            {chapters.map((note, index) => (
+            {ordered.map((note, index) => (
               <li key={note.path} className="flex gap-2.5 px-2 py-1.5 text-[13px]">
                 <span className="font-mono text-[11.5px] text-[var(--fl-muted)]">
                   {String(index + 1).padStart(2, "0")}
@@ -511,6 +619,7 @@ export function PublishBookDialog({ folder, workspace, notes, onClose }: Publish
           </ol>
         </div>
 
+        {courseChoice}
         {gardenChoice}
         {commentsChoice}
         {where}

@@ -37,10 +37,14 @@ import { lintKeymap } from "@codemirror/lint";
 import { editorTheme } from "./codemirror/theme";
 import { imagesFrom } from "./images";
 import { markdownSlashSource } from "./codemirror/slash-markdown";
+import { respell, spellingExtension } from "./codemirror/spelling";
+import type { SpellBridge } from "./spelling";
 import type { ActionContext } from "./insert-actions";
 
 export interface SourceEditorProps {
   value: string;
+  /** Underlines misspelt words in the prose and offers corrections, while switched on. */
+  spelling?: SpellBridge;
   onChange: (value: string) => void;
   placeholder?: string;
   showLineNumbers?: boolean;
@@ -163,6 +167,7 @@ export function SourceEditor({
   onImageFiles,
   slashActions,
   readOnly = false,
+  spelling,
 }: SourceEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -177,6 +182,8 @@ export function SourceEditor({
   onImageFilesRef.current = onImageFiles;
   const slashActionsRef = useRef(slashActions);
   slashActionsRef.current = slashActions;
+  const spellingRef = useRef(spelling);
+  spellingRef.current = spelling;
 
   /**
    * Every document this editor has reported upwards.
@@ -293,6 +300,17 @@ export function SourceEditor({
           },
         }),
         EditorView.contentAttributes.of({ "aria-label": ariaLabel }),
+        // Prose only: the diagram studio's plain-text editor is code.
+        ...(language === "markdown"
+          ? [
+              spellingExtension(() => spellingRef.current),
+              // The browser's checker is off while ForkLeaf's is on, so a word
+              // is not underlined twice.
+              EditorView.contentAttributes.of(() => ({
+                spellcheck: spellingRef.current?.enabled ? "false" : "true",
+              })),
+            ]
+          : []),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             const text = update.state.doc.toString();
@@ -550,6 +568,14 @@ export function SourceEditor({
     }),
     [],
   );
+
+  // Spelling switched, or the dictionary answered: redraw the underlines.
+  const paintedSpelling = useRef(spelling);
+  useEffect(() => {
+    if (paintedSpelling.current === spelling) return;
+    paintedSpelling.current = spelling;
+    viewRef.current?.dispatch({ effects: respell.of(null) });
+  }, [spelling]);
 
   // Swap caller extensions in place.
   useEffect(() => {

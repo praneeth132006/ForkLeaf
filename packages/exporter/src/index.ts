@@ -465,3 +465,5 @@ function safeFilename(title: string): string {
       .slice(0, 80) || "note"
   );
 }
+
+export { QUIZ, type CourseOptions, type CourseQuizCard } from "./course";

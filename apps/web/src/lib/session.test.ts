@@ -43,7 +43,14 @@ vi.mock("@/lib/github-oauth", async () => {
 process.env.SESSION_SECRET = "a-test-secret-that-is-certainly-long-enough";
 
 import { TokenRefused } from "@/lib/github-oauth";
-import { decryptSession, encryptSession, getLiveSession, getSession, sealValue } from "./session";
+import {
+  decryptSession,
+  encryptSession,
+  forgetRenewalsForTesting,
+  getLiveSession,
+  getSession,
+  sealValue,
+} from "./session";
 import { EncryptJWT } from "jose";
 
 const user = { id: 1, login: "someone", name: null, avatarUrl: "" };
@@ -56,6 +63,7 @@ async function signedInWith(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   store.clear();
+  forgetRenewalsForTesting();
   refreshUserToken.mockReset();
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -190,7 +198,7 @@ describe("getLiveSession", () => {
     refreshUserToken.mockRejectedValue(new TokenRefused("bad_refresh_token"));
 
     expect(await getLiveSession()).toBeNull();
-    expect(store.has("forkleaf_session")).toBe(false);
+    expect(await getSession()).toBeNull();
   });
 
   it("keeps the session when GitHub could not be reached", async () => {
@@ -207,10 +215,64 @@ describe("getLiveSession", () => {
     await signedInWith({ expiresAt: inSeconds(-10) });
 
     expect(await getLiveSession()).toBeNull();
-    expect(store.has("forkleaf_session")).toBe(false);
+    expect(await getSession()).toBeNull();
   });
 
   it("says nothing is signed in when there is no cookie", async () => {
     expect(await getLiveSession()).toBeNull();
+  });
+});
+
+/**
+ * The installed app on a phone: it wakes, and fires the tree, the open note,
+ * its images and the session check all at once over a slow connection. The
+ * responses come back in whatever order they like. None of that may end a
+ * sign-in that is still good.
+ */
+describe("requests that arrive out of order", () => {
+  const renewal = {
+    token: "new-token",
+    scopes: [],
+    expiresAt: inSeconds(28_800),
+    refreshToken: "r2",
+  };
+
+  it("hands a late request the session an earlier one already renewed", async () => {
+    await signedInWith({ expiresAt: inSeconds(0), refreshToken: "r" });
+    const stale = store.get("forkleaf_session")!;
+    refreshUserToken.mockResolvedValueOnce(renewal);
+
+    expect((await getLiveSession())?.token).toBe("new-token");
+
+    // Sent with the old cookie before the new one reached the browser.
+    store.set("forkleaf_session", stale);
+    refreshUserToken.mockRejectedValue(new TokenRefused("bad_refresh_token"));
+
+    expect((await getLiveSession())?.token).toBe("new-token");
+    expect(refreshUserToken).toHaveBeenCalledTimes(1);
+    expect((await getSession())?.token).toBe("new-token");
+  });
+
+  it("ends only the session GitHub refused, never a newer one", async () => {
+    // Another server instance renewed it and the browser now holds the result,
+    // but this instance's refusal of the old refresh token lands afterwards.
+    await signedInWith({ expiresAt: inSeconds(0), refreshToken: "r" });
+    refreshUserToken.mockRejectedValue(new TokenRefused("bad_refresh_token"));
+    expect(await getLiveSession()).toBeNull();
+
+    store.set("forkleaf_session", await encryptSession({ user, ...renewal }));
+
+    expect((await getSession())?.token).toBe("new-token");
+    expect((await getLiveSession())?.token).toBe("new-token");
+  });
+
+  it("keeps a session ended even when its cookie comes back", async () => {
+    await signedInWith({ expiresAt: inSeconds(0), refreshToken: "r" });
+    const dead = store.get("forkleaf_session")!;
+    refreshUserToken.mockRejectedValue(new TokenRefused("bad_refresh_token"));
+    expect(await getLiveSession()).toBeNull();
+
+    store.set("forkleaf_session", dead);
+    expect(await getSession()).toBeNull();
   });
 });

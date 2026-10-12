@@ -39,6 +39,8 @@ export interface DeckBridge {
   }>;
   /** A shared deck's `deck.md`, now or at an earlier commit. */
   read: (repo: string, ref?: string) => Promise<{ sha: string; content: string }>;
+  /** Opens the study room for everybody studying this deck. */
+  openRoom?: (repo: string) => void;
 }
 
 export interface DeckBlockOptions {
@@ -404,6 +406,21 @@ function DeckNodeView({
                   {busy === "check" ? "Checking…" : "Check for updates"}
                 </button>
               )}
+            </div>
+          )}
+
+          {bridge?.openRoom && repo && (role === "shared" || role === "source") && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-[var(--fl-border)] pt-3">
+              <button
+                type="button"
+                onClick={() => bridge.openRoom!(repo)}
+                className={`${button} justify-self-start`}
+              >
+                Study room
+              </button>
+              <span className="text-[12.5px] text-[var(--fl-muted)]">
+                See how everybody studying this deck is doing, and share your progress.
+              </span>
             </div>
           )}
 

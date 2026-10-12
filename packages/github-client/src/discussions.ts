@@ -424,6 +424,14 @@ const COMMENT_MUTATION = `
   }
 `;
 
+const UPDATE_COMMENT_MUTATION = `
+  mutation ForkLeafEditComment($commentId: ID!, $body: String!) {
+    updateDiscussionComment(input: { commentId: $commentId, body: $body }) {
+      comment { ${COMMENT_FIELDS} }
+    }
+  }
+`;
+
 interface ApiAuthor {
   login: string;
   avatarUrl: string;
@@ -718,6 +726,25 @@ export async function addDiscussionComment(
     { write: true },
   );
   return toComment(data.addDiscussionComment.comment);
+}
+
+/**
+ * Rewrites one of the viewer's own comments.
+ *
+ * For a comment that is a status rather than a message — a study room's
+ * progress line — which should change in place instead of piling up a new
+ * comment every time it is brought up to date.
+ */
+export async function updateDiscussionComment(
+  gql: GraphQLRunner,
+  input: { commentId: string; body: string },
+): Promise<DiscussionCommentDto> {
+  const data = await gql<{ updateDiscussionComment: { comment: ApiComment } }>(
+    UPDATE_COMMENT_MUTATION,
+    { commentId: input.commentId, body: input.body.slice(0, MAX_DISCUSSION_BODY) },
+    { write: true },
+  );
+  return toComment(data.updateDiscussionComment.comment);
 }
 
 // ─── The Lounge: every conversation in the notebook ─────────────────────────

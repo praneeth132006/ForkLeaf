@@ -1151,3 +1151,68 @@ describe("compareBranches", () => {
     expect(calls[0]?.url).toBe("/repos/octo/notes/compare/main...try%2Fmain%2Frunbook");
   });
 });
+
+describe("changesSince", () => {
+  const since = "2026-10-01T00:00:00Z";
+  const until = `GET /repos/octo/notes/commits?sha=main&until=${encodeURIComponent(since)}&per_page=1`;
+
+  it("compares the commit current then with the branch now, keeping only notes", async () => {
+    const { fetchImpl, calls } = fakeGitHub({
+      [until]: [
+        {
+          sha: "base-sha",
+          commit: { message: "x", author: { name: "Ada", date: "2026-09-30T10:00:00Z" } },
+          author: null,
+        },
+      ],
+      "GET /repos/octo/notes/compare/base-sha...main": {
+        merge_base_commit: { sha: "base-sha" },
+        commits: [{ sha: "tip-sha" }],
+        files: [
+          { filename: "ideas/cities.md", status: "added" },
+          { filename: "assets/photo.png", status: "added" },
+          { filename: "reading.md", status: "modified" },
+          { filename: "old.md", status: "renamed", previous_filename: "older.md" },
+        ],
+      },
+    });
+    const result = await new GitHubClient({ token: "t", fetch: fetchImpl }).changesSince(
+      repo,
+      since,
+    );
+
+    expect(result).toEqual({
+      baseSha: "base-sha",
+      headSha: "tip-sha",
+      files: [
+        { path: "ideas/cities.md", status: "added", previousPath: null },
+        { path: "reading.md", status: "modified", previousPath: null },
+        { path: "old.md", status: "renamed", previousPath: "older.md" },
+      ],
+      truncated: false,
+    });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("treats every note as new when the notebook is younger than the moment", async () => {
+    const { fetchImpl } = fakeGitHub({
+      [until]: [],
+      "GET /repos/octo/notes/git/ref/heads/main": { object: { sha: "head-sha" } },
+      "GET /repos/octo/notes/git/trees/head-sha?recursive=1": {
+        tree: [
+          { path: "a.md", type: "blob", sha: "1" },
+          { path: "deep", type: "tree", sha: "2" },
+          { path: "deep/b.md", type: "blob", sha: "3" },
+          { path: "deep/c.png", type: "blob", sha: "4" },
+        ],
+      },
+    });
+    const result = await new GitHubClient({ token: "t", fetch: fetchImpl }).changesSince(
+      repo,
+      since,
+    );
+    expect(result.baseSha).toBeNull();
+    expect(result.headSha).toBe("head-sha");
+    expect(result.files.map((file) => file.path).sort()).toEqual(["a.md", "deep/b.md"]);
+  });
+});

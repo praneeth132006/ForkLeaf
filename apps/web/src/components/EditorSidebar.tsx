@@ -53,7 +53,7 @@ export interface EditorSidebarProps {
   onCreateFolder: (parent: string) => void;
   onRenameFolder: (path: string) => void;
   /** Publishes a folder's notes as one linked site. Absent for a local workspace. */
-  onPublishFolder?: ((path: string) => void) | undefined;
+  onPublishFolder?: ((path: string, asCourse?: boolean) => void) | undefined;
   onDeleteFolder: (path: string) => void;
   /** Moves a note into another folder, from a drag within the tree. */
   onMoveNote: (path: string, toFolder: string) => void;

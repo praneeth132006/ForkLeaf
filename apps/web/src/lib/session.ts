@@ -17,6 +17,23 @@ import { refreshUserToken, TokenRefused } from "@/lib/github-oauth";
  */
 
 const COOKIE_NAME = "forkleaf_session";
+/**
+ * Names the one sign-in that has ended, by a fingerprint of its token.
+ *
+ * Ending a session used to mean deleting the session cookie, and that was the
+ * cause of "the app on my home screen keeps signing me out". Responses do not
+ * arrive in the order their requests were sent. A phone waking the installed
+ * app fires a burst of requests at once; one of them renews the eight-hour
+ * token and sets a new cookie, while another, sent a moment earlier with the
+ * old cookie, finds the old refresh token already spent and deletes the cookie.
+ * If that deletion lands second it erases the brand-new, perfectly good
+ * session along with the dead one.
+ *
+ * A marker that names the dead token cannot do that. The browser keeps
+ * whichever session cookie it was handed last, and the marker only matches the
+ * session it was written about, so a newer sign-in sails straight past it.
+ */
+const ENDED_COOKIE = "forkleaf_session_ended";
 const STATE_COOKIE = "forkleaf_oauth_state";
 const RETURN_COOKIE = "forkleaf_return_to";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
@@ -159,7 +176,40 @@ export async function getSession(): Promise<SessionPayload | null> {
   const store = await cookies();
   const value = store.get(COOKIE_NAME)?.value;
   if (!value) return null;
-  return decryptSession(value);
+  const session = await decryptSession(value);
+  if (!session) return null;
+
+  const ended = store.get(ENDED_COOKIE)?.value;
+  if (ended && ended === (await fingerprint(session.token))) return null;
+  return session;
+}
+
+/** A short, one-way name for a token: enough to recognise it, useless to anyone holding it. */
+async function fingerprint(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(digest).slice(0, 16), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+/**
+ * Ends one particular sign-in, without touching any other.
+ *
+ * For a session GitHub has stopped honouring. A person pressing "Sign out" is
+ * different — that is `clearSessionCookie`, which removes whatever is there.
+ */
+export async function endSession(session: Pick<SessionPayload, "token">): Promise<void> {
+  const store = await cookies();
+  store.set(ENDED_COOKIE, await fingerprint(session.token), {
+    ...cookieOptions,
+    maxAge: MAX_AGE_SECONDS,
+  });
+}
+
+/** Ends whichever sign-in this request was made with. */
+export async function endCurrentSession(): Promise<void> {
+  const session = await getSession();
+  if (session) await endSession(session);
 }
 
 /**
@@ -180,11 +230,49 @@ const RENEW_BEFORE_SECONDS = 300;
  * the same single-use refresh token; the first would win, and the rest would
  * come back refused, ending the session that was in the middle of being saved.
  *
- * Per instance, which is all that can be promised on serverless, and all that
- * is needed: the burst that causes the problem is one browser's requests
- * landing together, and those land on one instance.
+ * Per instance, which is all that can be promised on serverless. Requests that
+ * land on another instance, or after the renewal has finished, are what
+ * `renewed` below and the ended-session marker are for.
  */
 const renewing = new Map<string, Promise<SessionPayload | null>>();
+
+/**
+ * Renewals that have finished, by the refresh token they spent.
+ *
+ * `renewing` only covers requests that arrive while a renewal is in flight. A
+ * request sent with the old cookie just before the new one reached the browser
+ * arrives a moment *after*, finds the same expired token, and would spend a
+ * refresh token GitHub has already retired — and be refused. Remembering the
+ * answer for a few minutes lets that request carry on with the renewed
+ * session, and hands the browser the new cookie once more for good measure.
+ */
+const renewed = new Map<string, { session: SessionPayload; at: number }>();
+const RENEWED_FOR_MS = 10 * 60 * 1000;
+const RENEWED_MAX = 500;
+
+function rememberRenewal(spent: string, session: SessionPayload): void {
+  const now = Date.now();
+  for (const [key, entry] of renewed) {
+    if (now - entry.at > RENEWED_FOR_MS || renewed.size >= RENEWED_MAX) renewed.delete(key);
+  }
+  renewed.set(spent, { session, at: now });
+}
+
+function recentRenewal(spent: string): SessionPayload | null {
+  const entry = renewed.get(spent);
+  if (!entry) return null;
+  if (Date.now() - entry.at > RENEWED_FOR_MS) {
+    renewed.delete(spent);
+    return null;
+  }
+  return entry.session;
+}
+
+/** For tests: forget every renewal this instance has seen. */
+export function forgetRenewalsForTesting(): void {
+  renewing.clear();
+  renewed.clear();
+}
 
 /** True when the token has expired, or is about to. */
 function needsRenewal(session: SessionPayload): boolean {
@@ -214,8 +302,14 @@ export async function getLiveSession(): Promise<SessionPayload | null> {
   // is over, and saying so here saves every route behind it a round trip to
   // GitHub to be told the same thing.
   if (!session.refreshToken) {
-    await clearSessionCookie();
+    await endSession(session);
     return null;
+  }
+
+  const already = recentRenewal(session.refreshToken);
+  if (already) {
+    await setSessionCookie(already);
+    return already;
   }
 
   const inFlight = renewing.get(session.refreshToken);
@@ -233,7 +327,7 @@ async function renew(session: SessionPayload): Promise<SessionPayload | null> {
   try {
     const grant = await refreshUserToken(session.refreshToken!);
 
-    const renewed: SessionPayload = {
+    const next: SessionPayload = {
       ...session,
       token: grant.token,
       // A GitHub App returns no scopes on a renewal; keeping what the sign-in
@@ -247,15 +341,16 @@ async function renew(session: SessionPayload): Promise<SessionPayload | null> {
     // Before it is used, not after: the refresh token just spent is now dead,
     // and a renewal whose replacement never reached the cookie has thrown away
     // the session's only way back.
-    await setSessionCookie(renewed);
-    return renewed;
+    await setSessionCookie(next);
+    rememberRenewal(session.refreshToken!, next);
+    return next;
   } catch (error) {
     if (error instanceof TokenRefused) {
       // GitHub will say the same thing next time — the authorisation was
       // revoked, or the refresh token is past its six months. The session is
       // genuinely over.
       console.warn("[forkleaf] GitHub refused to renew the session token:", error.message);
-      await clearSessionCookie();
+      await endSession(session);
       return null;
     }
 

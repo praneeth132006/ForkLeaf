@@ -10,6 +10,7 @@ vi.mock("@/lib/session", () => ({
   getSession: () => Promise.resolve(session),
   getLiveSession: () => Promise.resolve(session),
   clearSessionCookie: () => Promise.resolve(),
+  endCurrentSession: () => Promise.resolve(),
 }));
 
 vi.mock("@forkleaf/github-client", async () => {

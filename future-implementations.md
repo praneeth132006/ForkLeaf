@@ -24,6 +24,13 @@ When something on this list ships, tick it, add the date, and describe it in
 - [x] Saves from the extension go to their own repository, sorted automatically (2026-09-13)
 - [x] One-step MCP setup: paste one address, sign in with GitHub (2026-09-13)
 - [x] A documentation page for every feature (2026-09-13)
+- [x] Spelling suggestions as you type (2026-10-12)
+- [x] Auto-glossary, contradiction detector, argument maps (2026-10-12)
+- [x] Exam simulator (2026-10-12)
+- [x] Live code from a repository that says when it changes (2026-10-12)
+- [x] Text from a picture, and quotes photographed from books (2026-10-12)
+- [x] Following other people's notebooks (2026-10-12)
+- [x] Course websites and study rooms for shared decks (2026-10-12)
 
 ## Next
 
@@ -74,6 +81,15 @@ When something on this list ships, tick it, add the date, and describe it in
       of the transcript into the note.
 - [ ] **Email to notebook.** Forward an email to a personal address and it arrives
       in your saves repository.
+
+### Next after these
+
+- [ ] **Forgetting-curve heatmap.** The notebook drawn as a map where notes you
+      are forgetting fade, from the flashcard schedule and when each note was
+      last opened; click a faded area for a five-minute refresh.
+- [ ] **Spelling in more languages**, with the dictionary chosen per note.
+- [ ] **Study rooms on decks the app is not installed on**, which today can be
+      read but not joined.
 
 ### Seeing and sharing
 

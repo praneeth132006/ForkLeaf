@@ -144,3 +144,31 @@ describe("a shared deck in the note", () => {
     expect((await screen.findByRole("alert")).textContent).toBe("There is no deck at x/y.");
   });
 });
+
+describe("a deck block's study room", () => {
+  it("offers the room for a copied deck and opens it for that repository", async () => {
+    const openRoom = vi.fn();
+    await mount("Cards\n\n```deck\nsource: ada/bio-deck\nversion: abc1234\n```\n", {
+      signedIn: () => true,
+      noteTitle: () => "Bio",
+      share: vi.fn(),
+      read: vi.fn(),
+      openRoom,
+    });
+    const { screen, fireEvent } = await import("@testing-library/react");
+    fireEvent.click(await screen.findByText("Study room"));
+    expect(openRoom).toHaveBeenCalledWith("ada/bio-deck");
+  });
+
+  it("offers no room for a deck that is not shared yet", async () => {
+    await mount("Cards\n\n```deck\n```\n", {
+      signedIn: () => true,
+      noteTitle: () => "Bio",
+      share: vi.fn(),
+      read: vi.fn(),
+      openRoom: vi.fn(),
+    });
+    const { screen } = await import("@testing-library/react");
+    expect(screen.queryByText("Study room")).toBeNull();
+  });
+});

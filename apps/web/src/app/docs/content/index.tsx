@@ -22,6 +22,18 @@ import {
   VoiceNotes,
 } from "./everyday";
 import { SigningIn, Repositories, Sync, Conflicts, Conversations } from "./github";
+import {
+  ArgumentMap,
+  Contradictions,
+  CourseWebsite,
+  Exam,
+  Following,
+  Glossary,
+  LiveCode,
+  Pictures,
+  Spelling,
+  StudyRooms,
+} from "./thinking";
 import { Plans, PrivacyAndData, Security } from "./account";
 import { Troubleshooting, Faq, Support } from "./running";
 
@@ -66,6 +78,16 @@ export const DOC_CONTENT: Record<string, () => React.JSX.Element> = {
   ask: AskNotebook,
   canvases: Canvases,
   meetings: MeetingNotes,
+  spelling: Spelling,
+  glossary: Glossary,
+  contradictions: Contradictions,
+  "argument-map": ArgumentMap,
+  exam: Exam,
+  "live-code": LiveCode,
+  pictures: Pictures,
+  following: Following,
+  "course-website": CourseWebsite,
+  "study-rooms": StudyRooms,
   plans: Plans,
   "privacy-and-data": PrivacyAndData,
   security: Security,

@@ -19,12 +19,21 @@ import type {
   ImageBridge,
   LinkBridge,
 } from "@forkleaf/editor";
-import { readSharedDeck, shareDeck } from "@/lib/gateway";
+import {
+  describeRepo,
+  listChangesSince,
+  readRepoFile,
+  readSharedDeck,
+  shareDeck,
+} from "@/lib/gateway";
 import { useInlineFlashcards } from "@/lib/inline-flashcards";
 import { useSpacedReading } from "@/lib/spaced-reading";
+import type { GlossaryBridge, LiveCodeBridge } from "@forkleaf/editor";
+import { setSpellingEnabled, spellingEnabled, useSpelling } from "@/lib/spelling";
 import { useCourseBridge } from "@/lib/course-bridge";
 import { GITHUB_SIGN_IN_URL } from "@/lib/constants";
 import { mapNote, noteMapMarkdown } from "@/lib/note-map";
+import { argumentCanvas, argumentStats, readArgument } from "@/lib/argument-map";
 import { buildSupportIndex, checkClaim, type SupportIndex } from "@/lib/claims";
 import { badgeMarkdown } from "@/lib/notebook-health";
 import { formatMonthlyPage, monthlyPagePath, summariseMonth } from "@/lib/monthly-learning";
@@ -118,10 +127,10 @@ import {
   type Identity,
   type KeyFile,
 } from "@/lib/shared-encryption";
-import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
+import { SCHEDULE_PATH, findCards, parseSchedule, wantsClozes } from "@/lib/flashcards";
 import { cardsInNotes, useDueCount } from "@/lib/flashcard-due";
 import { cardsRequest, readCardReply } from "@/lib/ai-cards";
-import { STUDY_LOG_PATH, recordReview } from "@/lib/study-log";
+import { STUDY_LOG_PATH, parseLog, recordReview, streak, thisWeek } from "@/lib/study-log";
 import { useAssistantKey, useAssistantSettings } from "@/hooks/useAssistant";
 import { isReady, provider as assistantProvider, streamChat } from "@/lib/assistant";
 import {
@@ -143,6 +152,29 @@ import { ToolsDialog } from "@/components/ToolsDialog";
 import { resurface, type Resurfaced } from "@/lib/resurface";
 import { formatCard, withCards } from "@/lib/flashcard-suggestions";
 import { AskDialog } from "@/components/AskDialog";
+import { ContradictionsDialog } from "@/components/ContradictionsDialog";
+import { GlossaryDialog } from "@/components/GlossaryDialog";
+import { ExamDialog } from "@/components/ExamDialog";
+import { OcrDialog } from "@/components/OcrDialog";
+import { BookQuoteDialog } from "@/components/BookQuoteDialog";
+import { FollowingDialog } from "@/components/FollowingDialog";
+import { StudyRoomDialog } from "@/components/StudyRoomDialog";
+import { readStudyRoom, shareStudyProgress } from "@/lib/gateway";
+import {
+  FOLLOWING_PATH,
+  followingNote,
+  markSeen,
+  parseFollowing,
+  readSeen,
+  seenSince,
+  withFollowed,
+  withoutFollowed,
+  type Followed,
+} from "@/lib/following";
+import { BOOKS_FOLDER, bookNote, bookTitles, isBookNote, withQuote } from "@/lib/book-quotes";
+import { EXAM_FOLDER } from "@/lib/exam";
+import { definitionsIn, glossaryFrom, type GlossaryEntry } from "@/lib/glossary";
+import { dismissContradiction, readDismissedContradictions } from "@/lib/contradictions";
 import { MEETING_FOLDER, extractMeeting, meetingNote, withMeetingSummary } from "@/lib/meeting";
 import { plainText } from "@/lib/mind";
 import { CanvasDialog, type CanvasNoteChoice } from "@/components/CanvasDialog";
@@ -639,7 +671,7 @@ export function EditorWorkspace() {
    * item is chosen rather than kept in state: a book is built from the notes'
    * full text, which the editor otherwise has no reason to hold all of.
    */
-  const [book, setBook] = useState<{ folder: string; notes: Note[] } | null>(null);
+  const [book, setBook] = useState<{ folder: string; notes: Note[]; course: boolean } | null>(null);
   const [dialog, setDialog] = useState<
     | "export"
     | "connect"
@@ -679,6 +711,12 @@ export function EditorWorkspace() {
     | "switch"
     | "encrypt-for-people"
     | "lounge"
+    | "contradictions"
+    | "glossary"
+    | "exam"
+    | "ocr"
+    | "book-quote"
+    | "following"
     | null
   >(null);
   /**
@@ -751,6 +789,14 @@ export function EditorWorkspace() {
   const words = useMemo(() => (note ? documentStats(note.content).words : 0), [note]);
 
   const notePath = note?.path ?? null;
+  // Read when a `/` tool runs, not on every render: the tool list is rebuilt
+  // only when the note changes identity, not on each keystroke.
+  const noteContentRef = useRef("");
+  const noteTitleRef = useRef("");
+  useEffect(() => {
+    noteContentRef.current = note?.content ?? "";
+    noteTitleRef.current = title;
+  }, [note, title]);
 
   /**
    * The folder the reader is currently working in.
@@ -1929,6 +1975,19 @@ export function EditorWorkspace() {
   );
   const readingBridge = useSpacedReading(readingStore);
 
+  /**
+   * Spelling suggestions, in every view. On by default; the switch is ⌘K and
+   * is remembered by this browser.
+   */
+  const [spellingOn, setSpellingOn] = useState(spellingEnabled);
+  const spellingBridge = useSpelling(spellingOn);
+  const toggleSpelling = useCallback(() => {
+    setSpellingOn((on) => {
+      setSpellingEnabled(!on);
+      return !on;
+    });
+  }, []);
+
   /** A course block turns a folder's notes into ordered lessons with a quiz. */
   const treeForCourse = notebook.tree;
   const courseStore = useMemo(
@@ -2030,9 +2089,203 @@ export function EditorWorkspace() {
     };
   }, [checkingClaims, supportIndex, notePath]);
 
+  /**
+   * The auto-glossary: every term the notebook defines, underlined wherever it
+   * appears with its definition on hover. The notebook is read once (again
+   * when files are added or renamed); the note being typed in is re-read as it
+   * changes, so a definition written a moment ago works straight away.
+   */
+  const [glossaryOn, setGlossaryOn] = useState(() => {
+    try {
+      return window.localStorage.getItem(GLOSSARY_KEY) !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const toggleGlossary = useCallback(() => {
+    setGlossaryOn((on) => {
+      try {
+        window.localStorage.setItem(GLOSSARY_KEY, on ? "off" : "on");
+      } catch {
+        // Blocked storage: the choice lasts for this visit.
+      }
+      return !on;
+    });
+  }, []);
+  const [glossaryDefinitions, setGlossaryDefinitions] = useState<Map<
+    string,
+    GlossaryEntry[]
+  > | null>(null);
+  const wantGlossary = glossaryOn || dialog === "glossary";
+  useEffect(() => {
+    if (!wantGlossary) return;
+    let live = true;
+    void allNotesForCanvas().then((entries) => {
+      if (!live) return;
+      const perNote = new Map<string, GlossaryEntry[]>();
+      for (const entry of entries) {
+        if (!isMarkdown(entry.path) || isTemplatePath(entry.path) || isEncrypted(entry.content)) {
+          continue;
+        }
+        perNote.set(
+          entry.path,
+          definitionsIn({
+            path: entry.path,
+            title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+            content: entry.content,
+          }),
+        );
+      }
+      setGlossaryDefinitions(perNote);
+    });
+    return () => {
+      live = false;
+    };
+  }, [wantGlossary, allNotesForCanvas, treeForClaims]);
+  const noteDefinitions = useMemo(
+    () =>
+      note && isMarkdown(note.path) && !isEncrypted(note.content)
+        ? definitionsIn({ path: note.path, title, content: note.content })
+        : [],
+    [note, title],
+  );
+  // Only a change to the definitions themselves rebuilds the glossary, not
+  // every keystroke in the note.
+  const noteDefinitionsKey = JSON.stringify(noteDefinitions);
+  const glossary = useMemo(() => {
+    if (!glossaryDefinitions) return null;
+    const merged = new Map(glossaryDefinitions);
+    if (notePath) merged.set(notePath, JSON.parse(noteDefinitionsKey) as GlossaryEntry[]);
+    return glossaryFrom(merged.values());
+  }, [glossaryDefinitions, notePath, noteDefinitionsKey]);
+  const glossaryBridge = useMemo<GlossaryBridge | undefined>(() => {
+    if (!glossaryOn || !glossary || glossary.entries.size === 0) return undefined;
+    return {
+      enabled: true,
+      version: versionOf(glossary),
+      match: glossary.match,
+      lookup: (key) => {
+        const list = glossary.entries.get(key);
+        const first = list?.[0];
+        return first
+          ? {
+              term: first.term,
+              definition: first.definition,
+              source: first.title,
+              path: first.path,
+              line: first.line,
+              others: new Set(list.map((entry) => entry.path)).size - 1,
+            }
+          : undefined;
+      },
+      open: (path, line) => {
+        setReveal({ path, line });
+        notebook.openNote(path);
+      },
+    };
+  }, [glossaryOn, glossary, notebook]);
+
+  /**
+   * Live code blocks read files from GitHub through the same proxy every other
+   * repository read uses. A block that names no branch reads the repository's
+   * default — which for this notebook is the branch being written on.
+   */
+  const defaultBranches = useRef(new Map<string, Promise<string>>());
+  /** A repository's default branch, asked of GitHub once per visit. */
+  const defaultBranchOf = useCallback((repo: string): Promise<string> => {
+    let known = defaultBranches.current.get(repo.toLowerCase());
+    if (!known) {
+      const [owner, name] = repo.split("/") as [string, string];
+      known = describeRepo(owner, name).then((summary) => summary.defaultBranch);
+      known.catch(() => defaultBranches.current.delete(repo.toLowerCase()));
+      defaultBranches.current.set(repo.toLowerCase(), known);
+    }
+    return known;
+  }, []);
+  const liveCodeBridge = useMemo<LiveCodeBridge>(() => {
+    const own =
+      workspace && !workspace.isLocal ? `${workspace.repo.owner}/${workspace.repo.repo}` : null;
+    const branchOf = (repo: string): Promise<string> =>
+      repo === own && workspace ? Promise.resolve(workspace.repo.branch) : defaultBranchOf(repo);
+    return {
+      defaultRepo: own,
+      read: async (repo, path, ref) => {
+        if (!user)
+          throw new Error("Sign in with GitHub to check this code against its repository.");
+        const [owner, name] = repo.split("/") as [string, string];
+        const file = await readRepoFile({
+          owner,
+          repo: name,
+          ref: ref ?? (await branchOf(repo)),
+          path,
+        });
+        return file ? file.content : null;
+      },
+      webUrl: (repo, path, ref, from, to) =>
+        `https://github.com/${repo}/blob/${encodeURIComponent(ref ?? "HEAD")}/${path
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/")}#L${from}-L${to}`,
+    };
+  }, [workspace, user, defaultBranchOf]);
+
+  /** The notebooks this person follows, read from following.md when the dialog opens. */
+  const [followedNotebooks, setFollowedNotebooks] = useState<{
+    path: string | null;
+    list: Followed[];
+  }>({
+    path: null,
+    list: [],
+  });
+  const loadFollowing = useCallback(async () => {
+    const entry = (await allNotesForCanvas()).find(
+      (each) => each.path === FOLLOWING_PATH || each.frontmatter.type === "following",
+    );
+    return { path: entry?.path ?? null, list: entry ? parseFollowing(entry.content) : [] };
+  }, [allNotesForCanvas]);
+  const readFollowing = useCallback(
+    async () => setFollowedNotebooks(await loadFollowing()),
+    [loadFollowing],
+  );
+  useEffect(() => {
+    if (dialog !== "following") return;
+    let live = true;
+    void loadFollowing().then((result) => {
+      if (live) setFollowedNotebooks(result);
+    });
+    return () => {
+      live = false;
+    };
+  }, [dialog, loadFollowing]);
+
+  /** The books quotes have been kept from, offered again in "Quote from a book". */
+  const [bookList, setBookList] = useState<ReturnType<typeof bookTitles>>([]);
+  useEffect(() => {
+    if (dialog !== "book-quote") return;
+    let live = true;
+    void allNotesForCanvas().then((entries) => {
+      if (!live) return;
+      setBookList(
+        bookTitles(
+          entries.map((entry) => ({
+            path: entry.path,
+            title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+            frontmatter: entry.frontmatter,
+          })),
+        ),
+      );
+    });
+    return () => {
+      live = false;
+    };
+  }, [dialog, allNotesForCanvas]);
+
   /** A deck block shares this note's cards publicly, or copies a shared deck in. */
+  /** The shared deck whose study room is open, by `owner/name`. */
+  const [studyRoom, setStudyRoom] = useState<string | null>(null);
   const deckBridge = useMemo<DeckBridge>(
     () => ({
+      openRoom: (repo) => setStudyRoom(repo),
       signedIn: () => user !== null,
       noteTitle: () => title || "Flashcards",
       read: async (repo, ref) => {
@@ -2045,7 +2298,7 @@ export function EditorWorkspace() {
         return { repo: `${shared.owner}/${shared.repo}`, sha: shared.sha };
       },
     }),
-    [user, title],
+    [user, title, setStudyRoom],
   );
 
   const linkBridge = useMemo<LinkBridge>(
@@ -2672,9 +2925,9 @@ export function EditorWorkspace() {
    * chapter list moves under the reader while they are counting it.
    */
   const handlePublishFolder = useCallback(
-    async (path: string) => {
+    async (path: string, asCourse = false) => {
       try {
-        setBook({ folder: path, notes: await loadAllNotes() });
+        setBook({ folder: path, notes: await loadAllNotes(), course: asCourse });
       } catch {
         notebook.reportError("Those notes could not be read, so the book was not opened.");
       }
@@ -3902,6 +4155,69 @@ export function EditorWorkspace() {
           },
         });
       }
+      if (note && !(sealed && !opened)) {
+        list.push({
+          id: "ocr",
+          label: "Text from a picture",
+          group: "Notes",
+          hint: "A screenshot, slide or photo, read on this device and added to the note as text",
+          keywords:
+            "ocr text picture image screenshot photo scan slide whiteboard recognise read extract copy",
+          run: () => setDialog("ocr"),
+        });
+      }
+      list.push({
+        id: "following",
+        label: "Notebooks I follow",
+        group: "Notes",
+        hint: "What the people whose notes you read have written lately — and a passage of theirs in your note in one click",
+        keywords:
+          "follow following feed subscribe friends people others notebooks public repositories updates new borrow quote",
+        run: () => setDialog("following"),
+      });
+      list.push({
+        id: "book-quote",
+        label: "Quote from a book (photo)",
+        group: "Notes",
+        hint: "Photograph a page, tap the lines to keep; they come back in spaced reading",
+        keywords:
+          "book quote photo camera page highlight reading kindle paper passage ocr scan capture",
+        run: () => setDialog("book-quote"),
+      });
+      list.push({
+        id: "exam",
+        label: "Take an exam on my notes",
+        group: "Notes",
+        hint: "A timed mock exam from a folder's cards, definitions and sections, marked, with what to reread",
+        keywords:
+          "exam test quiz mock practice paper revise revision study timed marks score grade weak spots",
+        run: () => setDialog("exam"),
+      });
+      list.push({
+        id: "glossary",
+        label: "Glossary",
+        group: "Notes",
+        hint: "Every term your notes define, A to Z, with where each is defined",
+        keywords: "glossary definitions terms vocabulary jargon define meaning dictionary",
+        run: () => setDialog("glossary"),
+      });
+      list.push({
+        id: "glossary-underlines",
+        label: glossaryOn ? "Stop underlining glossary terms" : "Underline glossary terms",
+        group: "Notes",
+        hint: "Terms your notes define, underlined everywhere with the definition on hover",
+        keywords: "glossary definitions terms underline hover tooltip define",
+        run: toggleGlossary,
+      });
+      list.push({
+        id: "contradictions",
+        label: "Find contradictions in my notes",
+        group: "Notes",
+        hint: "Sentences that say nearly the same thing but differ on a figure, a 'not', or an opposite word",
+        keywords:
+          "contradiction contradict conflict disagree inconsistent mismatch wrong date number fact check",
+        run: () => setDialog("contradictions"),
+      });
       list.push({
         id: "tasks",
         label: "Show every open to-do",
@@ -3923,6 +4239,14 @@ export function EditorWorkspace() {
           else
             setNotice("Nothing to bring back yet — a note shows up here after a month untouched.");
         },
+      });
+      list.push({
+        id: "spelling",
+        label: spellingOn ? "Turn spelling suggestions off" : "Turn spelling suggestions on",
+        group: "Notes",
+        hint: "Underline misspelt words and suggest corrections as you type",
+        keywords: "spelling spell check checker autocorrect correct typo grammar dictionary words",
+        run: toggleSpelling,
       });
       if (note && !(sealed && !opened)) {
         list.push({
@@ -4279,6 +4603,10 @@ export function EditorWorkspace() {
   }, [
     claimsOn,
     toggleClaims,
+    spellingOn,
+    toggleSpelling,
+    glossaryOn,
+    toggleGlossary,
     takenPaths,
     resurfaced,
     note,
@@ -4426,6 +4754,9 @@ export function EditorWorkspace() {
         TOOL_ICONS.help,
         "Hide the note, write what you remember, see what you missed",
       ),
+      ...tool("exam", "Study", TOOL_ICONS.cards, "A timed mock exam from a folder, marked"),
+      ...tool("ocr", "Capture", TOOL_ICONS.graph, "A screenshot or photo, read and added as text"),
+      ...tool("book-quote", "Capture", TOOL_ICONS.graph, "Photograph a book page, keep the lines"),
       ...tool(
         "flashcards",
         "Study",
@@ -4451,6 +4782,39 @@ export function EditorWorkspace() {
               keywords: ["map", "canvas", "links", "graph", "wide", "deep", "neighbourhood"],
               icon: <ExtraGlyph d={TOOL_ICONS.graph} />,
               insert: () => noteMapMarkdown(mapNote(links.graph, notePath, { depth: 2 })),
+            },
+          ]
+        : []),
+      ...(notePath
+        ? [
+            {
+              id: "tool:map-argument",
+              label: "Map the argument",
+              hint: "Claim, reasons, evidence and objections as a canvas — weak reasons in red",
+              group: "See",
+              keywords: [
+                "argument",
+                "essay",
+                "claim",
+                "reasons",
+                "evidence",
+                "objections",
+                "thesis",
+                "debate",
+                "logic",
+                "canvas",
+              ],
+              icon: <ExtraGlyph d={TOOL_ICONS.graph} />,
+              insert: () => {
+                const shape = readArgument(noteContentRef.current, noteTitleRef.current);
+                const stats = argumentStats(shape);
+                setNotice(
+                  stats.reasons === 0
+                    ? "No reasons found to map. Give each reason its own ## heading, or start sentences with “Because”, “First”, “Moreover” — then map it again."
+                    : `Mapped ${stats.reasons} reason${stats.reasons === 1 ? "" : "s"}, ${stats.evidence} piece${stats.evidence === 1 ? "" : "s"} of evidence and ${stats.objections} objection${stats.objections === 1 ? "" : "s"}.${stats.weak > 0 ? ` ${stats.weak} reason${stats.weak === 1 ? " has" : "s have"} no evidence yet, shown in red.` : ""}`,
+                );
+                return noteMapMarkdown(argumentCanvas(shape));
+              },
             },
           ]
         : []),
@@ -4774,7 +5138,10 @@ export function EditorWorkspace() {
               onRenameFolder={handleRenameFolder}
               onDeleteFolder={handleDeleteFolder}
               {...(workspace && !workspace.isLocal
-                ? { onPublishFolder: (path: string) => void handlePublishFolder(path) }
+                ? {
+                    onPublishFolder: (path: string, asCourse?: boolean) =>
+                      void handlePublishFolder(path, asCourse),
+                  }
                 : {})}
               onMoveNote={handleMoveNote}
               onMoveFolder={handleMoveFolder}
@@ -5347,6 +5714,9 @@ export function EditorWorkspace() {
                   {...(courseBridge ? { course: courseBridge } : {})}
                   deck={deckBridge}
                   claims={claimBridge}
+                  {...(spellingBridge ? { spelling: spellingBridge } : {})}
+                  {...(glossaryBridge ? { glossary: glossaryBridge } : {})}
+                  liveCode={liveCodeBridge}
                   {...(flashcardBridge ? { flashcards: flashcardBridge } : {})}
                   imageDestination={
                     workspace && !workspace.isLocal
@@ -6280,6 +6650,232 @@ export function EditorWorkspace() {
         />
       )}
 
+      {openDialog === "ocr" && (
+        <OcrDialog
+          onClose={() => setDialog(null)}
+          onAdd={async (text, picture) => {
+            const current = notebook.note;
+            if (!current) throw new Error("Open a note to add the text to.");
+            if (noteLocked) {
+              throw new Error("This note is locked. Unlock it — ⌘⇧L — to add text.");
+            }
+            const image =
+              picture && images.upload ? `![](${await images.upload(picture)})\n\n` : "";
+            const separator = current.content.endsWith("\n") ? "" : "\n";
+            await notebook.saveNote(`${current.content}${separator}\n${image}${text}\n`);
+            setDialog(null);
+            setNotice(
+              picture && images.upload
+                ? "The picture and its text were added to the end of this note."
+                : "The text was added to the end of this note.",
+            );
+          }}
+        />
+      )}
+
+      {openDialog === "following" && workspace && (
+        <FollowingDialog
+          onClose={() => setDialog(null)}
+          signedIn={Boolean(user)}
+          following={followedNotebooks.list}
+          onFollow={async (owner, name) => {
+            let summary;
+            try {
+              summary = await describeRepo(owner, name);
+            } catch {
+              throw new Error(`There is no notebook at ${owner}/${name} that you can read.`);
+            }
+            const followed = { owner, repo: name, label: summary.fullName };
+            if (followedNotebooks.path) {
+              await notebook.rewriteNote(followedNotebooks.path, (content) =>
+                withFollowed(content, followed),
+              );
+            } else {
+              const created = await notebook.createNote(
+                "Following",
+                "",
+                withFollowed(followingNote(), followed),
+              );
+              if (!created) throw new Error("following.md could not be created.");
+            }
+            await readFollowing();
+          }}
+          onUnfollow={async (followed) => {
+            if (!followedNotebooks.path) return;
+            await notebook.rewriteNote(followedNotebooks.path, (content) =>
+              withoutFollowed(content, followed),
+            );
+            await readFollowing();
+          }}
+          since={(followed) => seenSince(readSeen(workspace.id), followed, new Date())}
+          onCaughtUp={(followed) =>
+            markSeen(workspace.id, followed, new Date().toISOString().replace(/\.\d+Z$/, "Z"))
+          }
+          loadChanges={async (followed, from) =>
+            listChangesSince(
+              {
+                owner: followed.owner,
+                repo: followed.repo,
+                branch: await defaultBranchOf(`${followed.owner}/${followed.repo}`),
+                directory: "",
+              },
+              from,
+            )
+          }
+          readAt={async (followed, path, sha) =>
+            (await readRepoFile({ owner: followed.owner, repo: followed.repo, ref: sha, path }))
+              ?.content ?? null
+          }
+          onCopy={async (markdown) => {
+            const current = notebook.note;
+            if (!current) throw new Error("Open one of your notes to add it to.");
+            if (noteLocked) throw new Error("Your note is locked — ⌘⇧L to unlock it.");
+            const separator = current.content.endsWith("\n") ? "" : "\n";
+            await notebook.saveNote(`${current.content}${separator}\n${markdown}`);
+            return deriveTitle(current.content, current.frontmatter.title, current.path);
+          }}
+        />
+      )}
+
+      {studyRoom && note && (
+        <StudyRoomDialog
+          key={studyRoom}
+          onClose={() => setStudyRoom(null)}
+          repo={studyRoom}
+          signedIn={Boolean(user)}
+          load={() => {
+            const [owner = "", name = ""] = studyRoom.split("/");
+            return readStudyRoom(owner, name);
+          }}
+          progress={async () => {
+            // This deck's cards are the ones in this note; how well each is
+            // known comes from the notebook's flashcard schedule, and the week
+            // and streak from its study log.
+            const entries = await notebook.allNotes();
+            const read = (path: string) =>
+              entries.find((entry) => entry.path === path)?.content ?? null;
+            const cards = findCards(note.path, title, note.content);
+            const schedule = parseSchedule(read(SCHEDULE_PATH));
+            const log = parseLog(read(STUDY_LOG_PATH));
+            const today = dateStamp(new Date());
+            return {
+              week: thisWeek(log, today),
+              streak: streak(log, today),
+              mastered: cards.filter((card) => (schedule.get(card.id)?.interval ?? 0) >= 21).length,
+              cards: cards.length,
+              on: today,
+            };
+          }}
+          share={async (progress) => {
+            const [owner = "", name = ""] = studyRoom.split("/");
+            await shareStudyProgress({ owner, repo: name, deck: title || studyRoom, progress });
+          }}
+        />
+      )}
+
+      {openDialog === "book-quote" && (
+        <BookQuoteDialog
+          onClose={() => setDialog(null)}
+          books={bookList}
+          onSave={async ({ book: name, author, page, text }) => {
+            const today = dateStamp(new Date());
+            const existing = (await notebook.allNotes()).find(
+              (entry) =>
+                isBookNote(entry) &&
+                deriveTitle(entry.content, entry.frontmatter.title, entry.path).toLowerCase() ===
+                  name.toLowerCase(),
+            );
+            if (existing) {
+              await notebook.rewriteNote(
+                existing.path,
+                (content) => withQuote(content, { text, page, date: today }).content,
+              );
+              return existing.path;
+            }
+            const created = await notebook.createNote(
+              name,
+              BOOKS_FOLDER,
+              withQuote(bookNote(name, author), { text, page, date: today }).content,
+            );
+            if (!created) throw new Error("The book's note could not be created.");
+            track("note_created");
+            return created.path;
+          }}
+        />
+      )}
+
+      {openDialog === "exam" && (
+        <ExamDialog
+          onClose={() => setDialog(null)}
+          loadNotes={async () =>
+            (await notebook.allNotes())
+              .filter(
+                (entry) =>
+                  isMarkdown(entry.path) &&
+                  !isTemplatePath(entry.path) &&
+                  !isEncrypted(entry.content),
+              )
+              .map((entry) => ({
+                path: entry.path,
+                title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+                content: entry.content,
+              }))
+          }
+          onSave={async (examName, content) => {
+            const created = await notebook.createNote(examName, EXAM_FOLDER, content);
+            if (!created) return null;
+            track("note_created");
+            return created.path;
+          }}
+          onOpen={(path, line) => {
+            setDialog(null);
+            setReveal({ path, line });
+            notebook.openNote(path);
+          }}
+        />
+      )}
+
+      {openDialog === "glossary" && (
+        <GlossaryDialog
+          onClose={() => setDialog(null)}
+          entries={glossary?.entries ?? null}
+          underlining={glossaryOn}
+          onToggleUnderlining={toggleGlossary}
+          onOpen={(path, line) => {
+            setDialog(null);
+            setReveal({ path, line });
+            notebook.openNote(path);
+          }}
+        />
+      )}
+
+      {openDialog === "contradictions" && workspace && (
+        <ContradictionsDialog
+          onClose={() => setDialog(null)}
+          loadNotes={async () =>
+            (await notebook.allNotes())
+              .filter(
+                (entry) =>
+                  isMarkdown(entry.path) &&
+                  !isTemplatePath(entry.path) &&
+                  !isEncrypted(entry.content),
+              )
+              .map((entry) => ({
+                path: entry.path,
+                title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+                content: entry.content,
+              }))
+          }
+          dismissed={() => readDismissedContradictions(workspace.id)}
+          onDismiss={(id) => dismissContradiction(workspace.id, id)}
+          onOpen={(path, line) => {
+            setDialog(null);
+            setReveal({ path, line });
+            notebook.openNote(path);
+          }}
+        />
+      )}
+
       {openDialog === "flashcards" && workspace && (
         <FlashcardsDialog
           onClose={() => setDialog(null)}
@@ -6422,6 +7018,7 @@ export function EditorWorkspace() {
           folder={book.folder}
           workspace={workspace}
           notes={book.notes}
+          {...(book.course ? { startAsCourse: true } : {})}
           onClose={() => setBook(null)}
         />
       )}
@@ -6567,6 +7164,22 @@ function EmptyState({
 /** Icons for the `/` menu's tools, on the same 16px grid as the editor's own. */
 /** Notes the claim checker is on for, on this device. */
 const CLAIMS_KEY = "forkleaf:claims-on";
+const GLOSSARY_KEY = "forkleaf:glossary";
+
+/**
+ * A number per glossary built, for the editor's cache of where terms are.
+ * Kept by identity, so asking twice about the same glossary is the same answer.
+ */
+const glossaryVersions = new WeakMap<object, number>();
+let lastGlossaryVersion = 0;
+function versionOf(glossary: object): number {
+  let version = glossaryVersions.get(glossary);
+  if (version === undefined) {
+    version = ++lastGlossaryVersion;
+    glossaryVersions.set(glossary, version);
+  }
+  return version;
+}
 
 const TOOL_ICONS = {
   cards: "M2.75 5.25h8.5v8h-8.5zM5 2.75h8.25v8",

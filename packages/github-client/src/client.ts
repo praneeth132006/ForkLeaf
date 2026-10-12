@@ -11,6 +11,7 @@ import {
   listDiscussions,
   readDiscussion,
   setDiscussionAnswer,
+  updateDiscussionComment,
   type DiscussionCommentDto,
   type LoungeDto,
   type ThreadSummaryDto,
@@ -457,6 +458,14 @@ export class GitHubClient {
     return addDiscussionComment(this.graphql, input);
   }
 
+  /** Rewrites one of the viewer's own comments. */
+  updateDiscussionComment(input: {
+    commentId: string;
+    body: string;
+  }): Promise<DiscussionCommentDto> {
+    return updateDiscussionComment(this.graphql, input);
+  }
+
   /** Every discussion in the repository, newest activity first. */
   listDiscussions(options: {
     owner: string;
@@ -549,6 +558,8 @@ export class GitHubClient {
     name: string;
     description?: string;
     private?: boolean;
+    /** Switch GitHub Discussions on — for a shared deck, so it can have a study room. */
+    discussions?: boolean;
   }): Promise<RepoSummary> {
     const { data } = await this.transport.request<ApiRepo>("/user/repos", {
       method: "POST",
@@ -557,6 +568,7 @@ export class GitHubClient {
         description: options.description ?? "My notes, synced by ForkLeaf",
         private: options.private ?? true,
         auto_init: true,
+        ...(options.discussions ? { has_discussions: true } : {}),
       },
     });
 
@@ -1329,6 +1341,64 @@ export class GitHubClient {
         previousPath: file.previous_filename ?? null,
       })),
       truncated: all.length > limit,
+    };
+  }
+
+  /**
+   * The Markdown notes a notebook added or changed since a moment.
+   *
+   * For following somebody else's notebook: two requests whatever the size of
+   * the repository — the commit that was current at `since`, then GitHub's
+   * comparison of it with the branch as it is now. `baseSha` is that earlier
+   * commit, so a changed note can be read as it was and its new paragraphs
+   * picked out; null when the repository is newer than `since`, in which case
+   * every note in it is new.
+   */
+  async changesSince(
+    repo: RepoRef,
+    since: string,
+    limit = 100,
+  ): Promise<{
+    baseSha: string | null;
+    headSha: string;
+    files: CommitFile[];
+    truncated: boolean;
+  }> {
+    const base = await this.commitAt(repo, since);
+    if (!base) {
+      const head = await this.getBranchHead(repo);
+      const tree = await this.listTree(repo, { ref: head });
+      const notes: CommitFile[] = [];
+      const walk = (nodes: typeof tree) => {
+        for (const node of nodes) {
+          if (node.children) walk(node.children);
+          else if (/\.(md|markdown)$/i.test(node.path)) {
+            notes.push({ path: node.path, status: "added", previousPath: null });
+          }
+        }
+      };
+      walk(tree);
+      return {
+        baseSha: null,
+        headSha: head,
+        files: notes.slice(0, limit),
+        truncated: notes.length > limit,
+      };
+    }
+
+    const comparison = await this.compareBranches(
+      repo.owner,
+      repo.repo,
+      base.sha,
+      repo.branch,
+      Number.MAX_SAFE_INTEGER,
+    );
+    const notes = comparison.files.filter((file) => /\.(md|markdown)$/i.test(file.path));
+    return {
+      baseSha: base.sha,
+      headSha: comparison.headSha,
+      files: notes.slice(0, limit),
+      truncated: notes.length > limit,
     };
   }
 

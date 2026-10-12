@@ -409,6 +409,17 @@ describe("writing", () => {
     expect(calls[0]?.variables).toEqual({ discussionId: "D_5", body: "hello", replyToId: null });
     expect(calls[1]?.variables.replyToId).toBe("c1");
   });
+
+  it("rewrites one of the viewer's own comments in place", async () => {
+    const { client, calls } = fakeGraphQL({
+      ForkLeafEditComment: () => ok({ updateDiscussionComment: { comment: comment("c9") } }),
+    });
+
+    const edited = await client.updateDiscussionComment({ commentId: "c9", body: "new words" });
+
+    expect(edited).toMatchObject({ id: "c9" });
+    expect(calls[0]?.variables).toEqual({ commentId: "c9", body: "new words" });
+  });
 });
 
 // ─── v2: the Lounge ──────────────────────────────────────────────────────────

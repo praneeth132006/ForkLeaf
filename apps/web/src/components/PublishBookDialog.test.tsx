@@ -317,4 +317,66 @@ describe("PublishBookDialog — comments", () => {
     await waitFor(() => expect(screen.getByText("Publish book")).toBeTruthy());
     expect(listLounge).not.toHaveBeenCalled();
   });
+
+  describe("as a course", () => {
+    const COURSE = [
+      // Written out of order: the course puts a lesson after the ones it links to.
+      note("bio/a-advanced.md", "# Advanced\n\nBuilds on [[b-basics]].\n\nWhat is ATP? :: Energy"),
+      note("bio/b-basics.md", "# Basics\n\nWhat is a cell? :: The unit of life"),
+    ];
+
+    const openCourse = () =>
+      render(
+        <PublishBookDialog
+          folder="bio"
+          workspace={workspace}
+          notes={COURSE}
+          onClose={() => undefined}
+          startAsCourse
+        />,
+      );
+
+    it("orders the lessons by what builds on what, and says what it will add", async () => {
+      openCourse();
+      await waitFor(() => expect(screen.getByText("Basics")).toBeTruthy());
+      const titles = screen.getAllByRole("listitem").map((item) => item.textContent);
+      expect(titles[0]).toContain("Basics");
+      expect(titles[1]).toContain("Advanced");
+      expect(screen.getByText(/a quiz from the folder's 2 flashcards/)).toBeTruthy();
+      expect((screen.getByLabelText(/Publish as a course/) as HTMLInputElement).checked).toBe(true);
+    });
+
+    it("publishes lessons with progress and a quiz page", async () => {
+      openCourse();
+      await waitFor(() => expect(screen.getByText("Publish book")).toBeTruthy());
+      fireEvent.click(screen.getByText("Publish book"));
+      await waitFor(() => expect(publishBook).toHaveBeenCalled());
+
+      const sent = publishBook.mock.calls[0]![0];
+      expect(sent.chapters.map((c: { slug: string }) => c.slug)).toEqual([
+        "b-basics",
+        "a-advanced",
+      ]);
+      const quiz = sent.files.find((f: { path: string }) => f.path === "quiz.html");
+      expect(quiz.content).toContain("What is a cell?");
+      expect(quiz.content).toContain("What is ATP?");
+      const lesson = sent.files.find((f: { path: string }) => f.path === "b-basics.html");
+      expect(lesson.content).toContain("Lesson 1 of 2");
+      expect(lesson.content).toContain('id="course-config"');
+    });
+
+    it("can be switched back to a plain book", async () => {
+      openCourse();
+      await waitFor(() => expect(screen.getByText("Publish book")).toBeTruthy());
+      fireEvent.click(screen.getByLabelText(/Publish as a course/));
+      fireEvent.click(screen.getByText("Publish book"));
+      await waitFor(() => expect(publishBook).toHaveBeenCalled());
+      const sent = publishBook.mock.calls[0]![0];
+      expect(sent.files.some((f: { path: string }) => f.path === "quiz.html")).toBe(false);
+      expect(sent.chapters.map((c: { slug: string }) => c.slug)).toEqual([
+        "a-advanced",
+        "b-basics",
+      ]);
+    });
+  });
 });

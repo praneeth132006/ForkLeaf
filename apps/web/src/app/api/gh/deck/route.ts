@@ -141,6 +141,8 @@ export async function POST(request: NextRequest) {
       name,
       description: `Flashcards: ${title}`,
       private: false,
+      // So everybody who copies the deck can meet in its study room.
+      discussions: true,
     });
 
     const readme =

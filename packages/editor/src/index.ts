@@ -96,3 +96,29 @@ export { useDocumentTheme, type DocumentTheme } from "./useDocumentTheme";
 export { MermaidBlock, type MermaidBlockOptions } from "./extensions/MermaidBlock";
 export { markdownSlashCommands, markdownSlashSource } from "./codemirror/slash-markdown";
 export { readSlashState, type SlashState } from "./extensions/SlashCommands";
+export {
+  findWords,
+  matchCase,
+  worthChecking,
+  SuggestionBubble,
+  type SpellBridge,
+  type FoundWord,
+} from "./spelling";
+export { Spelling, spellingKey } from "./extensions/Spelling";
+export { spellingExtension } from "./codemirror/spelling";
+export {
+  Glossary,
+  glossaryKey,
+  glossaryDecorations,
+  type GlossaryBridge,
+  type GlossaryDefinition,
+} from "./extensions/Glossary";
+export { LiveCodeBlock, type LiveCodeBridge } from "./extensions/LiveCodeBlock";
+export {
+  parseLiveCode,
+  serializeLiveCode,
+  extractCode,
+  sameCode,
+  diffLines,
+  type LiveCodeSpec,
+} from "./live-code";

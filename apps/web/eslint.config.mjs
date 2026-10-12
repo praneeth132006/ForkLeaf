@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Third-party files copied in at build time (see scripts/).
+    "public/ocr/**",
+    "public/dictionaries/**",
+    "public/pdfjs/**",
   ]),
 ]);
 

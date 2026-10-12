@@ -28,7 +28,8 @@ export interface FileTreeProps {
    * workspace has nowhere to publish to, and an item that always fails is
    * worse than one that is not offered.
    */
-  onPublishFolder?: ((path: string) => void) | undefined;
+  /** Publishes a folder as a book, or as a course website when `asCourse`. */
+  onPublishFolder?: ((path: string, asCourse?: boolean) => void) | undefined;
   /** Moves a note to another folder. Called by drag-and-drop within the tree. */
   onMoveNote?: (path: string, toFolder: string) => void;
   /**
@@ -374,6 +375,10 @@ export function FileTree({
               {
                 label: "Publish as book…",
                 onSelect: () => onPublishFolder(node.path),
+              },
+              {
+                label: "Publish as course website…",
+                onSelect: () => onPublishFolder(node.path, true),
               },
             ]
           : []),

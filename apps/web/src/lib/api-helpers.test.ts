@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/session", () => ({
   clearSessionCookie: vi.fn(async () => {}),
+  endCurrentSession: vi.fn(async () => {}),
   getSession: vi.fn(async () => null),
   getLiveSession: vi.fn(async () => null),
 }));
@@ -174,15 +175,15 @@ describe("withRateLimitAdvice", () => {
 describe("forgetDeadSession", () => {
   it("clears the session when GitHub refuses the token", async () => {
     const { forgetDeadSession } = await import("./api-helpers");
-    const { clearSessionCookie } = await import("./session");
+    const { endCurrentSession } = await import("./session");
 
     expect(await forgetDeadSession(new GitHubError("unauthorized", "Bad credentials"))).toBe(true);
-    expect(clearSessionCookie).toHaveBeenCalledTimes(1);
+    expect(endCurrentSession).toHaveBeenCalledTimes(1);
   });
 
   it("leaves the session alone for every other failure", async () => {
     const { forgetDeadSession } = await import("./api-helpers");
-    const { clearSessionCookie } = await import("./session");
+    const { endCurrentSession } = await import("./session");
 
     // A rate limit, a private repository, a genuine 404: all recoverable, and
     // signing the user out over any of them would be its own bug.
@@ -191,6 +192,6 @@ describe("forgetDeadSession", () => {
     }
     // Not every failure is even a GitHubError.
     expect(await forgetDeadSession(new Error("socket hang up"))).toBe(false);
-    expect(clearSessionCookie).not.toHaveBeenCalled();
+    expect(endCurrentSession).not.toHaveBeenCalled();
   });
 });

@@ -26,6 +26,9 @@ import type { ReadingBridge } from "./extensions/ReadingBlock";
 import type { CourseBridge } from "./extensions/CourseBlock";
 import type { DeckBridge } from "./extensions/DeckBlock";
 import type { ClaimBridge } from "./extensions/ClaimChecker";
+import type { SpellBridge } from "./spelling";
+import type { GlossaryBridge } from "./extensions/Glossary";
+import type { LiveCodeBridge } from "./extensions/LiveCodeBlock";
 
 export interface MarkdownEditorProps {
   /**
@@ -92,6 +95,12 @@ export interface MarkdownEditorProps {
   deck?: DeckBridge;
   /** Underlines claims nothing in the notebook backs, while it is on for the note. */
   claims?: ClaimBridge;
+  /** Underlines misspelt words and offers corrections, in every view. */
+  spelling?: SpellBridge;
+  /** Terms the notebook defines, with their definitions on hover, in rich text. */
+  glossary?: GlossaryBridge;
+  /** Reads repositories, for live code blocks. */
+  liveCode?: LiveCodeBridge;
   /**
    * Makes the note readable but not writable, in every mode at once.
    *
@@ -145,6 +154,9 @@ export function MarkdownEditor({
   course,
   deck,
   claims,
+  spelling,
+  glossary,
+  liveCode,
   readOnly = false,
 }: MarkdownEditorProps) {
   // Split view: the divider position, as a percentage of the container width.
@@ -465,6 +477,9 @@ export function MarkdownEditor({
             {...(course ? { course } : {})}
             {...(deck ? { deck } : {})}
             {...(claims ? { claims } : {})}
+            {...(spelling ? { spelling } : {})}
+            {...(glossary ? { glossary } : {})}
+            {...(liveCode ? { liveCode } : {})}
             {...(placeholder ? { placeholder } : {})}
             // A wide bottom pad so the last paragraph can be scrolled to the
             // middle of the screen instead of being pinned to the bottom edge.
@@ -485,6 +500,7 @@ export function MarkdownEditor({
             slashActions={actionContext}
             {...(canUpload && !readOnly ? { onImageFiles: handleSourceImages } : {})}
             {...(placeholder ? { placeholder } : {})}
+            {...(spelling ? { spelling } : {})}
             showLineNumbers
           />
         </div>
@@ -507,6 +523,7 @@ export function MarkdownEditor({
               slashActions={actionContext}
               {...(canUpload && !readOnly ? { onImageFiles: handleSourceImages } : {})}
               {...(placeholder ? { placeholder } : {})}
+              {...(spelling ? { spelling } : {})}
               showLineNumbers
               className="min-h-0 w-full flex-1 overflow-hidden"
             />

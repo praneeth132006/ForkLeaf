@@ -166,6 +166,63 @@ export const DOC_SECTIONS: DocSection[] = [
     ],
   },
   {
+    title: "Thinking, studying & sharing",
+    pages: [
+      {
+        slug: "spelling",
+        title: "Spelling suggestions",
+        summary:
+          "Misspelt words underlined as you type, with corrections a tap away — on the device.",
+      },
+      {
+        slug: "glossary",
+        title: "Auto-glossary",
+        summary: "Define a term once and it explains itself, on hover, wherever it appears.",
+      },
+      {
+        slug: "contradictions",
+        title: "Contradictions",
+        summary: "Sentences in different notes that say nearly the same thing, but not quite.",
+      },
+      {
+        slug: "argument-map",
+        title: "Map the argument",
+        summary:
+          "An essay as claim, reasons, evidence and objections, with the weak reasons in red.",
+      },
+      {
+        slug: "exam",
+        title: "Exam simulator",
+        summary: "A timed mock exam from a folder, marked, with what to reread linked.",
+      },
+      {
+        slug: "live-code",
+        title: "Live code",
+        summary: "A function from a repository in a note, that says when it has changed.",
+      },
+      {
+        slug: "pictures",
+        title: "Pictures & book quotes",
+        summary: "Text from screenshots and photos, and quotes photographed from paper books.",
+      },
+      {
+        slug: "following",
+        title: "Following notebooks",
+        summary: "What the people whose notes you read have written, and their passages in yours.",
+      },
+      {
+        slug: "course-website",
+        title: "Course websites",
+        summary: "A folder published as lessons with progress and a quiz, on GitHub Pages.",
+      },
+      {
+        slug: "study-rooms",
+        title: "Study rooms",
+        summary: "A leaderboard for everybody studying the same shared deck.",
+      },
+    ],
+  },
+  {
     title: "GitHub",
     pages: [
       {
