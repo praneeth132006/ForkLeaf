@@ -50,6 +50,13 @@ Being built in this order. Ticked items are shipped and documented below.
 - [x] The Lounge: every conversation as channels, answers, and threads saved as notes
 - [x] Threads about passages, comments on published books, and conversations for AI assistants
 - [x] Live conversations through GitHub webhooks, and notifications
+- [x] Spelling suggestions as you type, in every view
+- [x] Auto-glossary, contradiction detector and argument maps
+- [x] Exam simulator
+- [x] Live code from a repository that says when it changes
+- [x] Text from a picture, and quotes photographed from books
+- [x] Following other people's notebooks
+- [x] A folder as a course website, and study rooms for shared decks
 
 What comes next is tracked in [future-implementations.md](future-implementations.md).
 
@@ -181,6 +188,14 @@ question; it stops by itself after hearing nothing a few times. Answers are
 judged on their words, so "it's water" counts for `Water` and "six" for `6`.
 Needs a browser that can both speak and listen (Chrome, Edge, Safari), which may
 send what you say to its speech service. Nothing said is kept.
+
+### Study rooms
+
+A shared or copied deck block has a **Study room** button: everybody studying
+the deck, ranked by cards reviewed this week, then streak, then how much of the
+deck they have mastered. **Share my progress** writes one line in the deck
+repository's GitHub Discussions (opening the room if need be) and updates the
+same line next time. Nothing else from the notebook is shared.
 
 ### Decks you can fork
 
@@ -378,6 +393,84 @@ so they are not counted twice in **Show every open to-do**.
   come from one note.
 - No AI writes the answer: everything shown is something you wrote, and nothing
   leaves the device. Code, templates and encrypted notes are never quoted.
+
+### Spelling suggestions
+
+On by default, in rich text, split and source view. A misspelt word gets a wavy
+underline; finishing one — typing the space or full stop after it — opens a
+bubble under it with up to five corrections, best first, and picking one
+replaces the word in the case you typed it (`Teh` → `The`). Click, tap or arrow
+into any underlined word to open it again. **Add to dictionary** keeps a word in
+this browser, **Ignore** until reload, **Esc** closes it. ⌘K → **Turn spelling
+suggestions off**. Code, link addresses, file names, emails, `#tags`,
+`@mentions`, acronyms and mixed-case names are never checked, and neither is the
+word still being typed. The English dictionary runs in a worker on the device;
+nothing typed is sent anywhere.
+
+### Auto-glossary
+
+Define a term the way you would anyway — `**Idempotent** means running it twice
+changes nothing.`, or `- Term: definition` lines under a `## Glossary` heading —
+and it gets a faint dotted underline wherever it appears in any note, with the
+definition and its note on hover (or tap). Plurals match, the longest term wins,
+acronyms match only in capitals. ⌘K → **Glossary** lists every term A to Z with
+every definition; ⌘K → **Stop underlining glossary terms** switches it off.
+
+### Contradictions
+
+⌘K → **Find contradictions in my notes** lists pairs of sentences that say
+nearly the same thing but differ on a figure (2019 or 2021), where one denies
+the other, or where they use opposite words (rose or fell) — side by side, what
+differs marked, each opening at the line. **Not a contradiction** hides a pair
+on this device. It says where to look, never which sentence is right.
+
+### Map the argument
+
+`/` → **Map the argument** draws an essay as a canvas: the claim on top, each
+reason (a `##` section, or a sentence starting *Because*, *First*, *Moreover*…)
+with the evidence under it (a link, citation, figure or quotation), and the
+objections (*However*, *Critics argue*, sections called Objections or Risks)
+pointing at the claim. A reason with no evidence is drawn in red. `Claim:`,
+`Reason:`, `Evidence:`, `Objection:` and `Rebuttal:` labels always win.
+
+### Exam simulator
+
+⌘K → **Take an exam on my notes** (also `/` → Study): pick a folder, 5–30
+questions and a time limit. Questions are your flashcards, your definitions
+("What does *latency* mean?") and your sections ("Explain *Photosynthesis*"),
+answered by typing; ⌘↵ moves on and the paper is handed in when time runs out.
+The marks show every miss beside what the notes say. **Save results as a note**
+writes `exams/<time> <folder> exam.md` with a *To go over again* checklist
+linking to the headings to reread.
+
+### Live code
+
+`/` → **Live code from a repository** embeds a function, class or line range
+from any GitHub repository (this notebook's by default). The note keeps a copy
+of the code inside a ` ```live-code ` fence, so it still reads correctly on
+GitHub; in ForkLeaf the current code is fetched each time and the block says
+**Matches the repository**, or **The code has changed since this note was
+written** with **Show what changed** and **Update the note**, or that the
+function has gone.
+
+### Text from a picture, and quotes from books
+
+- ⌘K → **Text from a picture**: paste, drop or choose a screenshot, slide or
+  photo. Its words are read on the device (Tesseract, in the browser), tidied
+  into Markdown — paragraphs rejoined, bullets as a list — for checking, then
+  added to the end of the note with or without the picture.
+- ⌘K → **Quote from a book (photo)**: **Take a photo of the page** opens the
+  camera on a phone. Tap the lines to keep, correct any misreading, name the
+  book and page; the passage goes into `books/<title>.md` as a quotation with
+  its page and date, and comes back in spaced reading. The photo is not kept.
+
+### Notebooks I follow
+
+⌘K → **Notebooks I follow**. Follow any public repository of notes by
+`owner/name` or its address; each lists the notes it added or changed since you
+last caught up. Open one to read it with the new paragraphs marked, and **Add to
+my note** quotes a paragraph into the open note with a permanent link to the
+commit and line. Who you follow is `following.md` — remove a line to unfollow.
 
 ### Meeting notes
 
@@ -741,6 +834,7 @@ open questions at the top. Nothing is sent to a model unless you tick it.
 | ------------------------------ | ---------------------------------------------------------------------------------------------- |
 | **Publish a note**             | ⌘K → **Publish this note as a page…**. Commits a page to `docs/` and switches on GitHub Pages. |
 | **Publish a folder as a book** | Right-click a folder → **Publish as book…**. Contents page, one page per note, working links.  |
+| **Course website**             | Right-click a folder → **Publish as course website…**: lessons in the order they build on each other, a progress bar and **Mark this lesson done** on every page, ticks on the contents page, and `quiz.html` from the folder's flashcards. Progress is kept in each visitor's browser. |
 | **Digital garden**             | In **Publish as book…**, tick **Publish as a digital garden**: backlinks on every page, a map. |
 | **Suggestions from readers**   | Published pages carry **Suggest an edit**; ⌘K → **See what other people have suggested**.      |
 | **Export**                     | **⌘⇧E**: PDF, Word, HTML, Markdown, plain text or JSON, made in your browser.                  |

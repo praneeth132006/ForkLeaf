@@ -132,6 +132,33 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
           "Install ForkLeaf and it becomes a Markdown editor for your operating system; ⌘S writes the file back.",
         how: "⌘K → Open a file from this computer",
       },
+      {
+        id: "spelling",
+        title: "Spelling suggestions as you type",
+        summary:
+          "Misspelt words are underlined in every view, and finishing one offers the likely corrections in a bubble. Checked on the device; code, links and names are left alone.",
+        how: "On by default · ⌘K → Turn spelling suggestions off",
+        tags: ["new"],
+        docs: "/docs/spelling",
+      },
+      {
+        id: "live-code",
+        title: "Live code that says when it changes",
+        summary:
+          "Embed a function from any GitHub repository. The note keeps a copy, and says — with a diff — when the code has moved on.",
+        how: "/ → Live code from a repository",
+        tags: ["new", "github"],
+        docs: "/docs/live-code",
+      },
+      {
+        id: "text-from-picture",
+        title: "Text from a picture",
+        summary:
+          "Paste a screenshot, slide or whiteboard photo and its words are read on the device and added to the note as editable Markdown.",
+        how: "⌘K → Text from a picture",
+        tags: ["new"],
+        docs: "/docs/pictures",
+      },
     ],
   },
   {
@@ -397,6 +424,42 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         how: "⌘⇧D",
         tags: ["github"],
       },
+      {
+        id: "glossary",
+        title: "Auto-glossary",
+        summary:
+          "Define a term once — **Idempotent** means … — and it is underlined wherever it appears, with the definition on hover.",
+        how: "Write a definition · ⌘K → Glossary",
+        tags: ["new"],
+        docs: "/docs/glossary",
+      },
+      {
+        id: "contradictions",
+        title: "Contradiction detector",
+        summary:
+          "Sentences in different notes that say nearly the same thing but differ on a figure, a “not”, or an opposite word, side by side.",
+        how: "⌘K → Find contradictions in my notes",
+        tags: ["new"],
+        docs: "/docs/contradictions",
+      },
+      {
+        id: "argument-map",
+        title: "Map the argument",
+        summary:
+          "An essay drawn as claim, reasons, evidence and objections on a canvas, with the reasons nothing backs in red.",
+        how: "/ → Map the argument",
+        tags: ["new"],
+        docs: "/docs/argument-map",
+      },
+      {
+        id: "exam",
+        title: "Exam simulator",
+        summary:
+          "A timed mock exam from a folder's cards, definitions and sections, marked, with a note linking every miss to what to reread.",
+        how: "⌘K → Take an exam on my notes",
+        tags: ["new"],
+        docs: "/docs/exam",
+      },
     ],
   },
   {
@@ -451,6 +514,24 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         summary:
           "See a link's title, description and picture before opening it — fetched so the site never sees you.",
         how: "Hover a link in a note",
+      },
+      {
+        id: "book-quotes",
+        title: "Quotes photographed from books",
+        summary:
+          "Photograph a page, tap the lines to keep, name the book and page. They go into the book's note and come back in spaced reading.",
+        how: "⌘K → Quote from a book (photo)",
+        tags: ["new"],
+        docs: "/docs/pictures#books",
+      },
+      {
+        id: "following",
+        title: "Follow other people's notebooks",
+        summary:
+          "See what the people whose notes you read have written lately, new paragraphs marked, and quote any of it into your note with a permanent link.",
+        how: "⌘K → Notebooks I follow",
+        tags: ["new", "github"],
+        docs: "/docs/following",
       },
     ],
   },
@@ -820,6 +901,24 @@ export const FEATURE_CATEGORIES: readonly FeatureCategory[] = [
         summary:
           "PDF, Word, HTML, Markdown, plain text or JSON, made in your browser with diagrams included.",
         how: "⌘⇧E",
+      },
+      {
+        id: "course-website",
+        title: "A folder as a course website",
+        summary:
+          "Lessons in the order they build on each other, progress and a “done” button on every page, and a quiz from the folder's flashcards.",
+        how: "Right-click a folder → Publish as course website…",
+        tags: ["new", "github"],
+        docs: "/docs/course-website",
+      },
+      {
+        id: "study-rooms",
+        title: "Study rooms",
+        summary:
+          "A leaderboard for everybody studying the same shared deck — reviews this week, streaks, mastery — kept in the deck's GitHub Discussions.",
+        how: "Study room, in a shared deck block",
+        tags: ["new", "github"],
+        docs: "/docs/study-rooms",
       },
     ],
   },

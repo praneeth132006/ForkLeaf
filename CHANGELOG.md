@@ -9,6 +9,60 @@ description, and the heading becomes the day's date when they ship.
 
 ## Unreleased
 
+### Staying signed in on the home-screen app
+
+The installed app on a phone kept signing people out. A GitHub App's sign-in
+renews every eight hours, and a phone waking the app sends a burst of requests
+whose answers arrive in any order: a request sent with the old cookie could
+land after the renewal and delete the brand-new session. Ending a session now
+names the exact sign-in that ended instead of deleting the cookie, renewals are
+remembered for ten minutes so late requests share them, and the browser checks
+with the server — and retries once — before treating a refusal as signed out.
+
+### Spelling suggestions as you type
+
+Misspelt words are underlined in every view; finishing one offers corrections
+in a bubble, replaced in the case you typed. Add to dictionary, Ignore, Esc.
+The English dictionary runs in a worker on the device.
+
+### Auto-glossary
+
+A term defined anywhere (`**Term** means …`, or a Glossary section) is
+underlined wherever it appears, with its definition on hover. ⌘K → Glossary
+lists them all.
+
+### Contradictions, argument maps and exams
+
+- ⌘K → **Find contradictions in my notes**: sentence pairs that differ on a
+  figure, a "not", or an opposite word.
+- `/` → **Map the argument**: claim, reasons, evidence and objections as a
+  canvas, unbacked reasons in red.
+- ⌘K → **Take an exam on my notes**: a timed mock exam from a folder, marked,
+  with a results note linking every miss to what to reread.
+
+### Live code from a repository
+
+`/` → **Live code from a repository** embeds a function from GitHub, keeps a
+copy in the note, and says — with a diff — when the code has changed.
+
+### Text from pictures, and quotes from books
+
+⌘K → **Text from a picture** reads a screenshot or photo on the device and adds
+it as Markdown; ⌘K → **Quote from a book (photo)** keeps chosen lines from a
+photographed page in the book's note, and spaced reading brings them back.
+
+### Notebooks I follow
+
+Follow public notebooks, read what they wrote lately with new paragraphs
+marked, and quote a paragraph into your note with a permanent link.
+
+### Course websites and study rooms
+
+Right-click a folder → **Publish as course website…** for lessons with progress
+and a quiz on GitHub Pages. A shared deck's **Study room** is a leaderboard
+kept in the deck's GitHub Discussions; decks shared from now on have
+Discussions switched on.
+
 ### Highlights on any web page
 
 Select text and right-click → **Highlight and save to ForkLeaf**. The words are
