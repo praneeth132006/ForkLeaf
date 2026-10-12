@@ -1,135 +1,166 @@
-import Link from "next/link";
-import { SectionHeading } from "./SectionHeading";
-
 /**
- * Feature grid.
+ * The illustrations the landing page tour is drawn with.
  *
- * Every claim here maps to code that exists in this repository. The previous
- * version advertised Pandoc-backed LaTeX and EPUB export, a pull-request review
- * flow and WebRTC collaborative editing — none of which ForkLeaf does, and the
- * last of which it deliberately does not do.
+ * Small CSS/SVG vignettes rather than screenshots: they re-theme with the rest
+ * of the page, stay sharp at any zoom and add nothing to the page weight.
+ * Every one shows something ForkLeaf does today.
  */
-const FEATURES = [
-  {
-    title: "Links that make it a knowledge base",
-    body: "[[Wikilinks]] in the Obsidian dialect, with a backlinks panel that quotes the line each link was written on. Link to a note you have not written yet and clicking it writes it.",
-    span: "md:col-span-2",
-    art: <LinksArt />,
-  },
-  {
-    title: "Search that reads the notes",
-    body: "Every word of every note, ranked with BM25 and answered in the browser. Results quote the line that matched.",
-    span: "",
-    art: <SearchArt />,
-  },
-  {
-    title: "Three editors, one file",
-    body: "Rich-text blocks, a split view, or raw source. Switch per note; the Markdown on disk is identical either way.",
-    span: "",
-    art: <ModesArt />,
-  },
-  {
-    title: "Diagrams without the syntax",
-    body: "A visual Mermaid builder for six diagram types, with templates, a cheatsheet and live rendering. Node positions round-trip through the file.",
-    span: "md:col-span-2",
-    art: <DiagramArt />,
-  },
-  {
-    title: "Opens the .md files on your computer",
-    body: "Install it and ForkLeaf registers as a Markdown editor: double-click a file, or run xdg-open, and ⌘S writes that file — not a copy in Downloads.",
-    span: "md:col-span-2",
-    art: <DesktopArt />,
-  },
-  {
-    title: "Offline by default",
-    body: "Writes hit IndexedDB first. The sync queue drains when you reconnect, and tells you plainly what is saved where.",
-    span: "",
-    art: <OfflineArt />,
-  },
-  {
-    title: "Real conflict resolution",
-    body: "Edit the same note on your phone and your laptop and ForkLeaf shows you both versions instead of silently picking one.",
-    span: "",
-    art: <ConflictArt />,
-  },
-  {
-    title: "Publish to a public link",
-    body: "One self-contained page, committed to your own repo and served by GitHub Pages. Nothing on our servers, and unpublishing is a deleted file.",
-    span: "",
-    art: <PublishArt />,
-  },
-  {
-    title: "Export that keeps the diagrams",
-    body: "Markdown, HTML, Word and PDF — all rendered in the browser, so the note never leaves your machine to become a file.",
-    span: "",
-    art: <ExportArt />,
-  },
-  {
-    title: "The code in your notes actually runs",
-    body: "Give a fenced block a language and it gets a Run button. bash, Python and JavaScript execute in a throwaway VM, and the output is written into the note underneath — committed with it, replaced on the next run, and kept in the history like anything else.",
-    span: "md:col-span-2",
-    art: <RunArt />,
-  },
-  {
-    title: "Sources that survive link rot",
-    body: "Paste an address and ForkLeaf writes the citation: the page's real title, plus a Wayback archive of it. The link still means something after the site is sold.",
-    span: "",
-    art: <CaptureArt />,
-  },
-  {
-    title: "Notes that say when they have gone off",
-    body: "Version numbers, dates, CVEs and linked files that have moved on since you last touched the note. It never claims a note is wrong — only that it is worth re-reading, and always why.",
-    span: "",
-    art: <FreshnessArt />,
-  },
-  {
-    title: "Review a note like code",
-    body: "Propose changes to a repository you cannot push to and ForkLeaf opens a real pull request. Read a PR as rendered notes rather than a diff, see who wrote each line, and watch the diagrams change shape between two commits.",
-    span: "md:col-span-2",
-    art: <ReviewArt />,
-  },
+
+const LINES: { text: string; accent?: boolean }[] = [
+  { text: "# Sync engine", accent: true },
+  { text: "" },
+  { text: "Writes land in IndexedDB first, then" },
+  { text: "drain to GitHub as one atomic commit." },
+  { text: "" },
+  { text: "## Guarantees", accent: true },
+  { text: "" },
+  { text: "- Nothing is lost when the tab closes" },
+  { text: "- Offline edits queue and replay" },
+];
+
+const HISTORY = [
+  { message: "Add conflict resolution notes", sha: "a3f9c21", when: "just now" },
+  { message: "Update 3 notes", sha: "7b21e08", when: "1 hour ago" },
+  { message: "Rename reading.md to reading-list.md", sha: "1c94ffa", when: "yesterday" },
 ] as const;
 
-export function Features() {
+/**
+ * The application, finished.
+ *
+ * Every colour is a token. It was hardcoded to a dark green palette the app
+ * retired, so on a light page it was a black rectangle with acid-green text in
+ * it, and in either theme it ignored the accent the reader had chosen — the one
+ * illustration on the page that did not belong to the page.
+ */
+export function RepoWindowArt() {
   return (
-    <section id="features" className="fl-anchor mx-auto w-full max-w-6xl px-6 py-24">
-      <SectionHeading
-        eyebrow="Features"
-        title="Built like a text editor, not like a database with a text box"
-        body="Plain files, plain git, plain exports — and the linking, search, diagramming, reviewing and running that a real notebook needs. Everything below is in the repository today, not on a roadmap."
-      />
+    <div
+      role="img"
+      aria-label="A note open in ForkLeaf: a file tree, the Markdown source, and the commits it has been through"
+      className="flex h-full min-h-[26rem] flex-col overflow-hidden rounded-2xl border border-[var(--fl-border)] bg-[var(--fl-surface)] shadow-[var(--fl-shadow-lg)]"
+    >
+      {/* Window chrome */}
+      <div className="flex items-center gap-3 border-b border-[var(--fl-border)] bg-[var(--fl-elevated)] px-4 py-2.5">
+        <span className="flex gap-1.5" aria-hidden="true">
+          <span className="h-2.5 w-2.5 rounded-full bg-[var(--fl-border-strong)]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[var(--fl-border-strong)]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[var(--fl-border-strong)]" />
+        </span>
 
-      <div className="mt-12 grid gap-4 md:grid-cols-3">
-        {FEATURES.map((feature) => (
-          <article
-            key={feature.title}
-            className={`fl-card flex flex-col overflow-hidden p-6 transition-colors hover:border-[var(--fl-border-strong)] ${feature.span}`}
-          >
-            <h3 className="text-[17px] font-semibold tracking-tight text-[var(--fl-text)]">
-              {feature.title}
-            </h3>
-            <p className="mt-2 max-w-md text-[15px] leading-relaxed text-[var(--fl-muted)]">
-              {feature.body}
-            </p>
-            <div className="mt-6 flex-1">{feature.art}</div>
-          </article>
-        ))}
+        <span className="mx-auto rounded-md border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3 py-1 font-mono text-[11px] text-[var(--fl-muted)]">
+          notes · main
+        </span>
+
+        <span className="hidden items-center gap-1.5 text-[11px] text-[var(--fl-muted)] sm:flex">
+          <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[var(--fl-accent)]" />
+          Synced
+        </span>
       </div>
 
-      <div className="mt-10 flex justify-center">
-        <Link href="/features" className="fl-btn fl-btn-ghost">
-          See every feature →
-        </Link>
+      <div className="flex min-h-0 flex-1">
+        {/* File tree */}
+        <aside
+          aria-hidden="true"
+          className="hidden w-48 shrink-0 flex-col gap-0.5 border-r border-[var(--fl-border)] py-3 sm:flex"
+        >
+          <div className="mx-3 mb-2 truncate rounded-md border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-2.5 py-1.5 text-[11px] text-[var(--fl-muted)]">
+            Search notes…
+          </div>
+          <TreeRow depth={0} label="architecture" folder />
+          <TreeRow depth={1} label="sync-engine.md" active />
+          <TreeRow depth={1} label="storage.md" />
+          <TreeRow depth={0} label="meetings" folder />
+          <TreeRow depth={1} label="2026-08-14.md" />
+          <TreeRow depth={0} label="reading-list.md" />
+        </aside>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Path bar */}
+          <div className="flex shrink-0 items-center border-b border-[var(--fl-border)] px-5 py-2">
+            <span className="truncate font-mono text-[11.5px] text-[var(--fl-muted)]">
+              architecture/sync-engine.md
+            </span>
+          </div>
+
+          {/* The note */}
+          <div className="min-h-0 flex-1 overflow-hidden p-5 font-mono text-[13px] leading-[1.75]">
+            {LINES.map((line, index) => (
+              <p
+                key={index}
+                className={`whitespace-pre-wrap ${
+                  line.accent ? "font-semibold text-[var(--fl-accent)]" : "text-[var(--fl-muted)]"
+                }`}
+              >
+                {line.text || " "}
+              </p>
+            ))}
+
+            {/* A caret at the end, because a still of a text editor with no
+                insertion point in it reads as a screenshot of a closed file. */}
+            <span
+              aria-hidden="true"
+              className="mt-1 inline-block h-[1.05em] w-[2px] align-text-bottom bg-[var(--fl-accent)]"
+            />
+          </div>
+
+          {/* The commits it has been through */}
+          <div className="shrink-0 border-t border-[var(--fl-border)] bg-[var(--fl-elevated)] px-3 py-1.5">
+            {HISTORY.map((commit, index) => (
+              <div
+                key={commit.sha}
+                className="flex items-center gap-2.5 whitespace-nowrap px-1.5 py-1"
+              >
+                <span
+                  aria-hidden="true"
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                    index === 0 ? "bg-[var(--fl-accent)]" : "bg-[var(--fl-border-strong)]"
+                  }`}
+                />
+                <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--fl-text)]">
+                  {commit.message}
+                </span>
+                <span className="shrink-0 font-mono text-[10.5px] text-[var(--fl-muted)]">
+                  {commit.sha}
+                </span>
+                <span className="hidden shrink-0 text-[11px] text-[var(--fl-muted)] sm:inline">
+                  {commit.when}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
-/* ── Inline art ────────────────────────────────────────────────────────────
-   Small CSS/SVG vignettes rather than screenshots: they re-theme with the rest
-   of the page and add nothing to the page weight. */
+function TreeRow({
+  label,
+  depth,
+  folder = false,
+  active = false,
+}: {
+  label: string;
+  depth: number;
+  folder?: boolean;
+  active?: boolean;
+}) {
+  return (
+    <div
+      style={{ paddingLeft: `${0.75 + depth * 0.75}rem` }}
+      className={`mx-2 flex items-center gap-1.5 whitespace-nowrap rounded-md py-1 pr-2 text-[12.5px] ${
+        active ? "bg-[var(--fl-accent-soft)] text-[var(--fl-accent)]" : "text-[var(--fl-muted)]"
+      }`}
+    >
+      <span aria-hidden="true" className="text-[9px] opacity-70">
+        {folder ? "▾" : "•"}
+      </span>
+      <span className="truncate">{label}</span>
+    </div>
+  );
+}
 
-function LinksArt() {
+export function LinksArt() {
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3">
@@ -166,7 +197,7 @@ function LinksArt() {
   );
 }
 
-function RunArt() {
+export function RunArt() {
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)]">
       <div className="flex items-center gap-2 border-b border-[var(--fl-border)] px-3 py-1.5">
@@ -188,7 +219,7 @@ function RunArt() {
   );
 }
 
-function CaptureArt() {
+export function CaptureArt() {
   return (
     <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3">
       <p className="truncate font-mono text-[11.5px] text-[var(--fl-muted)]">
@@ -206,7 +237,7 @@ function CaptureArt() {
   );
 }
 
-function FreshnessArt() {
+export function FreshnessArt() {
   return (
     <div className="space-y-2">
       {[
@@ -232,7 +263,7 @@ function FreshnessArt() {
   );
 }
 
-function ReviewArt() {
+export function ReviewArt() {
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3">
@@ -261,7 +292,7 @@ function ReviewArt() {
   );
 }
 
-function SearchArt() {
+export function SearchArt() {
   return (
     <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3">
       <p className="mb-2.5 font-mono text-[12px] text-[var(--fl-muted)]">
@@ -286,7 +317,7 @@ function SearchArt() {
   );
 }
 
-function DesktopArt() {
+export function DesktopArt() {
   return (
     <div className="space-y-2">
       <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-3 py-2 font-mono text-[12px]">
@@ -303,7 +334,7 @@ function DesktopArt() {
   );
 }
 
-function PublishArt() {
+export function PublishArt() {
   return (
     <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] p-3">
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--fl-muted)]">
@@ -319,7 +350,7 @@ function PublishArt() {
   );
 }
 
-function ModesArt() {
+export function ModesArt() {
   return (
     <div className="grid gap-2 sm:grid-cols-3">
       {[
@@ -351,7 +382,7 @@ function ModesArt() {
   );
 }
 
-function DiagramArt() {
+export function DiagramArt() {
   return (
     <svg
       viewBox="0 0 200 104"
@@ -422,7 +453,7 @@ function DiagramArt() {
   );
 }
 
-function OfflineArt() {
+export function OfflineArt() {
   return (
     <ul className="space-y-2 font-mono text-[12px]">
       {[
@@ -449,7 +480,7 @@ function OfflineArt() {
   );
 }
 
-function ConflictArt() {
+export function ConflictArt() {
   return (
     <div className="grid grid-cols-2 gap-2 text-[12px]">
       {[
@@ -479,7 +510,7 @@ function ConflictArt() {
   );
 }
 
-function ExportArt() {
+export function ExportArt() {
   return (
     <div className="flex flex-wrap gap-2">
       {[".md", ".pdf", ".html", ".docx", ".txt"].map((ext) => (
@@ -490,6 +521,123 @@ function ExportArt() {
           {ext}
         </span>
       ))}
+    </div>
+  );
+}
+
+export function FlashcardArt() {
+  return (
+    <div className="overflow-hidden rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)]">
+      <p className="border-b border-[var(--fl-border)] px-3 py-2 font-mono text-[11.5px] text-[var(--fl-muted)]">
+        Why is the sky blue? <span className="text-[var(--fl-accent)]">::</span> Rayleigh scattering
+      </p>
+      <div className="p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--fl-muted)]">
+          Due today
+        </p>
+        <p className="mt-1.5 font-serif text-[1.375rem] leading-tight text-[var(--fl-text)]">
+          Why is the sky blue?
+        </p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {["Forgot", "Hard", "Good", "Easy"].map((grade) => (
+            <span
+              key={grade}
+              className={`rounded-md border px-2 py-1 text-[11px] ${
+                grade === "Good"
+                  ? "border-[var(--fl-accent)] bg-[var(--fl-accent-soft)] text-[var(--fl-accent)]"
+                  : "border-[var(--fl-border)] text-[var(--fl-muted)]"
+              }`}
+            >
+              {grade}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Explain it back: what the reader remembered of a note, sentence by sentence. */
+export function RecallArt() {
+  const rows = [
+    { text: "Light reactions split water", state: "Remembered" },
+    { text: "Oxygen is released", state: "Remembered" },
+    { text: "ATP powers the Calvin cycle", state: "Partly" },
+    { text: "NADPH carries the electrons", state: "Missed" },
+  ] as const;
+  const tone = {
+    Remembered: "border-[var(--fl-accent)] bg-[var(--fl-accent-soft)]",
+    Partly: "border-[var(--fl-warn)] bg-[var(--fl-elevated)]",
+    Missed: "border-[var(--fl-danger)] bg-[var(--fl-elevated)]",
+  } as const;
+
+  return (
+    <div className="flex items-center gap-4">
+      <svg
+        viewBox="0 0 64 64"
+        className="h-20 w-20 shrink-0"
+        role="img"
+        aria-label="Three of four ideas remembered"
+      >
+        <circle cx="32" cy="32" r="26" fill="none" stroke="var(--fl-border)" strokeWidth="6" />
+        {/* 3 of 4 ideas: three quarters of the 163.4-unit circumference. */}
+        <circle
+          cx="32"
+          cy="32"
+          r="26"
+          fill="none"
+          stroke="var(--fl-accent)"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray="122.5 163.4"
+          transform="rotate(-90 32 32)"
+        />
+        <text
+          x="32"
+          y="37"
+          textAnchor="middle"
+          fontSize="15"
+          fontWeight="600"
+          fill="var(--fl-text)"
+        >
+          3/4
+        </text>
+      </svg>
+      <ul className="min-w-0 flex-1 space-y-1.5">
+        {rows.map((row) => (
+          <li
+            key={row.text}
+            className={`flex items-center justify-between gap-2 rounded-md border-l-2 px-2.5 py-1 text-[11.5px] ${tone[row.state]}`}
+          >
+            <span className="min-w-0 truncate text-[var(--fl-text)]">{row.text}</span>
+            <span className="shrink-0 text-[10px] uppercase tracking-wider text-[var(--fl-muted)]">
+              {row.state}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** An assistant working in the notebook through the MCP server. */
+export function McpArt() {
+  return (
+    <div className="space-y-2 font-mono text-[11.5px]">
+      <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-3 py-2 text-[var(--fl-text)]">
+        <span className="text-[var(--fl-muted)]">assistant → </span>search_notes(&quot;Q3
+        roadmap&quot;)
+      </div>
+      <div className="rounded-lg border border-[var(--fl-border)] bg-[var(--fl-elevated)] px-3 py-2 text-[var(--fl-text)]">
+        <span className="text-[var(--fl-muted)]">assistant → </span>append_to_daily_note(…)
+      </div>
+      <div className="flex items-center gap-2 rounded-lg border border-[var(--fl-accent)] bg-[var(--fl-accent-soft)] px-3 py-2 text-[var(--fl-text)]">
+        <span
+          aria-hidden="true"
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--fl-accent)]"
+        />
+        <span className="min-w-0 truncate">commit 9e1b4c0 · Update daily/2026-10-12.md</span>
+      </div>
     </div>
   );
 }

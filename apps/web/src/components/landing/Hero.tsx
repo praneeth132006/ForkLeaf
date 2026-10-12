@@ -69,16 +69,13 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
             the app that made them
           </h1>
 
-          {/* Two sentences, and they are the two that decide it: what the
-              thing is, and where the writing ends up. Everything this used to
-              add — the .md file, the local-first save, the commits under your
-              own name — is answered by scrolling, and a reader who has not yet
-              been given a reason to scroll will not read it here either. */}
-          <p className="mx-auto mt-6 max-w-2xl text-[16px] leading-[1.6] text-[var(--fl-muted)] sm:mt-7 sm:text-[17.5px] sm:leading-[1.62]">
-            A full Markdown workspace — linked notes, offline search, a visual diagram studio, real
-            version history — whose database is a{" "}
-            <em className="not-italic text-[var(--fl-text)]">GitHub repository you already own</em>.
-            Nothing is stored on our servers, and there is no ForkLeaf database to be locked out of.
+          {/* One sentence for what it does, one for where the writing ends up.
+              The four jobs are named once more right under the button, as the
+              table of contents for the tour that follows. */}
+          <p className="mx-auto mt-6 max-w-xl text-[16px] leading-[1.6] text-[var(--fl-muted)] sm:mt-7 sm:text-[17.5px] sm:leading-[1.62]">
+            Write, link, study and publish in Markdown. Every note is a file in a{" "}
+            <em className="not-italic text-[var(--fl-text)]">GitHub repository you already own</em>,
+            and nothing is stored on our servers.
           </p>
 
           {/* ── Call to action ──────────────────────────────────────────── */}
@@ -123,6 +120,27 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
               <>Free · Opens in your browser · No install, no account</>
             )}
           </p>
+
+          <nav
+            aria-label="What ForkLeaf does"
+            className="mx-auto mt-10 flex max-w-xl flex-wrap justify-center gap-2"
+          >
+            {[
+              { hash: "#own", label: "Own it" },
+              { hash: "#write", label: "Write and connect" },
+              { hash: "#learn", label: "Learn and check" },
+              { hash: "#share", label: "Capture and share" },
+            ].map((job, index) => (
+              <SectionLink
+                key={job.hash}
+                hash={job.hash}
+                className="inline-flex items-center gap-2 rounded-full border border-[var(--fl-border)] bg-[var(--fl-surface)] px-3.5 py-1.5 text-[13px] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-accent)] hover:text-[var(--fl-text)]"
+              >
+                <span className="font-mono text-[11px] text-[var(--fl-accent)]">0{index + 1}</span>
+                {job.label}
+              </SectionLink>
+            ))}
+          </nav>
         </div>
 
         {/* ── Product ───────────────────────────────────────────────────── */}
