@@ -26,6 +26,7 @@ import { setSpellingEnabled, spellingEnabled, useSpelling } from "@/lib/spelling
 import { useCourseBridge } from "@/lib/course-bridge";
 import { GITHUB_SIGN_IN_URL } from "@/lib/constants";
 import { mapNote, noteMapMarkdown } from "@/lib/note-map";
+import { argumentCanvas, argumentStats, readArgument } from "@/lib/argument-map";
 import { buildSupportIndex, checkClaim, type SupportIndex } from "@/lib/claims";
 import { badgeMarkdown } from "@/lib/notebook-health";
 import { formatMonthlyPage, monthlyPagePath, summariseMonth } from "@/lib/monthly-learning";
@@ -755,6 +756,14 @@ export function EditorWorkspace() {
   const words = useMemo(() => (note ? documentStats(note.content).words : 0), [note]);
 
   const notePath = note?.path ?? null;
+  // Read when a `/` tool runs, not on every render: the tool list is rebuilt
+  // only when the note changes identity, not on each keystroke.
+  const noteContentRef = useRef("");
+  const noteTitleRef = useRef("");
+  useEffect(() => {
+    noteContentRef.current = note?.content ?? "";
+    noteTitleRef.current = title;
+  }, [note, title]);
 
   /**
    * The folder the reader is currently working in.
@@ -4487,6 +4496,39 @@ export function EditorWorkspace() {
               keywords: ["map", "canvas", "links", "graph", "wide", "deep", "neighbourhood"],
               icon: <ExtraGlyph d={TOOL_ICONS.graph} />,
               insert: () => noteMapMarkdown(mapNote(links.graph, notePath, { depth: 2 })),
+            },
+          ]
+        : []),
+      ...(notePath
+        ? [
+            {
+              id: "tool:map-argument",
+              label: "Map the argument",
+              hint: "Claim, reasons, evidence and objections as a canvas — weak reasons in red",
+              group: "See",
+              keywords: [
+                "argument",
+                "essay",
+                "claim",
+                "reasons",
+                "evidence",
+                "objections",
+                "thesis",
+                "debate",
+                "logic",
+                "canvas",
+              ],
+              icon: <ExtraGlyph d={TOOL_ICONS.graph} />,
+              insert: () => {
+                const shape = readArgument(noteContentRef.current, noteTitleRef.current);
+                const stats = argumentStats(shape);
+                setNotice(
+                  stats.reasons === 0
+                    ? "No reasons found to map. Give each reason its own ## heading, or start sentences with “Because”, “First”, “Moreover” — then map it again."
+                    : `Mapped ${stats.reasons} reason${stats.reasons === 1 ? "" : "s"}, ${stats.evidence} piece${stats.evidence === 1 ? "" : "s"} of evidence and ${stats.objections} objection${stats.objections === 1 ? "" : "s"}.${stats.weak > 0 ? ` ${stats.weak} reason${stats.weak === 1 ? " has" : "s have"} no evidence yet, shown in red.` : ""}`,
+                );
+                return noteMapMarkdown(argumentCanvas(shape));
+              },
             },
           ]
         : []),
