@@ -260,10 +260,7 @@ describe("requests that arrive out of order", () => {
     refreshUserToken.mockRejectedValue(new TokenRefused("bad_refresh_token"));
     expect(await getLiveSession()).toBeNull();
 
-    store.set(
-      "forkleaf_session",
-      await encryptSession({ token: "new-token", user, ...renewal, scopes: [] }),
-    );
+    store.set("forkleaf_session", await encryptSession({ user, ...renewal }));
 
     expect((await getSession())?.token).toBe("new-token");
     expect((await getLiveSession())?.token).toBe("new-token");

@@ -937,6 +937,77 @@ mark.fl-hl-orange {
   cursor: help;
 }
 
+/* Spelling: a word the dictionary does not know. Wavy and in the danger
+   colour, as every writing tool has taught people to read it. */
+.fl-misspelt {
+  text-decoration: underline wavy var(--fl-danger);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+
+/* The corrections under a misspelt word. Fixed, so it floats over either
+   editor and follows the word as the page scrolls. */
+.fl-spell-bubble {
+  position: fixed;
+  z-index: 60;
+  min-width: 11rem;
+  max-width: min(20rem, calc(100vw - 16px));
+  border: 1px solid var(--fl-border);
+  border-radius: 12px;
+  background: var(--fl-surface);
+  box-shadow: var(--fl-shadow-lg);
+  padding: 4px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--fl-text);
+}
+
+.fl-spell-suggestions,
+.fl-spell-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.fl-spell-actions {
+  margin-top: 4px;
+  border-top: 1px solid var(--fl-border);
+  padding-top: 4px;
+}
+
+.fl-spell-option,
+.fl-spell-action {
+  border-radius: 8px;
+  padding: 6px 10px;
+  text-align: left;
+  /* Big enough to hit with a thumb. */
+  min-height: 34px;
+}
+
+.fl-spell-option {
+  font-weight: 600;
+}
+
+.fl-spell-action {
+  font-size: 12.5px;
+  color: var(--fl-muted);
+}
+
+.fl-spell-option:hover,
+.fl-spell-option:focus-visible,
+.fl-spell-action:hover,
+.fl-spell-action:focus-visible {
+  background: var(--fl-elevated);
+  color: var(--fl-text);
+  outline: none;
+}
+
+.fl-spell-note {
+  padding: 6px 10px;
+  color: var(--fl-muted);
+}
+
 /* A `Question :: Answer` line in a rendered note: the question, and the answer
    behind a click. The rich editor draws the same line as a card it can grade. */
 .fl-flashcard {

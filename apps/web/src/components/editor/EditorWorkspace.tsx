@@ -22,6 +22,7 @@ import type {
 import { readSharedDeck, shareDeck } from "@/lib/gateway";
 import { useInlineFlashcards } from "@/lib/inline-flashcards";
 import { useSpacedReading } from "@/lib/spaced-reading";
+import { setSpellingEnabled, spellingEnabled, useSpelling } from "@/lib/spelling";
 import { useCourseBridge } from "@/lib/course-bridge";
 import { GITHUB_SIGN_IN_URL } from "@/lib/constants";
 import { mapNote, noteMapMarkdown } from "@/lib/note-map";
@@ -1928,6 +1929,19 @@ export function EditorWorkspace() {
     [workspace, allNotesForCanvas, readNoteForReading, upsertNoteForReading, openNoteForCanvas],
   );
   const readingBridge = useSpacedReading(readingStore);
+
+  /**
+   * Spelling suggestions, in every view. On by default; the switch is ⌘K and
+   * is remembered by this browser.
+   */
+  const [spellingOn, setSpellingOn] = useState(spellingEnabled);
+  const spellingBridge = useSpelling(spellingOn);
+  const toggleSpelling = useCallback(() => {
+    setSpellingOn((on) => {
+      setSpellingEnabled(!on);
+      return !on;
+    });
+  }, []);
 
   /** A course block turns a folder's notes into ordered lessons with a quiz. */
   const treeForCourse = notebook.tree;
@@ -3924,6 +3938,14 @@ export function EditorWorkspace() {
             setNotice("Nothing to bring back yet — a note shows up here after a month untouched.");
         },
       });
+      list.push({
+        id: "spelling",
+        label: spellingOn ? "Turn spelling suggestions off" : "Turn spelling suggestions on",
+        group: "Notes",
+        hint: "Underline misspelt words and suggest corrections as you type",
+        keywords: "spelling spell check checker autocorrect correct typo grammar dictionary words",
+        run: toggleSpelling,
+      });
       if (note && !(sealed && !opened)) {
         list.push({
           id: "claims",
@@ -4279,6 +4301,8 @@ export function EditorWorkspace() {
   }, [
     claimsOn,
     toggleClaims,
+    spellingOn,
+    toggleSpelling,
     takenPaths,
     resurfaced,
     note,
@@ -5347,6 +5371,7 @@ export function EditorWorkspace() {
                   {...(courseBridge ? { course: courseBridge } : {})}
                   deck={deckBridge}
                   claims={claimBridge}
+                  {...(spellingBridge ? { spelling: spellingBridge } : {})}
                   {...(flashcardBridge ? { flashcards: flashcardBridge } : {})}
                   imageDestination={
                     workspace && !workspace.isLocal

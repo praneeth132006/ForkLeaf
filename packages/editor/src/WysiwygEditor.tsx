@@ -79,6 +79,8 @@ import { DeckBlock, type DeckBridge } from "./extensions/DeckBlock";
 import { HandsFreeBlock, browserSpeech, type SpeechKit } from "./extensions/HandsFreeBlock";
 import { ClaimChecker, claimCheckerKey, type ClaimBridge } from "./extensions/ClaimChecker";
 import { DecisionBlock } from "./extensions/DecisionBlock";
+import { Spelling, spellingKey } from "./extensions/Spelling";
+import type { SpellBridge } from "./spelling";
 import { Wikilink } from "./extensions/Wikilink";
 import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
 import { ShortcutsAfterLineBreak } from "./extensions/ShortcutsAfterLineBreak";
@@ -128,6 +130,8 @@ export interface WysiwygEditorProps {
   speech?: () => SpeechKit | null;
   /** Underlines claims nothing in the notebook backs, while it is on for the note. */
   claims?: ClaimBridge;
+  /** Underlines misspelt words and offers corrections, while it is switched on. */
+  spelling?: SpellBridge;
   /** Today, as `YYYY-MM-DD`, for dating decisions. The device's own by default. */
   today?: () => string;
   /**
@@ -168,6 +172,7 @@ export function WysiwygEditor({
   deck,
   speech,
   claims,
+  spelling,
   today,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
@@ -196,6 +201,8 @@ export function WysiwygEditor({
   speechRef.current = speech;
   const claimsRef = useRef<ClaimBridge | undefined>(claims);
   claimsRef.current = claims;
+  const spellingRef = useRef<SpellBridge | undefined>(spelling);
+  spellingRef.current = spelling;
   const todayRef = useRef(today);
   todayRef.current = today;
 
@@ -303,6 +310,7 @@ export function WysiwygEditor({
       CourseBlock.configure({ bridge: () => courseRef.current }),
       DeckBlock.configure({ bridge: () => deckRef.current }),
       ClaimChecker.configure({ bridge: () => claimsRef.current }),
+      Spelling.configure({ bridge: () => spellingRef.current }),
       DecisionBlock.configure({
         today: () => {
           if (todayRef.current) return todayRef.current();
@@ -454,10 +462,13 @@ export function WysiwygEditor({
     // mismatch because ProseMirror generates DOM the server cannot produce.
     immediatelyRender: false,
     editorProps: {
-      attributes: {
+      // The browser's own spell checker is turned off while ForkLeaf's is on,
+      // so a misspelt word is not underlined twice in two different colours.
+      attributes: () => ({
         class: "fl-prose focus:outline-none min-h-[50vh]",
         "aria-label": "Note content",
-      },
+        spellcheck: spellingRef.current?.enabled ? "false" : "true",
+      }),
       /**
        * Clicking a link follows it, in a tab of its own.
        *
@@ -602,6 +613,20 @@ export function WysiwygEditor({
     if (painted.editor !== editor || painted.claims === claims) return;
     editor.view.dispatch(editor.state.tr.setMeta(claimCheckerKey, true));
   }, [editor, claims]);
+
+  // The same for spelling: switched on or off, or answers back from the
+  // dictionary for words it had not checked yet.
+  const paintedSpelling = useRef<{ editor: Editor | null; spelling: SpellBridge | undefined }>({
+    editor: null,
+    spelling,
+  });
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const painted = paintedSpelling.current;
+    paintedSpelling.current = { editor, spelling };
+    if (painted.editor !== editor || painted.spelling === spelling) return;
+    editor.view.dispatch(editor.state.tr.setMeta(spellingKey, {}));
+  }, [editor, spelling]);
 
   // Hand the instance to the parent once it exists, and take it back on
   // unmount so a toolbar never holds a destroyed editor.
