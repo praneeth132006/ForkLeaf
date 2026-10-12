@@ -27,6 +27,7 @@ import type { CourseBridge } from "./extensions/CourseBlock";
 import type { DeckBridge } from "./extensions/DeckBlock";
 import type { ClaimBridge } from "./extensions/ClaimChecker";
 import type { SpellBridge } from "./spelling";
+import type { GlossaryBridge } from "./extensions/Glossary";
 
 export interface MarkdownEditorProps {
   /**
@@ -95,6 +96,8 @@ export interface MarkdownEditorProps {
   claims?: ClaimBridge;
   /** Underlines misspelt words and offers corrections, in every view. */
   spelling?: SpellBridge;
+  /** Terms the notebook defines, with their definitions on hover, in rich text. */
+  glossary?: GlossaryBridge;
   /**
    * Makes the note readable but not writable, in every mode at once.
    *
@@ -149,6 +152,7 @@ export function MarkdownEditor({
   deck,
   claims,
   spelling,
+  glossary,
   readOnly = false,
 }: MarkdownEditorProps) {
   // Split view: the divider position, as a percentage of the container width.
@@ -470,6 +474,7 @@ export function MarkdownEditor({
             {...(deck ? { deck } : {})}
             {...(claims ? { claims } : {})}
             {...(spelling ? { spelling } : {})}
+            {...(glossary ? { glossary } : {})}
             {...(placeholder ? { placeholder } : {})}
             // A wide bottom pad so the last paragraph can be scrolled to the
             // middle of the screen instead of being pinned to the bottom edge.

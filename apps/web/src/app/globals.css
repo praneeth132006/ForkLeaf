@@ -1008,6 +1008,52 @@ mark.fl-hl-orange {
   color: var(--fl-muted);
 }
 
+/* The auto-glossary: a term the notebook defines. Faint and dotted, so a note
+   full of them still reads as prose. */
+.fl-glossary-term {
+  text-decoration: underline dotted var(--fl-accent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 4px;
+  cursor: help;
+}
+
+.fl-glossary-card {
+  position: fixed;
+  z-index: 60;
+  width: min(20rem, calc(100vw - 16px));
+  border: 1px solid var(--fl-border);
+  border-radius: 12px;
+  background: var(--fl-surface);
+  box-shadow: var(--fl-shadow-lg);
+  padding: 10px 12px;
+  font-family: var(--font-sans);
+  color: var(--fl-text);
+}
+
+.fl-glossary-card-term {
+  display: block;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.fl-glossary-card-definition {
+  margin: 4px 0 8px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.fl-glossary-card-source {
+  font-size: 12px;
+  color: var(--fl-muted);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.fl-glossary-card-source:hover,
+.fl-glossary-card-source:focus-visible {
+  color: var(--fl-text);
+}
+
 /* A `Question :: Answer` line in a rendered note: the question, and the answer
    behind a click. The rich editor draws the same line as a card it can grade. */
 .fl-flashcard {

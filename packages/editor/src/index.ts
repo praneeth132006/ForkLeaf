@@ -106,3 +106,10 @@ export {
 } from "./spelling";
 export { Spelling, spellingKey } from "./extensions/Spelling";
 export { spellingExtension } from "./codemirror/spelling";
+export {
+  Glossary,
+  glossaryKey,
+  glossaryDecorations,
+  type GlossaryBridge,
+  type GlossaryDefinition,
+} from "./extensions/Glossary";

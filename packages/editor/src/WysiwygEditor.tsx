@@ -80,6 +80,7 @@ import { HandsFreeBlock, browserSpeech, type SpeechKit } from "./extensions/Hand
 import { ClaimChecker, claimCheckerKey, type ClaimBridge } from "./extensions/ClaimChecker";
 import { DecisionBlock } from "./extensions/DecisionBlock";
 import { Spelling, spellingKey } from "./extensions/Spelling";
+import { Glossary, glossaryKey, type GlossaryBridge } from "./extensions/Glossary";
 import type { SpellBridge } from "./spelling";
 import { Wikilink } from "./extensions/Wikilink";
 import { EnterIsALineBreak } from "./extensions/EnterIsALineBreak";
@@ -132,6 +133,8 @@ export interface WysiwygEditorProps {
   claims?: ClaimBridge;
   /** Underlines misspelt words and offers corrections, while it is switched on. */
   spelling?: SpellBridge;
+  /** Terms the notebook defines, underlined with their definition on hover. */
+  glossary?: GlossaryBridge;
   /** Today, as `YYYY-MM-DD`, for dating decisions. The device's own by default. */
   today?: () => string;
   /**
@@ -173,6 +176,7 @@ export function WysiwygEditor({
   speech,
   claims,
   spelling,
+  glossary,
   today,
 }: WysiwygEditorProps) {
   const onChangeRef = useRef(onChange);
@@ -203,6 +207,8 @@ export function WysiwygEditor({
   claimsRef.current = claims;
   const spellingRef = useRef<SpellBridge | undefined>(spelling);
   spellingRef.current = spelling;
+  const glossaryRef = useRef<GlossaryBridge | undefined>(glossary);
+  glossaryRef.current = glossary;
   const todayRef = useRef(today);
   todayRef.current = today;
 
@@ -311,6 +317,7 @@ export function WysiwygEditor({
       DeckBlock.configure({ bridge: () => deckRef.current }),
       ClaimChecker.configure({ bridge: () => claimsRef.current }),
       Spelling.configure({ bridge: () => spellingRef.current }),
+      Glossary.configure({ bridge: () => glossaryRef.current }),
       DecisionBlock.configure({
         today: () => {
           if (todayRef.current) return todayRef.current();
@@ -627,6 +634,19 @@ export function WysiwygEditor({
     if (painted.editor !== editor || painted.spelling === spelling) return;
     editor.view.dispatch(editor.state.tr.setMeta(spellingKey, {}));
   }, [editor, spelling]);
+
+  // And for the glossary: switched, or a term defined or removed somewhere.
+  const paintedGlossary = useRef<{ editor: Editor | null; glossary: GlossaryBridge | undefined }>({
+    editor: null,
+    glossary,
+  });
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const painted = paintedGlossary.current;
+    paintedGlossary.current = { editor, glossary };
+    if (painted.editor !== editor || painted.glossary === glossary) return;
+    editor.view.dispatch(editor.state.tr.setMeta(glossaryKey, true));
+  }, [editor, glossary]);
 
   // Hand the instance to the parent once it exists, and take it back on
   // unmount so a toolbar never holds a destroyed editor.

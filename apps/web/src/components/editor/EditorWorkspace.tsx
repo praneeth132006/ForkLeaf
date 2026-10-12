@@ -22,6 +22,7 @@ import type {
 import { readSharedDeck, shareDeck } from "@/lib/gateway";
 import { useInlineFlashcards } from "@/lib/inline-flashcards";
 import { useSpacedReading } from "@/lib/spaced-reading";
+import type { GlossaryBridge } from "@forkleaf/editor";
 import { setSpellingEnabled, spellingEnabled, useSpelling } from "@/lib/spelling";
 import { useCourseBridge } from "@/lib/course-bridge";
 import { GITHUB_SIGN_IN_URL } from "@/lib/constants";
@@ -146,6 +147,8 @@ import { resurface, type Resurfaced } from "@/lib/resurface";
 import { formatCard, withCards } from "@/lib/flashcard-suggestions";
 import { AskDialog } from "@/components/AskDialog";
 import { ContradictionsDialog } from "@/components/ContradictionsDialog";
+import { GlossaryDialog } from "@/components/GlossaryDialog";
+import { definitionsIn, glossaryFrom, type GlossaryEntry } from "@/lib/glossary";
 import { dismissContradiction, readDismissedContradictions } from "@/lib/contradictions";
 import { MEETING_FOLDER, extractMeeting, meetingNote, withMeetingSummary } from "@/lib/meeting";
 import { plainText } from "@/lib/mind";
@@ -684,6 +687,7 @@ export function EditorWorkspace() {
     | "encrypt-for-people"
     | "lounge"
     | "contradictions"
+    | "glossary"
     | null
   >(null);
   /**
@@ -2055,6 +2059,102 @@ export function EditorWorkspace() {
       },
     };
   }, [checkingClaims, supportIndex, notePath]);
+
+  /**
+   * The auto-glossary: every term the notebook defines, underlined wherever it
+   * appears with its definition on hover. The notebook is read once (again
+   * when files are added or renamed); the note being typed in is re-read as it
+   * changes, so a definition written a moment ago works straight away.
+   */
+  const [glossaryOn, setGlossaryOn] = useState(() => {
+    try {
+      return window.localStorage.getItem(GLOSSARY_KEY) !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const toggleGlossary = useCallback(() => {
+    setGlossaryOn((on) => {
+      try {
+        window.localStorage.setItem(GLOSSARY_KEY, on ? "off" : "on");
+      } catch {
+        // Blocked storage: the choice lasts for this visit.
+      }
+      return !on;
+    });
+  }, []);
+  const [glossaryDefinitions, setGlossaryDefinitions] = useState<Map<
+    string,
+    GlossaryEntry[]
+  > | null>(null);
+  const wantGlossary = glossaryOn || dialog === "glossary";
+  useEffect(() => {
+    if (!wantGlossary) return;
+    let live = true;
+    void allNotesForCanvas().then((entries) => {
+      if (!live) return;
+      const perNote = new Map<string, GlossaryEntry[]>();
+      for (const entry of entries) {
+        if (!isMarkdown(entry.path) || isTemplatePath(entry.path) || isEncrypted(entry.content)) {
+          continue;
+        }
+        perNote.set(
+          entry.path,
+          definitionsIn({
+            path: entry.path,
+            title: deriveTitle(entry.content, entry.frontmatter.title, entry.path),
+            content: entry.content,
+          }),
+        );
+      }
+      setGlossaryDefinitions(perNote);
+    });
+    return () => {
+      live = false;
+    };
+  }, [wantGlossary, allNotesForCanvas, treeForClaims]);
+  const noteDefinitions = useMemo(
+    () =>
+      note && isMarkdown(note.path) && !isEncrypted(note.content)
+        ? definitionsIn({ path: note.path, title, content: note.content })
+        : [],
+    [note, title],
+  );
+  // Only a change to the definitions themselves rebuilds the glossary, not
+  // every keystroke in the note.
+  const noteDefinitionsKey = JSON.stringify(noteDefinitions);
+  const glossary = useMemo(() => {
+    if (!glossaryDefinitions) return null;
+    const merged = new Map(glossaryDefinitions);
+    if (notePath) merged.set(notePath, JSON.parse(noteDefinitionsKey) as GlossaryEntry[]);
+    return glossaryFrom(merged.values());
+  }, [glossaryDefinitions, notePath, noteDefinitionsKey]);
+  const glossaryBridge = useMemo<GlossaryBridge | undefined>(() => {
+    if (!glossaryOn || !glossary || glossary.entries.size === 0) return undefined;
+    return {
+      enabled: true,
+      version: versionOf(glossary),
+      match: glossary.match,
+      lookup: (key) => {
+        const list = glossary.entries.get(key);
+        const first = list?.[0];
+        return first
+          ? {
+              term: first.term,
+              definition: first.definition,
+              source: first.title,
+              path: first.path,
+              line: first.line,
+              others: new Set(list.map((entry) => entry.path)).size - 1,
+            }
+          : undefined;
+      },
+      open: (path, line) => {
+        setReveal({ path, line });
+        notebook.openNote(path);
+      },
+    };
+  }, [glossaryOn, glossary, notebook]);
 
   /** A deck block shares this note's cards publicly, or copies a shared deck in. */
   const deckBridge = useMemo<DeckBridge>(
@@ -3929,6 +4029,22 @@ export function EditorWorkspace() {
         });
       }
       list.push({
+        id: "glossary",
+        label: "Glossary",
+        group: "Notes",
+        hint: "Every term your notes define, A to Z, with where each is defined",
+        keywords: "glossary definitions terms vocabulary jargon define meaning dictionary",
+        run: () => setDialog("glossary"),
+      });
+      list.push({
+        id: "glossary-underlines",
+        label: glossaryOn ? "Stop underlining glossary terms" : "Underline glossary terms",
+        group: "Notes",
+        hint: "Terms your notes define, underlined everywhere with the definition on hover",
+        keywords: "glossary definitions terms underline hover tooltip define",
+        run: toggleGlossary,
+      });
+      list.push({
         id: "contradictions",
         label: "Find contradictions in my notes",
         group: "Notes",
@@ -4324,6 +4440,8 @@ export function EditorWorkspace() {
     toggleClaims,
     spellingOn,
     toggleSpelling,
+    glossaryOn,
+    toggleGlossary,
     takenPaths,
     resurfaced,
     note,
@@ -5426,6 +5544,7 @@ export function EditorWorkspace() {
                   deck={deckBridge}
                   claims={claimBridge}
                   {...(spellingBridge ? { spelling: spellingBridge } : {})}
+                  {...(glossaryBridge ? { glossary: glossaryBridge } : {})}
                   {...(flashcardBridge ? { flashcards: flashcardBridge } : {})}
                   imageDestination={
                     workspace && !workspace.isLocal
@@ -6359,6 +6478,20 @@ export function EditorWorkspace() {
         />
       )}
 
+      {openDialog === "glossary" && (
+        <GlossaryDialog
+          onClose={() => setDialog(null)}
+          entries={glossary?.entries ?? null}
+          underlining={glossaryOn}
+          onToggleUnderlining={toggleGlossary}
+          onOpen={(path, line) => {
+            setDialog(null);
+            setReveal({ path, line });
+            notebook.openNote(path);
+          }}
+        />
+      )}
+
       {openDialog === "contradictions" && workspace && (
         <ContradictionsDialog
           onClose={() => setDialog(null)}
@@ -6673,6 +6806,22 @@ function EmptyState({
 /** Icons for the `/` menu's tools, on the same 16px grid as the editor's own. */
 /** Notes the claim checker is on for, on this device. */
 const CLAIMS_KEY = "forkleaf:claims-on";
+const GLOSSARY_KEY = "forkleaf:glossary";
+
+/**
+ * A number per glossary built, for the editor's cache of where terms are.
+ * Kept by identity, so asking twice about the same glossary is the same answer.
+ */
+const glossaryVersions = new WeakMap<object, number>();
+let lastGlossaryVersion = 0;
+function versionOf(glossary: object): number {
+  let version = glossaryVersions.get(glossary);
+  if (version === undefined) {
+    version = ++lastGlossaryVersion;
+    glossaryVersions.set(glossary, version);
+  }
+  return version;
+}
 
 const TOOL_ICONS = {
   cards: "M2.75 5.25h8.5v8h-8.5zM5 2.75h8.25v8",
