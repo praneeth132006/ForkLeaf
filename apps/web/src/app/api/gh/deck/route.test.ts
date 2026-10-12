@@ -133,7 +133,7 @@ describe("sharing a deck", () => {
     expect(status).toBe(200);
     expect(body).toEqual({ owner: "me", repo: "bio-deck", sha: "fff0000", cards: 2 });
     expect(state.github.createRepo).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "bio-deck", private: false }),
+      expect.objectContaining({ name: "bio-deck", private: false, discussions: true }),
     );
     const [where, changes] = state.github.commitChanges.mock.calls[0]!;
     expect(where).toEqual({ owner: "me", repo: "bio-deck", branch: "main", directory: "" });

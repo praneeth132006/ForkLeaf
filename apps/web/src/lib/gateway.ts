@@ -860,6 +860,36 @@ export async function listChangesSince(
   return call(`/api/gh/following?${repoParams(repo)}&since=${encodeURIComponent(since)}`);
 }
 
+export interface StudyRoomDto {
+  enabled: boolean;
+  url: string;
+  room: { number: number; url: string } | null;
+  comments: Array<{
+    id: string;
+    body: string;
+    createdAt: string;
+    viewerDidAuthor: boolean;
+    author: { login: string; avatarUrl: string } | null;
+  }>;
+}
+
+/** A shared deck's study room, if it has one. */
+export async function readStudyRoom(owner: string, repo: string): Promise<StudyRoomDto> {
+  return call(
+    `/api/gh/study-room?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`,
+  );
+}
+
+/** Brings the signed-in member's progress line up to date, opening the room if need be. */
+export async function shareStudyProgress(options: {
+  owner: string;
+  repo: string;
+  deck: string;
+  progress: { week: number; streak: number; mastered: number; cards: number; on: string };
+}): Promise<{ room: { number: number; url: string } }> {
+  return call("/api/gh/study-room", { method: "POST", body: JSON.stringify(options) });
+}
+
 export interface LinkPreviewResult {
   url: string;
   title: string | null;

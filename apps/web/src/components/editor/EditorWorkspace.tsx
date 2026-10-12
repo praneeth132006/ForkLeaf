@@ -127,10 +127,10 @@ import {
   type Identity,
   type KeyFile,
 } from "@/lib/shared-encryption";
-import { SCHEDULE_PATH, findCards, wantsClozes } from "@/lib/flashcards";
+import { SCHEDULE_PATH, findCards, parseSchedule, wantsClozes } from "@/lib/flashcards";
 import { cardsInNotes, useDueCount } from "@/lib/flashcard-due";
 import { cardsRequest, readCardReply } from "@/lib/ai-cards";
-import { STUDY_LOG_PATH, recordReview } from "@/lib/study-log";
+import { STUDY_LOG_PATH, parseLog, recordReview, streak, thisWeek } from "@/lib/study-log";
 import { useAssistantKey, useAssistantSettings } from "@/hooks/useAssistant";
 import { isReady, provider as assistantProvider, streamChat } from "@/lib/assistant";
 import {
@@ -158,6 +158,8 @@ import { ExamDialog } from "@/components/ExamDialog";
 import { OcrDialog } from "@/components/OcrDialog";
 import { BookQuoteDialog } from "@/components/BookQuoteDialog";
 import { FollowingDialog } from "@/components/FollowingDialog";
+import { StudyRoomDialog } from "@/components/StudyRoomDialog";
+import { readStudyRoom, shareStudyProgress } from "@/lib/gateway";
 import {
   FOLLOWING_PATH,
   followingNote,
@@ -2279,8 +2281,11 @@ export function EditorWorkspace() {
   }, [dialog, allNotesForCanvas]);
 
   /** A deck block shares this note's cards publicly, or copies a shared deck in. */
+  /** The shared deck whose study room is open, by `owner/name`. */
+  const [studyRoom, setStudyRoom] = useState<string | null>(null);
   const deckBridge = useMemo<DeckBridge>(
     () => ({
+      openRoom: (repo) => setStudyRoom(repo),
       signedIn: () => user !== null,
       noteTitle: () => title || "Flashcards",
       read: async (repo, ref) => {
@@ -2293,7 +2298,7 @@ export function EditorWorkspace() {
         return { repo: `${shared.owner}/${shared.repo}`, sha: shared.sha };
       },
     }),
-    [user, title],
+    [user, title, setStudyRoom],
   );
 
   const linkBridge = useMemo<LinkBridge>(
@@ -6728,6 +6733,42 @@ export function EditorWorkspace() {
             const separator = current.content.endsWith("\n") ? "" : "\n";
             await notebook.saveNote(`${current.content}${separator}\n${markdown}`);
             return deriveTitle(current.content, current.frontmatter.title, current.path);
+          }}
+        />
+      )}
+
+      {studyRoom && note && (
+        <StudyRoomDialog
+          key={studyRoom}
+          onClose={() => setStudyRoom(null)}
+          repo={studyRoom}
+          signedIn={Boolean(user)}
+          load={() => {
+            const [owner = "", name = ""] = studyRoom.split("/");
+            return readStudyRoom(owner, name);
+          }}
+          progress={async () => {
+            // This deck's cards are the ones in this note; how well each is
+            // known comes from the notebook's flashcard schedule, and the week
+            // and streak from its study log.
+            const entries = await notebook.allNotes();
+            const read = (path: string) =>
+              entries.find((entry) => entry.path === path)?.content ?? null;
+            const cards = findCards(note.path, title, note.content);
+            const schedule = parseSchedule(read(SCHEDULE_PATH));
+            const log = parseLog(read(STUDY_LOG_PATH));
+            const today = dateStamp(new Date());
+            return {
+              week: thisWeek(log, today),
+              streak: streak(log, today),
+              mastered: cards.filter((card) => (schedule.get(card.id)?.interval ?? 0) >= 21).length,
+              cards: cards.length,
+              on: today,
+            };
+          }}
+          share={async (progress) => {
+            const [owner = "", name = ""] = studyRoom.split("/");
+            await shareStudyProgress({ owner, repo: name, deck: title || studyRoom, progress });
           }}
         />
       )}
