@@ -651,7 +651,7 @@ export function EditorWorkspace() {
    * item is chosen rather than kept in state: a book is built from the notes'
    * full text, which the editor otherwise has no reason to hold all of.
    */
-  const [book, setBook] = useState<{ folder: string; notes: Note[] } | null>(null);
+  const [book, setBook] = useState<{ folder: string; notes: Note[]; course: boolean } | null>(null);
   const [dialog, setDialog] = useState<
     | "export"
     | "connect"
@@ -2870,9 +2870,9 @@ export function EditorWorkspace() {
    * chapter list moves under the reader while they are counting it.
    */
   const handlePublishFolder = useCallback(
-    async (path: string) => {
+    async (path: string, asCourse = false) => {
       try {
-        setBook({ folder: path, notes: await loadAllNotes() });
+        setBook({ folder: path, notes: await loadAllNotes(), course: asCourse });
       } catch {
         notebook.reportError("Those notes could not be read, so the book was not opened.");
       }
@@ -5074,7 +5074,10 @@ export function EditorWorkspace() {
               onRenameFolder={handleRenameFolder}
               onDeleteFolder={handleDeleteFolder}
               {...(workspace && !workspace.isLocal
-                ? { onPublishFolder: (path: string) => void handlePublishFolder(path) }
+                ? {
+                    onPublishFolder: (path: string, asCourse?: boolean) =>
+                      void handlePublishFolder(path, asCourse),
+                  }
                 : {})}
               onMoveNote={handleMoveNote}
               onMoveFolder={handleMoveFolder}
@@ -6851,6 +6854,7 @@ export function EditorWorkspace() {
           folder={book.folder}
           workspace={workspace}
           notes={book.notes}
+          {...(book.course ? { startAsCourse: true } : {})}
           onClose={() => setBook(null)}
         />
       )}

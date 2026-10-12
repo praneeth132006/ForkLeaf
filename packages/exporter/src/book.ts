@@ -6,6 +6,16 @@ import {
 import type { ExportOptions } from "@forkleaf/types";
 import { toBodyHtml, pageStyles, escapeHtml, type ImageResolver } from "./html";
 import { GARDEN_STYLES, gardenLinks, gardenMapSvg, type GardenLinks } from "./garden";
+import {
+  COURSE_SCRIPT,
+  COURSE_STYLES,
+  QUIZ,
+  courseConfig,
+  coverBar,
+  lessonBar,
+  quizBody,
+  type CourseOptions,
+} from "./course";
 
 /**
  * A folder of notes, published as a book.
@@ -71,6 +81,11 @@ export interface BuildBookOptions {
   garden?: boolean;
   /** Comments under every chapter, kept in the notes' GitHub Discussions. */
   comments?: BookComments;
+  /**
+   * Publish as a course: lessons with a progress bar and a "done" button,
+   * ticks on the contents page, and a quiz page from the cards given.
+   */
+  course?: CourseOptions;
 }
 
 /**
@@ -205,8 +220,11 @@ function withHeadingIds(html: string): string {
  * Order matters and is the caller's: it is the reading order, and it decides
  * which of two colliding notes is the one that keeps the plain name.
  */
-export function assignSlugs(notes: readonly BookNote[]): BookChapter[] {
-  const used = new Set<string>([INDEX]);
+export function assignSlugs(
+  notes: readonly BookNote[],
+  reserved: readonly string[] = [],
+): BookChapter[] {
+  const used = new Set<string>([INDEX, ...reserved]);
   const chapters: BookChapter[] = [];
 
   for (const note of notes) {
@@ -267,7 +285,8 @@ export async function buildBook(
   notes: readonly BookNote[],
   options: BuildBookOptions,
 ): Promise<Book> {
-  const chapters = assignSlugs(notes);
+  const course = options.course ?? null;
+  const chapters = assignSlugs(notes, course ? [QUIZ] : []);
   const resolveWiki = bookWikilinks(chapters);
 
   // From the markdown rather than the rendered HTML: it is the words the
@@ -309,19 +328,57 @@ export async function buildBook(
           suggestUrl: options.suggestUrl?.(note) ?? null,
           backlinks: links ? links.backlinks[index]!.map((from) => chapters[from]!) : null,
           comments: options.comments ? { config: options.comments, term: note.path } : null,
+          course: course ? { key: course.key } : null,
         }),
       };
     }),
   );
+
+  const lessonOf = new Map(chapters.map((chapter) => [chapter.source, chapter]));
+  const quizCards = (course?.quiz ?? []).map((card) => {
+    const lesson = lessonOf.get(card.notePath);
+    return { ...card, lesson: lesson ? { slug: lesson.slug, title: lesson.title } : null };
+  });
 
   return {
     chapters,
     files: [
       {
         path: `${INDEX}.html`,
-        content: coverPage(options.title, chapters, minutes, options.theme, links),
+        content: coverPage(
+          options.title,
+          chapters,
+          minutes,
+          options.theme,
+          links,
+          course ? { key: course.key, hasQuiz: quizCards.length > 0 } : null,
+        ),
       },
       ...pages,
+      ...(course && quizCards.length > 0
+        ? [
+            {
+              path: `${QUIZ}.html`,
+              content: `${head(`Quiz — ${options.title}`, options.theme)}
+<body class="book">
+<main class="book-cover">
+<header class="doc-head">
+  <p class="doc-meta"><a href="${INDEX}.html">${escapeHtml(options.title)}</a></p>
+  <h1 class="doc-title">Quiz</h1>
+</header>
+${quizBody(quizCards)}
+</main>
+${courseConfig(
+  course.key,
+  chapters.map((chapter) => chapter.slug),
+)}
+<script>${COURSE_SCRIPT}</script>
+</body>
+</html>
+`,
+            },
+          ]
+        : []),
       { path: BOOK_STYLESHEET, content: stylesheet(options.theme) },
     ],
   };
@@ -343,7 +400,7 @@ export async function buildBook(
  * and it overrides the export's own layout rather than replacing it.
  */
 export function stylesheet(theme: "light" | "dark"): string {
-  return `${pageStyles(theme)}${GARDEN_STYLES}
+  return `${pageStyles(theme)}${GARDEN_STYLES}${COURSE_STYLES}
 /* ── Comments ── */
 .book-comments { margin: 3rem 0 0; padding-top: 1.5rem; border-top: 1px solid var(--border, #e5e5e5); }
 .book-comments h2 { font-size: 1.1rem; margin: 0 0 .25rem; }
@@ -624,11 +681,14 @@ function chapterPage(input: {
   backlinks?: readonly BookChapter[] | null;
   /** Comments under the chapter, and the term its discussion is found by. */
   comments?: { config: BookComments; term: string } | null;
+  /** In a course: the key its progress is kept under. */
+  course?: { key: string } | null;
 }): string {
   const chapter = input.chapters[input.index]!;
   const previous = input.chapters[input.index - 1];
   const next = input.chapters[input.index + 1];
-  const where = `Chapter ${input.index + 1} of ${input.chapters.length}`;
+  const course = input.course ?? null;
+  const where = `${course ? "Lesson" : "Chapter"} ${input.index + 1} of ${input.chapters.length}`;
 
   const suggest = input.suggestUrl
     ? `<aside class="doc-suggest">
@@ -648,6 +708,7 @@ ${sidebar(input.book, input.chapters, input.index)}
   <h1 class="doc-title">${escapeHtml(chapter.title)}</h1>
   <p class="doc-meta">${where} · ${readingTime(input.minutes)}</p>
 </header>
+${course ? lessonBar(chapter.slug) : ""}
 ${input.body}
 ${backlinkList(input.backlinks ?? null)}
 ${suggest}
@@ -667,6 +728,14 @@ ${
   </nav>
 </div>
 </div>
+${
+  course
+    ? `${courseConfig(
+        course.key,
+        input.chapters.map((each) => each.slug),
+      )}\n<script>${COURSE_SCRIPT}</script>`
+    : ""
+}
 </body>
 </html>
 `;
@@ -741,13 +810,18 @@ function coverPage(
   minutes: readonly number[],
   theme: "light" | "dark",
   links: GardenLinks | null = null,
+  course: { key: string; hasQuiz: boolean } | null = null,
 ): string {
-  const count = chapters.length === 1 ? "1 chapter" : `${chapters.length} chapters`;
+  const unit = course ? "lesson" : "chapter";
+  const count = chapters.length === 1 ? `1 ${unit}` : `${chapters.length} ${unit}s`;
   const total = minutes.reduce((sum, one) => sum + one, 0);
 
   const items = chapters
     .map(
-      (chapter, index) => `    <li><a href="${chapter.slug}.html">
+      (
+        chapter,
+        index,
+      ) => `    <li${course ? ` data-toc-lesson="${escapeHtml(chapter.slug)}"` : ""}><a href="${chapter.slug}.html">
       <span class="book-toc-title">${escapeHtml(chapter.title)}</span>
       <span class="book-toc-read">${readingTime(minutes[index] ?? 1)}</span>
     </a></li>`,
@@ -761,6 +835,7 @@ function coverPage(
   <h1 class="doc-title">${escapeHtml(title)}</h1>
   <p class="doc-meta">${count} · ${readingTime(total)}</p>
 </header>
+${course ? coverBar(course.hasQuiz) : ""}
   <ol class="book-toc">
 ${items}
   </ol>
@@ -776,6 +851,14 @@ ${gardenMapSvg(
     : ""
 }
 </main>
+${
+  course
+    ? `${courseConfig(
+        course.key,
+        chapters.map((each) => each.slug),
+      )}\n<script>${COURSE_SCRIPT}</script>`
+    : ""
+}
 </body>
 </html>
 `;
