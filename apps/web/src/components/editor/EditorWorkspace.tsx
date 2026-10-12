@@ -19,7 +19,13 @@ import type {
   ImageBridge,
   LinkBridge,
 } from "@forkleaf/editor";
-import { describeRepo, readRepoFile, readSharedDeck, shareDeck } from "@/lib/gateway";
+import {
+  describeRepo,
+  listChangesSince,
+  readRepoFile,
+  readSharedDeck,
+  shareDeck,
+} from "@/lib/gateway";
 import { useInlineFlashcards } from "@/lib/inline-flashcards";
 import { useSpacedReading } from "@/lib/spaced-reading";
 import type { GlossaryBridge, LiveCodeBridge } from "@forkleaf/editor";
@@ -151,6 +157,18 @@ import { GlossaryDialog } from "@/components/GlossaryDialog";
 import { ExamDialog } from "@/components/ExamDialog";
 import { OcrDialog } from "@/components/OcrDialog";
 import { BookQuoteDialog } from "@/components/BookQuoteDialog";
+import { FollowingDialog } from "@/components/FollowingDialog";
+import {
+  FOLLOWING_PATH,
+  followingNote,
+  markSeen,
+  parseFollowing,
+  readSeen,
+  seenSince,
+  withFollowed,
+  withoutFollowed,
+  type Followed,
+} from "@/lib/following";
 import { BOOKS_FOLDER, bookNote, bookTitles, isBookNote, withQuote } from "@/lib/book-quotes";
 import { EXAM_FOLDER } from "@/lib/exam";
 import { definitionsIn, glossaryFrom, type GlossaryEntry } from "@/lib/glossary";
@@ -696,6 +714,7 @@ export function EditorWorkspace() {
     | "exam"
     | "ocr"
     | "book-quote"
+    | "following"
     | null
   >(null);
   /**
@@ -2170,20 +2189,22 @@ export function EditorWorkspace() {
    * default — which for this notebook is the branch being written on.
    */
   const defaultBranches = useRef(new Map<string, Promise<string>>());
+  /** A repository's default branch, asked of GitHub once per visit. */
+  const defaultBranchOf = useCallback((repo: string): Promise<string> => {
+    let known = defaultBranches.current.get(repo.toLowerCase());
+    if (!known) {
+      const [owner, name] = repo.split("/") as [string, string];
+      known = describeRepo(owner, name).then((summary) => summary.defaultBranch);
+      known.catch(() => defaultBranches.current.delete(repo.toLowerCase()));
+      defaultBranches.current.set(repo.toLowerCase(), known);
+    }
+    return known;
+  }, []);
   const liveCodeBridge = useMemo<LiveCodeBridge>(() => {
     const own =
       workspace && !workspace.isLocal ? `${workspace.repo.owner}/${workspace.repo.repo}` : null;
-    const branchOf = (repo: string): Promise<string> => {
-      if (repo === own && workspace) return Promise.resolve(workspace.repo.branch);
-      let known = defaultBranches.current.get(repo);
-      if (!known) {
-        const [owner, name] = repo.split("/") as [string, string];
-        known = describeRepo(owner, name).then((summary) => summary.defaultBranch);
-        known.catch(() => defaultBranches.current.delete(repo));
-        defaultBranches.current.set(repo, known);
-      }
-      return known;
-    };
+    const branchOf = (repo: string): Promise<string> =>
+      repo === own && workspace ? Promise.resolve(workspace.repo.branch) : defaultBranchOf(repo);
     return {
       defaultRepo: own,
       read: async (repo, path, ref) => {
@@ -2204,7 +2225,36 @@ export function EditorWorkspace() {
           .map(encodeURIComponent)
           .join("/")}#L${from}-L${to}`,
     };
-  }, [workspace, user]);
+  }, [workspace, user, defaultBranchOf]);
+
+  /** The notebooks this person follows, read from following.md when the dialog opens. */
+  const [followedNotebooks, setFollowedNotebooks] = useState<{
+    path: string | null;
+    list: Followed[];
+  }>({
+    path: null,
+    list: [],
+  });
+  const loadFollowing = useCallback(async () => {
+    const entry = (await allNotesForCanvas()).find(
+      (each) => each.path === FOLLOWING_PATH || each.frontmatter.type === "following",
+    );
+    return { path: entry?.path ?? null, list: entry ? parseFollowing(entry.content) : [] };
+  }, [allNotesForCanvas]);
+  const readFollowing = useCallback(
+    async () => setFollowedNotebooks(await loadFollowing()),
+    [loadFollowing],
+  );
+  useEffect(() => {
+    if (dialog !== "following") return;
+    let live = true;
+    void loadFollowing().then((result) => {
+      if (live) setFollowedNotebooks(result);
+    });
+    return () => {
+      live = false;
+    };
+  }, [dialog, loadFollowing]);
 
   /** The books quotes have been kept from, offered again in "Quote from a book". */
   const [bookList, setBookList] = useState<ReturnType<typeof bookTitles>>([]);
@@ -4111,6 +4161,15 @@ export function EditorWorkspace() {
           run: () => setDialog("ocr"),
         });
       }
+      list.push({
+        id: "following",
+        label: "Notebooks I follow",
+        group: "Notes",
+        hint: "What the people whose notes you read have written lately — and a passage of theirs in your note in one click",
+        keywords:
+          "follow following feed subscribe friends people others notebooks public repositories updates new borrow quote",
+        run: () => setDialog("following"),
+      });
       list.push({
         id: "book-quote",
         label: "Quote from a book (photo)",
@@ -6605,6 +6664,70 @@ export function EditorWorkspace() {
                 ? "The picture and its text were added to the end of this note."
                 : "The text was added to the end of this note.",
             );
+          }}
+        />
+      )}
+
+      {openDialog === "following" && workspace && (
+        <FollowingDialog
+          onClose={() => setDialog(null)}
+          signedIn={Boolean(user)}
+          following={followedNotebooks.list}
+          onFollow={async (owner, name) => {
+            let summary;
+            try {
+              summary = await describeRepo(owner, name);
+            } catch {
+              throw new Error(`There is no notebook at ${owner}/${name} that you can read.`);
+            }
+            const followed = { owner, repo: name, label: summary.fullName };
+            if (followedNotebooks.path) {
+              await notebook.rewriteNote(followedNotebooks.path, (content) =>
+                withFollowed(content, followed),
+              );
+            } else {
+              const created = await notebook.createNote(
+                "Following",
+                "",
+                withFollowed(followingNote(), followed),
+              );
+              if (!created) throw new Error("following.md could not be created.");
+            }
+            await readFollowing();
+          }}
+          onUnfollow={async (followed) => {
+            if (!followedNotebooks.path) return;
+            await notebook.rewriteNote(followedNotebooks.path, (content) =>
+              withoutFollowed(content, followed),
+            );
+            await readFollowing();
+          }}
+          since={(followed) => seenSince(readSeen(workspace.id), followed, new Date())}
+          onCaughtUp={(followed) =>
+            markSeen(workspace.id, followed, new Date().toISOString().replace(/\.\d+Z$/, "Z"))
+          }
+          loadChanges={async (followed, from) =>
+            listChangesSince(
+              {
+                owner: followed.owner,
+                repo: followed.repo,
+                branch: await defaultBranchOf(`${followed.owner}/${followed.repo}`),
+                directory: "",
+              },
+              from,
+            )
+          }
+          readAt={async (followed, path, sha) =>
+            (await readRepoFile({ owner: followed.owner, repo: followed.repo, ref: sha, path }))
+              ?.content ?? null
+          }
+          onCopy={async (markdown) => {
+            const current = notebook.note;
+            if (!current) throw new Error("Open one of your notes to add it to.");
+            if (noteLocked) throw new Error("Your note is locked — ⌘⇧L to unlock it.");
+            const separator = current.content.endsWith("\n") ? "" : "\n";
+            await notebook.saveNote(`${current.content}${separator}\n${markdown}`);
+            return deriveTitle(current.content, current.frontmatter.title, current.path);
           }}
         />
       )}

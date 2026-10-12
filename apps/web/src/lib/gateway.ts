@@ -836,6 +836,30 @@ export async function readRepoFile(options: {
   return file;
 }
 
+/** One note a followed notebook added or changed. */
+export interface FollowedChangeDto {
+  path: string;
+  status: string;
+  previousPath: string | null;
+}
+
+/**
+ * What a followed notebook has written since a moment: the notes, the commit
+ * they are compared from (null when the notebook is newer than that), and the
+ * commit they are compared to.
+ */
+export async function listChangesSince(
+  repo: RepoRef,
+  since: string,
+): Promise<{
+  baseSha: string | null;
+  headSha: string;
+  files: FollowedChangeDto[];
+  truncated: boolean;
+}> {
+  return call(`/api/gh/following?${repoParams(repo)}&since=${encodeURIComponent(since)}`);
+}
+
 export interface LinkPreviewResult {
   url: string;
   title: string | null;

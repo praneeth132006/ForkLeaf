@@ -1333,6 +1333,64 @@ export class GitHubClient {
   }
 
   /**
+   * The Markdown notes a notebook added or changed since a moment.
+   *
+   * For following somebody else's notebook: two requests whatever the size of
+   * the repository — the commit that was current at `since`, then GitHub's
+   * comparison of it with the branch as it is now. `baseSha` is that earlier
+   * commit, so a changed note can be read as it was and its new paragraphs
+   * picked out; null when the repository is newer than `since`, in which case
+   * every note in it is new.
+   */
+  async changesSince(
+    repo: RepoRef,
+    since: string,
+    limit = 100,
+  ): Promise<{
+    baseSha: string | null;
+    headSha: string;
+    files: CommitFile[];
+    truncated: boolean;
+  }> {
+    const base = await this.commitAt(repo, since);
+    if (!base) {
+      const head = await this.getBranchHead(repo);
+      const tree = await this.listTree(repo, { ref: head });
+      const notes: CommitFile[] = [];
+      const walk = (nodes: typeof tree) => {
+        for (const node of nodes) {
+          if (node.children) walk(node.children);
+          else if (/\.(md|markdown)$/i.test(node.path)) {
+            notes.push({ path: node.path, status: "added", previousPath: null });
+          }
+        }
+      };
+      walk(tree);
+      return {
+        baseSha: null,
+        headSha: head,
+        files: notes.slice(0, limit),
+        truncated: notes.length > limit,
+      };
+    }
+
+    const comparison = await this.compareBranches(
+      repo.owner,
+      repo.repo,
+      base.sha,
+      repo.branch,
+      Number.MAX_SAFE_INTEGER,
+    );
+    const notes = comparison.files.filter((file) => /\.(md|markdown)$/i.test(file.path));
+    return {
+      baseSha: base.sha,
+      headSha: comparison.headSha,
+      files: notes.slice(0, limit),
+      truncated: notes.length > limit,
+    };
+  }
+
+  /**
    * The other files one commit touched.
    *
    * Capped, because a commit can legitimately touch a thousand files — an
