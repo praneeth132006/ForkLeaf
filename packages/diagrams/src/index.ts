@@ -47,6 +47,7 @@ export {
   renderDiagram,
   clearDiagramCache,
   sanitizeSvg,
+  fitSvgToContainer,
   toStandaloneSvg,
   LIGHT_THEME,
   DARK_THEME,

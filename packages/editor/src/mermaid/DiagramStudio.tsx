@@ -513,7 +513,7 @@ export function DiagramStudio({
               <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-5">
                 {svg ? (
                   <div
-                    className="fl-diagram-preview max-w-full [&_svg]:h-auto [&_svg]:max-w-full"
+                    className="fl-diagram-preview w-full"
                     // Sanitised by the diagram renderer before it reaches here.
                     dangerouslySetInnerHTML={{ __html: svg }}
                   />

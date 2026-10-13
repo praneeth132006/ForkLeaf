@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { clearDiagramCache, renderDiagram, LIGHT_THEME, DARK_THEME } from "./render";
+import {
+  clearDiagramCache,
+  fitSvgToContainer,
+  renderDiagram,
+  LIGHT_THEME,
+  DARK_THEME,
+} from "./render";
 
 /**
  * The cache is the point of these tests.
@@ -109,5 +115,52 @@ describe("renderDiagram", () => {
     renderSpy.mockClear();
     await renderDiagram("flowchart TD\n keep --> me", LIGHT_THEME);
     expect(renderSpy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The other half of a diagram being readable: being drawn at a size.
+ *
+ * Mermaid hands back `width="100%"` with the laid-out width as a `max-width`,
+ * which resolves to the 300px default for a replaced element in every
+ * shrink-to-fit box this app shows diagrams in — the reason a 1277px flowchart
+ * was arriving as a row of specks 31px tall.
+ */
+describe("fitSvgToContainer", () => {
+  const svg = (attrs: string) => `<svg ${attrs}><g /></svg>`;
+
+  it("replaces mermaid's width cap with one that scales to the column", () => {
+    const fitted = fitSvgToContainer(
+      svg('id="d" width="100%" style="max-width: 400px;" viewBox="0 0 400 100"'),
+    );
+
+    expect(fitted).toContain("width: 100%");
+    expect(fitted).toContain("height: auto");
+    // Room to grow past the size it was laid out at, and a floor under it.
+    expect(fitted).toContain("max-width: 500px");
+    expect(fitted).toContain("min-width: 240px");
+    // The old attributes are gone rather than left to disagree with the style.
+    expect(fitted).not.toContain('width="100%"');
+    expect(fitted).not.toContain("max-width: 400px");
+  });
+
+  it("keeps everything else about the root element", () => {
+    const fitted = fitSvgToContainer(
+      svg('id="d" class="flowchart" aria-roledescription="flowchart" viewBox="0 0 400 100"'),
+    );
+
+    expect(fitted).toContain('id="d"');
+    expect(fitted).toContain('class="flowchart"');
+    expect(fitted).toContain('aria-roledescription="flowchart"');
+    expect(fitted).toContain("<g />");
+  });
+
+  it("leaves markup it cannot measure exactly as it found it", () => {
+    // No viewBox, so there is no laid-out width to scale against — and an
+    // error page rather than a diagram is markup that is not ours to resize.
+    const unmeasurable = svg('id="d" width="100%"');
+    expect(fitSvgToContainer(unmeasurable)).toBe(unmeasurable);
+    expect(fitSvgToContainer("<p>not a diagram</p>")).toBe("<p>not a diagram</p>");
+    expect(fitSvgToContainer(svg('viewBox="0 0 0 0"'))).toBe(svg('viewBox="0 0 0 0"'));
   });
 });
