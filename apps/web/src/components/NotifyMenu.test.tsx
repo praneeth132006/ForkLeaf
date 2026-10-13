@@ -73,3 +73,34 @@ describe("NotifyMenu", () => {
     expect(screen.queryByRole("dialog", { name: "Notifications" })).toBeNull();
   });
 });
+
+describe("NotifyMenu placement", () => {
+  // Every surface the bell sits on is an `.fl-panel`, which clips its children
+  // to its rounded corner. A menu positioned against the bell was therefore
+  // cut off rather than overflowing once it was wider than the gap between the
+  // bell and that panel's edge — which on a phone is most of the menu.
+  it("positions the panel against the window, not inside the clipping panel", () => {
+    setup();
+    openMenu();
+    const panel = screen.getByRole("dialog", { name: "Notifications" });
+    expect(panel.className).toContain("fixed");
+    expect(panel.className).not.toContain("absolute");
+  });
+
+  it("never asks for more width than the window has", () => {
+    setup();
+    openMenu();
+    const panel = screen.getByRole("dialog", { name: "Notifications" });
+    expect(panel.className).toContain("w-[min(16rem,calc(100vw-1rem))]");
+  });
+
+  it("keeps the panel inside the window on a narrow screen", () => {
+    setup();
+    openMenu();
+    const panel = screen.getByRole("dialog", { name: "Notifications" }) as HTMLElement;
+    // jsdom measures everything as zero, so the clamp's floor is what shows:
+    // the menu is pinned to the margin rather than to a negative offset.
+    expect(panel.style.left).toBe("8px");
+    expect(Number.parseInt(panel.style.top, 10)).toBeGreaterThanOrEqual(0);
+  });
+});

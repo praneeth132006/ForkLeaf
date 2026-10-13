@@ -176,7 +176,13 @@ export function EditorToolbar({
 
   return (
     <div className="shrink-0 border-b border-[var(--fl-border)]">
-      <div className="flex flex-wrap items-center gap-0.5 px-1.5 py-1.5">
+      {/* Wrapping is right on a wide window, where the second row is the
+          exception. On a phone it is the rule: these two rows became five at
+          375px, which is a hundred and twenty pixels of buttons above a
+          writing surface that has eight hundred to share out. Scrolling
+          sideways keeps each row a row — the same trade the open-note tabs
+          beside them make. */}
+      <div className="flex flex-nowrap overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-x-visible items-center gap-0.5 px-1.5 py-1.5">
         {/* ── History ─────────────────────────────────────────────────── */}
         {surface && (
           <>
@@ -376,7 +382,7 @@ export function EditorToolbar({
 
       {/* ── Table row, only while the caret is in one ──────────────────── */}
       {surface?.table && (
-        <div className="flex flex-wrap items-center gap-0.5 border-t border-[var(--fl-border)] bg-[var(--fl-surface)] px-1.5 py-1">
+        <div className="flex flex-nowrap overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-x-visible items-center gap-0.5 border-t border-[var(--fl-border)] bg-[var(--fl-surface)] px-1.5 py-1">
           <span className="px-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--fl-muted)]">
             Table
           </span>

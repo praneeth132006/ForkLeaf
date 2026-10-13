@@ -368,3 +368,32 @@ describe("EditorSidebar — disconnecting a repository", () => {
     expect(screen.queryByLabelText("Disconnect notes")).toBeNull();
   });
 });
+
+/**
+ * The chevron at the top, on a phone.
+ *
+ * Beside the document it narrows the column to a rail of icons. Over the
+ * document — a drawer covering the whole window, which is what it is below
+ * `md` — there is no rail to narrow to and nothing behind it to look at, so
+ * collapsing was a control that visibly did nothing, on the one layout where
+ * it was also the only way back out of the drawer.
+ */
+describe("EditorSidebar — the drawer's way out", () => {
+  it("collapses to the rail when it is a column beside the document", () => {
+    const onToggle = vi.fn();
+    renderSidebar("", { onToggle });
+
+    expect(screen.queryByRole("button", { name: "Close notes" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    expect(onToggle).toHaveBeenCalled();
+  });
+
+  it("offers to close instead when it is a drawer over the document", () => {
+    const onToggle = vi.fn();
+    renderSidebar("", { onToggle, asDrawer: true });
+
+    expect(screen.queryByRole("button", { name: "Collapse sidebar" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Close notes" }));
+    expect(onToggle).toHaveBeenCalled();
+  });
+});

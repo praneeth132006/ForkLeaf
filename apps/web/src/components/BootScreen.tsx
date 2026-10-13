@@ -29,7 +29,7 @@ export function BootScreen({ message = "Starting ForkLeaf…" }: { message?: str
 
   if (!stalled) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-[var(--fl-bg)]">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-[var(--fl-bg)]">
         <ForkLeafLogo markClassName="h-8 w-8" textClassName="text-xl" />
         <p className="text-sm text-[var(--fl-muted)]" aria-busy="true">
           {message}
@@ -39,7 +39,7 @@ export function BootScreen({ message = "Starting ForkLeaf…" }: { message?: str
   }
 
   return (
-    <div className="flex h-screen flex-col items-center justify-center gap-5 bg-[var(--fl-bg)] px-6 text-center">
+    <div className="flex h-[100dvh] flex-col items-center justify-center gap-5 bg-[var(--fl-bg)] px-6 text-center">
       <ForkLeafLogo markClassName="h-8 w-8" textClassName="text-xl" />
 
       <div className="max-w-md">

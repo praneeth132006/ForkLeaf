@@ -5079,9 +5079,12 @@ export function EditorWorkspace() {
   const readingBeside = reader.status !== "idle" && readerLayout === "beside";
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
+    <div className="fl-shell flex flex-col overflow-hidden bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
       {/* The gap and the padding are what make the three panels read as
-          separate surfaces rather than as one slab divided by hairlines. */}
+          separate surfaces rather than as one slab divided by hairlines — on a
+          screen wide enough to spend thirty-two pixels on saying so. Below
+          `md` both go, and the panels run flush to the window's edges; see
+          `.fl-shell` in `globals.css`. */}
       {drawer && (
         <button
           type="button"
@@ -5091,7 +5094,7 @@ export function EditorWorkspace() {
         />
       )}
 
-      <div className="flex min-h-0 flex-1 gap-2 p-2 pb-0">
+      <div className="flex min-h-0 flex-1 md:gap-2 md:p-2 md:pb-0">
         {/* Beside the document from `md` up; a drawer over it below that.
             One component either way — a second, cut-down mobile file tree
             would be a second set of bugs. */}
@@ -5099,14 +5102,26 @@ export function EditorWorkspace() {
           <div
             className={`fl-panel ${
               drawer === "files"
-                ? "fixed inset-y-2 left-2 z-40 flex w-[min(19rem,85vw)] shadow-[var(--fl-shadow-lg)] md:static md:z-auto md:shadow-none"
+                ? // Full-bleed on a phone rather than a 85vw card with a sliver
+                  // of the document showing past it: the sliver was not enough
+                  // of the note to be worth seeing and was enough of a target
+                  // to dismiss the drawer by accident, mid-scroll.
+                  "fl-drawer fixed inset-0 z-40 flex w-full md:static md:inset-auto md:z-auto md:w-[min(19rem,85vw)]"
                 : "hidden md:flex"
             } ${sidebarCollapsed ? "md:w-auto" : "md:w-[var(--fl-col)]"}`}
             style={{ "--fl-col": `${sidebarWidth}px` } as React.CSSProperties}
           >
             <EditorSidebar
-              collapsed={sidebarCollapsed}
-              onToggle={() => setSidebarCollapsed((value) => !value)}
+              // The rail is a desktop state — a 48px strip of icons beside the
+              // document. Opened as a phone drawer it filled the window with
+              // that strip and nothing else, so the one control that leads to
+              // the notes led to a blank column. A drawer is always the full
+              // sidebar; collapsing is for the column it is not.
+              collapsed={drawer === "files" ? false : sidebarCollapsed}
+              asDrawer={drawer === "files"}
+              onToggle={() =>
+                drawer === "files" ? setDrawer(null) : setSidebarCollapsed((value) => !value)
+              }
               workspaces={notebook.workspaces}
               activeWorkspace={workspace}
               onSwitchWorkspace={notebook.switchWorkspace}
@@ -5250,7 +5265,11 @@ export function EditorWorkspace() {
                 <div
                   role="tablist"
                   aria-label="Editor mode"
-                  className="flex shrink-0 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] p-0.5"
+                  // Three words of chrome for a choice that barely applies on a
+                  // phone — a split view at 375px is two unreadable columns —
+                  // and 150px of the 375 there are. "View as rich / split /
+                  // source" is in All tools for the screens that drop it.
+                  className="hidden shrink-0 rounded-lg border border-[var(--fl-border)] bg-[var(--fl-surface)] p-0.5 md:flex"
                 >
                   {MODES.map((option) => (
                     <button
@@ -5272,6 +5291,16 @@ export function EditorWorkspace() {
                 </div>
               ) : null}
 
+              {/* ── The window's own controls ──────────────────────────
+                Everything in here acts on the window rather than on the text.
+                Below `md` the row is cut to the four that cannot be reached
+                any other way — the conversation, the assistant, the document
+                panel, and the tool list that holds the rest — because at
+                375px the full set was 440px wide and `shrink-0` sent the last
+                three of them past the window's edge, where `.fl-panel`'s
+                `overflow: hidden` clipped them out of existence. The chat and
+                the assistant were among the three. Everything dropped here is
+                in "All tools", which is the button that stays. */}
               <div className="flex shrink-0 items-center justify-end gap-1">
                 {/* Search reads as the way into everything, which it is: notes
                   first, then every command in the editor. */}
@@ -5298,7 +5327,7 @@ export function EditorWorkspace() {
                     type="button"
                     onClick={() => setDialog("changes-of-mind")}
                     title="An edit reversed what this note said — record why"
-                    className="inline-flex items-center gap-1.5 rounded-full bg-[var(--fl-accent-soft)] px-2.5 py-1 text-[12px] font-medium text-[var(--fl-accent)] hover:bg-[var(--fl-accent)] hover:text-[var(--fl-accent-contrast)]"
+                    className="hidden items-center gap-1.5 md:inline-flex rounded-full bg-[var(--fl-accent-soft)] px-2.5 py-1 text-[12px] font-medium text-[var(--fl-accent)] hover:bg-[var(--fl-accent)] hover:text-[var(--fl-accent-contrast)]"
                   >
                     Changed your mind? Say why
                     {openReversals.length > 1 ? ` (${openReversals.length})` : ""}
@@ -5312,7 +5341,7 @@ export function EditorWorkspace() {
                     type="button"
                     onClick={() => openFlashcards(note.path)}
                     title={`Study the ${noteCardCount === 1 ? "card" : `${noteCardCount} cards`} in this note`}
-                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+                    className="hidden items-center gap-1.5 md:inline-flex rounded-lg px-2 py-1.5 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
                   >
                     <svg
                       viewBox="0 0 16 16"
@@ -5337,10 +5366,13 @@ export function EditorWorkspace() {
                         ? "Unlock this note so it can be edited (⌘⇧L)"
                         : "Lock this note against editing (⌘⇧L)"
                     }
+                    // Hidden below `md`, except when it is on: a locked note
+                    // is the answer to "why is nothing I type appearing", and
+                    // that question is not worth a trip through a dialog.
                     className={
                       noteLocked
                         ? "inline-flex bg-[var(--fl-accent-soft)] text-[var(--fl-accent)]"
-                        : ""
+                        : "hidden md:inline-flex"
                     }
                   >
                     {noteLocked ? <LockedGlyph /> : <UnlockedGlyph />}
@@ -5351,7 +5383,7 @@ export function EditorWorkspace() {
                   type="button"
                   onClick={() => setDialog("tools")}
                   title="Every tool in the editor, as buttons"
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12.5px] text-[var(--fl-muted)] transition-colors hover:bg-[var(--fl-elevated)] hover:text-[var(--fl-text)]"
                 >
                   <svg
                     viewBox="0 0 16 16"
@@ -5374,7 +5406,11 @@ export function EditorWorkspace() {
                   <span className="sr-only @3xl:hidden">All tools</span>
                 </button>
 
-                <IconButton onClick={() => setDialog("help")} label="Help (⌘⇧?)">
+                <IconButton
+                  onClick={() => setDialog("help")}
+                  label="Help (⌘⇧?)"
+                  className="hidden md:inline-flex"
+                >
                   <svg
                     viewBox="0 0 16 16"
                     className="h-4 w-4"
@@ -5391,6 +5427,7 @@ export function EditorWorkspace() {
                 <IconButton
                   onClick={toggleTheme}
                   label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+                  className="hidden md:inline-flex"
                 >
                   {theme === "dark" ? <SunGlyph /> : <MoonGlyph />}
                 </IconButton>
@@ -5774,7 +5811,7 @@ export function EditorWorkspace() {
 
         {readingBeside && (
           <div
-            className="fl-panel fixed inset-2 z-40 flex overflow-hidden shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:w-[var(--fl-col)] lg:max-w-[70vw] lg:shrink-0 lg:shadow-none"
+            className="fl-panel fl-drawer fixed inset-0 z-40 flex overflow-hidden md:inset-2 lg:static lg:inset-auto lg:z-auto lg:w-[var(--fl-col)] lg:max-w-[70vw] lg:shrink-0 lg:shadow-none"
             style={{ "--fl-col": `${readerWidth}px` } as React.CSSProperties}
           >
             {readerPane("panel")}
@@ -5804,7 +5841,7 @@ export function EditorWorkspace() {
           <div
             className={`fl-panel flex-col lg:w-[var(--fl-col)] ${
               drawer === "side"
-                ? "fixed inset-y-2 right-2 z-40 flex w-[min(23rem,92vw)] shadow-[var(--fl-shadow-lg)] lg:static lg:z-auto lg:shadow-none"
+                ? "fl-drawer fixed inset-0 z-40 flex w-full md:inset-y-2 md:right-2 md:left-auto md:w-[min(23rem,92vw)] lg:static lg:inset-auto lg:w-auto lg:shadow-none"
                 : "hidden lg:flex"
             }`}
             style={{ "--fl-col": `${panelWidth}px` } as React.CSSProperties}

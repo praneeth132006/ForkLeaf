@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Instrument_Sans, Instrument_Serif, JetBrains_Mono, Newsreader } from "next/font/google";
 import { THEME_INIT_SCRIPT } from "@/hooks/useTheme";
 import { Analytics } from "@/components/Analytics";
@@ -72,13 +72,29 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "ForkLeaf", statusBarStyle: "default" },
 };
 
-export const viewport = {
+export const viewport: Viewport = {
   // Matches --fl-bg in each theme so the mobile browser chrome never flashes a
   // colour the page itself does not use.
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#fcfcfa" },
     { media: "(prefers-color-scheme: dark)", color: "#000000" },
   ],
+  /**
+   * The app draws into the whole screen, rounded corners and notch included,
+   * and pays for that by respecting `env(safe-area-inset-*)` itself — see
+   * `.fl-shell` in `globals.css`. Installed to an iPhone's home screen without
+   * this, the window is letterboxed between two bars of background colour,
+   * which is the single thing that makes a web app look like a web page in a
+   * frame rather than an app.
+   */
+  viewportFit: "cover",
+  /**
+   * The on-screen keyboard shortens the layout viewport instead of sliding it
+   * out from under the page. A full-height editor whose toolbar is pinned to
+   * the bottom otherwise has that toolbar pushed behind the keyboard the
+   * moment anybody types, which on a phone is immediately.
+   */
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

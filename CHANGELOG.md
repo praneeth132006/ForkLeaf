@@ -9,6 +9,40 @@ description, and the heading becomes the day's date when they ship.
 
 ## Unreleased
 
+### The editor on a phone
+
+The editor window was a desktop layout shown at phone size, and three things
+were wrong with it at 375px.
+
+The header's controls were set not to shrink, so once they were wider than the
+row — which they were by about sixty pixels — the last three ran off the
+window's edge, where the panel's rounded-corner clipping cut them out of
+existence. Those three were the conversation, the assistant and the document
+panel, which on a phone are the only route to export, history, publishing and
+the note's properties. Below `md` the row is now cut to the four controls that
+cannot be reached any other way; the view switcher, lock, help and theme moved
+to **All tools**, where they already were.
+
+The window was sized in `vh` — the height of the browser with its address bar
+hidden, which it is not until you scroll — so the status bar hung below the
+fold of a layout that cannot scroll. It is now sized in `dvh`, draws into the
+notch and the home indicator rather than being letterboxed between them, and
+goes flush to the window's edges: no gap, no rounded corners, no shadow, which
+is sixteen pixels a side back for the writing surface. The formatting toolbar
+scrolls sideways instead of wrapping to three rows, worth another eighty.
+
+The file drawer covered the window but kept the sidebar's collapsed rail, so
+opening the notes could show a full screen of nothing but a strip of icons,
+with no way out of it; it is now always the full sidebar, with a close button
+where the collapse chevron is. Tree rows are 44px to a finger.
+
+### The notifications menu, cut off in the conversation column
+
+The bell's menu was positioned against the bell inside a panel that clips to
+its rounded corner, so on a narrow column it was sliced down the left rather
+than overflowing — the first few characters of every line in it were missing.
+It is now measured and placed against the window, like the right-click menu.
+
 ### Staying signed in on the home-screen app
 
 The installed app on a phone kept signing people out. A GitHub App's sign-in

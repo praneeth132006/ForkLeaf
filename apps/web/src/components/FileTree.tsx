@@ -631,7 +631,11 @@ const TreeItem = memo(function TreeItem({
     <li role="treeitem" aria-expanded={isFolder ? open : undefined} aria-selected={active}>
       <div
         ref={rowRef}
-        className={`relative flex items-center rounded-md pr-1.5 transition-colors ${
+        // `fl-touch` is what gives this row a 44px minimum on a phone — see
+        // `globals.css`. At its natural 28px it is a row a cursor hits every
+        // time and a thumb hits about four times in five, which in a file tree
+        // means opening the note above the one you meant.
+        className={`fl-touch relative flex items-center rounded-md pr-1.5 transition-colors ${
           lifted ? "opacity-40" : ""
         } ${
           dropping
