@@ -1093,18 +1093,25 @@ mark.fl-hl-orange {
   border-top: 1px dashed var(--fl-border);
 }
 
+/*
+ * A block, not a flex row.
+ *
+ * The renderer sizes a diagram to the width it is given and holds a floor
+ * under it, so a diagram wider than the note overflows on purpose and this
+ * box scrolls to it. A centred flex child overflows in both directions, and
+ * the half that goes left of the scroll origin cannot be reached at all —
+ * `margin-inline: auto` centres the ones that fit without that bargain.
+ */
 .fl-diagram,
 .fl-diagram-preview {
   margin: 1.5rem 0;
-  display: flex;
-  justify-content: center;
   overflow-x: auto;
 }
 
 .fl-diagram svg,
 .fl-diagram-preview svg {
-  max-width: 100%;
-  height: auto;
+  display: block;
+  margin-inline: auto;
 }
 
 .fl-diagram {

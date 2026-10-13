@@ -316,7 +316,7 @@ export function pageStyles(theme: "light" | "dark"): string {
   ul li::marker { color: var(--muted); }
   input[type="checkbox"] { margin-right: 0.5rem; }
   .diagram { margin: 2rem 0; text-align: center; overflow-x: auto; }
-  .diagram svg { max-width: 100%; height: auto; }
+  .diagram svg { display: block; margin: 0 auto; }
   /* ── The document's own title block ──────────────────────────────────
      A PDF gets handed on with no filename attached to it once it is in an
      email, so it has to say what it is on the page itself. */

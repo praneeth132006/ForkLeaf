@@ -59,6 +59,44 @@ export const DARK_THEME: MermaidTheme = {
 };
 
 /**
+ * How many colours mermaid asks a scale for. Its own limit, not ours.
+ */
+const BRANCH_SCALE_SLOTS = 12;
+
+/**
+ * Ink for a label sitting on one of the branch colours.
+ *
+ * Both of them are mid-tone, so the same near-black reads on them in either
+ * theme — following `primaryText` would put cream lettering on amber in dark
+ * mode and lose it.
+ */
+const BRANCH_INK = "#14181F";
+
+/**
+ * How many colours mermaid asks the git scale for. A mindmap's centre is
+ * painted from it — `git0` — as well as the branches of a git graph.
+ */
+const GIT_SCALE_SLOTS = 8;
+
+/** Fills mermaid's colour scales from the two colours we have. */
+function branchScale(theme: MermaidTheme): Record<string, string> {
+  const colourOf = (slot: number) => (slot % 2 === 0 ? theme.line : theme.secondary);
+  const variables: Record<string, string> = {};
+
+  for (let slot = 0; slot < BRANCH_SCALE_SLOTS; slot += 1) {
+    variables[`cScale${slot}`] = colourOf(slot);
+    variables[`cScaleLabel${slot}`] = BRANCH_INK;
+  }
+
+  for (let slot = 0; slot < GIT_SCALE_SLOTS; slot += 1) {
+    variables[`git${slot}`] = colourOf(slot);
+    variables[`gitBranchLabel${slot}`] = BRANCH_INK;
+  }
+
+  return variables;
+}
+
+/**
  * Configures mermaid once per page.
  *
  * `startOnLoad` is off because we render explicitly, and `securityLevel` is
@@ -82,6 +120,17 @@ export async function initMermaid(theme: MermaidTheme = LIGHT_THEME): Promise<vo
     // this root-level flag applies to all of them and takes precedence over
     // the per-diagram settings.
     htmlLabels: false,
+    /*
+     * The one thing mermaid draws wrong once labels are real SVG text.
+     *
+     * A mindmap's root is a circle sized to fit its label, and the label is
+     * then dropped at the circle's centre — right for an HTML label, which
+     * centres itself inside the box it is handed, and wrong for an SVG
+     * `<text>`, which *starts* there and runs off to the right of the circle
+     * it was measured for. That is why the middle of every mindmap read as a
+     * black disc with its title sitting beside it rather than in it.
+     */
+    themeCSS: ".mindmap-node.section-root text { text-anchor: middle; }",
     themeVariables: {
       background: theme.background,
       primaryColor: theme.primary,
@@ -145,6 +194,19 @@ export async function initMermaid(theme: MermaidTheme = LIGHT_THEME): Promise<vo
 
       attributeBackgroundColorOdd: theme.primary,
       attributeBackgroundColorEven: theme.tertiary,
+
+      // Mindmap branches and its centre, and the timeline, journey and git
+      // bands that share the same scales.
+      //
+      // Mermaid derives twelve colours from primaryColor when these are
+      // unset, and what it derived here was one amber branch and a ring of
+      // boxes the colour of the page behind them — the diagram the reader was
+      // meant to take in at a glance was the hardest thing in the note to
+      // read. The scale alternates the two colours this app actually has, each
+      // with ink dark enough to read on both of them. It has to be colours
+      // that show against the background rather than the surface tone, because
+      // mermaid paints the branch lines from the same slots.
+      ...branchScale(theme),
 
       pieTitleTextColor: theme.primaryText,
       pieSectionTextColor: theme.primaryText,
@@ -242,7 +304,7 @@ export async function renderDiagram(
     // behind, which render() does on failure.
     await mermaid.parse(code);
     const { svg } = await mermaid.render(id, code);
-    return remember(key, { svg: sanitizeSvg(svg), error: null });
+    return remember(key, { svg: fitSvgToContainer(sanitizeSvg(svg)), error: null });
   } catch (err) {
     // Failures are cached too. Mid-keystroke source is invalid far more often
     // than it is valid, and re-parsing the same broken string on every
@@ -281,4 +343,73 @@ export function toStandaloneSvg(svg: string): string {
     ? svg
     : svg.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
   return `<?xml version="1.0" encoding="UTF-8"?>\n${withNamespace}`;
+}
+
+/**
+ * How far a small diagram is allowed to be blown up past the size mermaid laid
+ * it out at, and how far a wide one is allowed to be shrunk before the column
+ * gives up and scrolls instead.
+ *
+ * Mermaid lays every diagram out at a 16px type size, so the scale a picture is
+ * drawn at is also the scale its words are read at — which makes mermaid's own
+ * size the one that is certainly readable, and these the two directions it can
+ * be bent without becoming something else. A two-box diagram stretched the
+ * width of a desktop column would be a billboard; a twenty-box flowchart
+ * squeezed into a phone would be a grey smudge. Between those, fill the width.
+ */
+const MAX_UPSCALE = 1.25;
+const MIN_DOWNSCALE = 0.6;
+
+/**
+ * Makes a rendered diagram take the width it is given.
+ *
+ * Mermaid hands back `<svg width="100%" style="max-width: 691px">`, which only
+ * does the right thing inside a block-level box. Every surface that shows a
+ * diagram here centres it — in a flex row, in a `text-align: center` figure —
+ * and a percentage width inside a shrink-to-fit box has nothing to be a
+ * percentage *of*, so the browser falls back to the 300px default width for a
+ * replaced element. That is why a diagram laid out at 1277px was being drawn
+ * 300px wide and 31px tall: a row of labelled specks with acres of space
+ * around them, in a container sized for the picture that should have been
+ * there.
+ *
+ * Width and height move to the style attribute, where they beat the
+ * `max-width: 100%` rules the surfaces apply, and `max-width` becomes a cap on
+ * enlargement rather than a refusal to enlarge at all. The floor is a real
+ * minimum: a diagram too wide for the column keeps a readable size and the
+ * column scrolls, which is what the preview's `overflow-x` was always there
+ * for.
+ */
+export function fitSvgToContainer(svg: string): string {
+  const open = /<svg\b[^>]*>/.exec(svg);
+  if (!open) return svg;
+
+  const tag = open[0];
+  const viewBox = /viewBox="\s*[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+([\d.]+)/.exec(tag);
+  if (!viewBox) return svg;
+
+  const width = Number(viewBox[1]);
+  const height = Number(viewBox[2]);
+  if (!(width > 0) || !(height > 0)) return svg;
+
+  // The attributes are dropped rather than rewritten: an SVG carrying both
+  // `width="100%"` and a style width is one more place for the two to disagree.
+  const attributes = tag
+    .slice(4, -1)
+    .replace(/\s(?:width|height|style)="[^"]*"/g, "")
+    .trim();
+
+  const style = [
+    "width: 100%",
+    "height: auto",
+    `max-width: ${round(width * MAX_UPSCALE)}px`,
+    `min-width: ${round(width * MIN_DOWNSCALE)}px`,
+  ].join("; ");
+
+  return svg.replace(tag, `<svg ${attributes} style="${style}">`);
+}
+
+/** Whole pixels: a style attribute is not the place for fifteen decimals. */
+function round(value: number): number {
+  return Math.round(value);
 }

@@ -127,10 +127,15 @@ function MermaidNodeView({
         role="button"
         aria-label={popout.active ? "Diagram open in another tab" : "Edit diagram"}
       >
-        <div className="flex min-h-[140px] items-center justify-center bg-[var(--fl-surface)] p-6">
+        {/* `overflow-x-auto` and a full-width child rather than a centred one:
+            the renderer gives a diagram a minimum width so it stays readable,
+            and a diagram wider than the note should be scrolled to, not shrunk
+            into illegibility or — worse — centred into an overflow the reader
+            cannot reach. */}
+        <div className="flex min-h-[140px] items-center justify-center overflow-x-auto bg-[var(--fl-surface)] p-6">
           {svg ? (
             <div
-              className="max-w-full [&_svg]:h-auto [&_svg]:max-w-full"
+              className="w-full [&_svg]:mx-auto [&_svg]:block"
               // Sanitised by the diagram renderer.
               dangerouslySetInnerHTML={{ __html: svg }}
             />
