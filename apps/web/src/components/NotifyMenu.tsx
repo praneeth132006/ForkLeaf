@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { LiveStatus } from "@/hooks/useLiveActivity";
 import type { NotifyPermission } from "@/hooks/useConversationAlerts";
 import type { NotifyMode } from "@/lib/notify";
@@ -12,6 +12,15 @@ import type { NotifyMode } from "@/lib/notify";
  * The dot on it is the live connection — filled when messages arrive as they
  * are posted, hollow when ForkLeaf is checking on a timer instead — so "why
  * did that take fifteen seconds?" has an answer one glance away.
+ *
+ * The panel below is positioned against the window rather than against the
+ * button, because every surface this bell sits on is an `.fl-panel`, and that
+ * class clips its children to its rounded corner. An absolutely positioned
+ * menu wider than the gap between the bell and the panel's edge was therefore
+ * cut off rather than overflowing — which on a phone, where the conversation
+ * column is barely wider than the menu itself, sliced the first few characters
+ * off every line in it. Measured and clamped to the window is the same trick
+ * `ContextMenu` uses, and the only one that cannot be clipped by an ancestor.
  */
 
 const CHOICES: { mode: NotifyMode; label: string; hint: string }[] = [
@@ -40,31 +49,80 @@ export function NotifyMenu({
   const [open, setOpen] = useState(false);
   const [refused, setRefused] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const bell = useRef<HTMLButtonElement>(null);
+  const [place, setPlace] = useState<{ top: number; left: number } | null>(null);
+
+  // One way out, so the measurement is always cleared with the panel it
+  // belongs to: a stale `place` would put the next opening at wherever the
+  // bell was the last time, for the frame before it is measured again.
+  const close = () => {
+    setOpen(false);
+    setPlace(null);
+  };
+
+  // Measured after the panel exists, so its real width decides where it goes:
+  // right-aligned under the bell when there is room, and slid back inside the
+  // window when there is not. `left` is clamped rather than flipped because a
+  // menu this wide on a narrow screen has no side to flip to — it simply sits
+  // against the margin.
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    const settle = () => {
+      const trigger = bell.current?.getBoundingClientRect();
+      const panel = box.current?.querySelector("[role=dialog]")?.getBoundingClientRect();
+      if (!trigger || !panel) return;
+
+      const MARGIN = 8;
+      setPlace({
+        top: Math.min(
+          trigger.bottom + 4,
+          Math.max(MARGIN, window.innerHeight - panel.height - MARGIN),
+        ),
+        left: Math.max(
+          MARGIN,
+          Math.min(trigger.right - panel.width, window.innerWidth - panel.width - MARGIN),
+        ),
+      });
+    };
+
+    settle();
+    window.addEventListener("resize", settle);
+    // Capturing, so the menu follows a scroll of any container it hangs over
+    // rather than staying behind where the bell used to be.
+    window.addEventListener("scroll", settle, true);
+    return () => {
+      window.removeEventListener("resize", settle);
+      window.removeEventListener("scroll", settle, true);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    const close = (event: MouseEvent | KeyboardEvent) => {
+    const dismiss = (event: MouseEvent | KeyboardEvent) => {
       if (
         event instanceof KeyboardEvent
           ? event.key === "Escape"
           : !box.current?.contains(event.target as Node)
       ) {
         setOpen(false);
+        setPlace(null);
       }
     };
-    document.addEventListener("mousedown", close);
-    document.addEventListener("keydown", close);
+    document.addEventListener("mousedown", dismiss);
+    document.addEventListener("keydown", dismiss);
     return () => {
-      document.removeEventListener("mousedown", close);
-      document.removeEventListener("keydown", close);
+      document.removeEventListener("mousedown", dismiss);
+      document.removeEventListener("keydown", dismiss);
     };
   }, [open]);
 
   return (
     <div ref={box} className="relative">
       <button
+        ref={bell}
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => (open ? close() : setOpen(true))}
         aria-expanded={open}
         aria-haspopup="true"
         aria-label={`Notifications and live updates — ${live === "live" ? "live" : "not live"}`}
@@ -96,7 +154,12 @@ export function NotifyMenu({
         <div
           role="dialog"
           aria-label="Notifications"
-          className="absolute right-0 z-20 mt-1 w-64 rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-3 text-[12.5px] shadow-[var(--fl-shadow-lg)]"
+          style={place ?? undefined}
+          // Hidden for the frame between mounting and being measured, so the
+          // panel is never seen at the top-left corner on its way to the bell.
+          className={`fixed z-50 w-[min(16rem,calc(100vw-1rem))] rounded-xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-3 text-[12.5px] shadow-[var(--fl-shadow-lg)] ${
+            place ? "" : "invisible"
+          }`}
         >
           <p className="text-[11.5px] text-[var(--fl-muted)]" role="status">
             {LIVE_TEXT[live]}

@@ -12,6 +12,19 @@ import { SORT_MODE_LABELS, type TreeSortMode } from "@/lib/tree-order";
 export interface EditorSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  /**
+   * True when this is the drawer over the document rather than the column
+   * beside it — which is to say, on a phone.
+   *
+   * It changes one thing: what the chevron at the top does and says. Beside
+   * the document it narrows the column to a rail; over the document there is
+   * no rail to narrow to and nothing behind the drawer to look at, so the only
+   * useful meaning left for that control is "put this away". It was previously
+   * wired to the collapse either way, which on a phone made it a button that
+   * visibly did nothing — and the drawer covers the window, so it was also the
+   * only way out of it short of opening a note.
+   */
+  asDrawer?: boolean;
   workspaces: Workspace[];
   activeWorkspace: Workspace | null;
   onSwitchWorkspace: (workspace: Workspace) => void;
@@ -272,7 +285,10 @@ export function EditorSidebar(props: EditorSidebarProps) {
             <ChevronDown />
           </button>
 
-          <RailButton label="Collapse sidebar" onClick={props.onToggle}>
+          <RailButton
+            label={props.asDrawer ? "Close notes" : "Collapse sidebar"}
+            onClick={props.onToggle}
+          >
             <svg
               viewBox="0 0 16 16"
               className="h-4 w-4"
@@ -282,7 +298,7 @@ export function EditorSidebar(props: EditorSidebarProps) {
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <path d="M9.5 4 5.5 8l4 4" />
+              {props.asDrawer ? <path d="M4 4l8 8M12 4l-8 8" /> : <path d="M9.5 4 5.5 8l4 4" />}
             </svg>
           </RailButton>
         </div>

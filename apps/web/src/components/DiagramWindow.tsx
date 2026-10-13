@@ -73,7 +73,7 @@ export function DiagramWindow() {
     // colour, a title bar of their own, and a status strip underneath. A
     // window that reads like the app it came out of does not feel like a
     // second application you have been thrown into.
-    <div className="flex h-screen flex-col overflow-hidden bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
       <div className="shrink-0 px-2 pt-2">
         <header className="fl-panel flex h-[52px] items-center gap-3 px-3">
           <ForkLeafLogo markClassName="h-5 w-5" textClassName="text-sm" />
@@ -254,7 +254,7 @@ function Message({ heading, body, code }: { heading: string; body: string; code?
   const [copied, setCopied] = useState(false);
 
   return (
-    <div className="flex h-screen flex-col items-center justify-center gap-5 bg-[var(--fl-bg)] px-6 text-center">
+    <div className="flex h-[100dvh] flex-col items-center justify-center gap-5 bg-[var(--fl-bg)] px-6 text-center">
       <ForkLeafLogo markClassName="h-7 w-7" textClassName="text-lg" />
 
       <div className="max-w-md">

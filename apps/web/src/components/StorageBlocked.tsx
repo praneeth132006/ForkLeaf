@@ -45,7 +45,7 @@ export function StorageBlocked() {
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-5 bg-[var(--fl-bg)] px-6 text-center">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-5 bg-[var(--fl-bg)] px-6 text-center">
       <ForkLeafLogo markClassName="h-8 w-8" textClassName="text-xl" />
 
       <div className="max-w-md">

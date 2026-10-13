@@ -273,6 +273,67 @@ h3 {
   min-height: 0;
 }
 
+/* ── The editor shell on a phone ───────────────────────────────────────────
+   The three-panel window above is a desktop shape: cards floating on a
+   background, separated by a gap, each with its own rounded corner and
+   shadow. On a 375px screen the same shape spends sixteen pixels of margin
+   and two hairlines per side on decoration, leaves the writing surface
+   narrower than the paragraph it holds, and — because every panel is
+   full-bleed against a window the same colour — the gap between them reads as
+   a rendering fault rather than as a seam.
+
+   Below `md` the panels go flush instead: edge to edge, square at the window's
+   corners, no shadow. This is what every notes app on a phone does, Apple
+   Notes included, and it is the difference between an app and a web page in a
+   frame. `.fl-shell` scopes it to the editor window, so cards elsewhere — the
+   dashboard, the docs — keep their shape.  */
+.fl-shell {
+  /* `dvh`, not `vh`: on a phone `100vh` is the height of the window with the
+     browser's address bar hidden, which it is not until you scroll. Sized in
+     `vh`, a layout that fits exactly hangs its last row — here the status bar
+     — below the fold, and the only way to see it is a scroll the page has
+     `overflow: hidden` to prevent. */
+  height: 100dvh;
+  /* Drawn into the notch and the home indicator — see `viewportFit` in
+     `app/layout.tsx` — and so responsible for keeping content out of both. */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  /* No rubber-banding the whole app when a list inside it hits its end. In a
+     browser that is a bounce; installed to a home screen it is a pull-to-
+     refresh that throws away the editor you were typing in. */
+  overscroll-behavior: none;
+}
+
+@media (max-width: 767px) {
+  .fl-shell .fl-panel {
+    border-radius: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    box-shadow: none;
+  }
+
+  /* A drawer still needs its edge: it is over the document, not beside it, and
+     without a shadow there is nothing to say which of the two is in front. */
+  .fl-shell .fl-panel.fl-drawer {
+    box-shadow: var(--fl-shadow-lg);
+  }
+
+  /* Touch targets, on the rows a finger actually aims at: the file tree, the
+     open-note tabs and the panel's own tab strip. 44px is the number Apple and
+     Google both land on; these were drawn at 28–32 for a cursor that can hit a
+     20px row every time. A minimum rather than a height, so nothing already
+     big enough grows, and scoped to `.fl-touch` rather than every button, so
+     the 20px close cross inside a tab is not stretched into its own row. */
+  .fl-shell .fl-touch,
+  .fl-shell .fl-touch > button,
+  .fl-shell .fl-touch > a,
+  .fl-shell .fl-touch [role="treeitem"] {
+    min-height: 44px;
+  }
+}
+
 /* ── Reusable surfaces ─────────────────────────────────────────────────────
    A small set of classes so the same card/button/input treatment is not
    re-derived from utilities in a dozen components and then drifting apart. */

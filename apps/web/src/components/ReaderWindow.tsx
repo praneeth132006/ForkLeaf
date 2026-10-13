@@ -99,7 +99,7 @@ export function ReaderWindow() {
 
   if (!target) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-2 bg-[var(--fl-bg)] px-6 text-center">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-2 bg-[var(--fl-bg)] px-6 text-center">
         <h1 className="text-lg font-medium text-[var(--fl-text)]">No document to open</h1>
         <p className="max-w-md text-sm text-[var(--fl-muted)]">
           This window opens a PDF from a connected repository, and the link it was given does not
@@ -116,7 +116,7 @@ export function ReaderWindow() {
   }
 
   return (
-    <div className="h-screen bg-[var(--fl-bg)]" data-theme={theme}>
+    <div className="h-[100dvh] bg-[var(--fl-bg)]" data-theme={theme}>
       <PdfReader
         // This window is the document, so the contents belong beside the page
         // rather than behind a button.

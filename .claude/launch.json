@@ -28,6 +28,13 @@
       "runtimeArgs": ["-C", "../MarkDown-ux", "--filter", "@forkleaf/web", "start", "-p", "3006"],
       "port": 3006,
       "autoPort": false
+    },
+    {
+      "name": "forkleaf-web-3007",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@forkleaf/web", "dev", "-p", "3007"],
+      "port": 3007,
+      "autoPort": false
     }
   ]
 }
