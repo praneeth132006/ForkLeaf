@@ -369,124 +369,148 @@ export function EditorSidebar(props: EditorSidebarProps) {
 
       {/* ── New note ──────────────────────────────────────────────────── */}
       {/* Creating a note is the one thing someone opens this app to do, and it
-          used to be a 34px square sharing a row with the search field. */}
-      <div className="relative flex items-stretch gap-1.5 px-2 pt-2" ref={foldersRef}>
-        <button
-          type="button"
-          onClick={() => props.onCreateNote(props.currentFolder)}
-          title={
-            props.currentFolder
-              ? `New note in ${props.currentFolder} (⌘⇧N)`
-              : props.activeWorkspace?.isLocal
-                ? "New note at the top of this notebook (⌘⇧N)"
-                : "New note at the top of the repository (⌘⇧N)"
-          }
-          className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[var(--fl-accent)] px-3 py-2 text-[13px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
-        >
-          <svg
-            viewBox="0 0 16 16"
-            aria-hidden="true"
-            className="h-3.5 w-3.5 shrink-0"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.9"
-            strokeLinecap="round"
-          >
-            <path d="M8 3.5v9M3.5 8h9" />
-          </svg>
-          New Note
-        </button>
+          used to be a 34px square sharing a row with the search field.
 
-        {/* Opening a PDF was reachable only from the command palette, which
-            means it was reachable only by people who already knew it existed.
-            It sits beside "New note" because it is the same kind of act: the
-            other way a document gets into the notebook. Opening a Markdown
-            file had the same problem, and is the more common of the two. */}
-        {props.onOpenMarkdownFile && (
-          <button
-            type="button"
-            onClick={props.onOpenMarkdownFile}
-            title="Open a Markdown file from this computer"
-            aria-label="Open a Markdown file from this computer"
-            className="flex w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--fl-border)] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)]"
-          >
-            <svg
-              viewBox="0 0 16 16"
-              aria-hidden="true"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinejoin="round"
-              strokeLinecap="round"
+          The row wraps rather than squeezes. "New Note" with its folder picker
+          keeps a width its label fits in, and the three file actions travel
+          together onto a line of their own when the sidebar is too narrow to
+          hold them beside it — at the default 256px with a repository that has
+          folders, five controls in one row left the button people come here
+          for 70px wide and broke its label across two lines; dragged to the
+          180px minimum it collapsed into a clipped square. Nothing is hidden
+          behind a menu at any width: these are all one click. */}
+      <div className="relative px-2 pt-2" ref={foldersRef}>
+        <div className="flex flex-wrap items-stretch gap-1.5">
+          {/* A split button: the folder picker is another way to press "New
+              Note", so it is joined to it rather than floating beside it as a
+              fifth unexplained square. */}
+          <div className="flex min-w-[8.5rem] flex-1 items-stretch">
+            <button
+              type="button"
+              onClick={() => props.onCreateNote(props.currentFolder)}
+              title={
+                props.currentFolder
+                  ? `New note in ${props.currentFolder} (⌘⇧N)`
+                  : props.activeWorkspace?.isLocal
+                    ? "New note at the top of this notebook (⌘⇧N)"
+                    : "New note at the top of the repository (⌘⇧N)"
+              }
+              className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap ${
+                folders.length > 0 ? "rounded-l-lg" : "rounded-lg"
+              } bg-[var(--fl-accent)] px-3 py-2 text-[13px] font-semibold text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]`}
             >
-              <rect x="1.8" y="3.6" width="12.4" height="8.8" rx="1.2" />
-              <path d="M4.2 10V6l1.6 2 1.6-2v4" />
-              <path d="M10.8 6v4M9.4 8.7l1.4 1.4 1.4-1.4" />
-            </svg>
-          </button>
-        )}
+              <svg
+                viewBox="0 0 16 16"
+                aria-hidden="true"
+                className="h-3.5 w-3.5 shrink-0"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+              >
+                <path d="M8 3.5v9M3.5 8h9" />
+              </svg>
+              New Note
+            </button>
 
-        {props.onOpenPdfFile && (
-          <button
-            type="button"
-            onClick={props.onOpenPdfFile}
-            title="Open a PDF from this computer"
-            aria-label="Open a PDF from this computer"
-            className="flex w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--fl-border)] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)]"
-          >
-            <svg
-              viewBox="0 0 16 16"
-              aria-hidden="true"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinejoin="round"
-              strokeLinecap="round"
+            {folders.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowFolders((value) => !value)}
+                aria-expanded={showFolders}
+                aria-haspopup="menu"
+                title="New note in a folder"
+                aria-label="New note in a folder"
+                className="flex w-8 shrink-0 items-center justify-center rounded-r-lg border-l border-[var(--fl-accent-contrast)]/25 bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
+              >
+                <ChevronDown className="text-current" />
+              </button>
+            )}
+          </div>
+
+          {/* The three ways a file gets into the notebook, kept together so
+              they wrap as one group rather than peeling off a square at a
+              time. */}
+          <div className="ml-auto flex shrink-0 items-stretch gap-1.5">
+            {/* Opening a PDF was reachable only from the command palette,
+                which means it was reachable only by people who already knew it
+                existed. It sits beside "New note" because it is the same kind
+                of act: the other way a document gets into the notebook.
+                Opening a Markdown file had the same problem, and is the more
+                common of the two. */}
+            {props.onOpenMarkdownFile && (
+              <button
+                type="button"
+                onClick={props.onOpenMarkdownFile}
+                title="Open a Markdown file from this computer"
+                aria-label="Open a Markdown file from this computer"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--fl-border)] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)]"
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                >
+                  <rect x="1.8" y="3.6" width="12.4" height="8.8" rx="1.2" />
+                  <path d="M4.2 10V6l1.6 2 1.6-2v4" />
+                  <path d="M10.8 6v4M9.4 8.7l1.4 1.4 1.4-1.4" />
+                </svg>
+              </button>
+            )}
+
+            {props.onOpenPdfFile && (
+              <button
+                type="button"
+                onClick={props.onOpenPdfFile}
+                title="Open a PDF from this computer"
+                aria-label="Open a PDF from this computer"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--fl-border)] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)]"
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                >
+                  <path d="M3.4 2.4h5.2l3.5 3.5v7.2a.9.9 0 0 1-.9.9H3.4a.9.9 0 0 1-.9-.9V3.3a.9.9 0 0 1 .9-.9Z" />
+                  <path d="M8.6 2.4v3.5h3.5" />
+                  <path d="M5 8.4h5.6M5 10.4h5.6M5 12.3h3.4" />
+                </svg>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => props.onCreateFolder(props.currentFolder)}
+              title={props.currentFolder ? `New folder in ${props.currentFolder}` : "New folder"}
+              aria-label="New folder"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--fl-border)] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)]"
             >
-              <path d="M3.4 2.4h5.2l3.5 3.5v7.2a.9.9 0 0 1-.9.9H3.4a.9.9 0 0 1-.9-.9V3.3a.9.9 0 0 1 .9-.9Z" />
-              <path d="M8.6 2.4v3.5h3.5" />
-              <path d="M5 8.4h5.6M5 10.4h5.6M5 12.3h3.4" />
-            </svg>
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={() => props.onCreateFolder(props.currentFolder)}
-          title={props.currentFolder ? `New folder in ${props.currentFolder}` : "New folder"}
-          aria-label="New folder"
-          className="flex w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--fl-border)] text-[var(--fl-muted)] transition-colors hover:border-[var(--fl-border-strong)] hover:text-[var(--fl-text)]"
-        >
-          <svg
-            viewBox="0 0 16 16"
-            aria-hidden="true"
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          >
-            <path d="M1.75 4.25c0-.83.67-1.5 1.5-1.5h2.4c.5 0 .96.24 1.25.65l.6.85h5.25c.83 0 1.5.67 1.5 1.5v6.5c0 .83-.67 1.5-1.5 1.5H3.25c-.83 0-1.5-.67-1.5-1.5z" />
-            <path d="M8 7.75v4M6 9.75h4" />
-          </svg>
-        </button>
-
-        {folders.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowFolders((value) => !value)}
-            aria-expanded={showFolders}
-            aria-haspopup="menu"
-            title="New note in a folder"
-            aria-label="New note in a folder"
-            className="flex w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--fl-accent)] text-[var(--fl-accent-contrast)] transition-colors hover:bg-[var(--fl-accent-hover)]"
-          >
-            <ChevronDown className="text-current" />
-          </button>
-        )}
+              <svg
+                viewBox="0 0 16 16"
+                aria-hidden="true"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              >
+                <path d="M1.75 4.25c0-.83.67-1.5 1.5-1.5h2.4c.5 0 .96.24 1.25.65l.6.85h5.25c.83 0 1.5.67 1.5 1.5v6.5c0 .83-.67 1.5-1.5 1.5H3.25c-.83 0-1.5-.67-1.5-1.5z" />
+                <path d="M8 7.75v4M6 9.75h4" />
+              </svg>
+            </button>
+          </div>
+        </div>
 
         {showFolders && (
           <div

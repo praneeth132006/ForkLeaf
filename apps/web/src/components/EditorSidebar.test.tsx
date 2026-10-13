@@ -368,3 +368,46 @@ describe("EditorSidebar — disconnecting a repository", () => {
     expect(screen.queryByLabelText("Disconnect notes")).toBeNull();
   });
 });
+
+/**
+ * How the row behaves when the sidebar is narrow.
+ *
+ * jsdom has no layout, so this cannot assert where anything lands on screen —
+ * what it can hold still is the grouping the wrapping depends on. "New Note"
+ * and the folder picker have to be one control, and the three file actions
+ * have to share a parent, or the row peels off a square at a time and the
+ * button people come here for ends up 70px wide with its label in two lines.
+ */
+describe("EditorSidebar — the new note row at any width", () => {
+  it("keeps the folder picker attached to New Note", () => {
+    renderSidebar("");
+
+    const create = screen.getByTitle("New note at the top of the repository (⌘⇧N)");
+    const picker = screen.getByLabelText("New note in a folder");
+
+    expect(picker.parentElement).toBe(create.parentElement);
+  });
+
+  it("keeps the three file actions together, apart from New Note", () => {
+    renderSidebar("", {
+      onOpenMarkdownFile: () => {},
+      onOpenPdfFile: () => {},
+    });
+
+    const markdown = screen.getByLabelText("Open a Markdown file from this computer");
+    const pdf = screen.getByLabelText("Open a PDF from this computer");
+    const folder = screen.getByLabelText("New folder");
+    const create = screen.getByTitle("New note at the top of the repository (⌘⇧N)");
+
+    expect(pdf.parentElement).toBe(markdown.parentElement);
+    expect(folder.parentElement).toBe(markdown.parentElement);
+    expect(markdown.parentElement).not.toBe(create.parentElement);
+  });
+
+  it("never breaks the label of the button it is all built around", () => {
+    renderSidebar("");
+
+    const create = screen.getByTitle("New note at the top of the repository (⌘⇧N)");
+    expect(create.className).toContain("whitespace-nowrap");
+  });
+});
