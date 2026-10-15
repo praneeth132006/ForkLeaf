@@ -237,6 +237,20 @@ h3 {
   -webkit-text-fill-color: transparent;
 }
 
+/* A diagram is a picture, not a paragraph.
+   Its labels are real SVG <text>, so Select All used to paint a highlight band
+   behind every one of them — and since a highlight sets `color` while an SVG
+   label is painted with `fill`, the words did not come back on top of it. A
+   flowchart turned into a row of blank capsules and an ER diagram into a
+   stack of empty rows. Nothing inside a diagram is worth selecting on its own
+   — the block as a whole is still selected, copied and exported with the text
+   around it — so the inside of every SVG, diagram or icon, stays out of the
+   browser's text selection. */
+svg {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* A selection made in a window that has since lost focus stays visible, dimmer.
    Without this the browser greys it out to near-invisibility, which is the
    state you are in every time you reach for a menu mid-selection. */

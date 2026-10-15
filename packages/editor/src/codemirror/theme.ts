@@ -41,12 +41,31 @@ const base = EditorView.theme({
   // rather than using the browser's, so it needs the same colour the rest of
   // the app uses — and it needs it on the unfocused case too, which is what
   // you are looking at every time you reach for a menu mid-selection.
-  ".cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection": {
+  //
+  // The focused selector is spelled out in full — down through the scroller
+  // and the selection layer — because CodeMirror's own base theme paints the
+  // focused selection through exactly that path:
+  //
+  //   &light.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground
+  //
+  // Five classes against the two a plain `&.cm-focused .cm-selectionBackground`
+  // carries, so the base theme won every time the editor had focus — which is
+  // every time anybody selects anything. That is where the pale lilac band
+  // over Select All came from: CodeMirror's light default painted across a
+  // dark document, with the text on top of it unreadable.
+  ".cm-selectionBackground": { backgroundColor: "var(--fl-selection)" },
+  "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": {
     backgroundColor: "var(--fl-selection)",
   },
-  "&:not(.cm-focused) .cm-selectionBackground": {
+  "&:not(.cm-focused) > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": {
     backgroundColor: "var(--fl-selection)",
     opacity: "0.7",
+  },
+  // The native highlight still shows through on anything the selection layer
+  // does not draw over, so it gets the same colour and keeps its text legible.
+  "& ::selection, &::selection": {
+    backgroundColor: "var(--fl-selection)",
+    color: "var(--fl-text)",
   },
   ".cm-cursor, .cm-dropCursor": {
     borderLeftColor: "var(--fl-accent)",
