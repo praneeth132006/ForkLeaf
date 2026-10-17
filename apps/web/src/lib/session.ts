@@ -16,24 +16,62 @@ import { refreshUserToken, TokenRefused } from "@/lib/github-oauth";
  * script that ever runs on the page.
  */
 
-const COOKIE_NAME = "forkleaf_session";
 /**
- * Names the one sign-in that has ended, by a fingerprint of its token.
+ * One sign-in per cookie, and a pointer at the one in use.
+ *
+ * There used to be a single `forkleaf_session`, which made "signed in" and
+ * "signed in as" the same fact and meant a second account could only ever
+ * arrive by evicting the first. Somebody who keeps work notes and personal
+ * notes in two GitHub accounts does not have one sign-in; they have two, and
+ * one of them is in front.
+ *
+ * So each account's sealed session lives in its own cookie, named for the
+ * GitHub account id, and a separate pointer says which is active. Separate
+ * cookies rather than one carrying a list: a sealed session is the better part
+ * of a kilobyte, three of them in one cookie would crowd the 4 KB a browser
+ * promises to keep, and a renewal would have to rewrite every account's token
+ * to save one of them.
+ *
+ * The id in the name is GitHub's own numeric account id — never the login,
+ * which a person can change, and which would make the cookie a place a
+ * username is quietly stored.
+ */
+const ACCOUNT_PREFIX = "forkleaf_acct_";
+const ACTIVE_COOKIE = "forkleaf_active";
+
+/**
+ * The single-session cookie this replaces, still read.
+ *
+ * Everybody signed in on the day this ships has one of these and no pointer.
+ * Reading it as the active account costs one `if` and saves every one of them
+ * a sign-in; it is rewritten into the new shape by the first thing that writes
+ * a cookie at all — a renewal, or the next sign-in — and deleted there.
+ */
+const LEGACY_COOKIE = "forkleaf_session";
+const LEGACY_ENDED_COOKIE = "forkleaf_session_ended";
+
+/**
+ * Names a sign-in that has ended, by a fingerprint of its token, per account.
  *
  * Ending a session used to mean deleting the session cookie, and that was the
  * cause of "the app on my home screen keeps signing me out". Responses do not
  * arrive in the order their requests were sent. A phone waking the installed
  * app fires a burst of requests at once; one of them renews the eight-hour
  * token and sets a new cookie, while another, sent a moment earlier with the
- * old cookie, finds the old refresh token already spent and deletes the cookie.
- * If that deletion lands second it erases the brand-new, perfectly good
- * session along with the dead one.
+ * old cookie, finds the old refresh token already spent and deletes the
+ * cookie. If that deletion lands second it erases the brand-new, perfectly
+ * good session along with the dead one.
  *
  * A marker that names the dead token cannot do that. The browser keeps
  * whichever session cookie it was handed last, and the marker only matches the
  * session it was written about, so a newer sign-in sails straight past it.
+ *
+ * One marker per account, because one account's token dying says nothing about
+ * another's — and a shared marker would have let a burst from one account end
+ * the other's session.
  */
-const ENDED_COOKIE = "forkleaf_session_ended";
+const ENDED_PREFIX = "forkleaf_ended_";
+
 const STATE_COOKIE = "forkleaf_oauth_state";
 const RETURN_COOKIE = "forkleaf_return_to";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
@@ -164,24 +202,158 @@ const cookieOptions = {
   path: "/",
 };
 
+/**
+ * Stores a sign-in and makes it the active one.
+ *
+ * Both halves on purpose. A sign-in that is stored and not pointed at is a
+ * person who pressed "Continue with GitHub" and watched nothing happen, and a
+ * renewal writes the account it renewed, which is the active one already — so
+ * there is no case where the pointer should stay where it was.
+ */
 export async function setSessionCookie(payload: SessionPayload): Promise<void> {
   const store = await cookies();
-  store.set(COOKIE_NAME, await encryptSession(payload), {
+  const id = payload.user.id;
+
+  store.set(accountCookie(id), await encryptSession(payload), {
     ...cookieOptions,
     maxAge: MAX_AGE_SECONDS,
   });
+  store.set(ACTIVE_COOKIE, String(id), { ...cookieOptions, maxAge: MAX_AGE_SECONDS });
+
+  // Whatever this browser was carrying from the single-session days has now
+  // been written in the new shape, under the account it actually belongs to.
+  store.delete(LEGACY_COOKIE);
 }
 
-export async function getSession(): Promise<SessionPayload | null> {
+/** The cookie a given account's sealed session lives in. */
+function accountCookie(id: number): string {
+  return `${ACCOUNT_PREFIX}${id}`;
+}
+
+/**
+ * Every account signed in on this browser, in no particular order.
+ *
+ * Sessions that have been ended are left out, so a caller never has to know
+ * the marker exists. The legacy cookie counts as one until something rewrites
+ * it.
+ */
+export async function listSessions(): Promise<SessionPayload[]> {
   const store = await cookies();
-  const value = store.get(COOKIE_NAME)?.value;
-  if (!value) return null;
+  const found: SessionPayload[] = [];
+
+  for (const cookie of store.getAll()) {
+    if (!cookie.name.startsWith(ACCOUNT_PREFIX)) continue;
+    // The id is in the name, but the session inside is what decides who this
+    // is: the name is a label on a sealed envelope, and only the seal is
+    // evidence. A renamed cookie therefore proves nothing and changes nothing.
+    const session = await openSession(store, cookie.value);
+    if (session) found.push(session);
+  }
+
+  if (found.length === 0) {
+    const legacy = await openLegacySession(store);
+    if (legacy) found.push(legacy);
+  }
+
+  return found;
+}
+
+/** Decrypts one cookie's session, unless that sign-in has ended. */
+async function openSession(
+  store: Awaited<ReturnType<typeof cookies>>,
+  value: string,
+): Promise<SessionPayload | null> {
   const session = await decryptSession(value);
   if (!session) return null;
+  return (await hasEnded(store, session)) ? null : session;
+}
 
-  const ended = store.get(ENDED_COOKIE)?.value;
-  if (ended && ended === (await fingerprint(session.token))) return null;
-  return session;
+/**
+ * Whether this exact sign-in has been ended.
+ *
+ * Both markers are consulted — this account's, and the single one from before
+ * accounts had their own. A session that began under the old cookie and died
+ * during the upgrade is named by whichever marker was current when GitHub
+ * refused it, and it is just as over either way. Checking both is safe
+ * precisely because a marker holds a fingerprint of one token: it can only
+ * ever match the session it was written about, so the old marker cannot end a
+ * newer sign-in by being left behind.
+ */
+async function hasEnded(
+  store: Awaited<ReturnType<typeof cookies>>,
+  session: SessionPayload,
+): Promise<boolean> {
+  const markers = [
+    store.get(`${ENDED_PREFIX}${session.user.id}`)?.value,
+    store.get(LEGACY_ENDED_COOKIE)?.value,
+  ].filter(Boolean);
+  if (markers.length === 0) return false;
+
+  const name = await fingerprint(session.token);
+  return markers.includes(name);
+}
+
+/** The pre-multi-account cookie, read until something rewrites it. */
+async function openLegacySession(
+  store: Awaited<ReturnType<typeof cookies>>,
+): Promise<SessionPayload | null> {
+  const value = store.get(LEGACY_COOKIE)?.value;
+  return value ? openSession(store, value) : null;
+}
+
+/**
+ * The sign-in this request is being made as.
+ *
+ * The pointer decides, and everything else is recovery: a browser that has one
+ * sign-in and no pointer is either mid-upgrade from the single-session cookie
+ * or has had the pointer expire under it, and in both cases the answer is
+ * obvious and refusing to give it would sign somebody out for nothing. With
+ * two sessions and no pointer there is no obvious answer, so none is invented
+ * — signing in again is a button, and guessing wrong is somebody's work notes
+ * opened under their personal account.
+ */
+export async function getSession(): Promise<SessionPayload | null> {
+  const store = await cookies();
+  const active = Number(store.get(ACTIVE_COOKIE)?.value);
+
+  if (Number.isSafeInteger(active)) {
+    const value = store.get(accountCookie(active))?.value;
+    if (value) {
+      const session = await openSession(store, value);
+      // The pointer is a name, not a credential: a session that has ended, or
+      // a cookie that will not open, is not a session because the pointer says
+      // so. It is also not a reason to fall back to another account.
+      if (session && session.user.id === active) return session;
+      return null;
+    }
+  }
+
+  const sessions = await listSessions();
+  return sessions.length === 1 ? sessions[0]! : null;
+}
+
+/**
+ * Brings one of the signed-in accounts to the front.
+ *
+ * Refuses an account this browser is not signed in to, which is what keeps
+ * this from being a way to point the app at an id and see what happens.
+ */
+export async function setActiveAccount(id: number): Promise<boolean> {
+  const sessions = await listSessions();
+  const match = sessions.find((session) => session.user.id === id);
+  if (!match) return false;
+
+  const store = await cookies();
+  // Written through `setSessionCookie` rather than by setting the pointer
+  // alone, so an account arriving from the legacy cookie lands in its own
+  // cookie on the way past instead of being pointed at and not found.
+  if (!store.get(accountCookie(id))) {
+    await setSessionCookie(match);
+    return true;
+  }
+
+  store.set(ACTIVE_COOKIE, String(id), { ...cookieOptions, maxAge: MAX_AGE_SECONDS });
+  return true;
 }
 
 /** A short, one-way name for a token: enough to recognise it, useless to anyone holding it. */
@@ -198,9 +370,9 @@ async function fingerprint(token: string): Promise<string> {
  * For a session GitHub has stopped honouring. A person pressing "Sign out" is
  * different — that is `clearSessionCookie`, which removes whatever is there.
  */
-export async function endSession(session: Pick<SessionPayload, "token">): Promise<void> {
+export async function endSession(session: Pick<SessionPayload, "token" | "user">): Promise<void> {
   const store = await cookies();
-  store.set(ENDED_COOKIE, await fingerprint(session.token), {
+  store.set(`${ENDED_PREFIX}${session.user.id}`, await fingerprint(session.token), {
     ...cookieOptions,
     maxAge: MAX_AGE_SECONDS,
   });
@@ -362,9 +534,24 @@ async function renew(session: SessionPayload): Promise<SessionPayload | null> {
   }
 }
 
+/**
+ * Signs out — every account, not only the one in front.
+ *
+ * "Sign out" has meant "this browser is no longer signed in to ForkLeaf" for
+ * as long as there has been one, and a second account quietly keeping its
+ * token in a cookie afterwards would be a worse surprise than any convenience
+ * it bought. Signing out of one account while staying signed in to another is
+ * a real thing to want and a different button, which the account menu will
+ * grow when there is a menu to grow it in.
+ */
 export async function clearSessionCookie(): Promise<void> {
   const store = await cookies();
-  store.delete(COOKIE_NAME);
+
+  for (const cookie of store.getAll()) {
+    if (cookie.name.startsWith(ACCOUNT_PREFIX)) store.delete(cookie.name);
+  }
+  store.delete(ACTIVE_COOKIE);
+  store.delete(LEGACY_COOKIE);
 }
 
 // ─── OAuth CSRF state ───────────────────────────────────────────────────────
