@@ -44,6 +44,8 @@ process.env.SESSION_SECRET = "a-test-secret-that-is-certainly-long-enough";
 
 import { TokenRefused } from "@/lib/github-oauth";
 import {
+  consumeOAuthState,
+  createOAuthState,
   decryptSession,
   encryptSession,
   forgetRenewalsForTesting,
@@ -274,5 +276,68 @@ describe("requests that arrive out of order", () => {
 
     store.set("forkleaf_session", dead);
     expect(await getSession()).toBeNull();
+  });
+});
+
+/**
+ * Sign-in is offered from the hero, the nav, the sidebar and the editor, and
+ * an installed app adds one more way to start it twice: github.com is outside
+ * the app's scope, so the browser moves the navigation into a view of its own
+ * and can run the start again on the way. The cookie used to hold the last
+ * state only, so finishing any attempt but the latest was rejected as a
+ * forgery — "that sign-in link expired or did not match", on a sign-in nobody
+ * forged.
+ */
+describe("sign-ins started more than once", () => {
+  beforeEach(() => {
+    store.clear();
+  });
+
+  it("lets an earlier attempt be the one that comes back", async () => {
+    const first = await createOAuthState();
+    await createOAuthState();
+
+    expect(await consumeOAuthState(first)).toBe(true);
+  });
+
+  it("still accepts the most recent attempt", async () => {
+    await createOAuthState();
+    const latest = await createOAuthState();
+
+    expect(await consumeOAuthState(latest)).toBe(true);
+  });
+
+  it("forgets the oldest once there are too many", async () => {
+    const oldest = await createOAuthState();
+    for (let i = 0; i < 4; i += 1) await createOAuthState();
+
+    expect(await consumeOAuthState(oldest)).toBe(false);
+  });
+
+  it("clears every attempt once one of them finishes", async () => {
+    const first = await createOAuthState();
+    const second = await createOAuthState();
+
+    expect(await consumeOAuthState(first)).toBe(true);
+    // The other attempt died with it: a state is single use, and so is the
+    // round of sign-in it belonged to.
+    expect(await consumeOAuthState(second)).toBe(false);
+  });
+
+  it("refuses a state nobody here issued", async () => {
+    await createOAuthState();
+
+    expect(await consumeOAuthState("f".repeat(48))).toBe(false);
+    expect(await consumeOAuthState("")).toBe(false);
+    expect(await consumeOAuthState(null)).toBe(false);
+  });
+
+  it("refuses anything that is not one of our states, however it got there", async () => {
+    // A cookie is attacker-writable in more situations than a session is, so
+    // the contents are parsed, not trusted: only 48 hex characters count.
+    store.set("forkleaf_oauth_state", "not-a-state.*.");
+
+    expect(await consumeOAuthState("not-a-state")).toBe(false);
+    expect(await consumeOAuthState("*")).toBe(false);
   });
 });

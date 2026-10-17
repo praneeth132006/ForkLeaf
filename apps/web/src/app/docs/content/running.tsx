@@ -20,9 +20,13 @@ export function Troubleshooting() {
       <Lead>The errors people actually hit, and what each one means.</Lead>
 
       <H2 id="sign-in">Signing in</H2>
-      <Def term="“That sign-in link expired or did not match”">
-        The sign-in round trip took too long, or it was started in one browser and finished in
-        another. Start again from the app; the link is single-use and only good for ten minutes.
+      <Def term="“That sign-in did not finish in the window it started in”">
+        The round trip has to end in the browser it began in, because the check that stops somebody
+        else&rsquo;s sign-in being completed in your browser lives in a cookie there. Press{" "}
+        <strong>Try again</strong> on the message and finish in one window. A few attempts may be
+        open at once — clicking the button twice is fine, and so is an installed app sending you
+        through its own browser view — but the one that comes back has to come back here, and within
+        half an hour.
       </Def>
       <Def term="“Could not complete sign-in with GitHub”">
         GitHub did not complete the exchange. Try once more from{" "}

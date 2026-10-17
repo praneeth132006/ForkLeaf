@@ -31,3 +31,14 @@ export const SUPPORT_MAILTO = `mailto:${SUPPORT_EMAIL}?subject=${encodeURICompon
  * explanation — an expired sign-in, a return path, the public-only option.
  */
 export const GITHUB_SIGN_IN_URL = "/api/auth/github";
+
+/**
+ * "Switch account", for somebody who keeps work notes and personal notes in
+ * two different GitHub accounts.
+ *
+ * Signing out and back in does not do it: GitHub still has a session and
+ * ForkLeaf is already authorised, so the round trip completes without a single
+ * screen and returns the account you were trying to leave. `switch=1` asks
+ * GitHub for its account picker on the way through.
+ */
+export const GITHUB_SWITCH_ACCOUNT_URL = "/api/auth/github?switch=1";

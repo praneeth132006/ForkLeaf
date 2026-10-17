@@ -14,6 +14,7 @@ import { usePalette, useTheme, type Theme } from "@/hooks/useTheme";
 import { PALETTES, normalizeHex } from "@/lib/palette";
 import { EVERYTHING } from "@/lib/plans";
 import { UnusedImages } from "@/components/UnusedImages";
+import { GITHUB_SWITCH_ACCOUNT_URL } from "@/lib/constants";
 
 export interface ProfilePanelProps {
   user: SessionUser | null;
@@ -216,6 +217,13 @@ export function ProfilePanel({ user, githubAvailable }: ProfilePanelProps) {
                 className="fl-btn fl-btn-ghost !py-2 !text-[13px]"
               >
                 Manage access ↗
+              </a>
+              <a
+                href={GITHUB_SWITCH_ACCOUNT_URL}
+                className="fl-btn fl-btn-ghost !py-2 !text-[13px]"
+                title="Sign in as a different GitHub account"
+              >
+                Switch account
               </a>
               <button
                 type="button"

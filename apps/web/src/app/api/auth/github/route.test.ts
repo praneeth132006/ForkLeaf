@@ -54,3 +54,27 @@ describe("the scope a sign-in asks for", () => {
     expect(scopeFor("")).toBe("repo");
   });
 });
+
+/**
+ * Switching between two GitHub accounts.
+ *
+ * GitHub keeps its own session and ForkLeaf is already authorised, so an
+ * ordinary sign-in completes without showing a single screen. That is the
+ * right behaviour for one account and a trap for two: signing out and back in
+ * returns the account you were trying to leave. `prompt=select_account` is
+ * GitHub's own way to ask for the picker; the route only sends it when asked.
+ */
+const promptFor = (shouldSwitch: string | null) => (shouldSwitch === "1" ? "select_account" : null);
+
+describe("switching account", () => {
+  it("asks GitHub for the account picker", () => {
+    expect(promptFor("1")).toBe("select_account");
+  });
+
+  it("leaves an ordinary sign-in alone", () => {
+    // Nobody with one account wants a chooser between them and their notes.
+    expect(promptFor(null)).toBeNull();
+    expect(promptFor("0")).toBeNull();
+    expect(promptFor("true")).toBeNull();
+  });
+});
