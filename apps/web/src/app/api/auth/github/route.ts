@@ -69,6 +69,22 @@ export async function GET(request: NextRequest) {
   authorize.searchParams.set("scope", SCOPES[requested] ?? SCOPES.all!);
   authorize.searchParams.set("state", state);
 
+  /**
+   * "Switch account", which is a different errand from "sign in".
+   *
+   * GitHub remembers who you are, and ForkLeaf is already authorised, so the
+   * ordinary flow goes through without a single screen — which is right the
+   * day you are one person and wrong the day you keep work and personal notes
+   * in two accounts: signing out and back in lands you in the account you were
+   * trying to leave. `prompt=select_account` makes GitHub show the picker even
+   * when a session is already open, which is the only part of this choice that
+   * is ours to ask for. Not on by default: nobody with one account wants a
+   * chooser between them and their notes.
+   */
+  if (new URL(request.url).searchParams.get("switch") === "1") {
+    authorize.searchParams.set("prompt", "select_account");
+  }
+
   return NextResponse.redirect(authorize);
 }
 

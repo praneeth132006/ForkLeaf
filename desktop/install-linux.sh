@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-URL="${FORKLEAF_URL:-https://forkleaf.app}"
+URL="${FORKLEAF_URL:-https://www.forkleaf.in}"
 
 BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
 APP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"

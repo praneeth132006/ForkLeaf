@@ -96,6 +96,17 @@ export function SigningIn() {
         Found&rdquo;.
       </P>
 
+      <H2 id="switching-accounts">Two accounts</H2>
+      <P>
+        If you keep work notes and personal notes in different GitHub accounts, use{" "}
+        <strong>Switch account</strong> — in the sidebar account menu, or on{" "}
+        <A href="/profile">your profile</A>. Signing out and back in will not do it: GitHub still
+        has a session of its own and ForkLeaf is already authorised, so the round trip finishes
+        without showing you anything and returns the account you were trying to leave. Switching
+        asks GitHub for its account picker on the way through. One account is signed in here at a
+        time; the notes of the other stay in its own repository, exactly where they were.
+      </P>
+
       <H2 id="signing-out">Signing out</H2>
       <P>
         <strong>Sign out</strong> in the sidebar account menu deletes the session cookie. It does
