@@ -127,12 +127,16 @@ function MermaidNodeView({
         role="button"
         aria-label={popout.active ? "Diagram open in another tab" : "Edit diagram"}
       >
-        {/* `overflow-x-auto` and a full-width child rather than a centred one:
-            the renderer gives a diagram a minimum width so it stays readable,
-            and a diagram wider than the note should be scrolled to, not shrunk
-            into illegibility or — worse — centred into an overflow the reader
-            cannot reach. */}
-        <div className="flex min-h-[140px] items-center justify-center overflow-x-auto bg-[var(--fl-surface)] p-6">
+        {/* A scrolling block, not a centred flex row. The renderer gives a
+            diagram a minimum width so it stays readable, so a diagram wider
+            than the note is meant to be scrolled to — and a flex row that
+            centres its child spreads that overflow to both sides, where the
+            half that goes left of the scroll origin cannot be reached at all.
+            `mx-auto` on the picture itself centres the ones that fit and
+            leaves the wide ones starting at the left edge, which is where
+            reading starts. The two states that are a line of text, not a
+            picture, do their own centring. */}
+        <div className="min-h-[140px] overflow-x-auto bg-[var(--fl-surface)] p-6">
           {svg ? (
             <div
               className="w-full [&_svg]:mx-auto [&_svg]:block"
@@ -140,12 +144,14 @@ function MermaidNodeView({
               dangerouslySetInnerHTML={{ __html: svg }}
             />
           ) : error ? (
-            <div className="text-center">
+            <div className="flex min-h-[92px] flex-col items-center justify-center text-center">
               <p className="text-sm text-[var(--fl-danger)]">{error.message}</p>
               <p className="mt-1 text-xs text-[var(--fl-muted)]">Click to fix it</p>
             </div>
           ) : (
-            <p className="text-sm italic text-[var(--fl-muted)]">Empty diagram — click to edit</p>
+            <p className="flex min-h-[92px] items-center justify-center text-sm italic text-[var(--fl-muted)]">
+              Empty diagram — click to edit
+            </p>
           )}
         </div>
 

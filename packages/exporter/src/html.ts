@@ -376,6 +376,25 @@ export function pageStyles(theme: "light" | "dark"): string {
     /* An image taller than a sheet has to be allowed to shrink, or the printer
        clips it at the page edge and the bottom half is simply gone. */
     img { max-height: 88vh; object-fit: contain; }
+    /* Same bargain for a diagram, which arrives carrying the sizing it was
+       given for a screen: fill the column, and never shrink below 60% of the
+       size mermaid laid it out at. That floor is there because a column that
+       is too narrow can scroll sideways. A sheet of paper cannot, which is
+       why a wide diagram printed with its right-hand side cut off and a tall
+       one came out of the printer halved. On paper the sheet is the limit in
+       both directions: the width of the text column, and what is left of the
+       page. Both of those beat an inline style, so both say so. */
+    .diagram { overflow: visible; }
+    .diagram svg {
+      min-width: 0 !important;
+      max-width: 100% !important;
+      max-height: 215mm !important;
+    }
+    /* A line of a paragraph stranded on its own at a page break reads as a
+       mistake, and a table whose headings are three sheets back is unusable. */
+    p, li, blockquote { orphans: 2; widows: 2; }
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; }
     /* Backgrounds are what tells a code block from prose; browsers drop them
        when printing unless asked not to. */
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -390,22 +409,25 @@ export function pageStyles(theme: "light" | "dark"): string {
     .doc-head { border-bottom-color: #ccc; }
     .doc-meta { color: #555; }
 
-    /* A fixed element inside a paged context repeats on every sheet, which is
-       how a running footer is done without the @page margin boxes that no
-       browser actually implements. */
+    /* This was a fixed-position box, on the theory that a fixed box in a paged
+       context repeats on every sheet. Printed from a frame it does not: it
+       resolves against the frame's own viewport rather than the page, so it
+       came down in the middle of a sheet — a hairline ruled through one
+       sentence and the title and brand printed on top of the next. A footer
+       that lands on the words is worse than no footer at all, and the browser
+       prints a page number of its own anyway. So it is a colophon now: once,
+       at the end of the document, where nothing can collide with it. */
     .doc-foot {
-      position: fixed;
-      bottom: -12mm;
-      left: 0;
-      right: 0;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 1rem;
+      margin-top: 12mm;
       padding-top: 2mm;
       border-top: 1px solid #ddd;
       font-size: 9pt;
       color: #666;
+      break-inside: avoid;
     }
     .doc-foot-title {
       overflow: hidden;
@@ -466,11 +488,11 @@ ${pageStyles(theme)}</style>
 </header>
 ${body}
 ${suggestion(suggestUrl)}
-</main>
 <footer class="doc-foot" aria-hidden="true">
   <span class="doc-foot-title">${escapeHtml(title)}</span>
   <span class="doc-foot-brand">${BRAND_MARK} ForkLeaf</span>
 </footer>
+</main>
 </body>
 </html>`;
 }
