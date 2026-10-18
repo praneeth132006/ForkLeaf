@@ -370,6 +370,32 @@ export async function clearSessionCookie(): Promise<void> {
 // ─── OAuth CSRF state ───────────────────────────────────────────────────────
 
 /**
+ * How many sign-in attempts can be in flight at once, and for how long.
+ *
+ * The cookie used to hold exactly one state, overwritten by every start. That
+ * is correct for somebody who presses one button once and comes straight back,
+ * and wrong for everybody else: ForkLeaf offers sign-in from the hero, from
+ * the nav, from the sidebar and from the editor, so clicking one, thinking
+ * better of it, clicking another and finishing the first ended at "that
+ * sign-in link expired or did not match". An installed app made it the normal
+ * case — github.com is outside the app's scope, so the browser moves the
+ * navigation into its own view, which can run the start again and leave the
+ * cookie holding a state GitHub was never given.
+ *
+ * So a few recent attempts are remembered rather than only the last, and any
+ * one of them may be the one that comes back. Each is still random, httpOnly,
+ * single use and short lived — finishing one clears them all — so the
+ * login-CSRF check this exists for is exactly as strong as it was. Four is
+ * enough for a person with a busy finger and small enough to stay a cookie.
+ *
+ * Thirty minutes rather than ten because the round trip is not ours: it runs
+ * through signing in to GitHub, two-factor, and sometimes choosing between
+ * accounts. Ten minutes was declaring a real sign-in a forgery.
+ */
+const MAX_PENDING_STATES = 4;
+const STATE_TTL_SECONDS = 1_800;
+
+/**
  * Creates the OAuth `state` parameter and stores it in a short-lived cookie.
  *
  * Without this check an attacker can complete the OAuth flow in the victim's
@@ -382,9 +408,19 @@ export async function createOAuthState(): Promise<string> {
   const state = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 
   const store = await cookies();
-  store.set(STATE_COOKIE, state, { ...cookieOptions, maxAge: 600 });
+  const pending = [state, ...readStates(store.get(STATE_COOKIE)?.value)].slice(
+    0,
+    MAX_PENDING_STATES,
+  );
+  store.set(STATE_COOKIE, pending.join("."), { ...cookieOptions, maxAge: STATE_TTL_SECONDS });
 
   return state;
+}
+
+/** The states still in flight, newest first. Hex and dots, nothing else. */
+function readStates(value: string | undefined): string[] {
+  if (!value) return [];
+  return value.split(".").filter((state) => /^[0-9a-f]{48}$/.test(state));
 }
 
 /**
@@ -412,14 +448,22 @@ export async function consumeReturnPath(): Promise<string | null> {
   return value;
 }
 
-/** Verifies and consumes the state parameter. Single use. */
+/**
+ * Verifies and consumes the state parameter. Single use.
+ *
+ * Any of the attempts still in flight will do — see `MAX_PENDING_STATES` — and
+ * all of them are dropped either way, so a state can never be replayed and an
+ * abandoned attempt cannot outlive the sign-in that finished.
+ */
 export async function consumeOAuthState(received: string | null): Promise<boolean> {
   const store = await cookies();
-  const expected = store.get(STATE_COOKIE)?.value;
+  const pending = readStates(store.get(STATE_COOKIE)?.value);
   store.delete(STATE_COOKIE);
 
-  if (!expected || !received) return false;
-  return timingSafeEqual(expected, received);
+  if (!received) return false;
+  // Every candidate is compared, rather than stopping at the first match, so
+  // the work does not depend on which attempt came back.
+  return pending.reduce((found, state) => timingSafeEqual(state, received) || found, false);
 }
 
 function timingSafeEqual(a: string, b: string): boolean {

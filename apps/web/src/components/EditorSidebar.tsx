@@ -6,6 +6,7 @@ import type { TreeNode, Workspace, SessionUser } from "@forkleaf/types";
 import { FileTree } from "./FileTree";
 import { ForkLeafMark } from "./Brand";
 import { useDismissable } from "@/hooks/useDismissable";
+import { GITHUB_SWITCH_ACCOUNT_URL } from "@/lib/constants";
 import { collectFilePaths, collectFolders } from "@/lib/tree";
 import { SORT_MODE_LABELS, type TreeSortMode } from "@/lib/tree-order";
 
@@ -903,6 +904,15 @@ export function EditorSidebar(props: EditorSidebarProps) {
               >
                 <MenuLink href="/profile">Your profile</MenuLink>
                 <MenuLink href="/docs">Documentation</MenuLink>
+                {/* A plain anchor, not a `Link`: this is a redirect to GitHub,
+                    not a page in this app. */}
+                <a
+                  href={GITHUB_SWITCH_ACCOUNT_URL}
+                  role="menuitem"
+                  className="block w-full rounded-lg px-2.5 py-1.5 text-left text-[13px] text-[var(--fl-text)] transition-colors hover:bg-[var(--fl-elevated)]"
+                >
+                  Switch account
+                </a>
                 <button
                   type="button"
                   role="menuitem"
