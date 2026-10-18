@@ -350,6 +350,13 @@ export function McpServer() {
         There is no token to create and nothing to install. The assistant keeps its own sign-in and
         renews it; ForkLeaf stores nothing about the connection.
       </P>
+      <Note>
+        ForkLeaf sends the sign-in back only to Claude, ChatGPT and VS Code at their own web
+        addresses, or to an app on your computer. The consent page always says where access will be
+        sent — if it names a place you did not just connect from, press{" "}
+        <strong>Don&rsquo;t allow</strong>. Running your own ForkLeaf with another web-based
+        assistant? Add its callback to <Code>MCP_ALLOWED_REDIRECT_HOSTS</Code>.
+      </Note>
 
       <H2 id="what-it-can-do">What the assistant gets</H2>
       <Table

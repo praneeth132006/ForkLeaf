@@ -42,6 +42,32 @@ write every repository the user granted access to.
 **A finding that recovers the token from the browser, or forges a valid session
 cookie, is a critical vulnerability.**
 
+### Connecting an AI assistant (MCP OAuth)
+
+Assistants connect over OAuth 2.1 as the MCP specification describes, including
+open dynamic client registration (RFC 7591) at `/api/mcp/oauth/register`:
+assistants register themselves the first time they connect, so registration
+needs no credential. What keeps that from becoming a phishing route:
+
+- **Redirect addresses are allowlisted.** A web (`https`) callback is accepted
+  only for the documented assistants, matched by exact host and pinned path
+  (`TRUSTED_REDIRECTS` in `apps/web/src/lib/mcp-oauth.ts`; a deployment can add
+  its own with `MCP_ALLOWED_REDIRECT_HOSTS`). Otherwise only loopback
+  `http://localhost` and an app's own scheme are allowed, and schemes that open
+  a browser (`intent:`, `googlechromes:`, `x-safari-https:`, `web+…`) are refused.
+- The rule is enforced at registration **and again** on the consent page, when
+  Allow is pressed, and on every token renewal, so a client registered under
+  older rules is held to the current ones.
+- PKCE with S256 is required; codes live five minutes, are single use, and are
+  redeemable only by the client they were issued to, at the registered redirect.
+- The consent page shows where access will be sent, separately from the name the
+  client chose, and cannot be framed. Registration is rate limited.
+
+**A way to obtain a code or token for someone else's notebook without their
+consent, or to have one delivered to an address outside these rules, is a
+vulnerability.** Tests: `apps/web/src/lib/mcp-oauth.test.ts` and
+`apps/web/src/app/api/mcp/oauth/*/route.test.ts`.
+
 ### Untrusted note content
 
 Note content is untrusted input. A user can open any public repository, and the

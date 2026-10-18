@@ -9,6 +9,18 @@ description, and the heading becomes the day's date when they ship.
 
 ## Unreleased
 
+### Assistants can only be sent back to addresses ForkLeaf knows
+
+A security researcher reported that anyone could register an assistant whose
+sign-in answer went to their own web site, then send someone a "connect" link.
+Web addresses are now accepted only for the assistants ForkLeaf documents —
+Claude, ChatGPT and VS Code, each at its exact callback — plus apps on your own
+computer. Registrations made before are held to the same rule when used or
+renewed, browser-opening link schemes are refused, a code is redeemable only by
+the client it was issued to, and assistant names are cleaned of hidden
+characters. Self-hosters can allow another web client with
+`MCP_ALLOWED_REDIRECT_HOSTS`.
+
 ### Staying signed in on the home-screen app
 
 The installed app on a phone kept signing people out. A GitHub App's sign-in

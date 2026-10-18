@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   authorizationServerMetadata,
+  cleanClientName,
   isAllowedRedirectUri,
+  isTrustedWebRedirect,
   parseRegistration,
   pkceChallenge,
   protectedResourceMetadata,
@@ -18,6 +20,57 @@ describe("isAllowedRedirectUri", () => {
     expect(isAllowedRedirectUri("cursor://anysphere.cursor-retrieval/oauth/callback")).toBe(true);
   });
 
+  it("accepts the documented assistants' web callbacks", () => {
+    for (const uri of [
+      "https://claude.ai/api/mcp/auth_callback",
+      "https://claude.com/api/mcp/auth_callback",
+      "https://chatgpt.com/connector_platform_oauth_redirect",
+      "https://vscode.dev/redirect",
+      "https://insiders.vscode.dev/redirect",
+      "vscode://vscode.github-authentication/did-authenticate",
+      "http://[::1]:7777/callback",
+    ]) {
+      expect(isAllowedRedirectUri(uri)).toBe(true);
+    }
+  });
+
+  // The report of 13 October 2026: an unauthenticated registration with an
+  // attacker's own HTTPS callback was accepted, so a "connect" link could
+  // deliver someone's notebook to that site.
+  it("refuses a web callback on any site that is not a known assistant", () => {
+    for (const uri of [
+      "https://attacker-alpha.example.com/cb",
+      "https://evil.example/api/mcp/auth_callback",
+      // Look-alikes and tricks around the trusted hosts.
+      "https://claude.ai.evil.example/api/mcp/auth_callback",
+      "https://evilclaude.ai/api/mcp/auth_callback",
+      "https://sub.claude.ai/api/mcp/auth_callback",
+      "https://claude.ai:8443/api/mcp/auth_callback",
+      "https://claude.ai/somewhere-else",
+      "https://claude.ai/api/mcp/auth_callback_evil",
+      "https://claude.ai/api/mcp/auth_callback/../../redirect?to=https://evil.example",
+      "https://claude.ai/api/mcp/%2e%2e/%2e%2e/redirect",
+      "https://chatgpt.com/",
+      "https://vscode.dev/",
+    ]) {
+      expect(isAllowedRedirectUri(uri), uri).toBe(false);
+    }
+  });
+
+  it("refuses schemes that hand the address to a web browser", () => {
+    for (const uri of [
+      "intent://evil.example/#Intent;scheme=https;end",
+      "googlechromes://evil.example/cb",
+      "x-safari-https://evil.example/cb",
+      "microsoft-edge:https://evil.example/cb",
+      "firefox://open-url?url=https://evil.example",
+      "web+forkleaf://evil.example/cb",
+      "mailto:attacker@example.com",
+    ]) {
+      expect(isAllowedRedirectUri(uri), uri).toBe(false);
+    }
+  });
+
   it("refuses anything that could run code, read files, or travel unencrypted", () => {
     for (const uri of [
       "javascript:alert(1)",
@@ -31,6 +84,33 @@ describe("isAllowedRedirectUri", () => {
     ]) {
       expect(isAllowedRedirectUri(uri)).toBe(false);
     }
+  });
+});
+
+describe("MCP_ALLOWED_REDIRECT_HOSTS", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("lets a deployment add its own web callbacks, host-exact", () => {
+    vi.stubEnv("MCP_ALLOWED_REDIRECT_HOSTS", " https://agent.example.org/oauth/ , other.example ");
+    expect(isAllowedRedirectUri("https://agent.example.org/oauth/callback")).toBe(true);
+    expect(isAllowedRedirectUri("https://agent.example.org/elsewhere")).toBe(false);
+    expect(isAllowedRedirectUri("https://other.example/any/path")).toBe(true);
+    expect(isAllowedRedirectUri("https://x.other.example/any/path")).toBe(false);
+  });
+
+  it("adds nothing when unset", () => {
+    expect(isTrustedWebRedirect(new URL("https://other.example/cb"), [])).toBe(false);
+  });
+});
+
+describe("cleanClientName", () => {
+  it("strips characters that could disguise a name", () => {
+    expect(cleanClientName("Cla\u200Bude")).toBe("Claude");
+    expect(cleanClientName("Evil\u202Eedualc")).toBe("Eviledualc");
+    expect(cleanClientName("line\none")).toBe("line one");
+    expect(cleanClientName("x".repeat(500))).toHaveLength(60);
+    expect(cleanClientName("   ")).toBe("An AI assistant");
+    expect(cleanClientName(7)).toBe("An AI assistant");
   });
 });
 
@@ -62,10 +142,27 @@ describe("parseRegistration", () => {
       ok: true,
       value: { redirectUris: ["http://localhost:1234/cb"], clientName: "Claude Code" },
     });
-    expect(parseRegistration({ redirect_uris: ["https://a.example/cb"] })).toMatchObject({
+    expect(
+      parseRegistration({ redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] }),
+    ).toMatchObject({
       ok: true,
       value: { clientName: "An AI assistant" },
     });
+  });
+
+  it("refuses the reported registration, and any list containing an unknown site", () => {
+    expect(
+      parseRegistration({
+        client_name: "ProbeAlpha",
+        redirect_uris: ["https://attacker-alpha.example.com/cb"],
+      }).ok,
+    ).toBe(false);
+    expect(
+      parseRegistration({
+        client_name: "Claude",
+        redirect_uris: ["https://claude.ai/api/mcp/auth_callback", "https://evil.example/cb"],
+      }).ok,
+    ).toBe(false);
   });
 
   it("refuses a registration without safe redirect addresses", () => {
@@ -108,6 +205,9 @@ describe("readAuthorizeRequest", () => {
     expect(without("code_challenge_method", "plain")).toBe(false);
     expect(without("response_type", "token")).toBe(false);
     expect(without("redirect_uri", "http://evil.example/")).toBe(false);
+    // A client registered before the allowlist still cannot be authorised
+    // to an address the rules no longer allow.
+    expect(without("redirect_uri", "https://attacker-alpha.example.com/cb")).toBe(false);
   });
 });
 

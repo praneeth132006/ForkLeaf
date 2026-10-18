@@ -1,5 +1,6 @@
 import "server-only";
 import { refreshUserToken, TokenRefused, type TokenGrant } from "@/lib/github-oauth";
+import { isAllowedRedirectUri } from "@/lib/mcp-oauth";
 import { openValue, sealValue } from "@/lib/session";
 
 /**
@@ -165,6 +166,16 @@ export async function refreshTokens(refreshToken: string, clientId: string | nul
   }
   if (clientId && clientId !== record.clientId) {
     throw new GrantError("invalid_grant", "That refresh token was issued to another client.");
+  }
+  // The client is held to today's rules, not the ones it registered under: a
+  // registration whose every answer address is no longer allowed is retired,
+  // and so is anything it was given.
+  const client = await openClient(record.clientId);
+  if (!client || !client.redirectUris.some((uri) => isAllowedRedirectUri(uri))) {
+    throw new GrantError(
+      "invalid_grant",
+      "This assistant's registration is no longer accepted. Connect again.",
+    );
   }
 
   // An OAuth App's token does not expire; there is nothing to renew.
