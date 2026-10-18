@@ -19,6 +19,7 @@ const cookieJar = {
     const value = store.get(name);
     return value === undefined ? undefined : { name, value };
   },
+  getAll: () => Array.from(store, ([name, value]) => ({ name, value })),
   set: (name: string, value: string) => void store.set(name, value),
   delete: (name: string) => void store.delete(name),
 };
@@ -44,6 +45,7 @@ process.env.SESSION_SECRET = "a-test-secret-that-is-certainly-long-enough";
 
 import { TokenRefused } from "@/lib/github-oauth";
 import {
+  clearSessionCookie,
   consumeOAuthState,
   createOAuthState,
   decryptSession,
@@ -51,7 +53,10 @@ import {
   forgetRenewalsForTesting,
   getLiveSession,
   getSession,
+  listSessions,
   sealValue,
+  setActiveAccount,
+  setSessionCookie,
 } from "./session";
 import { EncryptJWT } from "jose";
 
@@ -339,5 +344,147 @@ describe("sign-ins started more than once", () => {
 
     expect(await consumeOAuthState("not-a-state")).toBe(false);
     expect(await consumeOAuthState("*")).toBe(false);
+  });
+});
+
+/**
+ * Two accounts in one browser.
+ *
+ * Work notes in one GitHub account and personal notes in another is an
+ * ordinary way to live, and until now "signed in" and "signed in as" were the
+ * same cookie: a second account could only arrive by evicting the first. Each
+ * account's sealed session has its own cookie now, with a pointer at the one
+ * in front.
+ */
+describe("more than one account signed in", () => {
+  const work = { id: 7, login: "someone-work", name: null, avatarUrl: "" };
+  const personal = { id: 9, login: "someone", name: null, avatarUrl: "" };
+
+  /** Signs in an account the way a completed OAuth callback would. */
+  const signIn = (who: typeof work, token: string) =>
+    setSessionCookie({ token, user: who, scopes: ["repo"] });
+
+  beforeEach(() => {
+    store.clear();
+  });
+
+  it("keeps both, and answers as the one in front", async () => {
+    await signIn(work, "work-token");
+    await signIn(personal, "personal-token");
+
+    expect((await getSession())?.user.login).toBe("someone");
+    expect((await listSessions()).map((session) => session.user.id).sort()).toEqual([7, 9]);
+  });
+
+  it("switches between them without signing in again", async () => {
+    await signIn(work, "work-token");
+    await signIn(personal, "personal-token");
+
+    expect(await setActiveAccount(7)).toBe(true);
+
+    const session = await getSession();
+    expect(session?.user.login).toBe("someone-work");
+    // The token came back with it: switching is not a second round trip to
+    // GitHub, which is the whole point of keeping both.
+    expect(session?.token).toBe("work-token");
+  });
+
+  it("refuses to point at an account this browser is not signed in to", async () => {
+    await signIn(work, "work-token");
+
+    expect(await setActiveAccount(1234)).toBe(false);
+    expect((await getSession())?.user.id).toBe(7);
+  });
+
+  it("keeps one account's sessions out of the other's", async () => {
+    await signIn(work, "work-token");
+    await signIn(personal, "personal-token");
+
+    // GitHub refuses the personal account's token: that account's sign-in is
+    // over and the work account's is untouched. A single ended marker used to
+    // mean one account's bad morning ended the other's session too.
+    refreshUserToken.mockRejectedValue(new TokenRefused("bad_refresh_token"));
+    store.set(
+      "forkleaf_acct_9",
+      await encryptSession({
+        token: "personal-token-expiring",
+        user: personal,
+        expiresAt: inSeconds(0),
+        refreshToken: "r",
+      }),
+    );
+
+    expect(await getLiveSession()).toBeNull();
+    expect(await setActiveAccount(7)).toBe(true);
+    expect((await getSession())?.token).toBe("work-token");
+  });
+
+  it("falls back to the one that is left when the active account goes", async () => {
+    await signIn(work, "work-token");
+    await signIn(personal, "personal-token");
+    store.delete("forkleaf_acct_9");
+
+    expect((await getSession())?.user.id).toBe(7);
+  });
+
+  it("will not guess between two accounts with no pointer", async () => {
+    await signIn(work, "work-token");
+    await signIn(personal, "personal-token");
+    store.delete("forkleaf_active");
+
+    // Guessing wrong opens somebody's work notes under their personal account.
+    expect(await getSession()).toBeNull();
+    expect(await listSessions()).toHaveLength(2);
+  });
+
+  it("signs out of every account, not only the one in front", async () => {
+    await signIn(work, "work-token");
+    await signIn(personal, "personal-token");
+
+    await clearSessionCookie();
+
+    expect(await listSessions()).toEqual([]);
+    expect(await getSession()).toBeNull();
+    // Nothing left holding a token.
+    expect([...store.keys()].filter((name) => name.startsWith("forkleaf_acct_"))).toEqual([]);
+  });
+});
+
+/**
+ * The upgrade itself: everybody signed in on the day this ships has one
+ * `forkleaf_session` cookie and no pointer. Reading it costs one `if` and
+ * saves all of them a sign-in.
+ */
+describe("a browser arriving from the single-session cookie", () => {
+  beforeEach(() => {
+    store.clear();
+  });
+
+  it("is still signed in", async () => {
+    await signedInWith();
+
+    expect((await getSession())?.token).toBe("old-token");
+    expect(await listSessions()).toHaveLength(1);
+  });
+
+  it("is rewritten into its own account cookie by the next write", async () => {
+    await signedInWith();
+    const session = (await getSession())!;
+
+    await setSessionCookie(session);
+
+    expect(store.get(`forkleaf_acct_${user.id}`)).toBeDefined();
+    expect(store.get("forkleaf_active")).toBe(String(user.id));
+    // Left behind, it would be a second copy of the same token sitting in a
+    // cookie nothing reads.
+    expect(store.get("forkleaf_session")).toBeUndefined();
+  });
+
+  it("moves across when it is the account being switched to", async () => {
+    await signedInWith();
+
+    expect(await setActiveAccount(user.id)).toBe(true);
+    expect(store.get(`forkleaf_acct_${user.id}`)).toBeDefined();
+    expect(store.get("forkleaf_session")).toBeUndefined();
   });
 });
