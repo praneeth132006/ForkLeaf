@@ -48,8 +48,11 @@ export async function POST(request: NextRequest) {
             "That code has expired or is not valid. Connect again.",
           );
         }
+        // A public client identifies itself on every exchange (RFC 6749
+        // §4.1.3); a code is only redeemable by the client it was issued to.
         const clientId = form.get("client_id");
-        if (clientId && clientId !== code.clientId) {
+        if (!clientId) return oauthError("invalid_request", "client_id is missing.");
+        if (clientId !== code.clientId) {
           return oauthError("invalid_grant", "That code was issued to another client.");
         }
         const redirectUri = form.get("redirect_uri");

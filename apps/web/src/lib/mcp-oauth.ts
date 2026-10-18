@@ -34,15 +34,94 @@ const BLOCKED_SCHEMES = new Set([
   "ws:",
   "wss:",
   "http:",
+  // Schemes a phone or desktop hands straight to a web browser, with the rest
+  // of the address as the page to open. Each would turn "an app on this
+  // device" into "any web site", which is what the HTTPS allowlist prevents.
+  "intent:",
+  "chrome:",
+  "googlechrome:",
+  "googlechromes:",
+  "firefox:",
+  "microsoft-edge:",
+  "microsoft-edge-https:",
+  "opera-http:",
+  "opera-https:",
+  "x-safari-http:",
+  "x-safari-https:",
+  "brave:",
+  "mailto:",
+  "tel:",
+  "sms:",
 ]);
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /**
+ * The web sites an authorisation may be delivered to, as host and path.
+ *
+ * A web address can belong to anyone, so a code sent to one is a code handed
+ * to whoever runs that site. Open registration is what the MCP specification
+ * asks for — assistants register themselves the first time they connect — but
+ * that must not let a stranger register their own site and send someone a
+ * "connect" link that delivers their notebook there. So a web redirect is
+ * accepted only for the assistants ForkLeaf documents, each pinned to its
+ * callback path so an open redirect elsewhere on the same site cannot be used.
+ * Apps on the person's own machine (loopback HTTP, an app's own scheme) are
+ * not listed: an answer sent there never leaves that machine.
+ *
+ * A deployment can add its own with MCP_ALLOWED_REDIRECT_HOSTS, a comma
+ * separated list of `host` or `host/path` entries.
+ */
+export const TRUSTED_REDIRECTS: readonly string[] = [
+  "claude.ai/api/mcp/auth_callback",
+  "claude.com/api/mcp/auth_callback",
+  "chatgpt.com/connector_platform_oauth_redirect",
+  "vscode.dev/redirect",
+  "insiders.vscode.dev/redirect",
+];
+
+function configuredRedirects(): string[] {
+  const raw = typeof process === "undefined" ? undefined : process.env.MCP_ALLOWED_REDIRECT_HOSTS;
+  return (raw ?? "")
+    .split(",")
+    .map((entry) =>
+      entry
+        .trim()
+        .toLowerCase()
+        .replace(/^https:\/\//, "")
+        .replace(/\/+$/, ""),
+    )
+    .filter(Boolean);
+}
+
+/**
+ * Whether an HTTPS address is one of the allowed web callbacks. The host must
+ * match exactly — no subdomains, so a user-content subdomain of an allowed
+ * site does not inherit its trust — and the path must be the listed one or
+ * below it.
+ */
+export function isTrustedWebRedirect(url: URL, extra: readonly string[] = configuredRedirects()) {
+  if (url.protocol !== "https:" || url.port) return false;
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname.replace(/\/+$/, "");
+  return [...TRUSTED_REDIRECTS, ...extra].some((entry) => {
+    const slash = entry.indexOf("/");
+    const entryHost = slash === -1 ? entry : entry.slice(0, slash);
+    const entryPath = slash === -1 ? "" : entry.slice(slash);
+    if (host !== entryHost) return false;
+    return !entryPath || path === entryPath || path.startsWith(`${entryPath}/`);
+  });
+}
+
+/**
  * Where an assistant may ask to be sent back to.
  *
- * HTTPS anywhere; plain HTTP only on this machine, which is how command-line
- * clients receive the answer; and an app's own scheme (`cursor://…`), which
- * is how desktop apps do. Never a scheme that runs something or reads a file.
+ * HTTPS only to a known assistant's callback (see TRUSTED_REDIRECTS); plain
+ * HTTP only on this machine, which is how command-line clients receive the
+ * answer; and an app's own scheme (`cursor://…`), which is how desktop apps
+ * do. Never a scheme that runs something, reads a file, or opens a browser.
+ *
+ * Checked at registration and again on every authorisation and renewal, so a
+ * client registered before a rule tightened is held to the rule as it is now.
  */
 export function isAllowedRedirectUri(value: unknown): value is string {
   if (typeof value !== "string" || value.length > MAX_URI_LENGTH) return false;
@@ -53,9 +132,30 @@ export function isAllowedRedirectUri(value: unknown): value is string {
     return false;
   }
   if (url.hash || url.username || url.password) return false;
-  if (url.protocol === "https:") return true;
+  if (url.protocol === "https:") return isTrustedWebRedirect(url);
   if (url.protocol === "http:") return LOOPBACK.has(url.hostname);
-  return /^[a-z][a-z0-9+.-]*:$/.test(url.protocol) && !BLOCKED_SCHEMES.has(url.protocol);
+  return (
+    /^[a-z][a-z0-9+.-]*:$/.test(url.protocol) &&
+    !BLOCKED_SCHEMES.has(url.protocol) &&
+    // web+foo: is the prefix a web site can claim with registerProtocolHandler.
+    !url.protocol.startsWith("web+")
+  );
+}
+
+/**
+ * The name an assistant gives itself, made safe to show: no control,
+ * zero-width or direction-changing characters that could make it read as
+ * something else, one line, and short.
+ */
+export function cleanClientName(value: unknown): string {
+  if (typeof value !== "string") return "An AI assistant";
+  const cleaned = value
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, "")
+    .trim()
+    .slice(0, 60);
+  return cleaned || "An AI assistant";
 }
 
 const base64url = (bytes: Uint8Array) =>
@@ -128,10 +228,12 @@ export function parseRegistration(body: unknown): Parsed<Registration> {
   }
   const bad = uris.find((uri) => !isAllowedRedirectUri(uri));
   if (bad !== undefined) {
-    return { ok: false, error: `${String(bad)} is not an address ForkLeaf will redirect to.` };
+    return {
+      ok: false,
+      error: `${String(bad).slice(0, 200)} is not an address ForkLeaf will redirect to. Web addresses are accepted only for known assistants; apps on your own computer may use http://localhost or their own scheme.`,
+    };
   }
-  const clientName =
-    typeof name === "string" && name.trim() ? name.trim().slice(0, 100) : "An AI assistant";
+  const clientName = cleanClientName(name);
   return { ok: true, value: { redirectUris: uris as string[], clientName } };
 }
 
