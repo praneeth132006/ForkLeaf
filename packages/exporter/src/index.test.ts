@@ -210,7 +210,26 @@ describe("toHtml — what a printed page needs", () => {
     // Hidden on screen, shown on paper — the app's own chrome says this
     // everywhere else.
     expect(html).toContain(".doc-foot { display: none; }");
-    expect(html).toContain("position: fixed");
+  });
+
+  it("ends the footer with the document instead of floating it over the text", async () => {
+    const html = await toHtml("Body.", {}, options({ title: "Runbook" }));
+
+    // A fixed footer in a print frame resolves against the frame, not the
+    // sheet, and comes down in the middle of the page on top of the words.
+    expect(html).not.toContain("position: fixed");
+    // It also has to sit in the text column, which is what `main` is.
+    expect(html.indexOf('class="doc-foot"')).toBeLessThan(html.lastIndexOf("</main>"));
+  });
+
+  it("keeps a whole diagram on the sheet", async () => {
+    const html = await toHtml("Body.", {}, options());
+
+    // The renderer's floor — never below 60% of the laid-out size — is there
+    // for a column that can scroll sideways. Paper cannot.
+    expect(html).toContain("min-width: 0 !important");
+    expect(html).toContain("max-width: 100% !important");
+    expect(html).toContain("max-height: 215mm !important");
   });
 
   it("gives the page real margins, not just the first sheet", async () => {
