@@ -1,5 +1,5 @@
 import { syntaxTree } from "@codemirror/language";
-import { RangeSetBuilder, StateEffect, type Extension } from "@codemirror/state";
+import { Prec, RangeSetBuilder, StateEffect, type Extension } from "@codemirror/state";
 import {
   Decoration,
   EditorView,
@@ -7,7 +7,13 @@ import {
   type DecorationSet,
   type ViewUpdate,
 } from "@codemirror/view";
-import { findWords, matchCase, SuggestionBubble, type SpellBridge } from "../spelling";
+import {
+  findWords,
+  matchCase,
+  stillJustAfter,
+  SuggestionBubble,
+  type SpellBridge,
+} from "../spelling";
 
 /**
  * Spelling suggestions in the Markdown source.
@@ -118,10 +124,14 @@ export function spellingExtension(bridgeOf: () => SpellBridge | undefined): Exte
           this.finished = this.justFinished(update) ?? this.followFinished(update);
         } else if (update.selectionSet) {
           this.typed = false;
+        }
+        // Once the writer has started the next word, or taken the caret
+        // somewhere else, the moment for this one has passed.
+        if (this.finished && (update.docChanged || update.selectionSet)) {
           const head = update.state.selection.main.head;
-          if (this.finished && (head < this.finished.from || head > this.finished.to + 64)) {
-            this.finished = null;
-          }
+          const { from, to } = this.finished;
+          const gap = head > to ? update.state.doc.sliceString(to, head) : "";
+          if (head < from || !stillJustAfter(gap)) this.finished = null;
         }
 
         if (
@@ -314,18 +324,24 @@ export function spellingExtension(bridgeOf: () => SpellBridge | undefined): Exte
 
   return [
     plugin,
-    EditorView.domEventHandlers({
-      keydown(event, view) {
-        if (event.key !== "Escape") return false;
-        const instance = view.plugin(plugin);
-        if (!instance?.dismiss()) return false;
-        event.preventDefault();
-        return true;
-      },
-      blur(_event, view) {
-        view.plugin(plugin)?.close();
-        return false;
-      },
-    }),
+    Prec.highest(
+      EditorView.domEventHandlers({
+        keydown(event, view) {
+          const instance = view.plugin(plugin);
+          if (instance?.bubble.handleKey(event)) {
+            event.preventDefault();
+            return true;
+          }
+          if (event.key !== "Escape") return false;
+          if (!instance?.dismiss()) return false;
+          event.preventDefault();
+          return true;
+        },
+        blur(_event, view) {
+          view.plugin(plugin)?.close();
+          return false;
+        },
+      }),
+    ),
   ];
 }

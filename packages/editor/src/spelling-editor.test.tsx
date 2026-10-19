@@ -166,6 +166,62 @@ describe("spelling in rich text", () => {
     expect(markdownOf(editor)).toContain("teh");
   });
 
+  it("lets the keyboard pick a correction without leaving the editor", async () => {
+    const spelling = bridge({ teh: ["the", "ten"] });
+    const editor = focused(await mountRich("Start", spelling.value));
+    act(() => {
+      editor.commands.focus("end");
+    });
+    type(editor, " teh ");
+    await waitFor(() =>
+      expect(document.querySelector(".fl-spell-bubble")?.textContent).toContain("ten"),
+    );
+
+    const press = (key: string) =>
+      act(() => {
+        editor.view.dom.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+      });
+    press("ArrowDown");
+    press("ArrowDown");
+    expect(document.querySelector(".fl-spell-option.is-active")?.textContent).toBe("ten");
+    press("Enter");
+
+    expect(markdownOf(editor)).toContain("Start ten ");
+    expect(document.querySelector(".fl-spell-bubble")).toBeNull();
+  });
+
+  it("leaves Enter to the editor until a correction is highlighted", async () => {
+    const spelling = bridge({ teh: ["the"] });
+    const editor = focused(await mountRich("Start", spelling.value));
+    act(() => {
+      editor.commands.focus("end");
+    });
+    type(editor, " teh ");
+    await waitFor(() => expect(document.querySelector(".fl-spell-bubble")).not.toBeNull());
+    const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    act(() => {
+      editor.view.dom.dispatchEvent(event);
+    });
+    expect(markdownOf(editor)).toContain("teh");
+    expect(markdownOf(editor)).not.toContain("the");
+  });
+
+  it("closes the bubble once the next word is begun", async () => {
+    const spelling = bridge({ teh: ["the"] });
+    const editor = focused(await mountRich("Start", spelling.value));
+    act(() => {
+      editor.commands.focus("end");
+    });
+    type(editor, " teh ");
+    await waitFor(() => expect(document.querySelector(".fl-spell-bubble")).not.toBeNull());
+    type(editor, "n");
+    expect(document.querySelector(".fl-spell-bubble")).toBeNull();
+    type(editor, "ext word ");
+    expect(document.querySelector(".fl-spell-bubble")).toBeNull();
+    // The word stays underlined, to come back to.
+    expect(underlined()).toEqual(["teh"]);
+  });
+
   it("never changes the note just by being on", async () => {
     const onChange = vi.fn();
     render(
