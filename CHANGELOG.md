@@ -9,6 +9,15 @@ description, and the heading becomes the day's date when they ship.
 
 ## Unreleased
 
+### A caret the size of the text
+
+In Safari, and in the home-screen app on a Mac or iPhone, the caret in a note
+stood nearly twice as tall as the words beside it: Safari draws it the full
+height of the line, and a note has generous spacing between lines. The rich
+editor now draws its own caret, sized to the text it is in — a paragraph's
+caret matches the paragraph, a heading's the heading — and hands back to the
+browser's own while something is selected or being typed with an input method.
+
 ### Choosing a spelling correction from the keyboard
 
 The corrections under a misspelt word can now be picked without the mouse: ↓

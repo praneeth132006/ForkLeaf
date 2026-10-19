@@ -80,6 +80,7 @@ import { HandsFreeBlock, browserSpeech, type SpeechKit } from "./extensions/Hand
 import { ClaimChecker, claimCheckerKey, type ClaimBridge } from "./extensions/ClaimChecker";
 import { DecisionBlock } from "./extensions/DecisionBlock";
 import { Spelling, spellingKey } from "./extensions/Spelling";
+import { TextCaret } from "./extensions/TextCaret";
 import { Glossary, glossaryKey, type GlossaryBridge } from "./extensions/Glossary";
 import { LiveCodeBlock, type LiveCodeBridge } from "./extensions/LiveCodeBlock";
 import type { SpellBridge } from "./spelling";
@@ -323,6 +324,7 @@ export function WysiwygEditor({
       DeckBlock.configure({ bridge: () => deckRef.current }),
       ClaimChecker.configure({ bridge: () => claimsRef.current }),
       Spelling.configure({ bridge: () => spellingRef.current }),
+      TextCaret,
       Glossary.configure({ bridge: () => glossaryRef.current }),
       LiveCodeBlock.configure({ bridge: () => liveCodeRef.current }),
       DecisionBlock.configure({
