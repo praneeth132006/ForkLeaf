@@ -144,6 +144,15 @@ export function wordAt(words: readonly FoundWord[], at: number): FoundWord | und
   return words.find((word) => at >= word.from && at <= word.to);
 }
 
+/**
+ * Whether the text typed since a word was finished still leaves it "just
+ * finished": a space and a little punctuation, no more. The first letter of
+ * the next word means the writer has moved on, and the bubble should too.
+ */
+export function stillJustAfter(gap: string): boolean {
+  return /^[\s.,;:!?)\]"”’]{0,3}$/.test(gap);
+}
+
 // ─── The suggestion bubble ───────────────────────────────────────────────────
 
 export interface BubbleRequest {
@@ -163,10 +172,17 @@ export interface BubbleRequest {
  * Plain DOM rather than React, because both editors own their own rendering
  * and this has to float over either. One bubble per page; showing it for a
  * new word replaces the old one.
+ *
+ * It works from the keyboard without taking focus from the editor: the arrow
+ * keys move a highlight through the choices and Enter or Tab takes the
+ * highlighted one. Until something is highlighted every key but ↓ and ↑ goes
+ * to the editor as usual, so typing carries on undisturbed.
  */
 export class SuggestionBubble {
   private element: HTMLDivElement | null = null;
   private current: string | null = null;
+  private choices: HTMLButtonElement[] = [];
+  private active = -1;
 
   /** The word the bubble is open for, or null. */
   get word(): string | null {
@@ -184,7 +200,7 @@ export class SuggestionBubble {
 
     const bubble = document.createElement("div");
     bubble.className = "fl-spell-bubble";
-    bubble.setAttribute("role", "dialog");
+    bubble.setAttribute("role", "listbox");
     bubble.setAttribute("aria-label", `Spelling suggestions for ${request.word}`);
     bubble.dataset.testid = "spell-bubble";
     // Keep the caret where it is: a mousedown on the bubble would otherwise
@@ -227,7 +243,68 @@ export class SuggestionBubble {
     document.body.append(bubble);
     this.element = bubble;
     this.current = request.word;
+    this.choices = Array.from(bubble.querySelectorAll("button"));
+    this.choices.forEach((choice, index) => {
+      choice.id = `fl-spell-choice-${index}`;
+      choice.setAttribute("role", "option");
+      choice.setAttribute("aria-selected", "false");
+    });
     this.place(request.rect);
+  }
+
+  /**
+   * A key pressed in the editor while the bubble is open. Returns true when
+   * the bubble used it, so the editor should not.
+   */
+  handleKey(event: KeyboardEvent): boolean {
+    if (!this.element || this.choices.length === 0) return false;
+    // Shift with an arrow extends a selection, and Shift-Tab goes back: both
+    // belong to the editor.
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) {
+      return false;
+    }
+    const last = this.choices.length - 1;
+    const highlighted = this.active >= 0;
+
+    switch (event.key) {
+      case "ArrowDown":
+        this.highlight(highlighted ? Math.min(this.active + 1, last) : 0);
+        return true;
+      case "ArrowUp":
+        this.highlight(highlighted ? Math.max(this.active - 1, 0) : last);
+        return true;
+      case "ArrowRight":
+        if (!highlighted) return false;
+        this.highlight(Math.min(this.active + 1, last));
+        return true;
+      case "ArrowLeft":
+        if (!highlighted) return false;
+        this.highlight(Math.max(this.active - 1, 0));
+        return true;
+      case "Enter":
+      case "Tab":
+        if (!highlighted) return false;
+        this.choices[this.active]!.click();
+        return true;
+      default:
+        // Anything else is typing: let go of the highlight and carry on.
+        if (highlighted) this.highlight(-1);
+        return false;
+    }
+  }
+
+  private highlight(index: number): void {
+    this.choices[this.active]?.classList.remove("is-active");
+    this.choices[this.active]?.setAttribute("aria-selected", "false");
+    this.active = index;
+    const choice = this.choices[index];
+    if (choice) {
+      choice.classList.add("is-active");
+      choice.setAttribute("aria-selected", "true");
+      this.element?.setAttribute("aria-activedescendant", choice.id);
+    } else {
+      this.element?.removeAttribute("aria-activedescendant");
+    }
   }
 
   /** Moves the bubble to follow its word, e.g. while the page scrolls. */
@@ -250,6 +327,8 @@ export class SuggestionBubble {
     this.element?.remove();
     this.element = null;
     this.current = null;
+    this.choices = [];
+    this.active = -1;
   }
 }
 

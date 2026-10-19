@@ -960,6 +960,50 @@ mark.fl-hl-orange {
   text-decoration-skip-ink: none;
 }
 
+/* The rich editor's own caret, sized to the text rather than to the line —
+   see TextCaret.ts. The browser's caret is made transparent only while this
+   one is drawn, and never in a field inside a block, which keeps its own. */
+.fl-own-caret {
+  caret-color: transparent;
+}
+
+.fl-own-caret :is(input, textarea, select, [contenteditable="false"] [contenteditable="true"]) {
+  caret-color: auto;
+}
+
+.fl-text-caret {
+  position: absolute;
+  z-index: 1;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--fl-text);
+  pointer-events: none;
+}
+
+.fl-text-caret.is-blinking {
+  animation: fl-text-caret 1.06s steps(1, end) infinite;
+}
+
+@keyframes fl-text-caret {
+  0%,
+  50% {
+    opacity: 1;
+  }
+
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fl-text-caret.is-blinking {
+    animation: none !important;
+    opacity: 1;
+  }
+}
+
 /* The corrections under a misspelt word. Fixed, so it floats over either
    editor and follows the word as the page scrolls. */
 .fl-spell-bubble {
@@ -1010,8 +1054,10 @@ mark.fl-hl-orange {
 
 .fl-spell-option:hover,
 .fl-spell-option:focus-visible,
+.fl-spell-option.is-active,
 .fl-spell-action:hover,
-.fl-spell-action:focus-visible {
+.fl-spell-action:focus-visible,
+.fl-spell-action.is-active {
   background: var(--fl-elevated);
   color: var(--fl-text);
   outline: none;
