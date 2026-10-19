@@ -258,7 +258,11 @@ export class SuggestionBubble {
    */
   handleKey(event: KeyboardEvent): boolean {
     if (!this.element || this.choices.length === 0) return false;
-    if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return false;
+    // Shift with an arrow extends a selection, and Shift-Tab goes back: both
+    // belong to the editor.
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing) {
+      return false;
+    }
     const last = this.choices.length - 1;
     const highlighted = this.active >= 0;
 
@@ -279,7 +283,7 @@ export class SuggestionBubble {
         return true;
       case "Enter":
       case "Tab":
-        if (!highlighted || event.shiftKey) return false;
+        if (!highlighted) return false;
         this.choices[this.active]!.click();
         return true;
       default:

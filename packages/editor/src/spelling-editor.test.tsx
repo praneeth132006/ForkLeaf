@@ -206,6 +206,22 @@ describe("spelling in rich text", () => {
     expect(markdownOf(editor)).not.toContain("the");
   });
 
+  it("leaves Shift with an arrow to the editor, to extend a selection", async () => {
+    const spelling = bridge({ teh: ["the"] });
+    const editor = focused(await mountRich("Start", spelling.value));
+    act(() => {
+      editor.commands.focus("end");
+    });
+    type(editor, " teh ");
+    await waitFor(() => expect(document.querySelector(".fl-spell-bubble")).not.toBeNull());
+    act(() => {
+      editor.view.dom.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowDown", shiftKey: true, bubbles: true }),
+      );
+    });
+    expect(document.querySelector(".fl-spell-option.is-active")).toBeNull();
+  });
+
   it("closes the bubble once the next word is begun", async () => {
     const spelling = bridge({ teh: ["the"] });
     const editor = focused(await mountRich("Start", spelling.value));

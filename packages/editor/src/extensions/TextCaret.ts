@@ -1,5 +1,5 @@
 import { Extension } from "@tiptap/core";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 
 /**
@@ -68,6 +68,9 @@ class CaretView {
     if (
       !view.editable ||
       view.composing ||
+      // A text caret only: a gap cursor between two blocks, a selected image
+      // or a table cell selection draw themselves.
+      !(selection instanceof TextSelection) ||
       !selection.empty ||
       !view.hasFocus() ||
       !caret.isConnected
