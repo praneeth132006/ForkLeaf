@@ -5,6 +5,7 @@ import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import {
   findWords,
   matchCase,
+  stillJustAfter,
   SuggestionBubble,
   type FoundWord,
   type SpellBridge,
@@ -17,7 +18,9 @@ import {
  * full stop after it — opens a small bubble under it with the likely
  * corrections; so does putting the caret in any underlined word, by click,
  * tap or arrow keys. Picking a correction replaces the word, in the case it
- * was typed in. Escape closes the bubble without changing anything.
+ * was typed in. ↓ and ↑ move through the choices and Enter takes one; Escape
+ * closes the bubble without changing anything. Typing the next word closes it
+ * too: the moment for that correction has passed.
  *
  * The underlines are decorations, so the note's text is never touched until a
  * correction is chosen. The word the caret is at the end of is never
@@ -159,6 +162,9 @@ function justFinished(tr: Transaction, state: EditorState): Located | null {
 
 export const Spelling = Extension.create<SpellingOptions>({
   name: "spelling",
+  // Ahead of the keymaps, so ↓ and Enter reach an open bubble before they
+  // move the caret or split the paragraph.
+  priority: 1000,
 
   addOptions() {
     return { bridge: () => undefined };
@@ -197,10 +203,14 @@ export const Spelling = Extension.create<SpellingOptions>({
                 const sameBlock = state.doc.resolve(from).parent === state.selection.$head.parent;
                 finished = now === finished.word && sameBlock ? { ...finished, from, to } : null;
               }
-            } else if (tr.selectionSet && finished) {
-              // Moving the caret somewhere else means the moment has passed.
+            }
+            // Once the writer has started the next word, or taken the caret
+            // somewhere else, the moment for this one has passed.
+            if (finished && (tr.docChanged || tr.selectionSet)) {
               const head = state.selection.head;
-              if (head < finished.from || head > finished.to + 64) finished = null;
+              const gap =
+                head > finished.to ? state.doc.textBetween(finished.to, head, "\n", "\n") : "";
+              if (head < finished.from || !stillJustAfter(gap)) finished = null;
             }
 
             const typed = tr.docChanged ? true : tr.selectionSet ? false : previous.typed;
@@ -216,9 +226,13 @@ export const Spelling = Extension.create<SpellingOptions>({
         props: {
           decorations: (state) => spellingKey.getState(state)?.decorations ?? DecorationSet.empty,
           handleKeyDown(view, event) {
-            if (event.key !== "Escape") return false;
             const plugin = spellingView.get(view);
             if (!plugin?.bubble.visible) return false;
+            if (plugin.bubble.handleKey(event)) {
+              event.preventDefault();
+              return true;
+            }
+            if (event.key !== "Escape") return false;
             plugin.bubble.hide();
             plugin.dismissed = plugin.target?.from ?? null;
             view.dispatch(view.state.tr.setMeta(spellingKey, { dismiss: true }));

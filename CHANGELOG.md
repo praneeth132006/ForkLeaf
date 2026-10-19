@@ -9,6 +9,14 @@ description, and the heading becomes the day's date when they ship.
 
 ## Unreleased
 
+### Choosing a spelling correction from the keyboard
+
+The corrections under a misspelt word can now be picked without the mouse: ↓
+and ↑ move through them, Enter or Tab takes the highlighted one, and Escape
+closes the bubble. The bubble also stops following you around — it used to stay
+open while the next words were typed, and now closes as soon as the next word
+is begun. The misspelt word keeps its underline, to come back to.
+
 ### Assistants can only be sent back to addresses ForkLeaf knows
 
 A security researcher reported that anyone could register an assistant whose

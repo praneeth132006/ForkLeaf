@@ -1010,8 +1010,10 @@ mark.fl-hl-orange {
 
 .fl-spell-option:hover,
 .fl-spell-option:focus-visible,
+.fl-spell-option.is-active,
 .fl-spell-action:hover,
-.fl-spell-action:focus-visible {
+.fl-spell-action:focus-visible,
+.fl-spell-action.is-active {
   background: var(--fl-elevated);
   color: var(--fl-text);
   outline: none;
