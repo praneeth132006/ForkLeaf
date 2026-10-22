@@ -34,6 +34,9 @@ import { SectionLink } from "./SectionLink";
  * line-by-line blame) are named there now.
  */
 
+/** The ForkLeaf walkthrough, https://youtu.be/FG-poOJ7bHI. */
+const HERO_VIDEO_ID = "FG-poOJ7bHI";
+
 export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
   return (
     <section className="relative overflow-hidden">
@@ -141,6 +144,27 @@ export function Hero({ githubAvailable }: { githubAvailable: boolean }) {
               </SectionLink>
             ))}
           </nav>
+        </div>
+
+        {/* ── Video ─────────────────────────────────────────────────────── */}
+        {/* The walkthrough sits straight under the button, because a visitor
+            who has read the claim and is not yet sure wants to see the thing
+            move before scrolling to read about it. Served from
+            youtube-nocookie.com — the one frame host `proxy.ts` allows — so
+            the landing page sets no YouTube cookies until somebody plays it. */}
+        <div className="fl-rise mx-auto max-w-4xl pt-14 [animation-delay:100ms] md:pt-16">
+          <div className="overflow-hidden rounded-2xl border border-[var(--fl-border)] bg-[var(--fl-surface)] p-1.5 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.45)]">
+            <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${HERO_VIDEO_ID}?rel=0&modestbranding=1`}
+                title="ForkLeaf walkthrough"
+                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
+                className="absolute inset-0 h-full w-full border-0"
+              />
+            </div>
+          </div>
         </div>
 
         {/* ── Product ───────────────────────────────────────────────────── */}
