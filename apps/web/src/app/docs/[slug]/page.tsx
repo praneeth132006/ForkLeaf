@@ -18,7 +18,11 @@ export async function generateMetadata({
   const page = findDocPage(slug);
   if (!page) return {};
 
-  return { title: page.title, description: page.summary };
+  return {
+    title: page.title,
+    description: page.summary,
+    alternates: { canonical: `/docs/${page.slug}` },
+  };
 }
 
 export default async function DocPage({ params }: { params: Promise<{ slug: string }> }) {

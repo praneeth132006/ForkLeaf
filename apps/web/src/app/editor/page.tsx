@@ -3,7 +3,10 @@ import { EditorWorkspace } from "@/components/editor/EditorWorkspace";
 import { BootScreen } from "@/components/BootScreen";
 
 export const metadata = {
-  title: "Editor — ForkLeaf",
+  title: "Markdown editor",
+  description:
+    "A free Markdown editor in the browser with wikilinks, Mermaid diagrams and offline editing. Works with no account; connect GitHub to sync your notes to your own repository.",
+  alternates: { canonical: "/editor" },
 };
 
 /**

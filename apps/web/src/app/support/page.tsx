@@ -7,6 +7,7 @@ export const metadata = {
   title: "Support",
   description:
     "How to get help with ForkLeaf: what to try first, where to write, what to include, and how long a reply takes.",
+  alternates: { canonical: "/support" },
 };
 
 /**

@@ -3,7 +3,7 @@ import { DiagramDiffView } from "@/components/DiagramDiffView";
 import { BootScreen } from "@/components/BootScreen";
 
 export const metadata = {
-  title: "Diagram review — ForkLeaf",
+  title: "Diagram review",
   description: "See what a pull request changed in your Mermaid diagrams, as a picture.",
 };
 

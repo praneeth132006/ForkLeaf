@@ -5,6 +5,7 @@ export const metadata = {
   title: "Documentation",
   description:
     "Everything about ForkLeaf: writing, diagrams, GitHub sync, conflicts, exports, plans and security.",
+  alternates: { canonical: "/docs" },
 };
 
 export default function DocsIndex() {

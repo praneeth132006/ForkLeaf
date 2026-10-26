@@ -3,7 +3,7 @@ import { ReaderWindow } from "@/components/ReaderWindow";
 import { BootScreen } from "@/components/BootScreen";
 
 export const metadata = {
-  title: "Reader — ForkLeaf",
+  title: "Reader",
 };
 
 /**

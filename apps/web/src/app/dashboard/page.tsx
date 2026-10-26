@@ -2,9 +2,11 @@ import { DashboardPanel } from "@/components/dashboard/DashboardPanel";
 import { getSession, githubOAuthConfigured } from "@/lib/session";
 
 export const metadata = {
-  title: "Dashboard — ForkLeaf",
+  title: "Dashboard",
   description:
     "Every note you have written, indexed and searchable, across each GitHub repository you have connected.",
+  // One person's notebook: nothing here for a search engine.
+  robots: { index: false, follow: false },
 };
 
 /**

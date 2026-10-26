@@ -1,4 +1,7 @@
 import React from "react";
+import Link from "next/link";
+
+import { COMPARISON_APPS as APPS, COMPARISON_ROWS as ROWS, COMPETITORS } from "@/lib/comparisons";
 
 /**
  * ForkLeaf against the apps people actually have open.
@@ -9,117 +12,12 @@ import React from "react";
  * Notion", and an answer that never says the word Notion reads like an answer
  * that cannot be given.
  *
- * So the products are named and the table is written to be checked: every cell
- * is something a reader can verify in an afternoon, which is the only kind of
- * claim worth making about a competitor. The row that matters most — where the
- * file ends up — is first, because every other row follows from it, and the
- * four points underneath say what the rows add up to rather than leaving the
- * reader to work it out.
- *
- * Accurate about the alternatives, and unapologetic about the conclusion.
- * Nothing here is a dig at a good product; the argument is that a note you own
- * outright beats a note you have excellent access to, and the table is how
- * that gets shown rather than asserted. Anything a vendor can change tomorrow
- * — exact prices, plan names — is deliberately not quoted, so this cannot rot
- * into something untrue.
+ * The rows themselves live in `lib/comparisons`, shared with the
+ * `/compare/[slug]` pages, so the table and the per-app pages cannot disagree.
+ * The row that matters most — where the file ends up — is first, because
+ * every other row follows from it, and the four points underneath say what the
+ * rows add up to rather than leaving the reader to work it out.
  */
-const APPS = ["ForkLeaf", "Notion", "OneNote", "Obsidian", "Evernote"] as const;
-
-type App = (typeof APPS)[number];
-
-const ROWS: { criterion: string; note?: string; cells: Record<App, string> }[] = [
-  {
-    criterion: "Where a note ends up",
-    note: "The thing everything else follows from.",
-    cells: {
-      ForkLeaf: "A .md file in a GitHub repository you own",
-      Notion: "A row in Notion's database, on Notion's servers",
-      OneNote: "A .one notebook in OneDrive",
-      Obsidian: "A .md file in a folder on that device",
-      Evernote: "A note in Evernote's cloud",
-    },
-  },
-  {
-    criterion: "Format",
-    cells: {
-      ForkLeaf: "Markdown — readable in any editor, for ever",
-      Notion: "Blocks. Markdown export exists and loses things",
-      OneNote: "A proprietary binary format",
-      Obsidian: "Markdown",
-      Evernote: "ENEX, an XML format only Evernote writes",
-    },
-  },
-  {
-    criterion: "History",
-    cells: {
-      ForkLeaf: "Every save is a git commit — diffs, blame, revert",
-      Notion: "Page history, on paid plans, for a limited window",
-      OneNote: "Recent versions, per page",
-      Obsidian: "Nothing built in; a plugin or git of your own",
-      Evernote: "Note history on paid plans",
-    },
-  },
-  {
-    criterion: "Sync",
-    cells: {
-      ForkLeaf: "git push, to a repository you already pay nothing for",
-      Notion: "Theirs, included, and required",
-      OneNote: "OneDrive, included",
-      Obsidian: "A paid add-on, or a folder-sync tool you wire up",
-      Evernote: "Theirs, limited on the free tier",
-    },
-  },
-  {
-    criterion: "Offline",
-    cells: {
-      ForkLeaf: "Fully — edits queue locally and push when you reconnect",
-      Notion: "Partial, and not something to rely on",
-      OneNote: "Yes",
-      Obsidian: "Yes — it is a local app",
-      Evernote: "Partial, on paid plans",
-    },
-  },
-  {
-    criterion: "Diagrams",
-    cells: {
-      ForkLeaf: "A Mermaid studio; the diagram renders on GitHub as well",
-      Notion: "Mermaid in code blocks",
-      OneNote: "Freehand drawing and shapes",
-      Obsidian: "Mermaid, plus plugins",
-      Evernote: "Sketches",
-    },
-  },
-  {
-    criterion: "Collaboration",
-    cells: {
-      ForkLeaf: "Pull requests and review — proposed, discussed, then merged",
-      Notion: "Live multiplayer editing — genuinely excellent",
-      OneNote: "Shared notebooks",
-      Obsidian: "A paid add-on, or none",
-      Evernote: "Shared notes",
-    },
-  },
-  {
-    criterion: "If the company disappears",
-    cells: {
-      ForkLeaf: "Nothing happens. The notes were never here",
-      Notion: "You have whatever you exported before it happened",
-      OneNote: "Files in OneDrive, in a format only OneNote reads",
-      Obsidian: "You still have your folder — same answer, and a good one",
-      Evernote: "You have an ENEX file to find a converter for",
-    },
-  },
-  {
-    criterion: "Price",
-    cells: {
-      ForkLeaf: "Free, open source, and no account to close",
-      Notion: "Free tier, then per person per month",
-      OneNote: "Free with a Microsoft account",
-      Obsidian: "Free for personal use; sync and publish cost extra",
-      Evernote: "Free tier with limits, then paid",
-    },
-  },
-];
 
 /**
  * What the table adds up to.
@@ -251,6 +149,18 @@ export function ComparisonBlock() {
         without your permission, your payment or your password — because it is not an app holding
         them at all. It is a folder of Markdown in a repository with your name on it, and ForkLeaf
         is the window you happen to be reading it through.
+      </p>
+
+      <p className="mt-6 text-[14.5px] text-[var(--fl-muted)]">
+        One at a time, with how to move across:{" "}
+        {COMPETITORS.map((competitor, index) => (
+          <React.Fragment key={competitor.slug}>
+            {index > 0 && " · "}
+            <Link href={`/compare/${competitor.slug}`} className="fl-link">
+              ForkLeaf vs {competitor.name}
+            </Link>
+          </React.Fragment>
+        ))}
       </p>
     </>
   );

@@ -6,6 +6,7 @@ export const metadata = {
   title: "Terms & Conditions",
   description:
     "The terms for using ForkLeaf: what the service is, what you are responsible for, and the limits of our liability.",
+  alternates: { canonical: "/terms" },
 };
 
 export default function TermsPage() {
