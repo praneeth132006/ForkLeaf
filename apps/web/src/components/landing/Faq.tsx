@@ -15,9 +15,15 @@ import { SectionHeading } from "./SectionHeading";
  * without a line of JavaScript.
  */
 
-const QUESTIONS: { q: string; a: React.ReactNode }[] = [
+/**
+ * `plain` is the same answer as text, for the FAQ structured data on the home
+ * page. It sits beside the rich answer so the two are edited together.
+ */
+export const QUESTIONS: { q: string; plain: string; a: React.ReactNode }[] = [
   {
     q: "Do I have to connect GitHub?",
+    plain:
+      "No. The editor works with no account at all — notes are stored on that device and nothing leaves it. Connecting GitHub is what adds sync, history and reading the same notes on another machine. You can start without it and connect later.",
     a: (
       <>
         No. The editor works with no account at all — notes are stored on that device and nothing
@@ -32,6 +38,8 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
   },
   {
     q: "What exactly is ForkLeaf asking permission to do?",
+    plain:
+      "The hosted app requests GitHub’s repo scope, the narrowest classic scope that can write to a private repository. It is used only to read and commit Markdown in the repositories you connect, and the token is encrypted into an httpOnly cookie the browser cannot read. You can also sign in with public-repository access only, or use ForkLeaf with no account at all.",
     a: (
       <>
         The hosted app requests GitHub&rsquo;s <code className="fl-code">repo</code> scope, which is
@@ -47,6 +55,8 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
   },
   {
     q: "What happens to my notes if ForkLeaf shuts down?",
+    plain:
+      "Nothing. They are Markdown files in a repository on your own GitHub account, in a normal git history. Clone it and carry on in any editor that reads text.",
     a: (
       <>
         Nothing. They are Markdown files in a repository on your own GitHub account, in a normal git
@@ -57,6 +67,8 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
   },
   {
     q: "Is it really free, and what is the catch?",
+    plain:
+      "Free, all of it, no tiers. The expensive part of a notes app is storage, and ForkLeaf has none — your notes sit in your GitHub account. The project is open source under Apache-2.0 and funded by optional sponsorship.",
     a: (
       <>
         Free, all of it, no tiers. The expensive part of a notes app is storage, and ForkLeaf has
@@ -67,6 +79,8 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
   },
   {
     q: "Will it work with the notes I already have?",
+    plain:
+      "If they are Markdown, yes. Point ForkLeaf at a repository that already has .md files and it reads them where they are, including subdirectories and existing front matter. Obsidian-style [[wikilinks]] are the dialect it speaks natively.",
     a: (
       <>
         If they are Markdown, yes — point ForkLeaf at a repository that already has{" "}
@@ -78,6 +92,8 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
   },
   {
     q: "Can I use it offline?",
+    plain:
+      "That is the default. Every keystroke is written to IndexedDB on your device first; the commit queue drains to GitHub when there is a network again, and the status bar says plainly what is saved where.",
     a: (
       <>
         That is the default. Every keystroke is written to IndexedDB on your device first; the

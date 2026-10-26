@@ -7,16 +7,24 @@ import { Tour } from "@/components/landing/Tour";
 import { Toolkit } from "@/components/landing/Toolkit";
 import { Why } from "@/components/landing/Why";
 import { Ownership } from "@/components/landing/Ownership";
-import { Faq } from "@/components/landing/Faq";
+import { Faq, QUESTIONS } from "@/components/landing/Faq";
 import { Support } from "@/components/landing/Support";
 import { Pricing } from "@/components/landing/Pricing";
 import { CallToAction } from "@/components/landing/CallToAction";
 import { Footer } from "@/components/landing/Footer";
+import {
+  JsonLd,
+  faqLd,
+  organizationLd,
+  softwareApplicationLd,
+  websiteLd,
+} from "@/components/JsonLd";
 
 export const metadata = {
-  title: "ForkLeaf — Markdown notes stored in your own GitHub repo",
+  title: { absolute: "ForkLeaf — Markdown notes stored in your own GitHub repo" },
   description:
     "A local-first Markdown workspace whose storage is a GitHub repository you own. Wikilinks, backlinks, full-text search, a visual Mermaid studio, offline editing and PDF/Word/HTML export — over plain .md files, with real commit history and no lock-in. Free and open source.",
+  alternates: { canonical: "/" },
 };
 
 export default async function Home({
@@ -59,6 +67,14 @@ export default async function Home({
   // the clipping belonged in the first place.
   return (
     <div className="flex min-h-screen flex-col bg-[var(--fl-bg)] font-sans text-[var(--fl-text)]">
+      <JsonLd
+        data={[
+          softwareApplicationLd(),
+          organizationLd(),
+          websiteLd(),
+          faqLd(QUESTIONS.map(({ q, plain }) => ({ q, a: plain }))),
+        ]}
+      />
       <Nav githubAvailable={githubAvailable} signedIn={Boolean(session?.user)} />
 
       {error && (

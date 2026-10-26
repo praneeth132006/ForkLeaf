@@ -6,6 +6,7 @@ export const metadata = {
   title: "Privacy Policy",
   description:
     "What ForkLeaf collects, what it does not, where your notes live, and how to delete everything.",
+  alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {

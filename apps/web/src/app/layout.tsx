@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Instrument_Sans, Instrument_Serif, JetBrains_Mono, Newsreader } from "next/font/google";
 import { THEME_INIT_SCRIPT } from "@/hooks/useTheme";
 import { Analytics } from "@/components/Analytics";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
 // KaTeX before our own styles, so the notebook's type and colours win where both speak.
 import "katex/dist/katex.min.css";
 import "./globals.css";
@@ -59,13 +60,42 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  // Every relative URL below — canonicals, the generated Open Graph image —
+  // resolves against this, so a shared link points at the site and not at
+  // whichever deployment happened to render it.
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "ForkLeaf",
+    default: `${SITE_NAME} — ${SITE_TAGLINE}`,
     template: "%s · ForkLeaf",
   },
-  description:
-    "A local-first Markdown editor with first-class Mermaid diagrams. Your notes live in your own GitHub repository.",
-  applicationName: "ForkLeaf",
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [
+    "markdown notes",
+    "markdown editor",
+    "notes in GitHub",
+    "local-first notes",
+    "Obsidian alternative",
+    "Notion alternative",
+    "wikilinks",
+    "Mermaid diagrams",
+    "open source note taking",
+    "digital garden",
+  ],
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+    // No `url` here: every page inherits this block, and a site-wide `og:url`
+    // would tell every share card that it is a link to the home page.
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+  },
   // Installable, and — once installed — registered with the operating system
   // as a handler for markdown files. See `app/manifest.ts`.
   manifest: "/manifest.webmanifest",

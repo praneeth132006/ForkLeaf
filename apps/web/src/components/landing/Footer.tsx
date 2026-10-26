@@ -33,6 +33,8 @@ const COLUMNS = [
       { label: "Features", href: "/features" },
       { label: "Changelog", href: "/changelog" },
       { label: "Where it fits", href: "#why" },
+      { label: "Compare", href: "/compare" },
+      { label: "Notes in GitHub", href: "/github-notes" },
       { label: "Pricing", href: "#pricing" },
       { label: "Open the editor", href: "/editor" },
     ],

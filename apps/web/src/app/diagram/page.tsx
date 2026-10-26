@@ -3,7 +3,7 @@ import { DiagramWindow } from "@/components/DiagramWindow";
 import { BootScreen } from "@/components/BootScreen";
 
 export const metadata = {
-  title: "Diagram — ForkLeaf",
+  title: "Diagram",
 };
 
 /**

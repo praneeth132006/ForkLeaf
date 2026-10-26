@@ -7,6 +7,7 @@ export const metadata = {
   title: "Features",
   description:
     "Everything ForkLeaf does: writing, linking, flashcards, boards, saving from the web, reading papers, diagrams, history and publishing — all as plain files in your own GitHub repository.",
+  alternates: { canonical: "/features" },
 };
 
 /**

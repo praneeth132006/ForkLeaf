@@ -14,6 +14,7 @@ import {
 export const metadata = {
   title: "Changelog",
   description: "Everything that has changed in ForkLeaf, newest first, day by day.",
+  alternates: { canonical: "/changelog" },
 };
 
 /**
