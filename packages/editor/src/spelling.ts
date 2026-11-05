@@ -183,6 +183,14 @@ export class SuggestionBubble {
   private current: string | null = null;
   private choices: HTMLButtonElement[] = [];
   private active = -1;
+  /**
+   * Whether the bubble sits above its word rather than below it — which it
+   * does near the bottom of the screen. Above, it is drawn upside down
+   * (corrections nearest the word, "Ignore" furthest away) and ↑ is the key
+   * that walks away from the word into it, so the first press always lands on
+   * the most likely correction, never on "Ignore".
+   */
+  private above = false;
 
   /** The word the bubble is open for, or null. */
   get word(): string | null {
@@ -266,12 +274,24 @@ export class SuggestionBubble {
     const last = this.choices.length - 1;
     const highlighted = this.active >= 0;
 
+    // "Into the bubble" is away from the word: down when the bubble hangs
+    // below it, up when it sits above. Either way the first press lands on
+    // the best correction.
+    const into = this.above ? "ArrowUp" : "ArrowDown";
+    const back = this.above ? "ArrowDown" : "ArrowUp";
+
     switch (event.key) {
-      case "ArrowDown":
+      case into:
         this.highlight(highlighted ? Math.min(this.active + 1, last) : 0);
         return true;
-      case "ArrowUp":
-        this.highlight(highlighted ? Math.max(this.active - 1, 0) : last);
+      case back:
+        if (!highlighted) return false;
+        if (this.active === 0) {
+          // Back past the first correction returns to the text.
+          this.highlight(-1);
+          return true;
+        }
+        this.highlight(this.active - 1);
         return true;
       case "ArrowRight":
         if (!highlighted) return false;
@@ -317,8 +337,10 @@ export class SuggestionBubble {
     const left = Math.max(8, Math.min(rect.left, (view?.innerWidth ?? 1024) - width - 8));
     // Below the word, unless that would leave the screen; then above it.
     const below = rect.bottom + 6;
-    const top =
-      view && below + height > view.innerHeight - 8 ? Math.max(8, rect.top - height - 6) : below;
+    const above = !!view && below + height > view.innerHeight - 8;
+    const top = above ? Math.max(8, rect.top - height - 6) : below;
+    this.above = above;
+    bubble.classList.toggle("is-above", above);
     bubble.style.left = `${left}px`;
     bubble.style.top = `${top}px`;
   }
@@ -329,6 +351,7 @@ export class SuggestionBubble {
     this.current = null;
     this.choices = [];
     this.active = -1;
+    this.above = false;
   }
 }
 

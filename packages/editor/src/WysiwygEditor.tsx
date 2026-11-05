@@ -93,7 +93,7 @@ import { RoomToWrite, roomBelow } from "./extensions/RoomToWrite";
 import type { LinkBridge } from "./links";
 import { readSlashState } from "./extensions/SlashCommands";
 import { isolateCurrentLine } from "./isolate-line";
-import { caretBelow } from "./caret";
+import { caretBelow, CARET_ROOM, followCaretWhileImagesLoad } from "./caret";
 import { type ActionContext } from "./insert-actions";
 import { filterSlashItems, groupSlashItems, insertTextOf, type SlashItem } from "./slash-items";
 
@@ -451,6 +451,7 @@ export function WysiwygEditor({
        * writing about the screenshot.
        */
       if (position !== undefined) caretBelow(view, position);
+      followCaretWhileImagesLoad(view);
 
       // The upload stored the image locally and called setAssetUrls(), which
       // is a React state update. That update was processed while `await`
@@ -478,6 +479,10 @@ export function WysiwygEditor({
     // mismatch because ProseMirror generates DOM the server cannot produce.
     immediatelyRender: false,
     editorProps: {
+      // Room above and below the caret, so the line being written never sits
+      // on (or under) the edge of the window. See CARET_ROOM.
+      scrollMargin: CARET_ROOM,
+      scrollThreshold: CARET_ROOM,
       // The browser's own spell checker is turned off while ForkLeaf's is on,
       // so a misspelt word is not underlined twice in two different colours.
       attributes: () => ({
