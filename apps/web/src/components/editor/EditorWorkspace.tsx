@@ -288,6 +288,7 @@ import { hasRelativeImages, repairNoteLinks } from "@/lib/repair-links";
 import { excerptOf, flattenTree, isMarkdown } from "@/lib/library";
 import { track } from "@/lib/firebase/analytics";
 import { upsertUserProfile } from "@/lib/firebase/users";
+import { useInstalledAppZoomGuard } from "@/hooks/useInstalledAppZoomGuard";
 
 /**
  * The editor is browser-only: it reaches for IndexedDB and builds a
@@ -471,6 +472,7 @@ export function EditorWorkspace() {
     path: searchParams.get("note"),
   });
   const router = useRouter();
+  useInstalledAppZoomGuard();
 
   /**
    * Something shared into ForkLeaf from outside — the share sheet, the

@@ -849,6 +849,22 @@ select:focus-visible {
   overflow-x: auto;
 }
 
+/* In the rich editor a table already sits in a wrapper of its own, so the
+   wrapper scrolls sideways and the table stays a real table. A table that is
+   itself `display: block` inside an editable region is the case Safari's
+   installed web app painted as nothing at all — the rows were there, the caret
+   could go into them, and the screen under the heading stayed empty. */
+.fl-prose .tableWrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.fl-prose .tableWrapper > table {
+  display: table;
+  overflow: visible;
+  margin: 0;
+}
+
 .fl-prose th,
 .fl-prose td {
   border: 1px solid var(--fl-border);
@@ -1034,6 +1050,23 @@ mark.fl-hl-orange {
   padding-top: 4px;
 }
 
+/* Above its word (near the bottom of the screen) the bubble is drawn the other
+   way up: corrections nearest the word, the actions furthest from it, so ↑
+   reaches the best correction first. */
+.fl-spell-bubble.is-above {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.fl-spell-bubble.is-above .fl-spell-actions {
+  margin-top: 0;
+  border-top: none;
+  padding-top: 0;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--fl-border);
+  padding-bottom: 4px;
+}
+
 .fl-spell-option,
 .fl-spell-action {
   border-radius: 8px;
@@ -1054,12 +1087,19 @@ mark.fl-hl-orange {
 
 .fl-spell-option:hover,
 .fl-spell-option:focus-visible,
-.fl-spell-option.is-active,
 .fl-spell-action:hover,
-.fl-spell-action:focus-visible,
-.fl-spell-action.is-active {
+.fl-spell-action:focus-visible {
   background: var(--fl-elevated);
   color: var(--fl-text);
+  outline: none;
+}
+
+/* The choice the arrow keys are on — the one Enter will take. It has to be
+   unmistakable at a glance, so it is filled with the accent, not tinted. */
+.fl-spell-option.is-active,
+.fl-spell-action.is-active {
+  background: var(--fl-accent);
+  color: var(--fl-accent-contrast);
   outline: none;
 }
 

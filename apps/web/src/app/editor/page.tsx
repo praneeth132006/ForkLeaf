@@ -20,6 +20,24 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 /**
+ * The editor is an app, not a page to read: it is never zoomed as a whole.
+ *
+ * Without this, a phone or tablet zooms the entire editor in the moment a
+ * field with small text takes focus — and the Home Screen app, which has no
+ * browser chrome to zoom back out with, comes back from a reload still
+ * zoomed. The writing itself is already sized for reading.
+ */
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fcfcfa" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+  ],
+};
+
+/**
  * The editor route.
  *
  * A thin server shell around the client editor, so `?ws=` and `?note=` can be
