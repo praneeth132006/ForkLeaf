@@ -161,10 +161,33 @@ export async function toBodyHtml(
     /FORKLEAFDIAGRAM(\d+)TOKEN/g,
     (_match, index: string) => `<div class="diagram">${svgs[Number(index)] ?? ""}</div>`,
   );
+  body = wrapTables(body);
 
   if (resolveImage) body = await inlineImages(body, resolveImage);
 
   return body;
+}
+
+/**
+ * Puts every table in a box of its own that can scroll.
+ *
+ * A table is the one thing in a note with a width of its own: eight columns
+ * of figures need the room eight columns need, and `width: 100%` does not
+ * make them fit — it makes the columns too narrow to set their contents, so
+ * "North America" stacks one word per line and the whole thing still runs off
+ * the right-hand edge of a phone. The page scrolled sideways, which is the
+ * single clearest sign that a document was not made for the screen it is on.
+ *
+ * Inside a box that scrolls, the table keeps its natural width and the page
+ * keeps its own. Printing undoes this — a sheet of paper cannot scroll — and
+ * the print rules shrink the type instead, which is what a table does on
+ * paper everywhere else.
+ */
+function wrapTables(html: string): string {
+  return html.replace(
+    /<table\b[\s\S]*?<\/table>/gi,
+    (table) => `<div class="table-wrap">${table}</div>`,
+  );
 }
 
 /**
@@ -280,6 +303,9 @@ export function pageStyles(theme: "light" | "dark"): string {
     background: var(--bg);
     color: var(--fg);
     font: 16px/1.7 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    /* A pasted URL or a hash is one word as far as the browser is concerned,
+       and one word wider than the column pushes the whole page sideways. */
+    overflow-wrap: break-word;
   }
   main { max-width: 46rem; margin: 0 auto; }
   h1, h2, h3, h4 { line-height: 1.25; margin: 2.5rem 0 1rem; font-weight: 650; }
@@ -309,6 +335,10 @@ export function pageStyles(theme: "light" | "dark"): string {
     overflow-x: auto;
   }
   pre code { background: none; padding: 0; }
+  /* The scroll box a table sits in, from wrapTables. The table keeps its own
+     width inside it, so the page never has to widen to hold it. */
+  .table-wrap { margin: 0 0 1.25rem; overflow-x: auto; }
+  .table-wrap table { margin: 0; }
   table { border-collapse: collapse; width: 100%; }
   th, td { border: 1px solid var(--rule); padding: 0.5rem 0.75rem; text-align: left; }
   th { background: var(--code-bg); font-weight: 600; }
@@ -372,7 +402,42 @@ export function pageStyles(theme: "light" | "dark"): string {
     @page { margin: 18mm 16mm 20mm; }
     body { padding: 0; background: #fff; color: #000; }
     h1, h2, h3 { break-after: avoid; }
-    pre, blockquote, table, .diagram, figure, img { break-inside: avoid; }
+    blockquote, .diagram, figure, img { break-inside: avoid; }
+
+    /* ── Code on paper ────────────────────────────────────────────────────
+       On screen a code block that is too wide scrolls sideways. A sheet of
+       paper does not scroll, so overflow-x: auto printed as a hard cut at
+       the right-hand margin: every line of every long line was simply gone
+       from the PDF, with nothing to say it had been there. Wrapped instead —
+       the same thing a terminal does, and the only choice that loses no
+       characters. The indent is kept with pre-wrap, and the continuation
+       of a wrapped line is where it falls. */
+    pre {
+      overflow: visible;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      /* A listing broken across two sheets is still readable; a listing
+         pushed whole onto the next sheet leaves half a page blank, and one
+         longer than a sheet cannot be kept whole at all. */
+      break-inside: auto;
+    }
+    pre code { white-space: inherit; }
+
+    /* ── Tables on paper ──────────────────────────────────────────────────
+       The box that lets a table scroll on screen has nothing to do on paper,
+       and overflow on it would clip rather than scroll. The table is
+       allowed to break across sheets instead — with its headings repeated on
+       each, which is what thead below is for — because keeping a table
+       whole means a page break before it and, for anything longer than a
+       sheet, a table that cannot be printed at all.
+
+       The type comes down a little, as it does in every printed table: the
+       column is 176mm wide here against a screen's unlimited width, and the
+       difference between eight columns of figures that fit and eight columns
+       that set one word to a line is about this much. */
+    .table-wrap { overflow: visible; margin: 0 0 1.25rem; }
+    table { break-inside: auto; font-size: 0.82em; }
+    th, td { padding: 0.35rem 0.5rem; }
     /* An image taller than a sheet has to be allowed to shrink, or the printer
        clips it at the page edge and the bottom half is simply gone. */
     img { max-height: 88vh; object-fit: contain; }

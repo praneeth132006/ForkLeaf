@@ -54,6 +54,20 @@ describe("the content security policy and PostHog", () => {
     expect(sources).not.toContain("*");
   });
 
+  /**
+   * The bug this is here for: an image kept on this device is handed to the
+   * page as an object URL, and reading it back — which is how an export
+   * carries its pictures — is a connection as far as this policy goes. Every
+   * exported PDF, HTML and Word file left with its images missing.
+   */
+  it("lets the page read back bytes it holds, which is how an export carries its images", () => {
+    const sources = directive(policy("abc", false, undefined), "connect-src");
+    expect(sources).toContain("blob:");
+    // Reading a handle to our own bytes is not permission to reach a host.
+    expect(sources).not.toContain("https:");
+    expect(sources).not.toContain("data:");
+  });
+
   it("keeps a nonced page strict", () => {
     const script = directive(policy("abc", false, undefined), "script-src");
     expect(script).toContain("'strict-dynamic'");

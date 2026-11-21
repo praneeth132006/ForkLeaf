@@ -185,6 +185,39 @@ describe("buildBook", () => {
  * as `href="#target"` — an anchor to a heading that is not there — so every
  * link between notes is silently dead.
  */
+/**
+ * A chapter is served out of `docs/<book>/`, and the `assets/chart.png` a
+ * note wrote means "beside the note". From the published page that points
+ * into the book's own folder, where only the stylesheet lives — so a book
+ * went up with every picture in it a broken box.
+ */
+describe("the pictures a published chapter carries", () => {
+  it("asks for each chapter's images against that chapter's own note", async () => {
+    const asked: string[] = [];
+    const built = await buildBook(
+      [note("guide/one.md", "![a](assets/one.png)"), note("guide/deep/two.md", "![b](x/two.png)")],
+      {
+        title: "Guide",
+        theme: "light",
+        renderDiagrams: false,
+        resolveImage: (chapter) => async (src) => {
+          asked.push(`${chapter.path} → ${src}`);
+          return "data:image/png;base64,AAAA";
+        },
+      },
+    );
+
+    expect(asked).toEqual(["guide/one.md → assets/one.png", "guide/deep/two.md → x/two.png"]);
+    expect(fileAt(built.files, "one.html")).toContain('src="data:image/png;base64,AAAA"');
+    expect(fileAt(built.files, "two.html")).toContain('src="data:image/png;base64,AAAA"');
+  });
+
+  it("leaves the path alone when nothing resolves it, as it always did", async () => {
+    const built = await build([note("guide/one.md", "![a](assets/one.png)")]);
+    expect(fileAt(built.files, "one.html")).toContain('src="assets/one.png"');
+  });
+});
+
 describe("wikilinks between chapters", () => {
   const linked = () =>
     build([

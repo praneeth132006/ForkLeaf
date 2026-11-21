@@ -21,6 +21,7 @@ import {
 } from "@/lib/gateway";
 import { Dialog } from "./Dialog";
 import { linkDocuments } from "@/lib/publish-citations";
+import { exportImageResolver } from "@/lib/export-images";
 import { describeTarget, publishTargetOf, suggestEditUrl } from "@/lib/publish-target";
 import { orderLessons, quizFrom } from "@/lib/course";
 import { readable } from "@/lib/flashcards";
@@ -29,6 +30,16 @@ export interface PublishBookDialogProps {
   /** The folder being published, relative to the workspace root. */
   folder: string;
   workspace: Workspace;
+  /**
+   * Object URLs for the images held on this device, keyed by repository path.
+   *
+   * A chapter is served out of `docs/<book>/`, and the `assets/chart.png` a
+   * note wrote is relative to the note. From the published page that points
+   * into the book's own folder, where only the stylesheet lives — so every
+   * picture in every published book was a broken box until the chapters
+   * started carrying their images the way an exported file does.
+   */
+  assetUrls: Readonly<Record<string, string>>;
   /** Every note in the notebook; the ones under `folder` become chapters. */
   notes: readonly Note[];
   onClose: () => void;
@@ -60,6 +71,7 @@ type Stage = "loading" | "idle" | "working";
 export function PublishBookDialog({
   folder,
   workspace,
+  assetUrls,
   notes,
   onClose,
   startAsCourse = false,
@@ -304,6 +316,9 @@ export function PublishBookDialog({
         title,
         theme: "light",
         renderDiagrams: true,
+        // Per chapter: `assets/chart.png` names a different file depending on
+        // which note wrote it.
+        resolveImage: (chapter) => exportImageResolver(workspace, chapter.path, assetUrls),
         // Points at the note in the repository it came from, never at the
         // published copy.
         suggestUrl: (note) => suggestEditUrl(workspace.repo, note.path),

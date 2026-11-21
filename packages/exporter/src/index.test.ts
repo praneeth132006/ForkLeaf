@@ -241,6 +241,73 @@ describe("toHtml — what a printed page needs", () => {
     const html = await toHtml("Body.", {}, options());
     expect(html).toContain('a[href^="http"]::after');
   });
+
+  /**
+   * Code on paper.
+   *
+   * A code block scrolls sideways on screen. Printed, `overflow-x` is a hard
+   * cut at the right margin instead: every long line came out of the printer
+   * with its end missing and nothing to say it had been there.
+   */
+  it("wraps long code lines rather than cutting them off at the margin", async () => {
+    const html = await toHtml("```\nconst x = 1;\n```", {}, options());
+    const print = html.slice(html.indexOf("@media print"));
+
+    expect(print).toContain("white-space: pre-wrap");
+    expect(print).toContain("overflow-wrap: anywhere");
+    expect(print).toContain("overflow: visible");
+  });
+
+  /**
+   * Tables on paper.
+   *
+   * Kept whole, a table taller than a sheet cannot be printed at all, and one
+   * a little too tall leaves most of a page blank before it. Broken across
+   * sheets with its headings repeated, it reads.
+   */
+  it("lets a long table run over the page break, headings and all", async () => {
+    const html = await toHtml("| a | b |\n| - | - |\n| 1 | 2 |", {}, options());
+    const print = html.slice(html.indexOf("@media print"));
+
+    expect(print).toContain("table { break-inside: auto;");
+    expect(print).toContain("thead { display: table-header-group; }");
+    expect(print).toContain("tr { break-inside: avoid; }");
+    // The box that lets a table scroll on screen must not clip it on paper.
+    expect(print).toContain(".table-wrap { overflow: visible;");
+  });
+});
+
+describe("toHtml — a table wider than the page it is on", () => {
+  /**
+   * Eight columns of figures need the room eight columns need. Set loose in
+   * the document, the table pushed the page itself sideways on a phone and
+   * still set "North America" one word to a line.
+   */
+  it("puts a table in a box that can scroll", async () => {
+    const html = await toHtml("| a | b |\n| - | - |\n| 1 | 2 |", {}, options());
+
+    expect(html).toContain('<div class="table-wrap"><table>');
+    expect(html).toContain("</table></div>");
+    expect(html).toContain(".table-wrap { margin: 0 0 1.25rem; overflow-x: auto; }");
+  });
+
+  it("wraps every table in the note, not just the first", async () => {
+    const two = "| a |\n| - |\n| 1 |\n\nBetween.\n\n| b |\n| - |\n| 2 |";
+    const html = await toHtml(two, {}, options());
+
+    expect(html.match(/table-wrap/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(html.match(/<table>/g)).toHaveLength(2);
+  });
+
+  it("leaves a note with no table exactly as it was", async () => {
+    const html = await toHtml("Just prose.", {}, options());
+    expect(html).not.toContain('<div class="table-wrap">');
+  });
+
+  it("keeps a long word from widening the page", async () => {
+    const html = await toHtml("Body.", {}, options());
+    expect(html).toContain("overflow-wrap: break-word");
+  });
 });
 
 /**

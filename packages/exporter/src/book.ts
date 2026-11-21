@@ -72,8 +72,14 @@ export interface BuildBookOptions {
   renderDiagrams: boolean;
   /** Where a reader who spots a mistake in this chapter should go. */
   suggestUrl?: (note: BookNote) => string | null;
-  /** Turns a note-relative image path into something a page can show. */
-  resolveImage?: ImageResolver;
+  /**
+   * Turns a note-relative image path into something a page can show.
+   *
+   * Per chapter, like `suggestUrl` above, because `assets/chart.png` names a
+   * different file depending on which note wrote it — one resolver for a
+   * whole book would answer for the wrong folder as soon as the book had two.
+   */
+  resolveImage?: (note: BookNote) => ImageResolver;
   /**
    * Publish as a garden: every page lists the notes that link to it, and the
    * contents page carries a map of how they all connect.
@@ -311,7 +317,7 @@ export async function buildBook(
           note.markdown,
           note.frontmatter,
           exportOptions,
-          options.resolveImage,
+          options.resolveImage?.(note),
           resolveWiki,
         ),
       );

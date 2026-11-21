@@ -71,6 +71,7 @@ const open = (folder = "handbook", notes: Note[] = NOTES) =>
     <PublishBookDialog
       folder={folder}
       workspace={workspace}
+      assetUrls={{}}
       notes={notes}
       onClose={() => undefined}
     />,
@@ -330,6 +331,7 @@ describe("PublishBookDialog — comments", () => {
         <PublishBookDialog
           folder="bio"
           workspace={workspace}
+          assetUrls={{}}
           notes={COURSE}
           onClose={() => undefined}
           startAsCourse

@@ -50,6 +50,7 @@ function view(props: Partial<React.ComponentProps<typeof PublishDialog>> = {}) {
     <PublishDialog
       note={note}
       workspace={workspace()}
+      assetUrls={{}}
       published={undefined}
       onSetTarget={vi.fn()}
       onChanged={vi.fn()}

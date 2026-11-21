@@ -173,6 +173,23 @@ export function policy(
     // because it cannot be intercepted on the way.
     [
       "connect-src 'self'",
+      /**
+       * Bytes this page already holds, read back from the handle it was given.
+       *
+       * Everything exported is built in the browser, and an image kept on
+       * this device is handed to the document as an object URL. Turning that
+       * back into the `data:` URL an exported file has to carry means reading
+       * it — `fetch(blobUrl)` — and a fetch is a connection as far as this
+       * policy is concerned. Without `blob:` here the browser refused every
+       * one of those reads, so every PDF, HTML and Word file left the app
+       * with its pictures missing and nothing said about it. `img-src` has
+       * allowed `blob:` all along, which is why the same images rendered
+       * perfectly on screen and vanished on the way out.
+       *
+       * A blob URL names bytes this page itself put in the browser, in this
+       * tab, for as long as the tab lives. It cannot address anything else.
+       */
+      "blob:",
       "https://api.anthropic.com",
       "https://api.openai.com",
       "https://openrouter.ai",

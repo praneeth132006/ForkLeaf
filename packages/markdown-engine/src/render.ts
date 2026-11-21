@@ -133,11 +133,22 @@ const schema: SanitizeSchema = {
   tagNames: [...(defaultSchema.tagNames ?? []), "input", "mark", "iframe"],
   protocols: {
     ...defaultSchema.protocols,
-    // Notes written offline embed their images inline, so `data:` has to
-    // survive sanitisation. `src` is only reachable on `img` here, and the
-    // rewrite step below has already thrown out every data URL that is not a
-    // raster image — an `<img>` cannot run script in any case.
-    src: [...(defaultSchema.protocols?.src ?? []), "data"],
+    /**
+     * Notes written offline embed their images inline, so `data:` has to
+     * survive sanitisation. `src` is only reachable on `img` here, and the
+     * rewrite step below has already thrown out every data URL that is not a
+     * raster image — an `<img>` cannot run script in any case.
+     *
+     * `blob:` is the other one, and leaving it out was why a picture pasted
+     * into a notebook held on this device never appeared: the bytes live in
+     * local storage and are handed to the page as an object URL, the
+     * sanitiser did not recognise the scheme, and so it removed the `src`
+     * from every single one of them. What rendered was the broken-image icon
+     * and the alt text — for an image the app was holding the whole time. A
+     * blob URL is a handle to bytes this page itself put there; it cannot
+     * name anything the page does not already have.
+     */
+    src: [...(defaultSchema.protocols?.src ?? []), "data", "blob"],
   },
 };
 
