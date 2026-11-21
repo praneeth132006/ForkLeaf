@@ -2,7 +2,7 @@
 
 import type { ImageResolver } from "@forkleaf/exporter";
 import type { Workspace } from "@forkleaf/types";
-import { resolveImageSrc } from "@/lib/assets";
+import { MISSING_IMAGE_SRC, resolveImageSrc } from "@/lib/assets";
 
 /**
  * Making an exported file carry its pictures.
@@ -63,12 +63,28 @@ export function exportImageResolver(
     // The same resolution the editor uses, so an image that renders on screen
     // is exactly the image that lands in the file.
     const resolved = resolveImageSrc(workspace, notePath, src, assetUrls);
-    if (!resolved || resolved === src) return null;
+    if (!resolved || resolved === src) return MISSING_IMAGE_SRC;
     if (resolved.startsWith("data:")) return resolved;
 
-    const response = await fetch(resolved);
-    if (!response.ok) return null;
+    try {
+      const response = await fetch(resolved);
+      if (!response.ok) return MISSING_IMAGE_SRC;
 
-    return toDataUrl(await response.blob());
+      return toDataUrl(await response.blob());
+    } catch {
+      /**
+       * The bytes could not be read — offline, a repository this device has
+       * lost access to, a picture pruned from local storage.
+       *
+       * The placeholder, not the original path. A relative path is the one
+       * answer that is certainly wrong in a file that has left the app: it
+       * resolves against wherever the reader saved it, finds nothing, and
+       * draws the browser's broken-image icon, which reads as a damaged
+       * document. A box that says the image is not on this device is the
+       * truth, and it says it in the document rather than in a console
+       * nobody opens.
+       */
+      return MISSING_IMAGE_SRC;
+    }
   };
 }

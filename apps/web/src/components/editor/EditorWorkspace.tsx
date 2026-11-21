@@ -7019,6 +7019,7 @@ export function EditorWorkspace() {
           key={book.folder}
           folder={book.folder}
           workspace={workspace}
+          assetUrls={notebook.assetUrls}
           notes={book.notes}
           {...(book.course ? { startAsCourse: true } : {})}
           onClose={() => setBook(null)}
@@ -7031,6 +7032,7 @@ export function EditorWorkspace() {
           // leave the last one's address on screen as this one's.
           key={note.id}
           workspace={workspace}
+          assetUrls={notebook.assetUrls}
           note={note}
           published={publishedNote}
           onSetTarget={async (target) => {

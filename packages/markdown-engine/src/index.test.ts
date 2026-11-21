@@ -273,6 +273,29 @@ describe("images and highlights", () => {
     expect(html).toContain("<img");
   });
 
+  /**
+   * A picture in a notebook held on this device is served from local storage
+   * as an object URL. The sanitiser did not know the scheme and so removed
+   * the `src` from every one of them: what rendered was the broken-image icon
+   * and the alt text, for an image the app was holding the whole time.
+   */
+  it("keeps a blob URL, which is how an image on this device is served", () => {
+    const html = markdownToHtml("![a chart](assets/chart.png)", {
+      resolveImageSrc: () => "blob:http://localhost:3000/4bd1c0e2",
+    });
+
+    expect(html).toContain('src="blob:http://localhost:3000/4bd1c0e2"');
+  });
+
+  it("still refuses a scheme that can run something", () => {
+    const html = markdownToHtml("![](assets/chart.png)", {
+      // eslint-disable-next-line no-script-url
+      resolveImageSrc: () => "javascript:alert(1)",
+    });
+
+    expect(html).not.toContain("javascript:");
+  });
+
   it("renders ==highlight== as a mark, which is what the editor writes", () => {
     expect(markdownToHtml("some ==important== text")).toContain("<mark>important</mark>");
   });

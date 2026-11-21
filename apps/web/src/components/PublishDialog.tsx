@@ -7,6 +7,7 @@ import { toHtml } from "@forkleaf/exporter";
 import { ApiGatewayError, publishNote, unpublishNote } from "@/lib/gateway";
 import { Dialog } from "./Dialog";
 import { linkDocuments } from "@/lib/publish-citations";
+import { exportImageResolver } from "@/lib/export-images";
 import {
   describeTarget,
   isSplitPublishing,
@@ -19,6 +20,15 @@ import {
 export interface PublishDialogProps {
   note: Note;
   workspace: Workspace;
+  /**
+   * Object URLs for the images held on this device, keyed by repository path.
+   *
+   * A published page is one file in `docs/`, and a note's `assets/chart.png`
+   * is written relative to the *note*. Served from `docs/` it points at a
+   * file that is not there, so the pictures have to travel inside the page
+   * the way they do in an exported one.
+   */
+  assetUrls: Readonly<Record<string, string>>;
   /**
    * Points this workspace's pages at another repository, or back at its own.
    *
@@ -66,6 +76,7 @@ type Stage = "idle" | "working";
 export function PublishDialog({
   note,
   workspace,
+  assetUrls,
   onSetTarget,
   published,
   onChanged,
@@ -126,16 +137,23 @@ export function PublishDialog({
           repo: workspace.repo,
         });
 
-        const html = await toHtml(body, note.frontmatter, {
-          format: "html",
-          title,
-          includeFrontmatter: false,
-          renderDiagrams: true,
-          theme: "light",
-          // The reader's way to send a correction back. Points at the note in
-          // the repository it came from, never at the published copy.
-          suggestUrl: suggestEditUrl(workspace.repo, note.path),
-        });
+        const html = await toHtml(
+          body,
+          note.frontmatter,
+          {
+            format: "html",
+            title,
+            includeFrontmatter: false,
+            renderDiagrams: true,
+            theme: "light",
+            // The reader's way to send a correction back. Points at the note
+            // in the repository it came from, never at the published copy.
+            suggestUrl: suggestEditUrl(workspace.repo, note.path),
+          },
+          // Carries the note's pictures into the page, as an exported file
+          // does. Without this the page went up with every image broken.
+          exportImageResolver(workspace, note.path, assetUrls),
+        );
 
         setStep("Committing it to your repository…");
         const result = await publishNote({ repo, slug, html, title });
@@ -148,7 +166,7 @@ export function PublishDialog({
         setStage("idle");
       }
     },
-    [note, title, slug, onChanged, workspace.repo],
+    [note, title, slug, onChanged, workspace, assetUrls],
   );
 
   const publish = useCallback(() => publishTo(target), [publishTo, target]);
